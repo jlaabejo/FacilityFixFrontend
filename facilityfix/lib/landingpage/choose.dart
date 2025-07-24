@@ -13,7 +13,7 @@ class ChooseRole extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            // Logo
+            // Logo at the top
             Padding(
               padding: const EdgeInsets.only(top: 40.0),
               child: Center(
@@ -24,66 +24,59 @@ class ChooseRole extends StatelessWidget {
               ),
             ),
 
-            const Spacer(),
+            // Spacer for separation
+            const SizedBox(height: 40),
 
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Column(
-                children: [
-                  const Text(
-                    'Welcome',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const Text(
-                    'Tap your destination',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Tenant Button
-                  _buildRoleButton(context, 'Tenant', 'tenant'),
-
-                  const SizedBox(height: 24),
-
-                  // Staff Button
-                  _buildRoleButton(context, 'Staff', 'staff'),
-
-                  const SizedBox(height: 24),
-
-                  // Admin Button
-                  _buildRoleButton(context, 'Admin', 'admin'),
-
-                  const SizedBox(height: 24),
-
-                  // Back Button
-                  SizedBox(
-                    width: 150,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      child: const Text(
-                        'Back',
+            // Centered Welcome and Role Buttons
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Welcome',
                         style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 24),
+
+                      // Role Buttons
+                      _buildRoleButton(context, 'Tenant', 'tenant'),
+                      const SizedBox(height: 16),
+
+                      _buildRoleButton(context, 'Staff', 'staff'),
+                      const SizedBox(height: 16),
+
+                      _buildRoleButton(context, 'Admin', 'admin'),
+                      const SizedBox(height: 24),
+
+                      // Back Button
+                      SizedBox(
+                        width: 150,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.grey,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(context);
+                          },
+                          child: const Text(
+                            'Back',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 24),
-                ],
+                ),
               ),
             ),
           ],

@@ -12,7 +12,7 @@ class LoginOrSignup extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            // Logo
+            // Logo at the top
             Padding(
               padding: const EdgeInsets.only(top: 40.0),
               child: Center(
@@ -23,92 +23,96 @@ class LoginOrSignup extends StatelessWidget {
               ),
             ),
 
-            // Spacer 
-            const Spacer(),
+            // Spacer between logo and center content
+            const SizedBox(height: 40),
 
-            // Welcome
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Column(
-                children: [
-                  const Text(
-                    'Welcome',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-                  // Login
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF005CE8),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          PageRouteBuilder(
-                            opaque: false, 
-                            transitionDuration: Duration.zero,
-                            reverseTransitionDuration: Duration.zero,
-                            pageBuilder: (context, animation, secondaryAnimation) => ChooseRole(isLogin: true), // true = login
-                            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                              return child; 
-                            },
-                          ),
-                        );
-                      },
-
-                      child: const Text(
-                        'Log In',
+            // Expanded section to center the content vertically
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Welcome',
                         style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
-                  ),
+                      const SizedBox(height: 24),
 
-                  // Sign Up
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF005CE8),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      onPressed: () { // Sign Up
-                        Navigator.push(
-                          context,
-                          PageRouteBuilder(
-                            opaque: false, 
-                            transitionDuration: Duration.zero,
-                            reverseTransitionDuration: Duration.zero,
-                            pageBuilder: (context, animation, secondaryAnimation) => ChooseRole(isLogin: false), // false = sign up
-                            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                              return child;
-                            },
+                      // Log In Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF005CE8),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
-                        );
-                      },
-
-                      child: const Text(
-                        'Sign Up',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white,
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                opaque: false,
+                                transitionDuration: Duration.zero,
+                                reverseTransitionDuration: Duration.zero,
+                                pageBuilder: (context, animation, secondaryAnimation) =>
+                                    ChooseRole(isLogin: true),
+                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                  return child;
+                                },
+                              ),
+                            );
+                          },
+                          child: const Text(
+                            'Log In',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
 
-                  const SizedBox(height: 24),
-                ],
+                      const SizedBox(height: 16),
+
+                      // Sign Up Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF005CE8),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                opaque: false,
+                                transitionDuration: Duration.zero,
+                                reverseTransitionDuration: Duration.zero,
+                                pageBuilder: (context, animation, secondaryAnimation) =>
+                                    ChooseRole(isLogin: false),
+                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                  return child;
+                                },
+                              ),
+                            );
+                          },
+                          child: const Text(
+                            'Sign Up',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ],

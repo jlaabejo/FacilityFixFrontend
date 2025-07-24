@@ -12,7 +12,7 @@ class WelcomePage extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            // Logo
+            // Logo at the top
             Padding(
               padding: const EdgeInsets.only(top: 40.0),
               child: Center(
@@ -23,13 +23,10 @@ class WelcomePage extends StatelessWidget {
               ),
             ),
 
-            // Spacer 
-            const Spacer(),
-
-            // Welcome
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            // Welcome Text, Get Started Button, and Register Now (centered)
+            Expanded(
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text(
                     'Welcome',
@@ -38,34 +35,40 @@ class WelcomePage extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  const SizedBox(height: 16),
 
-                  // Get Started button
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF005CE8),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const LoginOrSignup(role: '')),
-                        );
-                      },
-                      child: const Text(
-                        'Get Started',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF005CE8),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const LoginOrSignup(role: ''),
+                            ),
+                          );
+                        },
+                        child: const Text(
+                          'Get Started',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
                   ),
 
-                  // Text
                   const SizedBox(height: 24),
+
+                  // Register Section
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -74,11 +77,14 @@ class WelcomePage extends StatelessWidget {
                         onTap: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const ChooseRole(isLogin: false)), // false = signup
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const ChooseRole(isLogin: false),
+                            ),
                           );
                         },
                         child: const Text(
-                          'Register Now',
+                          'Sign Up Now',
                           style: TextStyle(
                             color: Colors.blue,
                             fontWeight: FontWeight.bold,
@@ -87,7 +93,6 @@ class WelcomePage extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
                 ],
               ),
             ),
