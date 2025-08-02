@@ -1,5 +1,5 @@
 import 'package:facilityfix/landingpage/forgot_password.dart';
-import 'package:facilityfix/pages/homepage.dart';
+import 'package:facilityfix/tenant/home.dart';
 import 'package:flutter/material.dart';
 
 class LogIn extends StatefulWidget {

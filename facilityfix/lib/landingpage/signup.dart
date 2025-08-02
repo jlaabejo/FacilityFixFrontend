@@ -1,8 +1,7 @@
 // Required imports
+import 'package:facilityfix/tenant/home.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/landingpage/choose.dart';
-import 'package:facilityfix/pages/homepage.dart';
-
 class SignUp extends StatefulWidget {
   final String role;
   const SignUp({Key? key, required this.role}) : super(key: key);
@@ -78,7 +77,7 @@ class _SignUpState extends State<SignUp> {
                             fontFamily: 'Inter',
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 24),
 
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -91,14 +90,14 @@ class _SignUpState extends State<SignUp> {
                                 controller: firstNameController,
                                 hint: "First Name",
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 16),
 
                               // Last Name field with validation
                               _buildValidatedField(
                                 controller: lastNameController,
                                 hint: "Last Name",
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 16),
 
                               // Birthdate field with date picker
                               TextFormField(
@@ -131,7 +130,7 @@ class _SignUpState extends State<SignUp> {
                                   return null;
                                 },
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 16),
 
                               // ID field for tenant or staff
                               if (widget.role == 'tenant') ...[
@@ -139,7 +138,7 @@ class _SignUpState extends State<SignUp> {
                                   controller: idController,
                                   hint: "Building & Unit No.",
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 16),
 
                                 // Classification dropdown for staff
                               ] else if (widget.role == 'staff') ...[
@@ -171,11 +170,11 @@ class _SignUpState extends State<SignUp> {
 
                               // Email field with validation
                               _buildValidatedEmailField(),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 16),
 
                               // Phone field with validation
                               _buildValidatedPhoneField(),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 16),
                               _buildValidatedPasswordField(),
                             ],
                           ),
@@ -214,8 +213,8 @@ class _SignUpState extends State<SignUp> {
                           ),
                         ),
 
-                        const SizedBox(height: 8),
-                        
+                        const SizedBox(height: 24),
+
                         // Already have an account
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -240,7 +239,7 @@ class _SignUpState extends State<SignUp> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 24),
                       ],
                     ),
                   ),
