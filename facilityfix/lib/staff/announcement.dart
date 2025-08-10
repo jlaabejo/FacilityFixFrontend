@@ -1,10 +1,12 @@
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
+import 'package:facilityfix/staff/notification.dart';
+import 'package:facilityfix/staff/view_details/announcement_details.dart';
 import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/widgets/announcement_cards.dart';
-import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
+import 'package:flutter/material.dart';
 
 class AnnouncementPage extends StatefulWidget {
   const AnnouncementPage({super.key});
@@ -16,14 +18,6 @@ class AnnouncementPage extends StatefulWidget {
 class _AnnouncementState extends State<AnnouncementPage> {
   int _selectedIndex = 2;
 
-  final List<Widget> pages = const [
-    HomePage(),             // index 0
-    WorkOrderPage(),        // index 1
-    Placeholder(),          // Placeholder instead of self
-    CalendarPage(),         // index 3
-    InventoryPage(),        // index 4
-  ];
-
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
@@ -33,34 +27,20 @@ class _AnnouncementState extends State<AnnouncementPage> {
   ];
 
   void _onTabTapped(int index) {
-    if (index == _selectedIndex) return;
+    final destinations = [
+      const HomePage(),
+      const WorkOrderPage(),
+      const AnnouncementPage(),
+      const CalendarPage(),
+      const InventoryPage(),
+    ];
 
-    // Navigate to the correct page
-    Widget destination;
-    switch (index) {
-      case 0:
-        destination = const HomePage();
-        break;
-      case 1:
-        destination = const WorkOrderPage();
-        break;
-      case 2:
-        destination = const AnnouncementPage();
-        break;
-      case 3:
-        destination = const CalendarPage();
-        break;
-      case 4:
-        destination = const InventoryPage();
-        break;
-      default:
-        destination = const HomePage();
+    if (index != _selectedIndex) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => destinations[index]),
+      );
     }
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => destination),
-    );
   }
 
   @override
@@ -72,7 +52,10 @@ class _AnnouncementState extends State<AnnouncementPage> {
           IconButton(
             icon: const Icon(Icons.notifications),
             onPressed: () {
-              // Handle notification tap
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NotificationPage()),
+              );
             },
           ),
         ],
@@ -89,9 +72,14 @@ class _AnnouncementState extends State<AnnouncementPage> {
               title: 'Utility Interruption',
               datePosted: '3 hours ago',
               details: 'Temporary shutdown in pipelines for maintenance cleaning.',
-              classification: 'utility',
-              onViewPressed: () {
-                // Navigate to announcement details
+              classification: 'utility', 
+              onTap: () {  
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AnnouncementDetails(),
+                  ),
+                );
               },
             ),
           ],

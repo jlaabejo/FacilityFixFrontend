@@ -1,7 +1,10 @@
 import 'package:facilityfix/admin/announcement.dart';
 import 'package:facilityfix/admin/calendar.dart';
 import 'package:facilityfix/admin/inventory.dart';
+import 'package:facilityfix/admin/notification.dart';
+import 'package:facilityfix/admin/profile.dart';
 import 'package:facilityfix/admin/workorder.dart';
+import 'package:facilityfix/admin/view_details/announcement_details.dart';
 import 'package:facilityfix/widgets/announcement_cards.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
@@ -46,16 +49,31 @@ class _HomeState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        leading: const Text('Home'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications),
-            onPressed: () {
-              // Handle notification tap
-            },
-          ),
-        ],
+        leading: IconButton(
+        icon: const CircleAvatar(
+          backgroundImage: AssetImage('assets/images/profile.jpg'), // Replace with your profile image asset or use Icon()
+          radius: 16,
+        ),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ProfilePage()),
+          );
+        },
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.notifications),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NotificationPage()),
+            );
+          },
+        ),
+      ],
       ),
       
       body: SafeArea(
@@ -73,7 +91,7 @@ class _HomeState extends State<HomePage> {
                       count: '1',
                       icon: Icons.settings,
                       iconColor: Color(0xFF005CE8),
-                      backgroundColor: Color(0xFFFFFAEB),
+                      backgroundColor: Color(0xFFFF0F6FF),
                       borderColor: Color(0xFF005CE8),
                     ),
                   ),
@@ -108,19 +126,6 @@ class _HomeState extends State<HomePage> {
                 },
               ),
               const SizedBox(height: 18),
-              RequestRepairCard(
-                title: "Leaking Faucet",
-                requestId: "REQ-2025-009",
-                date: "27 Sept",
-                classification: "Review",
-                onTap: () {
-                  // Navigate to request details
-                },
-                onChatTap: () {
-                  // Open chat
-                },
-              ),
-              const SizedBox(height: 18),
 
               // Maintenance Task Section
               const Text('Latest Announcement', style: TextStyle(fontSize: 16)),
@@ -130,10 +135,13 @@ class _HomeState extends State<HomePage> {
                 title: 'Utility Interruption',
                 datePosted: '3 hours ago',
                 details: 'Temporary shutdown in pipelines for maintenance cleaning.',
-                classification: 'utility',
-                onViewPressed: () {
-                  // Navigate to announcement details
-                },
+                classification: 'Utility Interruption',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AnnouncementDetails()),
+                    );
+                  }
               ),
               const SizedBox(height: 18),
               const Text('Analytics', style: TextStyle(fontSize: 16)),

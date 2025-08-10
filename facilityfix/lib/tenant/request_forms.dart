@@ -5,6 +5,7 @@ import 'package:facilityfix/tenant/profile.dart';
 import 'package:facilityfix/tenant/workorder.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:facilityfix/widgets/forms.dart';
+import 'package:facilityfix/widgets/pop_up.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide FilledButton;
 import 'package:facilityfix/widgets/app&nav_bar.dart';
@@ -36,7 +37,7 @@ class _RequestFormState extends State<RequestForm> {
       const HomePage(),
       const WorkOrderPage(),
       const AnnouncementPage(),
-      const Profile(),
+      const ProfilePage(),
     ];
 
     if (index != 1) {
@@ -82,6 +83,17 @@ class _RequestFormState extends State<RequestForm> {
 
   PlatformFile? selectedFile;
 
+  void _showRequestDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => CustomPopup(
+        title: 'Success',
+        message: 'Your ${widget.requestType.toLowerCase()} has been submitted successfully.',
+        primaryText: 'Ok',
+        onPrimaryPressed: () => Navigator.of(context).pop(), 
+      ),
+    );
+  }
 
   List<Widget> getFormFields() {
     switch (widget.requestType) {
@@ -99,7 +111,7 @@ class _RequestFormState extends State<RequestForm> {
               children: [
 
                 // Date Requested
-                CustomInputField(
+                InputField(
                   label: 'Date Requested',
                   controller: dateRequestedController,
                   hintText: 'Auto-filled',
@@ -113,7 +125,7 @@ class _RequestFormState extends State<RequestForm> {
                 const SizedBox(height: 8),
 
                 // Building & Unit No.
-                CustomInputField(
+                InputField(
                   label: 'Building & Unit No.',
                   controller: unitController,
                   hintText: 'Auto-filled',
@@ -127,7 +139,7 @@ class _RequestFormState extends State<RequestForm> {
                 const SizedBox(height: 8),
                 
                 // Name
-                CustomInputField(
+                InputField(
                   label: 'Name',
                   controller: nameController,
                   hintText: 'Auto-filled',
@@ -141,7 +153,7 @@ class _RequestFormState extends State<RequestForm> {
                 const SizedBox(height: 8),
 
                 // Description
-                CustomInputField(
+                InputField(
                   label: 'Description',
                   controller: descriptionController,
                   hintText: 'Enter task description',
@@ -154,7 +166,7 @@ class _RequestFormState extends State<RequestForm> {
                 const SizedBox(height: 8),
 
                 // Availability
-                CustomInputField(
+                InputField(
                   label: 'Availability',
                   controller: availabilityController,
                   hintText: 'Select preferred date & time',
@@ -182,7 +194,7 @@ class _RequestFormState extends State<RequestForm> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CustomInputField(
+                InputField(
                   label: 'Date Requested',
                   controller: dateRequestedController,
                   hintText: 'Select date',
@@ -194,7 +206,7 @@ class _RequestFormState extends State<RequestForm> {
                 ),
                 const SizedBox(height: 8),
 
-                CustomInputField(
+                InputField(
                   label: 'Building & Unit No.',
                   controller: unitController,
                   hintText: 'Enter Building & Unit No.',
@@ -206,7 +218,7 @@ class _RequestFormState extends State<RequestForm> {
                 ),
                 const SizedBox(height: 8),
 
-                CustomInputField(
+                InputField(
                   label: 'Name',
                   controller: nameController,
                   hintText: 'Enter your name',
@@ -218,7 +230,7 @@ class _RequestFormState extends State<RequestForm> {
                 ),
                 const SizedBox(height: 8),
 
-                CustomInputField(
+                InputField(
                   label: 'Task Title',
                   controller: titleController,
                   hintText: 'Enter Task Title',
@@ -230,7 +242,7 @@ class _RequestFormState extends State<RequestForm> {
                 ),
                 const SizedBox(height: 8),
 
-                CustomInputField(
+                InputField(
                   label: 'Description',
                   controller: descriptionController,
                   hintText: 'Enter task description',
@@ -242,7 +254,7 @@ class _RequestFormState extends State<RequestForm> {
                 FileAttachmentPicker(label: 'Upload Attachment'),
                 const SizedBox(height: 8),
 
-                CustomInputField(
+                InputField(
                   label: 'Availability',
                   controller: availabilityController,
                   hintText: 'Select preferred date & time',
@@ -272,7 +284,7 @@ class _RequestFormState extends State<RequestForm> {
               children: [
 
                 // Date Requested
-                CustomInputField(
+                InputField(
                   label: 'Date Requested',
                   controller: dateRequestedController,
                   hintText: 'Auto-filled',
@@ -286,7 +298,7 @@ class _RequestFormState extends State<RequestForm> {
                 const SizedBox(height: 8),
 
                 // Building & Unit No.
-                CustomInputField(
+                InputField(
                   label: 'Building & Unit No.',
                   controller: unitController,
                   hintText: 'Auto-filled',
@@ -300,7 +312,7 @@ class _RequestFormState extends State<RequestForm> {
                 const SizedBox(height: 8),
                 
                 // Name
-                CustomInputField(
+                InputField(
                   label: 'Name',
                   controller: nameController,
                   hintText: 'Auto-filled',
@@ -314,7 +326,7 @@ class _RequestFormState extends State<RequestForm> {
                 const SizedBox(height: 8),
 
                 // Description
-                CustomInputField(
+                InputField(
                   label: 'Description',
                   controller: descriptionController,
                   hintText: 'Enter task description',
@@ -327,7 +339,7 @@ class _RequestFormState extends State<RequestForm> {
                 const SizedBox(height: 8),
                 
                 // Availability
-                CustomInputField(
+                InputField(
                   label: 'Availability',
                   controller: availabilityController,
                   hintText: 'Select preferred date & time',
@@ -395,7 +407,7 @@ class _RequestFormState extends State<RequestForm> {
             FilledButton(
               label: "Create Task",
               onPressed: () {
-                // your logic
+                _showRequestDialog(context);
               },
             ),
           ],

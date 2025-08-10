@@ -1,5 +1,7 @@
 import 'package:facilityfix/tenant/home.dart';
+import 'package:facilityfix/tenant/notification.dart';
 import 'package:facilityfix/tenant/profile.dart';
+import 'package:facilityfix/tenant/view_details.dart';
 import 'package:facilityfix/tenant/workorder.dart';
 import 'package:facilityfix/widgets/announcement_cards.dart';
 import 'package:flutter/material.dart';
@@ -27,7 +29,7 @@ class _AnnouncementState extends State<AnnouncementPage> {
       const HomePage(),
       const WorkOrderPage(),
       const AnnouncementPage(),
-      const Profile(),
+      const ProfilePage(),
     ];
 
     if (index != 2) {
@@ -48,7 +50,10 @@ class _AnnouncementState extends State<AnnouncementPage> {
           IconButton(
             icon: const Icon(Icons.notifications),
             onPressed: () {
-              // Handle notification tap
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NotificationPage()),
+              );
             },
           ),
         ],
@@ -66,8 +71,11 @@ class _AnnouncementState extends State<AnnouncementPage> {
               datePosted: '3 hours ago',
               details: 'Temporary shutdown in pipelines for maintenance cleaning.',
               classification: 'utility',
-              onViewPressed: () {
-                // Navigate to announcement details
+              onTap: () {
+                Navigator.push(
+                  context,
+                    MaterialPageRoute(builder: (_) => const ViewDetailsPage(selectedTabLabel: 'announcement detail',)),
+                );
               },
             ),
           ],

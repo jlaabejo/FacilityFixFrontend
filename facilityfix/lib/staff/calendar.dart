@@ -1,7 +1,8 @@
-import 'package:facilityfix/admin/announcement.dart';
-import 'package:facilityfix/admin/home.dart';
-import 'package:facilityfix/admin/workorder.dart';
+import 'package:facilityfix/staff/announcement.dart';
+import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
+import 'package:facilityfix/staff/notification.dart';
+import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:flutter/material.dart';
 
@@ -13,15 +14,7 @@ class CalendarPage extends StatefulWidget {
 }
 
 class _CalendarState extends State<CalendarPage> {
-  final int _selectedIndex = 4;
-
-  final List<Widget> pages = const [
-    HomePage(),             // index 0
-    WorkOrderPage(),        // index 1
-    AnnouncementPage(),     // index 2
-    Placeholder(),          // Placeholder instead of self
-    InventoryPage(),        // index 4
-  ];
+  int _selectedIndex = 3;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -32,34 +25,20 @@ class _CalendarState extends State<CalendarPage> {
   ];
 
   void _onTabTapped(int index) {
-    if (index == _selectedIndex) return;
+    final destinations = [
+      const HomePage(),
+      const WorkOrderPage(),
+      const AnnouncementPage(),
+      const CalendarPage(),
+      const InventoryPage(),
+    ];
 
-    // Navigate to the correct page
-    Widget destination;
-    switch (index) {
-      case 0:
-        destination = const HomePage();
-        break;
-      case 1:
-        destination = const WorkOrderPage();
-        break;
-      case 2:
-        destination = const AnnouncementPage();
-        break;
-      case 3:
-        destination = const CalendarPage();
-        break;
-      case 4:
-        destination = const InventoryPage();
-        break;
-      default:
-        destination = const HomePage();
+    if (index != 3) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => destinations[index]),
+      );
     }
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => destination),
-    );
   }
 
   @override
@@ -71,7 +50,10 @@ class _CalendarState extends State<CalendarPage> {
           IconButton(
             icon: const Icon(Icons.notifications),
             onPressed: () {
-              // Handle notification tap
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NotificationPage()),
+              );
             },
           ),
         ],

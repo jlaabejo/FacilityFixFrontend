@@ -29,7 +29,7 @@ class _HomeState extends State<HomePage> {
       const HomePage(),
       const WorkOrderPage(),
       const AnnouncementPage(),
-      const Profile(),
+      const ProfilePage(),
     ];
 
     if (index != 0) {
@@ -141,7 +141,7 @@ class _HomeState extends State<HomePage> {
                 datePosted: '3 hours ago',
                 details: 'Temporary shutdown in pipelines for maintenance cleaning.',
                 classification: 'utility',
-                onViewPressed: () {
+                onTap: () {
                   // Navigate to announcement details
                 },
               ),

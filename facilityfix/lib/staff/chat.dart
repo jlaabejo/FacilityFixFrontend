@@ -1,8 +1,10 @@
+
+import 'package:facilityfix/staff/announcement.dart';
+import 'package:facilityfix/staff/calendar.dart';
+import 'package:facilityfix/staff/home.dart';
+import 'package:facilityfix/staff/inventory.dart';
+import 'package:facilityfix/staff/workorder.dart';
 import 'package:flutter/material.dart';
-import 'package:facilityfix/tenant/announcement.dart';
-import 'package:facilityfix/tenant/home.dart';
-import 'package:facilityfix/tenant/profile.dart';
-import 'package:facilityfix/tenant/workorder.dart';
 import 'package:facilityfix/widgets/chat.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 
@@ -20,8 +22,26 @@ class _ChatPageState extends State<ChatPage> {
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
     NavItem(icon: Icons.announcement_rounded),
-    NavItem(icon: Icons.person),
+    NavItem(icon: Icons.calendar_month),
+    NavItem(icon: Icons.inventory),
   ];
+
+  void _onTabTapped(int index) {
+    final destinations = [
+      const HomePage(),
+      const WorkOrderPage(),
+      const AnnouncementPage(),
+      const CalendarPage(),
+      const InventoryPage(),
+    ];
+
+    if (index != 1) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => destinations[index]),
+      );
+    }
+  }
 
   final List<ChatMessage> _messages = [
     ChatMessage(
@@ -35,22 +55,6 @@ class _ChatPageState extends State<ChatPage> {
       isSender: true,
     ),
   ];
-
-  void _onTabTapped(int index) {
-    final destinations = [
-      const HomePage(),
-      const WorkOrderPage(),
-      const AnnouncementPage(),
-      const ProfilePage(),
-    ];
-
-    if (index != _selectedIndex) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => destinations[index]),
-      );
-    }
-  }
 
   void _handleSendMessage(String messageText) {
     final newMessage = ChatMessage(

@@ -1,7 +1,9 @@
+import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/inventory.dart';
-import 'package:facilityfix/tenant/announcement.dart';
-import 'package:facilityfix/tenant/workorder.dart';
+import 'package:facilityfix/staff/notification.dart' show NotificationPage;
+import 'package:facilityfix/staff/profile.dart';
+import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/widgets/announcement_cards.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
@@ -18,14 +20,6 @@ class HomePage extends StatefulWidget {
 class _HomeState extends State<HomePage> {
   int _selectedIndex = 0;
 
-  final List<Widget> pages = const [
-    Placeholder(),          // Placeholder instead of self
-    WorkOrderPage(),        // index 1
-    AnnouncementPage(),     // index 2
-    CalendarPage(),         // index 3
-    InventoryPage(),        // index 4
-  ];
-
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
@@ -35,49 +29,49 @@ class _HomeState extends State<HomePage> {
   ];
 
   void _onTabTapped(int index) {
-    if (index == _selectedIndex) return;
+    final destinations = [
+      const HomePage(),
+      const WorkOrderPage(),
+      const AnnouncementPage(),
+      const CalendarPage(),
+      const InventoryPage(),
+    ];
 
-    // Navigate to the correct page
-    Widget destination;
-    switch (index) {
-      case 0:
-        destination = const HomePage();
-        break;
-      case 1:
-        destination = const WorkOrderPage();
-        break;
-      case 2:
-        destination = const AnnouncementPage();
-        break;
-      case 3:
-        destination = const CalendarPage();
-        break;
-      case 4:
-        destination = const InventoryPage();
-        break;
-      default:
-        destination = const HomePage();
+    if (index != 0) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => destinations[index]),
+      );
     }
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => destination),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: CustomAppBar(
-        leading: const Text('Home'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications),
-            onPressed: () {
-              // Handle notification tap
-            },
-          ),
-        ],
+        leading: IconButton(
+        icon: const CircleAvatar(
+          backgroundImage: AssetImage('assets/images/profile.jpg'), 
+          radius: 16,
+        ),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ProfilePage()),
+          );
+        },
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.notifications),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NotificationPage()),
+            );
+          },
+        ),
+      ],
       ),
 
       
@@ -141,9 +135,9 @@ class _HomeState extends State<HomePage> {
                 datePosted: '3 hours ago',
                 details: 'Temporary shutdown in pipelines for maintenance cleaning.',
                 classification: 'utility',
-                onViewPressed: () {
+                onTap: () {
                   // Navigate to announcement details
-                },
+                }, 
               ),
               const SizedBox(height: 24),
             ],

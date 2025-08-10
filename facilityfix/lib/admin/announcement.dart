@@ -1,10 +1,10 @@
 
 import 'package:facilityfix/admin/calendar.dart';
-import 'package:facilityfix/admin/forms.dart';
-
 import 'package:facilityfix/admin/home.dart';
 import 'package:facilityfix/admin/inventory.dart';
 import 'package:facilityfix/admin/workorder.dart';
+import 'package:facilityfix/admin/forms/announcement.dart';
+import 'package:facilityfix/admin/view_details/announcement_details.dart';
 import 'package:facilityfix/widgets/announcement_cards.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:facilityfix/widgets/pop_up.dart';
@@ -49,25 +49,42 @@ class _AnnouncementState extends State<AnnouncementPage> {
   void _showRequestDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (BuildContext dialogContext) => CustomPopup(
-        title: 'Create an Announcement',
+      builder: (_) => CustomPopup(
+        title: 'Create Announcement',
         message: 'Would you like to create a new announcement?',
         primaryText: 'Yes',
-        onPrimaryPressed: () {
-          Navigator.of(dialogContext).pop(); // use dialogContext, not context
-          Navigator.push(
+        onPrimaryPressed: () async {
+          Navigator.of(context).pop(); 
+
+          final submitted = await Navigator.push<bool>(
             context,
             MaterialPageRoute(
-              builder: (BuildContext context) => const AddForm(requestType: 'Maintenance Task'),
+              builder: (_) => AnnouncementForm(requestType: 'Basic Information'),
             ),
           );
+
+          // Show success popup if submitted is true
+          if (submitted == true) {
+            _showSuccessPopup();
+          }
         },
         secondaryText: 'Cancel',
-        onSecondaryPressed: () => Navigator.of(dialogContext).pop(),
+        onSecondaryPressed: () => Navigator.of(context).pop(),
       ),
     );
   }
 
+  void _showSuccessPopup() {
+    showDialog(
+      context: context,
+      builder: (_) => CustomPopup(
+        title: 'Success',
+        message: 'Announcement created successfully!',
+        primaryText: 'Ok',
+        onPrimaryPressed: () => Navigator.of(context).pop(),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -86,32 +103,44 @@ class _AnnouncementState extends State<AnnouncementPage> {
       ),
 
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            
-            // Latest Announcement Section
-            AnnouncementCard(
-              title: 'Utility Interruption',
-              datePosted: '3 hours ago',
-              details: 'Temporary shutdown in pipelines for maintenance cleaning.',
-              classification: 'utility',
-              onViewPressed: () {
-                // Navigate to announcement details
-              },
-            ),
-            // Add Button
-            Positioned(
-              bottom: 24,
-              right: 24,
-              child: AddButton(onPressed: () => _showRequestDialog(context)),
-            ),
-          ],
+        child: SizedBox.expand(
+          child: Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AnnouncementCard(
+                        title: 'Utility Interruption',
+                        datePosted: '3 hours ago',
+                        details: 'Temporary shutdown in pipelines for maintenance cleaning.',
+                        classification: 'Utility Interruption',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const AnnouncementDetails()),
+                          );
+                        }
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+              ),
+              //Add Button
+              Positioned(
+                bottom: 24,
+                right: 24,
+                child: AddButton(
+                  onPressed: () => _showRequestDialog(context),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-
       bottomNavigationBar: NavBar(
         items: _navItems,
         currentIndex: _selectedIndex,

@@ -1,21 +1,21 @@
-
 import 'package:facilityfix/admin/announcement.dart';
 import 'package:facilityfix/admin/calendar.dart';
 import 'package:facilityfix/admin/home.dart';
 import 'package:facilityfix/admin/inventory.dart';
 import 'package:facilityfix/admin/workorder.dart';
+import 'package:facilityfix/widgets/view_details.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 
-class NotificationPage extends StatefulWidget {
-  const NotificationPage({super.key});
+class AnnouncementDetails extends StatefulWidget {
+  const  AnnouncementDetails({super.key});
 
   @override
-  State<NotificationPage> createState() => _NotificationPageState();
+  State<AnnouncementDetails> createState() => _AnnouncementDetailsState();
 }
 
-class _NotificationPageState extends State<NotificationPage> {
-  int _selectedIndex = 0;
+class _AnnouncementDetailsState extends State<AnnouncementDetails> {
+  int _selectedIndex = 2;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -48,17 +48,33 @@ class _NotificationPageState extends State<NotificationPage> {
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
         leading: Row(
-          children: const [
-            BackButton(),
-            SizedBox(width: 8),
-            Text('Notification'),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, 0, 8, 0),
+              child: const BackButton(),
+            ),
+            Text('View Details'),
           ],
         ),
       ),
-
-      body: const SafeArea(
-        child: Center(
-          child: Text('Notification Page'),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              AnnouncementDetailScreen(
+                    title: 'Water Interruption Notice',
+                    datePosted: 'August 6, 2025',
+                    classification: 'Utility Interruption',
+                    description: 'Water supply will be interrupted due to mainline repair.',
+                    locationAffected: 'Building A & B',
+                    scheduleStart: 'August 7, 2025 - 8:00 AM',
+                    scheduleEnd: 'August 7, 2025 - 5:00 PM',
+                    contactNumber: '0917 123 4567',
+                    contactEmail: 'support@condoadmin.ph',
+                  ),
+            ],
+          ),
         ),
       ),
 

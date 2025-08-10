@@ -333,7 +333,7 @@ class RepairTaskCard extends StatelessWidget {
 }
 
 // Announcement task card
-class AnnouncementTaskCard extends StatelessWidget {
+class MaintenanceTaskCard extends StatelessWidget {
   final String title;
   final String requestId;
   final String unit;
@@ -342,7 +342,7 @@ class AnnouncementTaskCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onChatTap;
 
-  const AnnouncementTaskCard({
+  const MaintenanceTaskCard({
     super.key,
     required this.title,
     required this.requestId,

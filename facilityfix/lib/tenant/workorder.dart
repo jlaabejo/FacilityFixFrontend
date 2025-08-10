@@ -1,6 +1,7 @@
 import 'package:facilityfix/tenant/chat.dart';
 import 'package:facilityfix/tenant/request_forms.dart';
 import 'package:facilityfix/tenant/view_details.dart';
+
 import 'package:facilityfix/widgets/pop_up.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/buttons.dart';
@@ -40,7 +41,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       const HomePage(),
       const WorkOrderPage(),
       const AnnouncementPage(),
-      const Profile(),
+      const ProfilePage(),
     ];
 
     if (index != 1) {
@@ -126,7 +127,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const ViewDetailsPage()),
+                  MaterialPageRoute(builder: (_) => const ViewDetailsPage(selectedTabLabel: 'repair detail',)),
                 );
               },
               onChatTap: () {
@@ -150,7 +151,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const ViewDetailsPage()),
+                  MaterialPageRoute(builder: (_) => const ViewDetailsPage(selectedTabLabel: 'repair',)),
                 );
               },
               onChatTap: () {
@@ -174,7 +175,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const ViewDetailsPage()),
+                  MaterialPageRoute(builder: (_) => const ViewDetailsPage(selectedTabLabel: 'repair',)),
                 );
               },
               onChatTap: () {
@@ -252,7 +253,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                 ],
               ),
             ),
-
             // Add Button
             Positioned(
               bottom: 24,

@@ -1,26 +1,33 @@
-import 'package:facilityfix/admin/announcement.dart';
-import 'package:facilityfix/admin/calendar.dart';
-import 'package:facilityfix/admin/home.dart';
-import 'package:facilityfix/admin/inventory.dart';
-import 'package:facilityfix/widgets/app&nav_bar.dart';
+import 'package:facilityfix/staff/announcement.dart';
+import 'package:facilityfix/staff/calendar.dart';
+import 'package:facilityfix/staff/chat.dart';
+import 'package:facilityfix/staff/notification.dart';
+import 'package:facilityfix/staff/view_details/details_maintenanceForm.dart';
+import 'package:facilityfix/staff/view_details/details_repairForm.dart';
+import 'package:facilityfix/staff/home.dart';
+import 'package:facilityfix/staff/inventory.dart';
+import 'package:facilityfix/widgets/workorder_cards.dart';
 import 'package:flutter/material.dart';
+import 'package:facilityfix/widgets/buttons.dart';
+import 'package:facilityfix/widgets/app&nav_bar.dart';
 
 class WorkOrderPage extends StatefulWidget {
   const WorkOrderPage({super.key});
+  
 
   @override
-  State<WorkOrderPage> createState() => _WorkOrderState();
+  State<WorkOrderPage> createState() => _WorkOrderPageState();
 }
 
-class _WorkOrderState extends State<WorkOrderPage> {
-  final int _selectedIndex = 1;
+class _WorkOrderPageState extends State<WorkOrderPage> {
+  String selectedTabLabel = "Repair Task";
+  String _selectedClassification = "Repair Task";
+  final TextEditingController _searchController = TextEditingController();
+  
 
-  final List<Widget> pages = const [
-    HomePage(),             // index 0
-    Placeholder(),          // Placeholder instead of self
-    AnnouncementPage(),     // index 2
-    CalendarPage(),         // index 3
-    InventoryPage(),        // index 4
+  final tabs = [
+    TabItem(label: 'Repair Task', count: 5),
+    TabItem(label: 'Maintenance Task', count: 2),
   ];
 
   final List<NavItem> _navItems = const [
@@ -32,63 +39,138 @@ class _WorkOrderState extends State<WorkOrderPage> {
   ];
 
   void _onTabTapped(int index) {
-    if (index == _selectedIndex) return;
+    final destinations = [
+      const HomePage(),
+      const WorkOrderPage(),
+      const AnnouncementPage(),
+      const CalendarPage(),
+      const InventoryPage(),
+    ];
 
-    // Navigate to the correct page
-    Widget destination;
-    switch (index) {
-      case 0:
-        destination = const HomePage();
-        break;
-      case 1:
-        destination = const WorkOrderPage();
-        break;
-      case 2:
-        destination = const AnnouncementPage();
-        break;
-      case 3:
-        destination = const CalendarPage();
-        break;
-      case 4:
-        destination = const InventoryPage();
-        break;
-      default:
-        destination = const HomePage();
+    if (index != 1) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => destinations[index]),
+      );
     }
+  }
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => destination),
-    );
+  Widget _buildTabContent() {
+    switch (selectedTabLabel.toLowerCase()) {
+      case 'repair task':
+        return ListView(
+          children: [
+            RepairTaskCard(
+              title: 'Fix Sink',
+              requestId: 'REQ-001',
+              date: '26 Sept',
+              classification: 'In Progress',
+              unit: 'Unit 203',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const RepairDetails()),
+                );
+              },
+            ),
+          ],
+        );
+
+      case 'maintenance task':
+        return ListView(
+          children: [
+            MaintenanceTaskCard(
+              title: 'Light Inspection',
+              requestId: 'PM-GEN-LIGHT-001',
+              unit: 'Lobby',
+              date: '30 July', 
+              classification: 'High',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MaintenanceDetails()),
+                );
+              },
+              onChatTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ChatPage()),
+                );
+              },
+            ),
+          ],
+        );
+      default:
+        return const Center(child: Text("No requests found."));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        leading: const Text('Announcement'),
+        leading: const Text('Work Order Management'),
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications),
             onPressed: () {
-              // Handle notification tap
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NotificationPage()),
+              );
             },
           ),
         ],
       ),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SearchAndFilterBar(
+                    searchController: _searchController,
+                    selectedClassification: _selectedClassification,
+                    classifications: ['All', 'Electrical', 'Plumbing', 'Carpentry'],
+                    onSearchChanged: (query) {},
+                    onFilterChanged: (classification) {
+                      setState(() {
+                        _selectedClassification = classification;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
 
-      body: const SafeArea(
-        child: Center(
-          child: Text('Calendar Page'),
+                  StatusTabSelector(
+                    tabs: tabs,
+                    selectedLabel: selectedTabLabel,
+                    onTabSelected: (label) {
+                      setState(() {
+                        selectedTabLabel = label;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 24),
+
+                  const Text(
+                    'Recent Request',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 16),
+
+                  Expanded(child: _buildTabContent()),
+                ],
+              ),
+            ),
+          ],
         ),
-
-
-
-        
       ),
       bottomNavigationBar: NavBar(
         items: _navItems,
-        currentIndex: _selectedIndex,
+        currentIndex: 1,
         onTap: _onTabTapped,
       ),
     );

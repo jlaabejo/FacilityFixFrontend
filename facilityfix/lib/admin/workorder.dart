@@ -1,18 +1,21 @@
 import 'package:facilityfix/admin/announcement.dart';
 import 'package:facilityfix/admin/calendar.dart';
 import 'package:facilityfix/admin/chat.dart';
-import 'package:facilityfix/admin/forms.dart';
 import 'package:facilityfix/admin/home.dart';
 import 'package:facilityfix/admin/inventory.dart';
-import 'package:facilityfix/tenant/view_details.dart';
+import 'package:facilityfix/admin/forms/maintenance_task.dart';
+import 'package:facilityfix/admin/notification.dart';
+import 'package:facilityfix/admin/view_details/maintenance_details.dart';
+import 'package:facilityfix/admin/view_details/repair_details.dart';
 import 'package:facilityfix/widgets/pop_up.dart';
+import 'package:facilityfix/widgets/workorder_cards.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
-import 'package:facilityfix/widgets/workOrder_cards.dart';
 
 class WorkOrderPage extends StatefulWidget {
   const WorkOrderPage({super.key});
+  
 
   @override
   State<WorkOrderPage> createState() => _WorkOrderPageState();
@@ -22,6 +25,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   String selectedTabLabel = "Repair";
   String _selectedClassification = "Repair";
   final TextEditingController _searchController = TextEditingController();
+  
 
   final tabs = [
     TabItem(label: 'Repair', count: 5),
@@ -65,7 +69,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
           Navigator.push(
             context,
           MaterialPageRoute(
-              builder: (_) => const AddForm(requestType: 'Maintenance Task'),
+              builder: (_) => MaintenanceForm(requestType: 'Basic Information',),
             ),
           );
         },
@@ -89,7 +93,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const ViewDetailsPage()),
+                  MaterialPageRoute(builder: (_) => const RepairDetails()),
                 );
               },
             ),
@@ -99,7 +103,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       case 'maintenance':
         return ListView(
           children: [
-            AnnouncementTaskCard(
+            MaintenanceTaskCard(
               title: 'Pest Control',
               requestId: 'MT-5356',
               unit: 'Lobby',
@@ -108,7 +112,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const ViewDetailsPage()),
+                  MaterialPageRoute(builder: (_) => const MaintenanceDetails()),
                 );
               },
               onChatTap: () {
@@ -130,11 +134,16 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        leading: const Text('Repair Management'),
+        leading: const Text('Work Order Management'),
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications),
-            onPressed: () {},
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NotificationPage()),
+              );
+            },
           ),
         ],
       ),

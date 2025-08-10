@@ -1,4 +1,4 @@
-import 'package:facilityfix/tenant/home.dart';
+import 'package:facilityfix/admin/home.dart';
 import 'package:flutter/material.dart';
 
 void main() {

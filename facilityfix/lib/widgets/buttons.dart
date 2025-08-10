@@ -245,7 +245,7 @@ class AddButton extends StatelessWidget {
   }
 }
 
-// Text Button
+// Filled Text Button
 class FilledButton extends StatelessWidget {
   final String label;
   final VoidCallback onPressed;
@@ -315,6 +315,182 @@ class FilledButton extends StatelessWidget {
   }
 }
 
+// Dropdown
+class DropdownField<T> extends StatefulWidget {
+  final String label;
+  final T? value; // Single value
+  final List<T>? values; // Multiple values
+  final List<T> items;
+  final void Function(T?)? onChanged; // For single select
+  final void Function(List<T>)? onChangedMulti; // For multi select
+  final bool isRequired;
+  final String? hintText;
+  final Widget? prefixIcon;
+  final Widget? suffixIcon;
+  final bool isMultiSelect;
+  final TextEditingController? otherController;
+
+  const DropdownField({
+    super.key,
+    required this.label,
+    required this.items,
+    this.value,
+    this.values,
+    this.onChanged,
+    this.onChangedMulti,
+    this.isRequired = false,
+    this.hintText,
+    this.prefixIcon,
+    this.suffixIcon,
+    this.isMultiSelect = false,
+    this.otherController,
+  });
+
+  @override
+  State<DropdownField<T>> createState() => _DropdownFieldState<T>();
+}
+
+class _DropdownFieldState<T> extends State<DropdownField<T>> {
+  bool showOtherInput = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.isMultiSelect) {
+      showOtherInput = widget.value != null && widget.value.toString() == 'Others';
+    }
+  }
+
+  void _showMultiSelectDialog() async {
+    final List<T> selected = List.from(widget.values ?? []);
+
+    final result = await showDialog<List<T>>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            title: Text(widget.label),
+            content: SingleChildScrollView(
+              child: Column(
+                children: widget.items.map((item) {
+                  final isSelected = selected.contains(item);
+                  return CheckboxListTile(
+                    value: isSelected,
+                    title: Text(item.toString()),
+                    onChanged: (checked) {
+                      setStateDialog(() {
+                        if (checked == true) {
+                          selected.add(item);
+                        } else {
+                          selected.remove(item);
+                        }
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancel"),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, selected),
+                child: const Text("OK"),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (result != null && widget.onChangedMulti != null) {
+      widget.onChangedMulti!(result);
+    }
+  }
 
 
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.isRequired ? '${widget.label} *' : widget.label,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
 
+          // Multi-select mode
+          if (widget.isMultiSelect)
+            InkWell(
+              onTap: _showMultiSelectDialog,
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  hintText: widget.hintText ?? 'Select ${widget.label}...',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  prefixIcon: widget.prefixIcon,
+                  suffixIcon: widget.suffixIcon,
+                ),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: -8,
+                  children: (widget.values ?? [])
+                      .map((val) => Chip(label: Text(val.toString())))
+                      .toList(),
+                ),
+              ),
+            )
+          else
+            DropdownButtonFormField<T>(
+              value: widget.value,
+              isExpanded: true,
+              decoration: InputDecoration(
+                hintText: widget.hintText ?? 'Select ${widget.label}...',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                prefixIcon: widget.prefixIcon,
+                suffixIcon: widget.suffixIcon,
+              ),
+              items: widget.items.map((item) {
+                return DropdownMenuItem<T>(
+                  value: item,
+                  child: Text(item.toString()),
+                );
+              }).toList(),
+              onChanged: (val) {
+                setState(() {
+                  showOtherInput = val.toString() == 'Others';
+                });
+                widget.onChanged?.call(val);
+              },
+              validator: widget.isRequired
+                  ? (val) => val == null ? '${widget.label} is required' : null
+                  : null,
+            ),
+
+          if (showOtherInput && widget.otherController != null) ...[
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: widget.otherController,
+              decoration: InputDecoration(
+                labelText: 'Please specify',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              validator: (value) {
+                if (widget.isRequired &&
+                    showOtherInput &&
+                    (value == null || value.trim().isEmpty)) {
+                  return 'Please specify';
+                }
+                return null;
+              },
+            ),
+          ]
+        ],
+      ),
+    );
+  }
+}
