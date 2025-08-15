@@ -150,7 +150,7 @@ class LoginPage extends StatelessWidget {
                           onPressed: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => const DashboardPage()),
+                              MaterialPageRoute(builder: (context) => const AdminWebDashPage()),
                             );
                           },
                           child: const Text('dashboard'),
