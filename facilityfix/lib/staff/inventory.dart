@@ -4,8 +4,9 @@ import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/notification.dart';
+import 'package:facilityfix/staff/view_details/invetory_details.dart';
 import 'package:facilityfix/staff/workorder.dart';
-import 'package:facilityfix/widgets/announcement_cards.dart';
+import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/pop_up.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/buttons.dart';
@@ -77,46 +78,64 @@ class _InventoryPageState extends State<InventoryPage> {
     );
   }
 
-  Widget _buildTabContent() {
-    switch (selectedTabLabel.toLowerCase()) {
-      case 'items':
-        return ListView(
-          children: [
-            InventoryCard(
-              itemName: 'Galvanized Screw 3mm',
-              priority: 'Maintenance',
-              itemId: 'MAT-CIV-003',
-              categoryLabel: 'Civil/Carpentry',
-              quantity: '150 pcs',
-            ),
-          ],
-        );
+Widget _buildTabContent() {
+  switch (selectedTabLabel.toLowerCase()) {
+    case 'items':
+      return ListView(
+        children: [
+          InventoryCard(
+            itemName: 'Galvanized Screw 3mm',
+            stockStatus: 'In Stock',
+            itemId: 'MAT-CIV-003',
+            department:'Carpentry', 
+            quantity: '15',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => InventoryDetails(selectedTabLabel: 'inventory details'),
+                ),
+              );
+            },
+          ),
+        ],
+      );
 
-      case 'requests':
-        return ListView(
-          children: [
-            InventoryRequestCard(
-              itemName: 'Galvanized Screw 3mm',
-              requestId: 'REQ-2025-001',
-              itemType: 'Civil/Carpentry',
-              status: 'Pending',
-            ),
-          ],
-        );
-      default:
-        return const Center(child: Text("No requests found."));
-    }
+    case 'requests':
+      return ListView(
+        children: [
+          InventoryRequestCard(
+            itemName: 'LED Tube Light',
+            requestId: 'REQ-2025-001',
+            department: 'Electrical', 
+            status: 'Pending',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => InventoryDetails(selectedTabLabel: 'inventory request'),
+                ),
+              );
+            },
+          ), 
+        ],
+      );
+
+    default:
+      return const Center(child: Text("No requests found."));
   }
+}
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        leading: const Text('Inventory Management'),
+        title: 'Inventory Management',
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications),
+            icon: const Icon(Icons.notifications_outlined),
             onPressed: () {
               Navigator.push(
                 context,

@@ -1,8 +1,8 @@
-import 'package:facilityfix/admin/announcement.dart';
-import 'package:facilityfix/admin/calendar.dart';
-import 'package:facilityfix/admin/home.dart';
-import 'package:facilityfix/admin/inventory.dart';
-import 'package:facilityfix/admin/workorder.dart';
+import 'package:facilityfix/staff/announcement.dart';
+import 'package:facilityfix/staff/calendar.dart';
+import 'package:facilityfix/staff/home.dart';
+import 'package:facilityfix/staff/inventory.dart';
+import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/widgets/tag.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
@@ -21,7 +21,7 @@ class InventoryDetails extends StatefulWidget {
 }
 
 class _InventoryDetailsState extends State<InventoryDetails> {
-  int _selectedIndex = 4;
+  int _selectedIndex = 1;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -87,22 +87,7 @@ class _InventoryDetailsState extends State<InventoryDetails> {
           quantity: '5',
           unit: 'pcs',
           notes: 'Replace flickering lights near elevator lobby.',
-          onApprove: () {
-            // TODO: Update the request’s status to Approved in your database
-            // TODO: Deduct quantity from inventory if needed
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Request approved.')),
-            );
-            Navigator.pop(context); // close details view and return to list
-          },
-          onReject: () {
-            // TODO: Update the request’s status to Rejected in your database
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Request rejected.')),
-            );
-            Navigator.pop(context); 
-          },
-              );
+        );
       default:
         return const Center(child: Text("No requests found."));
     }
@@ -113,19 +98,16 @@ class _InventoryDetailsState extends State<InventoryDetails> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        title: 'Inventory Management',
         leading: Row(
           children: const [
             Padding(
               padding: EdgeInsets.only(right: 8),
               child: BackButton(),
             ),
+            Text('View Details'),
           ],
         ),
-        showMore: true, 
-        showHistory: true,
       ),
-
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),

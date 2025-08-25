@@ -95,7 +95,7 @@ class _FileAttachmentPickerState extends State<FileAttachmentPicker> {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
       type: FileType.custom,
-      allowedExtensions: ['jpg', 'pdf', 'doc'],
+      allowedExtensions: ['jpg', 'pdf', 'doc', 'png'],
     );
 
     if (result != null && result.files.isNotEmpty) {
@@ -333,6 +333,10 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
 
   @override
   Widget build(BuildContext context) {
+    const hintStyle = TextStyle(color: Color(0xFF475467));
+    const valueStyle = TextStyle(color: Color(0xFF475467)); 
+    const itemStyle = TextStyle(color: Color(0xFF475467));  
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: Column(
@@ -350,7 +354,10 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
               items: widget.items.map((item) => MultiSelectItem<T>(item, item.toString())).toList(),
               initialValue: widget.selectedValues ?? [],
               title: Text(widget.label),
-              buttonText: Text(widget.hintText ?? 'Select ${widget.label}...'),
+              buttonText: Text(
+                widget.hintText ?? 'Select ${widget.label}...',
+                style: hintStyle,
+              ),
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.grey),
                 borderRadius: BorderRadius.circular(8),
@@ -373,14 +380,17 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
               isExpanded: true,
               decoration: InputDecoration(
                 hintText: widget.hintText ?? 'Select ${widget.label}...',
+                hintStyle: hintStyle,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 prefixIcon: widget.prefixIcon,
                 suffixIcon: widget.suffixIcon,
               ),
+              style: valueStyle, // selected value text
+              icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF475467)), // arrow color
               items: widget.items.map((item) {
                 return DropdownMenuItem<T>(
                   value: item,
-                  child: Text(item.toString()),
+                  child: Text(item.toString(), style: itemStyle),
                 );
               }).toList(),
               onChanged: (val) {
@@ -400,6 +410,7 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
               controller: widget.otherController,
               decoration: InputDecoration(
                 labelText: 'Please specify',
+                hintStyle: hintStyle,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
               validator: (value) {

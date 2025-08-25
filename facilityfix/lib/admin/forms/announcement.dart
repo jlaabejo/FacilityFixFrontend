@@ -49,241 +49,173 @@ class _AnnouncementFormState extends State<AnnouncementForm> {
     }
   }
 
-  Future<void> _selectDateTime(BuildContext context) async {
-    final DateTime? pickedDate = await showDatePicker(
+  Future<void> _pickDateTime(TextEditingController controller) async {
+    final pickedDate = await showDatePicker(
       context: context,
       initialDate: DateTime.now(),
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
-
     if (pickedDate != null) {
-      final TimeOfDay? pickedTime = await showTimePicker(
+      final pickedTime = await showTimePicker(
         context: context,
         initialTime: TimeOfDay.now(),
       );
-
       if (pickedTime != null) {
         final formattedDate =
             "${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}";
         final formattedTime = pickedTime.format(context);
-        availabilityController.text = "$formattedDate at $formattedTime";
+        controller.text = "$formattedDate $formattedTime";
       }
     }
   }
 
   // Controllers
-  final TextEditingController taskNameController = TextEditingController();
-  final TextEditingController idController = TextEditingController();
-  final TextEditingController nameController = TextEditingController();
-  final TextEditingController dateCreatedController = TextEditingController();
+  final TextEditingController audienceController = TextEditingController();
+  final TextEditingController noticeTypeController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
-
-  final TextEditingController unitController = TextEditingController();
-  final TextEditingController titleController = TextEditingController();
-  final TextEditingController availabilityController = TextEditingController();
-  final TextEditingController priorityController = TextEditingController();
-  final TextEditingController statusController = TextEditingController();
   final TextEditingController locationController = TextEditingController();
-  final TextEditingController hoursController = TextEditingController();
-  final TextEditingController dateStartedController = TextEditingController();
-  final TextEditingController dueDateController = TextEditingController();
-  final TextEditingController adminNotificationController = TextEditingController();
-  final TextEditingController staffNotificationController = TextEditingController();
-  final TextEditingController otherPriorityController = TextEditingController();
-  final TextEditingController remarksController = TextEditingController();
+  final TextEditingController scheduleVisibilityController = TextEditingController();
+  final TextEditingController schedulePostingController = TextEditingController();
 
-  final List<TextEditingController> checklistControllers = [];
+  // Holds multiple selected files
+  List<PlatformFile> selectedFiles = [];
+  bool pinToDashboard = false;
 
-  PlatformFile? selectedFile;
+  /// File picker with multi-selection and delete capability
+  Widget _filePicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+      const Text('Attachments', style: TextStyle(fontWeight: FontWeight.bold)),
+      const SizedBox(height: 8),
+      ElevatedButton.icon(
+        onPressed: () async {
+          final result = await FilePicker.platform.pickFiles(allowMultiple: true);
+          if (result != null) {
+            setState(() {
+              selectedFiles = result.files;
+            });
+          }
+        },
+        icon: const Icon(Icons.attach_file),
+        label: const Text('Choose Files'),
+      ),
 
-  // For dropdowns
-  String? recurringValue;
-  String? departmentValue;
-  String? staffValue;
-  String? priorityValue;
-  String? locationValue; 
-
-  final List<String> notificationOptions = [
-    'Same Day',
-    '1 Day Before',
-    '2 Days Before',  
-    '3 Days Before',
-    '1 Week Before',
-    '1 Month Before',
-    '3 Months Before',
-  ];
-
-  List<String> adminNotifTime = [];
-  List<String> staffNotifTime = [];
-
-  void addChecklistItem() {
-    setState(() => checklistControllers.add(TextEditingController()));
-  }
-
-  void removeChecklistItem(int index) {
-    setState(() => checklistControllers.removeAt(index));
+      // List each selected file with a delete button
+      if (selectedFiles.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (int i = 0; i < selectedFiles.length; i++)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        selectedFiles[i].name,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete, size: 20),
+                      onPressed: () {
+                        setState(() => selectedFiles.removeAt(i));
+                      },
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+    ]);
   }
 
   List<Widget> getFormFields() {
-    switch (widget.requestType) {
-      case 'Basic Information':
-        return [
-          const Text('Basic Information', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
+    return [
+      const Text('New Announcement',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 16),
 
-          InputField(label: 'Task Title', controller: idController, hintText: 'Enter Task Title', isRequired: true, readOnly: false),
-          InputField(label: 'Task Id', controller: idController, hintText: 'Auto-filled', isRequired: true, readOnly: true),
-          InputField(label: 'Created By', controller: taskNameController, hintText: 'Auto-filled', isRequired: true, readOnly: true),
-          InputField(label: 'Date Created', controller: dateCreatedController, hintText: 'Auto-filled', isRequired: true, readOnly: true),
-          
-          DropdownField<String>(
-            label: 'Priority',
-            value: priorityValue,
-            items: ['Low', 'Medium', 'High'],
-            onChanged: (newValue) {
-              setState(() => priorityValue = newValue);
-            },
-            isRequired: true,
-            otherController: otherPriorityController,
-          ),
+      DropdownField<String>(
+        label: 'Audience',
+        value: audienceController.text.isEmpty ? null : audienceController.text,
+        items: ['Tenant', 'Staff', 'All'],
+        onChanged: (value) {
+          setState(() => audienceController.text = value ?? '');
+        },
+        isRequired: true,
+      ),
 
-          DropdownField<String>(
-            label: 'Location',
-            value: locationValue,
-            items: ['Lobby', 'Gate', 'Pool'],
-            onChanged: (newValue) {
-              setState(() => locationValue = newValue);
-            },
-            isRequired: true,
-            otherController: otherPriorityController,
-          ),
+      DropdownField<String>(
+        label: 'Notice Type',
+        value: noticeTypeController.text.isEmpty ? null : noticeTypeController.text,
+        items: [
+          'Scheduled Maintenance',
+          'Utility Interruption',
+          'Safety Inspection',
+          'Facility Works',
+          'General Announcement',
+          'Pest Control',
+          'Power Outage'
+        ],
+        onChanged: (value) {
+          setState(() => noticeTypeController.text = value ?? '');
+        },
+        isRequired: true,
+      ),
 
-          InputField(label: 'Description', controller: descriptionController, hintText: 'Enter task description', isRequired: true),
+      InputField(
+        label: 'Description / Message Body',
+        controller: descriptionController,
+        hintText: 'Enter announcement details',
+        isRequired: true,
+        maxLines: 4,
+      ),
 
-          const SizedBox(height: 8),
-          const Text('Task Checklist', style: TextStyle(fontWeight: FontWeight.bold)),
-          ...List.generate(
-            checklistControllers.length,
-            (index) => Row(
-              children: [
-                Expanded(
-                  child: InputField(
-                    label: 'Checklist ${index + 1}',
-                    controller: checklistControllers[index],
-                    hintText: 'Enter checklist item',
-                    isRequired: true,
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => removeChecklistItem(index),
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                )
-              ],
-            ),
-          ),
-          ElevatedButton.icon(
-            onPressed: addChecklistItem,
-            icon: const Icon(Icons.add),
-            label: const Text('Add Checklist Item'),
-          ),
-        ];
+      InputField(
+        label: 'Location (Affected Area)',
+        controller: locationController,
+        hintText: 'Enter location',
+        isRequired: true,
+      ),
 
-      case 'Assign & Schedule Work':
-        return [
-          const SizedBox(height: 8),
-          const Text('Schedule & Assignment', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-
-          DropdownField<String>(
-            label: 'Recurring Interval',
-            value: recurringValue,
-            items: ['1 week', '1 month', '3 months', '1 year', 'Others'],
-            onChanged: (value) => setState(() => recurringValue = value),
-            otherController: otherPriorityController,
+      GestureDetector(
+        onTap: () => _pickDateTime(scheduleVisibilityController),
+        child: AbsorbPointer(
+          child: InputField(
+            label: 'Schedule Visibility',
+            controller: scheduleVisibilityController,
+            hintText: 'Select date & time',
             isRequired: true,
           ),
+        ),
+      ),
 
-          InputField(label: 'Estimated Duration', controller: hoursController, hintText: 'In hours', isRequired: true,),
-          InputField(
-            controller: dateStartedController,
-            readOnly: true,
-              label: 'Start Date',
-              hintText: 'Pick start date',
-              suffixIcon: const Icon(Icons.calendar_today),
-              onTap: () async {
-                DateTime? pickedDate = await showDatePicker(
-                  context: context,
-                  initialDate: DateTime.now(),
-                  firstDate: DateTime(1900),
-                  lastDate: DateTime.now(),
-                );
-                if (pickedDate != null) {
-                  dateStartedController.text =
-                      "${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}";
-                }
-              },  
-            ),
-          InputField(label: 'Due Date', controller: dueDateController, hintText: 'Auto-calculated', readOnly: true),
-
-          DropdownField<String>(
-            label: 'Department',
-            value: departmentValue,
-            items: ['Maintenance', 'Plumbing', 'Electrical', 'Carpentry', 'Others'],
-            onChanged: (value) => setState(() => departmentValue = value),
-            otherController: otherPriorityController,
+      GestureDetector(
+        onTap: () => _pickDateTime(schedulePostingController),
+        child: AbsorbPointer(
+          child: InputField(
+            label: 'Schedule Posting',
+            controller: schedulePostingController,
+            hintText: 'Select date & time',
             isRequired: true,
           ),
+        ),
+      ),
 
-          DropdownField<String>(
-            label: 'Assign Staff',
-            value: staffValue,
-            items: ['Juan Dela Cruz', 'Anna Marie', 'Pedro Santos'],
-            onChanged: (value) => setState(() => staffValue = value),
-            isRequired: true,
-          ),
+      _filePicker(),
 
-          FileAttachmentPicker(label: 'Upload Attachment'),
-
-          const SizedBox(height: 8),
-          const Text('Remarks', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-
-          InputField(label: 'Remarks / Notes', controller: remarksController, hintText: 'Enter remarks', isRequired: false),
-
-          const Text('Notifications', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-
-          DropdownField<String>(
-            label: 'Admin Notifications',
-            items: notificationOptions,
-            values: adminNotifTime,
-            onChangedMulti: (vals) => setState(() => adminNotifTime = vals),
-            isMultiSelect: true,
-            isRequired: true,
-          ),
-
-          DropdownField<String>(
-            label: 'Staff Notifications',
-            items: notificationOptions,
-            values: staffNotifTime, 
-            onChangedMulti: (vals) => setState(() => staffNotifTime = vals),
-            isMultiSelect: true,
-            isRequired: true,
-          ),
-
-          InputField(
-            label: 'Availability',
-            controller: availabilityController,
-            hintText: 'Select preferred date & time',
-            readOnly: true,
-            suffixIcon: const Icon(Icons.calendar_today),
-            onTap: () => _selectDateTime(context),
-          ),
-        ];
-
-      default:
-        return [const Text('Invalid request type')];
-    }
+      SwitchListTile(
+        title: const Text('Pin to Dashboard'),
+        value: pinToDashboard,
+        onChanged: (val) {
+          setState(() => pinToDashboard = val);
+        },
+      ),
+    ];
   }
 
   @override
@@ -314,23 +246,14 @@ class _AnnouncementFormState extends State<AnnouncementForm> {
                 ),
               ),
             ),
-              FilledButton(
-              label: widget.requestType == 'Assign & Schedule Work' ? "Submit" : "Next",
+            FilledButton(
+              label: "Submit",
               onPressed: () {
-                if (widget.requestType == 'Assign & Schedule Work') {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Form submitted successfully!')),
-                  );
-                  Navigator.pop(context);
-                } else {
-                  // Go to Assign & Schedule Work page
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AnnouncementForm(requestType: 'Assign & Schedule Work'),
-                    ),
-                  );
-                }
+                // Auto-notification logic happens here after submit/post
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Announcement created & audience notified!')),
+                );
+                Navigator.pop(context);
               },
             ),
           ],

@@ -78,7 +78,6 @@ class _MaintenanceFormState extends State<MaintenanceForm> {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController dateCreatedController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
-
   final TextEditingController unitController = TextEditingController();
   final TextEditingController titleController = TextEditingController();
   final TextEditingController availabilityController = TextEditingController();
@@ -291,11 +290,11 @@ class _MaintenanceFormState extends State<MaintenanceForm> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
+        title: 'New Maintenance Task',
         leading: Row(
           children: const [
             BackButton(),
             SizedBox(width: 8),
-            Text('New Maintenance Task'),
           ],
         ),
       ),

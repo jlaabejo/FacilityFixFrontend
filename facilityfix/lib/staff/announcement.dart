@@ -1,21 +1,23 @@
+import 'dart:async';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/staff/notification.dart';
-import 'package:facilityfix/staff/view_details/announcement_details.dart';
 import 'package:facilityfix/staff/workorder.dart';
-import 'package:facilityfix/widgets/announcement_cards.dart';
+import 'package:facilityfix/tenant/view_details.dart';
+import 'package:facilityfix/widgets/buttons.dart';
+import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
+import 'package:facilityfix/widgets/helper_models.dart';
 import 'package:flutter/material.dart';
-
 class AnnouncementPage extends StatefulWidget {
   const AnnouncementPage({super.key});
 
   @override
-  State<AnnouncementPage> createState() => _AnnouncementState();
+  State<AnnouncementPage> createState() => _AnnouncementPageState();
 }
 
-class _AnnouncementState extends State<AnnouncementPage> {
+class _AnnouncementPageState extends State<AnnouncementPage> {
   int _selectedIndex = 2;
 
   final List<NavItem> _navItems = const [
@@ -34,23 +36,143 @@ class _AnnouncementState extends State<AnnouncementPage> {
       const CalendarPage(),
       const InventoryPage(),
     ];
-
     if (index != _selectedIndex) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => destinations[index]),
       );
+      setState(() => _selectedIndex = index);
+    }
+  }
+
+  // ===== Search, classification & read-status filters =====
+  final TextEditingController _searchController = TextEditingController();
+  String _selectedClassification = "All";
+  AnnStatusFilter _statusFilter = AnnStatusFilter.all;
+
+  // ===== Demo data (replace with backend) =====
+  final List<Announcement> _all = [
+    Announcement(
+      title: 'Utility Interruption',
+      classification: 'utility interruption',
+      details: 'Temporary shutdown in pipelines for maintenance cleaning.',
+      postedAt: DateTime.now().subtract(const Duration(hours: 3)),
+      isRead: false,
+    ),
+    Announcement(
+      title: 'Power Outage',
+      classification: 'power outage',
+      details: 'Scheduled power interruption due to transformer maintenance.',
+      postedAt: DateTime.now().subtract(const Duration(hours: 27)),
+      isRead: true,
+    ),
+    Announcement(
+      title: 'General Maintenance',
+      classification: 'general maintenance',
+      details: 'Common area repainting and minor repairs this weekend.',
+      postedAt: DateTime.now().subtract(const Duration(days: 3)),
+      isRead: false,
+    ),
+    Announcement(
+      title: 'Pest Control',
+      classification: 'pest control',
+      details: 'Building-wide pest control on Saturday, secure food items.',
+      postedAt: DateTime.now().subtract(const Duration(days: 11)),
+      isRead: true,
+    ),
+  ];
+
+  // ===== Debounce for search =====
+  Timer? _debounce;
+  void _onSearchChanged(String _) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 250), () {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() => _onSearchChanged(_searchController.text));
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // ===== Filtering logic =====
+  bool _isRecent(DateTime dt) =>
+      DateTime.now().difference(dt).inDays <= 7;
+
+  bool _matchesClassification(String classification) {
+    if (_selectedClassification == 'All') return true;
+    return classification.toLowerCase() == _selectedClassification.toLowerCase();
+  }
+
+  bool _matchesSearch(String haystack) {
+    final q = _searchController.text.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    return haystack.toLowerCase().contains(q);
+  }
+
+  bool _matchesStatus(Announcement a) {
+    switch (_statusFilter) {
+      case AnnStatusFilter.all:
+        return true;
+      case AnnStatusFilter.unread:
+        return !a.isRead;
+      case AnnStatusFilter.read:
+        return a.isRead;
+      case AnnStatusFilter.recent:
+        return _isRecent(a.postedAt);
+    }
+  }
+
+  List<Announcement> get _filteredAnnouncements {
+    return _all.where((a) {
+      final classMatch = _matchesClassification(a.classification);
+      final searchMatch = _matchesSearch("${a.title} ${a.details} ${a.classification}");
+      final statusMatch = _matchesStatus(a);
+      return classMatch && searchMatch && statusMatch;
+    }).toList()
+      ..sort((a, b) => b.postedAt.compareTo(a.postedAt));
+  }
+
+  Future<void> _refresh() async {
+    // TODO: replace with backend fetch
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  String headerTitle() {
+    switch (_statusFilter) {
+      case AnnStatusFilter.all:
+        return 'All Announcements';
+      case AnnStatusFilter.unread:
+        return 'Unread Announcements';
+      case AnnStatusFilter.read:
+        return 'Read Announcements';
+      case AnnStatusFilter.recent:
+        return 'Recent Announcements';
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final items = _filteredAnnouncements;
+
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        leading: const Text('Announcement'),
+        title: 'Announcement',
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications),
+            icon: const Icon(Icons.notifications_outlined),
             onPressed: () {
               Navigator.push(
                 context,
@@ -60,33 +182,124 @@ class _AnnouncementState extends State<AnnouncementPage> {
           ),
         ],
       ),
-
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            
-            // Latest Announcement Section
-            AnnouncementCard(
-              title: 'Utility Interruption',
-              datePosted: '3 hours ago',
-              details: 'Temporary shutdown in pipelines for maintenance cleaning.',
-              classification: 'utility', 
-              onTap: () {  
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const AnnouncementDetails(),
-                  ),
-                );
-              },
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Search & classification filter
+                SearchAndFilterBar(
+                  searchController: _searchController,
+                  selectedClassification: _selectedClassification,
+                  classifications: const [
+                    'All',
+                    'Utility Interruption',
+                    'Power Outage',
+                    'Pest Control',
+                    'General Maintenance',
+                  ],
+                  onSearchChanged: (_) => setState(() {}),
+                  onFilterChanged: (v) => setState(() => _selectedClassification = v),
+                ),
+                const SizedBox(height: 12),
+
+                // Status segmented filter
+                Row(
+                  children: [
+                    SegmentChip(
+                      label: 'All',
+                      selected: _statusFilter == AnnStatusFilter.all,
+                      onSelected: () => setState(() => _statusFilter = AnnStatusFilter.all),
+                    ),
+                    const SizedBox(width: 8),
+                    SegmentChip(
+                      label: 'Unread',
+                      selected: _statusFilter == AnnStatusFilter.unread,
+                      onSelected: () => setState(() => _statusFilter = AnnStatusFilter.unread),
+                    ),
+                    const SizedBox(width: 8),
+                    SegmentChip(
+                      label: 'Read',
+                      selected: _statusFilter == AnnStatusFilter.read,
+                      onSelected: () => setState(() => _statusFilter = AnnStatusFilter.read),
+                    ),
+                    const SizedBox(width: 8),
+                    SegmentChip(
+                      label: 'Recent',
+                      selected: _statusFilter == AnnStatusFilter.recent,
+                      onSelected: () => setState(() => _statusFilter = AnnStatusFilter.recent),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+                Text(
+                  headerTitle(),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 12),
+
+                // List
+                Expanded(
+                  child: items.isEmpty
+                      ? const EmptyState()
+                      : ListView.separated(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          itemCount: items.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          itemBuilder: (_, i) {
+                            final a = items[i];
+                            final y = a.postedAt.year;
+                            final m = a.postedAt.month.toString().padLeft(2, '0');
+                            final d = a.postedAt.day.toString().padLeft(2, '0');
+                            final dateStr = '$y-$m-$d';
+
+                            // unread dot overlay + reduced opacity for read
+                            return Opacity(
+                              opacity: a.isRead ? 0.85 : 1,
+                              child: Stack(
+                                children: [
+                                  AnnouncementCard(
+                                    title: a.title,
+                                    datePosted: dateStr,
+                                    details: a.details,
+                                    classification: a.classification,
+                                    onTap: () {
+                                      // mark as read on view
+                                      final idx = _all.indexOf(a);
+                                      if (idx != -1 && !_all[idx].isRead) {
+                                        setState(() => _all[idx] = _all[idx].copyWith(isRead: true));
+                                      }
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => const ViewDetailsPage(
+                                            selectedTabLabel: 'announcement detail',
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                  if (!a.isRead)
+                                    const Positioned(
+                                      top: 10,
+                                      right: 10,
+                                      child: UnreadDot(),
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
-    ),
-
       bottomNavigationBar: NavBar(
         items: _navItems,
         currentIndex: _selectedIndex,

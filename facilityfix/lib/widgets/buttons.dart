@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 // Status Tab Selector
@@ -94,7 +95,7 @@ class StatusTabSelector extends StatelessWidget {
   }
 }
 
-// Search and Filter
+// Search and Filter Bar
 class SearchAndFilterBar extends StatelessWidget {
   final TextEditingController searchController;
   final String selectedClassification;
@@ -113,10 +114,11 @@ class SearchAndFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final borderRadius = BorderRadius.circular(12);
+
     return Row(
       children: [
-
-        // Search Field
+        // Search Field (icon on left)
         Expanded(
           child: Container(
             height: 48,
@@ -129,78 +131,229 @@ class SearchAndFilterBar extends StatelessWidget {
                   strokeAlign: BorderSide.strokeAlignOutside,
                   color: Color(0xFFE5E7E8),
                 ),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: borderRadius,
               ),
             ),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                const Icon(Icons.search, size: 20, color: Color(0xFF6E6E70)),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: TextField(
-                    controller: searchController,
-                    onChanged: onSearchChanged,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w400,
-                      color: Colors.black,
-                      height: 1.83,
-                    ),
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                      hintText: 'Search work orders...',
-                      border: InputBorder.none,
-                      hintStyle: TextStyle(
-                        color: Color(0xFF6E6E70),
-                        fontSize: 12,
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w400,
-                        height: 1.83,
-                      ),
-                    ),
+                  child: ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: searchController,
+                    builder: (_, __, ___) {
+                      return _DebouncedTextField(
+                        controller: searchController,
+                        onChanged: onSearchChanged,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w400,
+                          color: Colors.black,
+                          height: 1.83,
+                        ),
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                          hintText: 'Search work orders...',
+                          border: InputBorder.none,
+                          hintStyle: TextStyle(
+                            color: Color(0xFF6E6E70),
+                            fontSize: 12,
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w400,
+                            height: 1.83,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
-                const SizedBox(width: 8),
-                const Icon(Icons.search, size: 24, color: Color(0xFF6E6E70)),
+                // Clear button
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: searchController,
+                  builder: (_, value, __) {
+                    if (value.text.isEmpty) return const SizedBox.shrink();
+                    return IconButton(
+                      icon: const Icon(Icons.close, size: 18, color: Color(0xFF6E6E70)),
+                      splashRadius: 18,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      tooltip: 'Clear',
+                      onPressed: () {
+                        searchController.clear();
+                        onSearchChanged('');
+                      },
+                    );
+                  },
+                ),
               ],
             ),
           ),
         ),
         const SizedBox(width: 8),
 
-        // Filter Button
+        // Filter Button (same design; opens chip selector sheet)
         Container(
           width: 48,
           height: 48,
           decoration: ShapeDecoration(
-            color: const Color(0xFFF4F5FF), // background color here
+            color: const Color(0xFFF4F5FF),
             shape: RoundedRectangleBorder(
               side: const BorderSide(width: 1, color: Color(0xFFE7E7E8)),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: borderRadius,
             ),
           ),
-          child: PopupMenuButton<String>(
-            icon: const Icon(Icons.filter_alt_outlined, size: 20, color: Colors.black),
-            onSelected: onFilterChanged,
-            itemBuilder: (BuildContext context) {
-              return classifications.map((String value) {
-                return PopupMenuItem<String>(
-                  value: value,
-                  child: Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontFamily: 'Inter',
-                    ),
-                  ),
-                );
-              }).toList();
+          child: InkWell(
+            borderRadius: borderRadius,
+            onTap: () async {
+              final picked = await _showChipFilterSheet(
+                context,
+                options: classifications,
+                current: selectedClassification,
+              );
+              if (picked != null) onFilterChanged(picked);
             },
+            child: const Center(
+              child: Icon(Icons.tune, size: 20, color: Colors.black),
+            ),
           ),
-        )
-
+        ),
       ],
+    );
+  }
+}
+
+// ── Helper: bottom sheet with horizontal chips (single-select) ───────────────
+Future<String?> _showChipFilterSheet(
+  BuildContext context, {
+  required List<String> options,
+  required String current,
+}) {
+  String temp = current;
+
+  return showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: Theme.of(context).colorScheme.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (ctx) {
+      final onSurface = Theme.of(ctx).colorScheme.onSurface;
+
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // grab handle
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDDDEE0),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              Row(
+                children: [
+                  const Text('Filter by classification',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Close'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // Vertical chips
+              SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: options.map((opt) {
+                    final sel = opt == temp;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8), // spacing between chips
+                      child: ChoiceChip(
+                        label: Text(opt),
+                        selected: sel,
+                        onSelected: (_) {
+                          temp = opt;
+                          Navigator.pop(ctx, temp); // return immediately
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => Navigator.pop(ctx, 'All'),
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('Reset to All'),
+                  style: TextButton.styleFrom(foregroundColor: onSurface),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+// ── Helper: debounced TextField (for smooth typing) ──────────────────────────
+class _DebouncedTextField extends StatefulWidget {
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final Duration duration;
+  final InputDecoration decoration;
+  final TextStyle? style;
+
+  const _DebouncedTextField({
+    required this.controller,
+    required this.onChanged,
+    required this.decoration,
+    this.duration = const Duration(milliseconds: 250),
+    this.style,
+  });
+
+  @override
+  State<_DebouncedTextField> createState() => _DebouncedTextFieldState();
+}
+
+class _DebouncedTextFieldState extends State<_DebouncedTextField> {
+  Timer? _t;
+
+  void _debounce(String v) {
+    _t?.cancel();
+    _t = Timer(widget.duration, () => widget.onChanged(v));
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: widget.controller,
+      onChanged: _debounce,
+      onSubmitted: widget.onChanged, // immediate on Enter
+      textInputAction: TextInputAction.search,
+      style: widget.style,
+      decoration: widget.decoration,
     );
   }
 }
@@ -244,76 +397,191 @@ class AddButton extends StatelessWidget {
     );
   }
 }
-
-// Filled Text Button
+// Filled Button
 class FilledButton extends StatelessWidget {
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
+
   final Color backgroundColor;
   final Color textColor;
-  final double width;
+
+  /// Optional fixed width/height; if null, sizes to parent constraints.
+  final double? width;
   final double height;
+
   final double borderRadius;
   final TextStyle? textStyle;
+  final IconData? leadingIcon;
+
+  final bool isLoading;
+  final bool isDisabled;
+  final Gradient? gradient;
+  final double elevation;
+
+  /// whether to show the outer white container with border
+  final bool withOuterBorder;
+  final IconData? icon;
 
   const FilledButton({
     super.key,
     required this.label,
-    required this.onPressed,
+    required VoidCallback onPressed,
     this.backgroundColor = const Color(0xFF005CE7),
     this.textColor = Colors.white,
-    this.width = 375,
-    this.height = 80,
+    this.width,
+    this.height = 48,
     this.borderRadius = 100,
     this.textStyle,
-  });
+    this.leadingIcon,
+    this.isLoading = false,
+    this.isDisabled = false,
+    this.gradient,
+    this.elevation = 2.0,
+    this.withOuterBorder = true,
+    this.icon,
+  }) : onPressed = (isDisabled || isLoading) ? null : onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      decoration: ShapeDecoration(
-        color: const Color(0xFFFEFEFE),
-        shape: RoundedRectangleBorder(
-        side: BorderSide(
-        width: 1,
-        color: const Color(0xFFD0D5DD),
+    final theme = Theme.of(context);
+    final effectiveTextStyle = (textStyle ??
+            theme.textTheme.labelLarge?.copyWith(
+              color: textColor,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.1,
+            )) ??
+        TextStyle(
+          color: textColor,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.1,
+        );
+
+    final disabled = onPressed == null;
+    final baseColor = disabled ? const Color(0xFFEBECEF) : backgroundColor;
+    final fgColor = disabled ? const Color(0xFF9CA3AF) : textColor;
+
+    // Press/hover overlay color derived from base color
+    Color overlay(Color c, double opacity) => c.withOpacity(opacity);
+
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(borderRadius),
+    );
+
+    Widget buttonCore = Material(
+      elevation: elevation,
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(borderRadius),
+      clipBehavior: Clip.antiAlias,
+      child: Ink(
+        height: height,
+        width: width ?? double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(borderRadius),
+          color: gradient == null ? baseColor : null,
+          gradient: disabled ? null : gradient,
+          boxShadow: elevation > 0
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
         ),
-        ),
-      ),
-      child: GestureDetector(
-        onTap: onPressed,
-        child: Container(
-          width: double.infinity,
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          decoration: ShapeDecoration(
-            color: backgroundColor,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(borderRadius),
+        child: InkWell(
+          onTap: onPressed,
+          customBorder: shape,
+          splashColor: overlay(Colors.white, 0.20),
+          highlightColor: overlay(Colors.black, 0.05),
+          hoverColor: overlay(Colors.white, 0.06),
+          focusColor: overlay(Colors.white, 0.12),
+          child: Center(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              transitionBuilder: (child, anim) =>
+                  FadeTransition(opacity: anim, child: child),
+              child: isLoading
+                  ? SizedBox(
+                      key: const ValueKey('loading'),
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(fgColor),
+                      ),
+                    )
+                  : _ButtonContent(
+                      key: const ValueKey('content'),
+                      label: label,
+                      textStyle: effectiveTextStyle.copyWith(color: fgColor),
+                      leadingIcon: leadingIcon,
+                      iconColor: fgColor,
+                    ),
             ),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: textStyle ??
-                TextStyle(
-                  color: textColor,
-                  fontSize: 14,
-                  fontFamily: 'Inter',
-                  fontWeight: FontWeight.w600,
-                  height: 1.43,
-                  letterSpacing: 0.10,
-                ),
           ),
         ),
       ),
     );
+
+    // ✅ Wrap in outer border only if enabled
+    if (withOuterBorder) {
+      buttonCore = Material(
+        color: const Color(0xFFFEFEFE),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(width: 1, color: Color(0xFFD0D5DD)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: buttonCore,
+        ),
+      );
+    }
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        minHeight: height + (withOuterBorder ? 24 : 0),
+        maxWidth: width ?? double.infinity,
+      ),
+      child: buttonCore,
+    );
   }
 }
+
+class _ButtonContent extends StatelessWidget {
+  final String label;
+  final TextStyle textStyle;
+  final IconData? leadingIcon;
+  final Color iconColor;
+
+  const _ButtonContent({
+    super.key,
+    required this.label,
+    required this.textStyle,
+    this.leadingIcon,
+    required this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Text(label, textAlign: TextAlign.center, style: textStyle);
+
+    if (leadingIcon == null) return content;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(leadingIcon, size: 18, color: iconColor),
+        const SizedBox(width: 8),
+        Flexible(child: content),
+      ],
+    );
+  }
+}
+
 
 // Dropdown
 class DropdownField<T> extends StatefulWidget {
@@ -491,6 +759,132 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
           ]
         ],
       ),
+    );
+  }
+}
+
+/// A reusable outlined pill-shaped button with optional icon.
+/// - Honors [height] and [borderRadius].
+/// - Disabled when [onPressed] is null or [isLoading] is true.
+/// - Supports loading spinner and tooltip.
+/// - Uses Ink ripple clipped to the rounded outline.
+class OutlinedPillButton extends StatelessWidget {
+  final IconData? icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  final bool isLoading;
+
+  final double height;
+  final double borderRadius;
+  final EdgeInsetsGeometry padding;
+
+  final Color? backgroundColor; // fill behind outline (usually white/transparent)
+  final Color? foregroundColor; // icon/text color
+  final Color? borderColor;
+  final double borderWidth;
+  final Color? splashColor;
+
+  final String? tooltip;
+
+  const OutlinedPillButton({
+    super.key,
+    required this.label,
+    this.icon,
+    this.onPressed,
+    this.isLoading = false,
+    this.height = 48,
+    this.borderRadius = 100,
+    this.padding = const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    this.backgroundColor,
+    this.foregroundColor,
+    this.borderColor,
+    this.borderWidth = 1,
+    this.splashColor,
+    this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final enabled = onPressed != null && !isLoading;
+
+    // Sensible defaults pulled from theme
+    final Color fg = (foregroundColor ??
+        (enabled ? const Color(0xFF374151) : theme.disabledColor));
+    final Color bg = backgroundColor ?? Colors.white;
+    final Color br = borderColor ??
+        (enabled ? const Color(0xFFD0D5DD) : theme.disabledColor.withOpacity(0.5));
+    final Color splash = splashColor ?? theme.colorScheme.primary.withOpacity(0.12);
+
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(borderRadius),
+      side: BorderSide(color: br, width: borderWidth),
+    );
+
+    Widget button = ConstrainedBox(
+      constraints: BoxConstraints(minHeight: height),
+      child: Material(
+        color: Colors.transparent,
+        shape: shape, // for proper ink clipping
+        child: Ink(
+          decoration: ShapeDecoration(color: bg, shape: shape),
+          child: InkWell(
+            onTap: enabled ? onPressed : null,
+            customBorder: shape,
+            splashColor: splash,
+            highlightColor: splash.withOpacity(0.6),
+            child: Padding(
+              padding: padding,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isLoading) ...[
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(fg),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ] else if (icon != null) ...[
+                    Icon(icon, size: 20, color: fg),
+                    const SizedBox(width: 8),
+                  ],
+                  Flexible(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: fg,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (tooltip != null && tooltip!.trim().isNotEmpty) {
+      button = Tooltip(message: tooltip!, child: button);
+    }
+
+    // Add semantics for accessibility (announce disabled/loading states)
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: label,
+      value: isLoading ? 'Loading' : null,
+      child: button,
     );
   }
 }

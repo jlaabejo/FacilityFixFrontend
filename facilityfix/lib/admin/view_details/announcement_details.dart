@@ -47,13 +47,13 @@ class _AnnouncementDetailsState extends State<AnnouncementDetails> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
+        title: 'Announcement Management',
         leading: Row(
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(0, 0, 8, 0),
               child: const BackButton(),
             ),
-            Text('View Details'),
           ],
         ),
       ),

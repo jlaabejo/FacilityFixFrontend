@@ -53,7 +53,7 @@ class _FullDetailsState extends State<FullDetails> {
         return RepairDetailsScreen(
           title: "Leaking Faucet",
           requestId: "REQ-2025-00123",
-          classification: "Plumbing",
+          statusTag: 'Pending',
           date: "August 2, 2025",
           requestType: "Repair",
           unit: "A 1001",
@@ -66,8 +66,8 @@ class _FullDetailsState extends State<FullDetails> {
               'Inspecting all ceilings lights and emergency lighting. Check for flickering, burnt bulbs, and exposed wiring.',
           recommendation: 'Clear clogged drainage pipe.',
           attachments: [
-            "https://via.placeholder.com/140x80.png?text=Leak+1",
-            "https://via.placeholder.com/140x80.png?text=Leak+2",
+              "assets/images/upload1.png",
+              "assets/images/upload2.png",
           ],
         );
 
@@ -95,8 +95,7 @@ class _FullDetailsState extends State<FullDetails> {
               'Inspecting all ceilings lights and emergency lighting. Check for flickering, burnt bulbs, and exposed wiring.',
           recommendation: 'Clear clogged drainage pipe.',
           attachments: [
-            'https://placehold.co/147x80',
-            'https://placehold.co/147x80'
+              "assets/images/upload3.png",
           ],
           adminNote:
               'Emergency lights in basement often have moisture issues - check battery backups.',
@@ -111,13 +110,13 @@ class _FullDetailsState extends State<FullDetails> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
+        title: 'View Details',
         leading: Row(
           children: const [
             Padding(
               padding: EdgeInsets.only(right: 8),
               child: BackButton(),
             ),
-            Text('View Details'),
           ],
         ),
       ),

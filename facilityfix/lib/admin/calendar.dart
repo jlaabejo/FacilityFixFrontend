@@ -46,7 +46,7 @@ class _CalendarPageState extends State<CalendarPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        leading: const Text('Calendar'),
+        title: 'Calendar',
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications),

@@ -4,25 +4,21 @@ import 'package:facilityfix/admin/home.dart';
 import 'package:facilityfix/admin/inventory.dart';
 import 'package:facilityfix/admin/workorder.dart';
 import 'package:facilityfix/widgets/buttons.dart';
-import 'package:facilityfix/widgets/forms.dart' hide DropdownField;
-import 'package:file_picker/file_picker.dart';
+import 'package:facilityfix/widgets/forms.dart'; // InputField
 import 'package:flutter/material.dart' hide FilledButton;
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 
 class InventoryForm extends StatefulWidget {
-  final String requestType;
-
-  const InventoryForm({
-    super.key,
-    required this.requestType,
-  });
+  final String requestType; // 'Inventory From' | 'Stock & Supplier Details'
+  const InventoryForm({super.key, required this.requestType});
 
   @override
   State<InventoryForm> createState() => _InventoryFormState();
 }
 
 class _InventoryFormState extends State<InventoryForm> {
-  int _selectedIndex = 2;
+  // highlight the Inventory tab (index 4) in the bottom nav
+  int _selectedIndex = 4;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -40,7 +36,6 @@ class _InventoryFormState extends State<InventoryForm> {
       const CalendarPage(),
       const InventoryPage(),
     ];
-
     if (index != _selectedIndex) {
       Navigator.pushReplacement(
         context,
@@ -49,238 +44,200 @@ class _InventoryFormState extends State<InventoryForm> {
     }
   }
 
-  Future<void> _selectDateTime(BuildContext context) async {
-    final DateTime? pickedDate = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-
-    if (pickedDate != null) {
-      final TimeOfDay? pickedTime = await showTimePicker(
-        context: context,
-        initialTime: TimeOfDay.now(),
-      );
-
-      if (pickedTime != null) {
-        final formattedDate =
-            "${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}";
-        final formattedTime = pickedTime.format(context);
-        availabilityController.text = "$formattedDate at $formattedTime";
-      }
-    }
-  }
-
-  // Controllers
-  final TextEditingController taskNameController = TextEditingController();
-  final TextEditingController idController = TextEditingController();
-  final TextEditingController nameController = TextEditingController();
-  final TextEditingController dateCreatedController = TextEditingController();
-  final TextEditingController descriptionController = TextEditingController();
-
+  // Controllers for inventory fields
+  final TextEditingController itemNameController = TextEditingController();
+  final TextEditingController itemCodeController = TextEditingController();
+  final TextEditingController dateAddedController = TextEditingController();
+  final TextEditingController brandNameController = TextEditingController();
+  final TextEditingController quantityController = TextEditingController();
+  final TextEditingController reorderLevelController = TextEditingController();
   final TextEditingController unitController = TextEditingController();
-  final TextEditingController titleController = TextEditingController();
-  final TextEditingController availabilityController = TextEditingController();
-  final TextEditingController priorityController = TextEditingController();
-  final TextEditingController statusController = TextEditingController();
-  final TextEditingController locationController = TextEditingController();
-  final TextEditingController hoursController = TextEditingController();
-  final TextEditingController dateStartedController = TextEditingController();
-  final TextEditingController dueDateController = TextEditingController();
-  final TextEditingController adminNotificationController = TextEditingController();
-  final TextEditingController staffNotificationController = TextEditingController();
-  final TextEditingController otherPriorityController = TextEditingController();
-  final TextEditingController remarksController = TextEditingController();
+  final TextEditingController supplierController = TextEditingController();
+  final TextEditingController warrantyController = TextEditingController();
+  final TextEditingController contactNumberController = TextEditingController();
 
-  final List<TextEditingController> checklistControllers = [];
+  // Dropdown values
+  String? classificationValue;
+  String? tagValue;
+  String? unitValue; 
 
-  PlatformFile? selectedFile;
-
-  // For dropdowns
-  String? recurringValue;
-  String? departmentValue;
-  String? staffValue;
-  String? priorityValue;
-  String? locationValue; 
-
-  final List<String> notificationOptions = [
-    'Same Day',
-    '1 Day Before',
-    '2 Days Before',  
-    '3 Days Before',
-    '1 Week Before',
-    '1 Month Before',
-    '3 Months Before',
-  ];
-
-  List<String> adminNotifTime = [];
-  List<String> staffNotifTime = [];
-
-  void addChecklistItem() {
-    setState(() => checklistControllers.add(TextEditingController()));
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    dateAddedController.text =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    itemCodeController.text =
+        "INV-${now.year}-${now.millisecondsSinceEpoch.toString().substring(7)}";
   }
 
-  void removeChecklistItem(int index) {
-    setState(() => checklistControllers.removeAt(index));
-  }
-
+  /// Builds fields based on which step we're on.
   List<Widget> getFormFields() {
     switch (widget.requestType) {
+      // Step 1 – Basic Information
       case 'Inventory From':
         return [
-          const Text('Basic Information', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text('Basic Information',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
-
-          InputField(label: 'Task Title', controller: idController, hintText: 'Enter Task Title', isRequired: true, readOnly: false),
-          InputField(label: 'Task Id', controller: idController, hintText: 'Auto-filled', isRequired: true, readOnly: true),
-          InputField(label: 'Created By', controller: taskNameController, hintText: 'Auto-filled', isRequired: true, readOnly: true),
-          InputField(label: 'Date Created', controller: dateCreatedController, hintText: 'Auto-filled', isRequired: true, readOnly: true),
-          
-          DropdownField<String>(
-            label: 'Priority',
-            value: priorityValue,
-            items: ['Low', 'Medium', 'High'],
-            onChanged: (newValue) {
-              setState(() => priorityValue = newValue);
-            },
+          InputField(
+            label: 'Item Name',
+            controller: itemNameController,
+            hintText: 'Enter item name',
             isRequired: true,
-            otherController: otherPriorityController,
           ),
-
-          DropdownField<String>(
-            label: 'Location',
-            value: locationValue,
-            items: ['Lobby', 'Gate', 'Pool'],
-            onChanged: (newValue) {
-              setState(() => locationValue = newValue);
-            },
+          InputField(
+            label: 'Item Code',
+            controller: itemCodeController,
+            hintText: 'Auto-filled',
+            readOnly: true,
             isRequired: true,
-            otherController: otherPriorityController,
           ),
-
-          InputField(label: 'Description', controller: descriptionController, hintText: 'Enter task description', isRequired: true),
-
+          InputField(
+            label: 'Date Added',
+            controller: dateAddedController,
+            hintText: 'Auto-filled',
+            readOnly: true,
+            isRequired: true,
+          ),
+          const Text('Classification *', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          const Text('Task Checklist', style: TextStyle(fontWeight: FontWeight.bold)),
-          ...List.generate(
-            checklistControllers.length,
-            (index) => Row(
-              children: [
-                Expanded(
-                  child: InputField(
-                    label: 'Checklist ${index + 1}',
-                    controller: checklistControllers[index],
-                    hintText: 'Enter checklist item',
-                    isRequired: true,
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => removeChecklistItem(index),
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                )
-              ],
+          DropdownButtonFormField<String>(
+            value: classificationValue,
+            decoration: const InputDecoration(
+              hintText: 'Select classification',
+              border: OutlineInputBorder(),
             ),
+            items: const [
+              'Lighting',
+              'Fasteners',
+              'Tools',
+              'Materials',
+              'Consumables',
+              'PPE',
+              'HVAC',
+              'Electrical Fixtures',
+              'Plumbing Parts',
+            ].map((String value) {
+              return DropdownMenuItem<String>(
+                value: value,
+                child: Text(value),
+              );
+            }).toList(),
+            onChanged: (newValue) => setState(() => classificationValue = newValue),
           ),
-          ElevatedButton.icon(
-            onPressed: addChecklistItem,
-            icon: const Icon(Icons.add),
-            label: const Text('Add Checklist Item'),
+          const SizedBox(height: 12),
+          InputField(
+            label: 'Brand Name',
+            controller: brandNameController,
+            hintText: 'Enter brand name',
+            isRequired: false,
           ),
         ];
 
-      case 'Assign & Schedule Work':
+      // Step 2 – Stock and Supplier Details
+      case 'Stock & Supplier Details':
         return [
+          const Text('Stock & Supplier Details',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          const Text('Stock Details',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          const Text('Schedule & Assignment', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-
-          DropdownField<String>(
-            label: 'Recurring Interval',
-            value: recurringValue,
-            items: ['1 week', '1 month', '3 months', '1 year', 'Others'],
-            onChanged: (value) => setState(() => recurringValue = value),
-            otherController: otherPriorityController,
+          InputField(
+            label: 'Quantity In Stock',
+            controller: quantityController,
+            hintText: 'Enter quantity',
             isRequired: true,
           ),
-
-          InputField(label: 'Estimated Duration', controller: hoursController, hintText: 'In hours', isRequired: true,),
           InputField(
-            controller: dateStartedController,
-            readOnly: true,
-              label: 'Start Date',
-              hintText: 'Pick start date',
-              suffixIcon: const Icon(Icons.calendar_today),
-              onTap: () async {
-                DateTime? pickedDate = await showDatePicker(
-                  context: context,
-                  initialDate: DateTime.now(),
-                  firstDate: DateTime(1900),
-                  lastDate: DateTime.now(),
-                );
-                if (pickedDate != null) {
-                  dateStartedController.text =
-                      "${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}";
-                }
-              },  
+            label: 'Reorder Level',
+            controller: reorderLevelController,
+            hintText: 'Enter reorder level',
+            isRequired: true,
+          ),
+          const Text('Unit *', style: TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            value: unitController.text.isEmpty ? null : unitController.text,
+            decoration: const InputDecoration(
+              hintText: 'Select unit (e.g., pcs, box)',
+              border: OutlineInputBorder(),
             ),
-          InputField(label: 'Due Date', controller: dueDateController, hintText: 'Auto-calculated', readOnly: true),
-
-          DropdownField<String>(
-            label: 'Department',
-            value: departmentValue,
-            items: ['Maintenance', 'Plumbing', 'Electrical', 'Carpentry', 'Others'],
-            onChanged: (value) => setState(() => departmentValue = value),
-            otherController: otherPriorityController,
-            isRequired: true,
+            items: const [
+              'pcs', 'box', 'set', 'pack', 'roll', 'litre', 'kg', 'gal'
+            ].map((String value) {
+              return DropdownMenuItem<String>(
+                value: value,
+                child: Text(value),
+              );
+            }).toList(),
+            onChanged: (newValue) {
+              setState(() => unitController.text = newValue ?? '');
+            },
           ),
-
-          DropdownField<String>(
-            label: 'Assign Staff',
-            value: staffValue,
-            items: ['Juan Dela Cruz', 'Anna Marie', 'Pedro Santos'],
-            onChanged: (value) => setState(() => staffValue = value),
-            isRequired: true,
-          ),
-
-          FileAttachmentPicker(label: 'Upload Attachment'),
-
+          const SizedBox(height: 12),
+          const Text('Tag *', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          const Text('Remarks', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          DropdownButtonFormField<String>(
+            value: tagValue,
+            decoration: const InputDecoration(
+              hintText: 'Select tag',
+              border: OutlineInputBorder(),
+            ),
+            items: const [
+              'High-Turnover', 'Critical-Use', 'Repair-Prone'
+            ].map((String value) {
+              return DropdownMenuItem<String>(
+                value: value,
+                child: Text(value),
+              );
+            }).toList(),
+            onChanged: (newValue) => setState(() => tagValue = newValue),
+          ),
+          const SizedBox(height: 12),
+          const Text('Supplier Information',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-
-          InputField(label: 'Remarks / Notes', controller: remarksController, hintText: 'Enter remarks', isRequired: false),
-
-          const Text('Notifications', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-
-          DropdownField<String>(
-            label: 'Admin Notifications',
-            items: notificationOptions,
-            values: adminNotifTime,
-            onChangedMulti: (vals) => setState(() => adminNotifTime = vals),
-            isMultiSelect: true,
-            isRequired: true,
-          ),
-
-          DropdownField<String>(
-            label: 'Staff Notifications',
-            items: notificationOptions,
-            values: staffNotifTime, 
-            onChangedMulti: (vals) => setState(() => staffNotifTime = vals),
-            isMultiSelect: true,
-            isRequired: true,
-          ),
-
           InputField(
-            label: 'Availability',
-            controller: availabilityController,
-            hintText: 'Select preferred date & time',
-            readOnly: true,
-            suffixIcon: const Icon(Icons.calendar_today),
-            onTap: () => _selectDateTime(context),
+            label: 'Supplier',
+            controller: supplierController,
+            hintText: 'Enter supplier name',
+            isRequired: false,
+          ),
+          InputField(
+            label: 'Contact Number',
+            controller: contactNumberController,
+            hintText: 'Enter contact number',
+            isRequired: false,
+          ),
+          GestureDetector(
+            onTap: () async {
+              final pickedDate = await showDatePicker(
+                context: context,
+                initialDate: DateTime.now(),
+                firstDate: DateTime(2020),
+                lastDate: DateTime(2100),
+              );
+              if (pickedDate != null) {
+                setState(() {
+                  warrantyController.text =
+                      "${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}";
+                });
+              }
+            },
+            child: AbsorbPointer(
+              child: InputField(
+                label: 'Warranty Until',
+                controller: warrantyController,
+                hintText: 'Select date',
+                suffixIcon: const Icon(Icons.calendar_today),
+                isRequired: false,
+              ),
+            ),
           ),
         ];
-
+      // Fallback
       default:
         return [const Text('Invalid request type')];
     }
@@ -288,14 +245,18 @@ class _InventoryFormState extends State<InventoryForm> {
 
   @override
   Widget build(BuildContext context) {
+    // final step if the type is 'Stock & Supplier Details'
+    final bool isFinalStep =
+        widget.requestType == 'Stock & Supplier Details';
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
         leading: Row(
-          children: const [
-            BackButton(),
-            SizedBox(width: 8),
-            Text('New Announcement'),
+          children: [
+            const BackButton(),
+            const SizedBox(width: 8),
+            Text(isFinalStep ? 'Stock & Supplier Details' : 'Add Inventory Item'),
           ],
         ),
       ),
@@ -314,20 +275,23 @@ class _InventoryFormState extends State<InventoryForm> {
                 ),
               ),
             ),
-              FilledButton(
-              label: widget.requestType == 'Assign & Schedule Work' ? "Submit" : "Next",
+            FilledButton(
+              label: isFinalStep ? "Submit" : "Next",
               onPressed: () {
-                if (widget.requestType == 'Assign & Schedule Work') {
+                if (isFinalStep) {
+                  // Here you would persist to backend if needed
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Form submitted successfully!')),
+                    const SnackBar(
+                        content: Text('Inventory item added successfully!')),
                   );
                   Navigator.pop(context);
                 } else {
-                  // Go to Assign & Schedule Work page
+                  // Navigate to the stock/supplier step
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => InventoryForm(requestType: 'Assign & Schedule Work'),
+                      builder: (_) => InventoryForm(
+                          requestType: 'Stock & Supplier Details'),
                     ),
                   );
                 }
