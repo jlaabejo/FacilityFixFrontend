@@ -1,4 +1,7 @@
 //import 'package:facilityfix/adminweb/pages/adminrole_page.dart';
+//import 'package:facilityfix/adminweb/pages/internalmaintenance_viewform.dart';
+//import 'package:facilityfix/adminweb/pages/externalmaintenance_form.dart';
+//import 'package:facilityfix/adminweb/pages/adminrepair_wop_page.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'adminweb/pages/login_page.dart';
@@ -7,9 +10,16 @@ import 'adminweb/layout/facilityfix_layout.dart';
 import 'adminweb/pages/adminwebuser_page.dart';
 import 'adminweb/pages/adminrole_page.dart';
 import 'adminweb/pages/adminmaintenance_page.dart';
+import 'adminweb/pages/adminrepair_cs_page.dart';
+import 'adminweb/pages/adminrepair_js_page.dart';
+import 'adminweb/pages/adminrepair_wop_page.dart';
 // import 'adminweb/pages/calendar_page.dart';
 // import 'adminweb/pages/analytics_page.dart';
 // import 'adminweb/pages/settings_page.dart';
+import 'adminweb/pages/workmaintenance_form.dart';
+import 'adminweb/pages/internalmaintenance_viewform.dart';
+import 'adminweb/pages/externalmaintenance_form.dart';
+import 'adminweb/pages/externalmaintenance_viewform.dart';
 
 
 void main() {
@@ -57,8 +67,8 @@ class MyApp extends StatelessWidget {
       ),
       GoRoute(
         path: '/work/repair',
-        name: 'work_repair',
-        builder: (context, state) => const PlaceholderPage(title: 'View Orders'),
+        name: 'work_repair_concernslip',
+        builder: (context, state) => const AdminRepairPage(),
       ),
       
       // Calendar route
@@ -106,6 +116,35 @@ class MyApp extends StatelessWidget {
         path: '/logout',
         name: 'logout',
         builder: (context, state) => const LoginPage(),
+      ),
+      GoRoute(
+      path: '/adminweb/pages/workmaintenance_form',
+      builder: (context, state) => const InternalMaintenanceFormPage(),
+      ),
+      GoRoute(
+      path: '/workmaintenance/internalviewtask',
+      name: 'maintenance_internal',
+      builder: (context, state) => const InternalTaskViewPage(),
+      ),
+      GoRoute(
+      path: '/adminweb/pages/externalmaintenance_form',
+      name: 'maintenance_external_form',
+      builder: (context, state) => const ExternalMaintenanceFormPage(),
+      ),
+      GoRoute(
+      path: '/adminweb/pages/externalviewtask',
+      name: 'maintenance_external',
+      builder: (context, state) => const ExternalViewTaskPage(),
+      ),
+      GoRoute(
+        path: '/adminweb/pages/adminrepair_js_page',
+        name: 'work_repair_jobservice',
+        builder: (context, state) => const RepairJobServicePage(),
+      ),
+      GoRoute(
+        path: '/adminweb/pages/adminrepair_wop_page',
+        name: 'work_repair_workorderpermit',
+        builder: (context, state) => const RepairWorkOrderPermitPage(),
       ),
     ],
     
