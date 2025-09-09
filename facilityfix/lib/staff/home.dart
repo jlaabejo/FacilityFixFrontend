@@ -5,6 +5,7 @@ import 'package:facilityfix/staff/notification.dart' show NotificationPage;
 import 'package:facilityfix/staff/profile.dart'; // make sure this exists
 import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/widgets/cards.dart';
+import 'package:facilityfix/widgets/helper_models.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 
@@ -19,7 +20,7 @@ class _HomeState extends State<HomePage> {
   int _selectedIndex = 0;
 
   static const String _userName = 'Juan';
-  static const String _department = 'Maintenance';
+  static const String _department = 'Plumbing';
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -90,6 +91,7 @@ class _HomeState extends State<HomePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                
                 // Greeting
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -155,76 +157,127 @@ class _HomeState extends State<HomePage> {
                 ),
                 const SizedBox(height: 24),
 
-                // Recent Requests (Repair – tenant-created)
-                const _SectionHeader(title: 'Recent Requests', actionLabel: 'View all'),
+                // Recent Requests 
+                SectionHeader(
+                  title: 'Recent Requests',
+                  actionLabel: 'View all',
+                  onActionTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const WorkOrderPage()),
+                    );
+                  },
+                ),
                 const SizedBox(height: 12),
                 Column(
                   children: [
                     RepairCard(
-                      title: "Leaking Faucet",
-                      requestId: "REQ-2025-009",
-                      date: "27 Sept",
-                      status: "In Progress",
-                      unit: 'A 123',                
-                      priority: 'medium',             
-                      department: 'maintenance',            
-                      showAvatar: false,        
-                      avatarUrl: null,         
+                      title: 'Leaking faucet',
+                      requestId: 'CS-2025-031',
+                      reqDate: 'Aug 23',
+                      statusTag: 'Done',
+                      departmentTag: 'Plumbing',
+                      requestType: 'Concern Slip',
+                      unit: 'A 1001',
+                      priority: 'High',
+
+                      // Avatar
+                      hasCompletionAssessment: true,
+                      completionAssigneeName: 'Juan Dela Cruz',
+                      completionAssigneeDepartment: 'Plumbing',
+                      completionAssigneePhotoUrl: 'assets/images/avatar.png',
                       onTap: () {},
-                      onChatTap: () {},
+                      onChatTap: () {}, 
                     ),
                     const SizedBox(height: 12),
                     RepairCard(
-                      title: "Clogged Drainage",
-                      requestId: "CS-2025-00321",
-                      date: "12 Jul",
-                      status: "Pending",
-                      unit: 'C 124',
-                      priority: 'low',
-                      department: 'maintenance',
-                      showAvatar: false,
-                      avatarUrl: null,
+                      title: 'Leaking faucet',
+                      requestId: 'JS-2025-031',
+                      reqDate: 'Aug 23',
+                      statusTag: 'Done',
+                      departmentTag: 'Plumbing',
+                      requestType: 'Job Service',
+                      unit: 'A 1001',
+                      priority: 'High',
+
+                      // Avatar
+                      hasCompletionAssessment: true,
+                      completionAssigneeName: 'Juan Dela Cruz',
+                      completionAssigneeDepartment: 'Plumbing',
+                      // completionAssigneePhotoUrl: 'assets/images/avatar.png',
                       onTap: () {},
-                      onChatTap: () {},
+                      onChatTap: () {}, 
                     ),
                   ],
                 ),
                 const SizedBox(height: 24),
 
                 // Recent Maintenance (admin-created)
-                const _SectionHeader(title: 'Recent Maintenance', actionLabel: 'View all'),
+                SectionHeader(
+                  title: 'Recent Maintenance',
+                  actionLabel: 'View all',
+                  onActionTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const WorkOrderPage()),
+                    );
+                  },
+                ),
                 const SizedBox(height: 12),
                 Column(
                   children: [
                     MaintenanceCard(
-                      title: "Leaking Faucet",
-                      requestId: "REQ-2025-009",
-                      date: "27 Sept",
-                      status: "In Progress",
-                      unit: 'A 1001',
+                      title: 'Quarterly Pipe Inspection',
+                      requestId: 'MT-P-2025-011',
+                      date: 'Aug 28',
+                      status: 'In Progress',
+                      department: 'Plumbing',
+                      unit: 'Tower A - 5th Floor',
                       priority: 'High',
-                      department: 'Maintenance',
+
+                      // Avatar
+                      hasInitialAssessment: true,
+                      initialAssigneeName: 'Juan Dela Cruz',
+                      initialAssigneeDepartment: 'Plumbing',
+                      initialAssigneePhotoUrl: 'assets/images/avatar.png',
+
                       onTap: () {},
-                      onChatTap: () {},
+                      onChatTap: () {}, 
                     ),
                     const SizedBox(height: 12),
                     MaintenanceCard(
-                      title: "Clogged Drainage",
-                      requestId: "CS-2025-00321",
-                      date: "12 Jul",
-                      status: "Pending",
-                      unit: 'B 102',
-                      priority: 'Medium',
-                      department: 'Maintenance',
+                      title: 'Quarterly Pipe Inspection',
+                      requestId: 'MT-P-2025-011',
+                      date: 'Aug 28',
+                      status: 'Done',
+                      department: 'Plumbing',
+                      unit: 'Tower A - 5th Floor',
+                      priority: 'High',
+
+                      // Avatar
+                      hasInitialAssessment: true,
+                      initialAssigneeName: 'Juan Dela Cruz',
+                      initialAssigneeDepartment: 'Plumbing',
+                      initialAssigneePhotoUrl: 'assets/images/avatar.png',
+
                       onTap: () {},
-                      onChatTap: () {},
+                      onChatTap: () {}, 
                     ),
                   ],
                 ),
                 const SizedBox(height: 24),
 
                 // Latest Announcement
-                const _SectionHeader(title: 'Latest Announcement', actionLabel: 'View all'),
+                SectionHeader(
+                  title: 'Latest Announcement',
+                  actionLabel: 'View all',
+                  onActionTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const AnnouncementPage()),
+                    );
+                  },
+                ),
                 const SizedBox(height: 12),
                 AnnouncementCard(
                   title: 'Utility Interruption',
@@ -239,7 +292,6 @@ class _HomeState extends State<HomePage> {
           ),
         ),
       ),
-
       bottomNavigationBar: NavBar(
         items: _navItems,
         currentIndex: _selectedIndex,
@@ -249,34 +301,3 @@ class _HomeState extends State<HomePage> {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, this.actionLabel});
-  final String title;
-  final String? actionLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            color: Color(0xFF101828),
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.2,
-          ),
-        ),
-        const Spacer(),
-        if (actionLabel != null)
-          TextButton(
-            onPressed: () {},
-            child: Text(
-              actionLabel!,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-      ],
-    );
-  }
-}

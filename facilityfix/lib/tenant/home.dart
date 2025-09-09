@@ -2,7 +2,8 @@ import 'package:facilityfix/tenant/announcement.dart';
 import 'package:facilityfix/tenant/notification.dart';
 import 'package:facilityfix/tenant/profile.dart';
 import 'package:facilityfix/tenant/workorder.dart';
-import 'package:facilityfix/widgets/cards.dart';            
+import 'package:facilityfix/widgets/cards.dart';
+import 'package:facilityfix/widgets/helper_models.dart';            
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 
@@ -141,24 +142,48 @@ class _HomeState extends State<HomePage> {
                 const SizedBox(height: 24),
 
                 // Recent Requests
-                const _SectionHeader(title: 'Recent Requests', actionLabel: 'View all'),
+                SectionHeader(
+                  title: 'Recent Requests',
+                  actionLabel: 'View all',
+                  onActionTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => WorkOrderPage(),
+                      ),
+                    );
+                  },
+                ),
                 const SizedBox(height: 12),
                 Column(
                   children: [
                     RepairCard(
-                      title: "Leaking Faucet",
-                      requestId: "REQ-2025-009",
-                      date: "27 Sept",
-                      status: "In Progress",
+                      title: 'Leaking faucet',
+                      requestId: 'JS-2025-031',
+                      reqDate: 'Aug 23',
+                      statusTag: 'Done',
+                      departmentTag: 'Plumbing',
+                      requestType: 'Job Service',
+                      unit: 'A 1001',
+                      priority: 'High',
+
+                      // Avatar
+                      hasCompletionAssessment: true,
+                      completionAssigneeName: 'Juan Dela Cruz',
+                      completionAssigneeDepartment: 'Plumbing',
+                      completionAssigneePhotoUrl: 'assets/images/avatar.png',
                       onTap: () {},
-                      onChatTap: () {},
+                      onChatTap: () {}, 
                     ),
                     const SizedBox(height: 12),
                     RepairCard(
-                      title: "Clogged Drainage",
-                      requestId: "CS-2025-00321",
-                      date: "12 Jul",
-                      status: "Pending",
+                      title: 'Leaking faucet',
+                      requestId: 'CS-2025-005',
+                      reqDate: 'Aug 22',
+                      statusTag: 'Pending',
+                      departmentTag: 'Plumbing',
+                      requestType: 'Concern Slip',
+                      unit: 'A 1001',
+                      priority: null,
                       onTap: () {},
                       onChatTap: () {},
                     ),
@@ -167,7 +192,17 @@ class _HomeState extends State<HomePage> {
                 const SizedBox(height: 24),
 
                 // Latest Announcement
-                const _SectionHeader(title: 'Latest Announcement', actionLabel: 'View all'),
+                SectionHeader(
+                  title: 'Latest Announcement',
+                  actionLabel: 'View all',
+                  onActionTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => AnnouncementPage(),
+                      ),
+                    );
+                  },
+                ),
                 const SizedBox(height: 12),
                 AnnouncementCard(
                   title: 'Utility Interruption',
@@ -194,36 +229,3 @@ class _HomeState extends State<HomePage> {
   }
 }
 
-/// ===== Helpers (kept local to this file) ====================================
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, this.actionLabel});
-  final String title;
-  final String? actionLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            color: Color(0xFF101828),
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.2,
-          ),
-        ),
-        const Spacer(),
-        if (actionLabel != null)
-          TextButton(
-            onPressed: () {},
-            child: Text(
-              actionLabel!,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-      ],
-    );
-  }
-}

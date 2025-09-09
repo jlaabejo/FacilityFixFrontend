@@ -1,3 +1,4 @@
+
 import 'package:facilityfix/admin/announcement.dart';
 import 'package:facilityfix/admin/calendar.dart';
 import 'package:facilityfix/admin/home.dart';
@@ -47,7 +48,7 @@ class _AnnouncementDetailsState extends State<AnnouncementDetails> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        title: 'Announcement Management',
+        title: 'View Details',
         leading: Row(
           children: [
             Padding(
@@ -56,6 +57,8 @@ class _AnnouncementDetailsState extends State<AnnouncementDetails> {
             ),
           ],
         ),
+        showMore: true,
+        showHistory: false,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -77,7 +80,6 @@ class _AnnouncementDetailsState extends State<AnnouncementDetails> {
           ),
         ),
       ),
-
       bottomNavigationBar: NavBar(
         items: _navItems,
         currentIndex: _selectedIndex,

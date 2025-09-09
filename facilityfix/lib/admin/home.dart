@@ -4,9 +4,9 @@ import 'package:facilityfix/admin/inventory.dart';
 import 'package:facilityfix/admin/notification.dart';
 import 'package:facilityfix/admin/profile.dart';
 import 'package:facilityfix/admin/workorder.dart';
-import 'package:facilityfix/admin/view_details/announcement_details.dart';
 import 'package:facilityfix/widgets/analytics.dart';
 import 'package:facilityfix/widgets/cards.dart';
+import 'package:facilityfix/widgets/helper_models.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 
@@ -129,7 +129,7 @@ class _HomeState extends State<HomePage> {
                 children: const [
                   Expanded(
                     child: StatusCard(
-                      title: 'Repair Request',
+                      title: 'Repair\tRequest',
                       count: '1',
                       icon: Icons.settings_outlined,
                       iconColor: Color(0xFF005CE8),
@@ -140,7 +140,7 @@ class _HomeState extends State<HomePage> {
                   SizedBox(width: 12),
                   Expanded(
                     child: StatusCard(
-                      title: 'Maintenance Due',
+                      title: 'Maintenance\tDue',
                       count: '0',
                       icon: Icons.check_circle_rounded,
                       iconColor: Color(0xFF24D164),
@@ -153,34 +153,55 @@ class _HomeState extends State<HomePage> {
               const SizedBox(height: 24),
 
               // Recent Repair Tasks
-              const _SectionHeader(title: 'Recent Repair Tasks', actionLabel: 'View all'),
+              SectionHeader(
+                title: 'Recent Repair Request',
+                actionLabel: 'View all',
+                onActionTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const WorkOrderPage(),
+                    ),
+                  );
+                },
+              ),
               const SizedBox(height: 12),
               Column(
                 children: [
                   RepairCard(
-                    title: "Leaking Faucet",
-                    requestId: "REQ-2025-009",
-                    date: "27 Sept",
-                    status: "In Progress",
-                    unit: "A 1001",
-                    priority: "High",
-                    department: "Plumbing",
-                    showAvatar: false,
-                    avatarUrl: '', // 👈 safe default
+                    title: 'Leaking faucet',
+                    requestId: 'CS-2025-031',
+                    reqDate: 'Aug 23',
+                    statusTag: 'Done',
+                    departmentTag: 'Plumbing',
+                    requestType: 'Concern Slip',
+                    unit: 'A 1001',
+                    priority: 'High',
+
+                    // Avatar
+                    hasCompletionAssessment: true,
+                    completionAssigneeName: 'Juan Dela Cruz',
+                    completionAssigneeDepartment: 'Plumbing',
+                    completionAssigneePhotoUrl: 'assets/images/avatar.png',
                     onTap: () {},
                     onChatTap: () {},
                   ),
                   const SizedBox(height: 12),
                   RepairCard(
-                    title: "Clogged Drainage",
-                    requestId: "CS-2025-00321",
-                    date: "12 Jul",
-                    status: "Pending",
-                    unit: "B 102",
-                    priority: "Medium",
-                    department: "Electrical",
-                    showAvatar: false,
-                    avatarUrl: '', // 👈 safe default
+                    title: 'Leaking faucet',
+                    requestId: 'JS-2025-031',
+                    reqDate: 'Aug 23',
+                    statusTag: 'Done',
+                    departmentTag: 'Plumbing',
+                    requestType: 'Job Service',
+                    unit: 'A 1001',
+                    priority: 'High',
+
+                    // Avatar
+                    hasCompletionAssessment: true,
+                    completionAssigneeName: 'Juan Dela Cruz',
+                    completionAssigneeDepartment: 'Plumbing',
+                    // completionAssigneePhotoUrl: 'assets/images/avatar.png',
                     onTap: () {},
                     onChatTap: () {},
                   ),
@@ -189,34 +210,55 @@ class _HomeState extends State<HomePage> {
               const SizedBox(height: 24),
 
               // Recent Maintenance Tasks
-              const _SectionHeader(title: 'Recent Maintenance Tasks', actionLabel: 'View all'),
+              SectionHeader(
+                title: 'Recent Maintenance',
+                actionLabel: 'View all',
+                onActionTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const WorkOrderPage(),
+                    ),
+                  );
+                },
+              ),
               const SizedBox(height: 12),
               Column(
                 children: [
                   MaintenanceCard(
-                    title: "Pump Room Inspection",
-                    requestId: "PM-2025-020",
-                    date: "15 Aug",
-                    status: "Scheduled",
-                    unit: "B2 Pump Room",
-                    priority: "Medium",
-                    department: "General Maintenance",
-                    showAvatar: false, // 👈 safe default
-                    avatarUrl: '',     // 👈 safe default
+                    title: 'Quarterly Pipe Inspection',
+                    requestId: 'MT-P-2025-011',
+                    date: 'Aug 28',
+                    status: 'In Progress',
+                    department: 'Plumbing',
+                    unit: 'Tower A - 5th Floor',
+                    priority: 'High',
+
+                    // Avatar
+                    hasInitialAssessment: true,
+                    initialAssigneeName: 'Juan Dela Cruz',
+                    initialAssigneeDepartment: 'Plumbing',
+                    initialAssigneePhotoUrl: 'assets/images/avatar.png',
+
                     onTap: () {},
                     onChatTap: () {},
                   ),
                   const SizedBox(height: 12),
                   MaintenanceCard(
-                    title: "Lobby Light Check",
-                    requestId: "PM-GEN-LIGHT-001",
-                    date: "30 Jul",
-                    status: "In Progress",
-                    unit: "Lobby",
-                    priority: "Low",
-                    department: "General Maintenance",
-                    showAvatar: false, // 👈 safe default
-                    avatarUrl: '',     // 👈 safe default
+                    title: 'Quarterly Pipe Inspection',
+                    requestId: 'MT-P-2025-011',
+                    date: 'Aug 28',
+                    status: 'Done',
+                    department: 'Plumbing',
+                    unit: 'Tower A - 5th Floor',
+                    priority: 'High',
+
+                    // Avatar
+                    hasInitialAssessment: true,
+                    initialAssigneeName: 'Juan Dela Cruz',
+                    initialAssigneeDepartment: 'Plumbing',
+                    initialAssigneePhotoUrl: 'assets/images/avatar.png',
+
                     onTap: () {},
                     onChatTap: () {},
                   ),
@@ -225,20 +267,26 @@ class _HomeState extends State<HomePage> {
               const SizedBox(height: 24),
 
               // Announcements
-              const _SectionHeader(title: 'Latest Announcement', actionLabel: 'View all'),
+              SectionHeader(
+                title: 'Latest Announcement',
+                actionLabel: 'View all',
+                onActionTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AnnouncementPage(),
+                    ),
+                  );
+                },
+              ),
               const SizedBox(height: 12),
               AnnouncementCard(
                 title: 'Utility Interruption',
                 datePosted: '3 hours ago',
                 details:
-                    'Temporary shutdown in pipelines for routine maintenance cleaning.',
-                classification: 'Utility Interruption',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const AnnouncementDetails()),
-                  );
-                },
+                    'Temporary shutdown in pipelines for maintenance cleaning.',
+                classification: 'utility interruption',
+                onTap: () {},
               ),
               const SizedBox(height: 24),
 
@@ -246,11 +294,19 @@ class _HomeState extends State<HomePage> {
               const _SectionHeader(title: 'Analytics'),
               const SizedBox(height: 12),
               WeeklyAnalyticsChartCard(
-                xLabels: const ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+                xLabels: const [
+                  'Sun',
+                  'Mon',
+                  'Tue',
+                  'Wed',
+                  'Thu',
+                  'Fri',
+                  'Sat',
+                ],
                 repairCounts: const [4, 6, 3, 10, 2, 5, 1],
                 maintenanceCounts: const [2, 1, 6, 7, 3, 2, 8],
                 highlightIndex: DateTime.now().weekday % 7, // optional
-              )
+              ),
             ],
           ),
         ),

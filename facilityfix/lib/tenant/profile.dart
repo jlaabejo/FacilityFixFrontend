@@ -10,7 +10,7 @@ import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/workorder.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/forms.dart';
-import 'package:facilityfix/widgets/pop_up.dart';
+import 'package:facilityfix/widgets/modals.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -29,22 +29,28 @@ class _ProfilePageState extends State<ProfilePage> {
     NavItem(icon: Icons.person),
   ];
 
+  // Controllers
+  final TextEditingController nameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController phoneNumberController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
 
   File? _profileImageFile;
 
-  // Provide profile image (default placeholder if none selected)
   ImageProvider get _profileImageProvider {
-    if (_profileImageFile != null) {
-      return FileImage(_profileImageFile!);
-    }
+    if (_profileImageFile != null) return FileImage(_profileImageFile!);
     return const AssetImage('assets/images/profile.png');
   }
 
-  // Bottom navigation tab handler
+  @override
+  void initState() {
+    super.initState();
+    // Prefill demo values
+    nameController.text = 'Erika De Guzman';
+    emailController.text = 'erika.deguzman@example.com';
+    phoneNumberController.text = '+63 912 345 6789';
+  }
+
   void _onTabTapped(int index) {
     final destinations = [
       const HomePage(),
@@ -52,7 +58,6 @@ class _ProfilePageState extends State<ProfilePage> {
       const AnnouncementPage(),
       const ProfilePage(),
     ];
-
     if (index != _selectedIndex) {
       Navigator.pushReplacement(
         context,
@@ -61,7 +66,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // Modal bottom sheet for photo upload
   Future<void> _openPhotoPickerSheet(BuildContext context) async {
     await showModalBottomSheet(
       context: context,
@@ -76,7 +80,6 @@ class _ProfilePageState extends State<ProfilePage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Drag handle
               Container(
                 width: 48,
                 height: 4,
@@ -92,7 +95,6 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
               const SizedBox(height: 8),
               const Divider(height: 1),
-              // Upload from gallery
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined),
                 title: const Text('Upload from gallery'),
@@ -108,7 +110,6 @@ class _ProfilePageState extends State<ProfilePage> {
                   if (context.mounted) Navigator.pop(ctx);
                 },
               ),
-              // Take a photo
               ListTile(
                 leading: const Icon(Icons.camera_alt_outlined),
                 title: const Text('Take a photo'),
@@ -135,17 +136,9 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    emailController.text = 'erika.deguzman@example.com';
-    phoneNumberController.text = '+63 912 345 6789';
-    passwordController.text = '••••••••';
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F4F6),
+      backgroundColor: Colors.white,
       appBar: CustomAppBar(
         title: 'Profile',
         actions: [
@@ -167,27 +160,54 @@ class _ProfilePageState extends State<ProfilePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Profile avatar with edit badge
               ProfileInfoWidget(
                 profileImage: _profileImageProvider,
-                name: 'Erika De Guzman',
+                name: nameController.text, // ← uses editable name
                 staffId: 'Tenant ID: #T12345',
                 onTap: () => _openPhotoPickerSheet(context),
               ),
-
               const SizedBox(height: 24),
-
-              // Personal Details card with edit icon in header
               SectionCard(
                 title: 'Personal Details',
                 trailing: IconButton(
                   icon: const Icon(Icons.edit, size: 20, color: Colors.blueGrey),
-                  onPressed: () {
-                    // TODO: Implement edit personal details logic
+                  tooltip: 'Edit personal details',
+                  onPressed: () async {
+                    // Use the (name, email, phone) edit sheet (no password)
+                    final updated = await showEditPersonalDetailsSheet(
+                      context: context,
+                      initialName: nameController.text,
+                      initialEmail: emailController.text,
+                      initialPhone: phoneNumberController.text,
+                    );
+
+                    if (updated == null || !mounted) return;
+
+                    setState(() {
+                      nameController.text = updated.name;
+                      emailController.text = updated.email;
+                      phoneNumberController.text = updated.phone;
+                    });
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Personal details updated')),
+                    );
                   },
                 ),
                 child: Column(
                   children: [
+                    InputField(
+                      label: 'Name',
+                      controller: nameController,
+                      hintText: 'Auto-filled',
+                      isRequired: true,
+                      readOnly: true,
+                      prefixIcon: const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Icon(Icons.person),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     InputField(
                       label: 'Email',
                       controller: emailController,
@@ -211,38 +231,10 @@ class _ProfilePageState extends State<ProfilePage> {
                         child: Icon(Icons.phone),
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    PasswordInputField(
-                      label: 'Password',
-                      controller: passwordController,
-                      hintText: 'Auto-filled',
-                      isRequired: true,
-                      readOnly: true,
-                      prefixIcon: const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Icon(Icons.lock),
-                      ),
-                    ),
-                    // Forgot password link
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () {
-                          // TODO: Implement forgot password flow
-                        },
-                        child: const Text(
-                          'Forgot password?',
-                          style: TextStyle(fontSize: 13, color: Colors.blue),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
-
               const SizedBox(height: 18),
-
-              // Settings card
               SectionCard(
                 title: 'Settings',
                 child: Column(
@@ -261,10 +253,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 24),
-
-              // Logout
               LogoutButton(
                 onPressed: () {
                   showDialog(
@@ -277,9 +266,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         Navigator.of(context).pop();
                         Navigator.pushReplacement(
                           context,
-                          MaterialPageRoute(
-                            builder: (_) => const WelcomePage(),
-                          ),
+                          MaterialPageRoute(builder: (_) => const WelcomePage()),
                         );
                       },
                       secondaryText: 'No',

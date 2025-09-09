@@ -1,5 +1,6 @@
 import 'package:facilityfix/widgets/helper_models.dart';
 import 'package:facilityfix/widgets/tag.dart';
+import 'package:facilityfix/widgets/view_details.dart';
 import 'package:flutter/material.dart';
 
 class StatusCard extends StatelessWidget {
@@ -115,7 +116,7 @@ class StatusCard extends StatelessWidget {
   }
 }
 
-// Announcement Card
+// Announcement Card -----------------------------
 class AnnouncementCard extends StatelessWidget {
   final String title;
   final String datePosted;   // e.g., "Aug 7, 2025"
@@ -349,22 +350,22 @@ const Map<String, _ClassStyle> _styles = {
   ),
 };
 
-// Inventory Card
+// Inventory Card -----------------------------------------
 class InventoryCard extends StatefulWidget {
   final String itemName;
-  final String stockStatus;    
+  final String stockStatus; // e.g., In Stock | Out of Stock | Critical
   final String itemId;
-  final String department;
-  final String quantity;
-  final VoidCallback? onTap;    
+  final String department;  // e.g., Plumbing, Electrical, etc.
+  final String quantityInStock;    // keep as String to match your source
+  final VoidCallback? onTap;
 
   const InventoryCard({
     super.key,
     required this.itemName,
-    required this.stockStatus,  
+    required this.stockStatus,
     required this.itemId,
     required this.department,
-    required this.quantity,
+    required this.quantityInStock,
     this.onTap,
   });
 
@@ -375,141 +376,127 @@ class InventoryCard extends StatefulWidget {
 class _InventoryCardState extends State<InventoryCard> {
   @override
   Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(16);
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: radius,
         onTap: widget.onTap ??
-            () {
-              debugPrint('InventoryCard tapped: ${widget.itemId}');
-            },
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: ShapeDecoration(
-                color: const Color(0xFFF6F7F9),
-                shape: RoundedRectangleBorder(
-                  side: BorderSide(
-                    width: 1,
-                    color: Colors.black.withOpacity(0.10),
-                  ),
-                  borderRadius: const BorderRadius.only(
-                    topRight: Radius.circular(12),
-                    bottomRight: Radius.circular(12),
-                  ),
-                ),
-              ),
-              child: Column(
+            () => debugPrint('InventoryCard tapped: ${widget.itemId}'),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: radius,
+            border: Border.all(
+              width: 1,
+              color: Colors.black.withOpacity(0.08),
+            ),
+            // ⬇︎ removed boxShadow
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Title + Stock status tag
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // itemName + stock status tag
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          widget.itemName,
-                          style: const TextStyle(
-                            color: Color(0xFF101828),
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: -0.50,
-                            fontFamily: 'Inter',
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      StockStatusTag(widget.stockStatus),
-                    ],
-                  ),
-
-                  const SizedBox(height: 4),
-
-                  // Item ID
-                  SizedBox(
-                    width: double.infinity,
+                  Expanded(
                     child: Text(
-                      'ID: ${widget.itemId}',
+                      widget.itemName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Color(0xFF4A5154),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                        height: 1,
                         fontFamily: 'Inter',
+                        color: Color(0xFF101828),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.3,
                       ),
                     ),
                   ),
-
-                  const SizedBox(height: 8),
-
-                  // category and quantity
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: ShapeDecoration(
-                          color: Colors.orange,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(100),
-                          ),
-                        ),
-                        child: Text(
-                          widget.department,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                            fontFamily: 'Inter',
-                          ),
-                        ),
-                      ),
-
-                      Container(
-                        width: 80,
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                        decoration: ShapeDecoration(
-                          color: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(100),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.inventory_2,
-                              size: 14,
-                              color: Color(0xFF101828),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              widget.quantity,
-                              style: const TextStyle(
-                                color: Color(0xFF101828),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: -0.50,
-                                fontFamily: 'Inter',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                  const SizedBox(width: 8),
+                  StockStatusTag(widget.stockStatus),
                 ],
               ),
-            ),
-          )
-        );
-      }
-    }
 
-// Inventory Request Card
+              const SizedBox(height: 6),
+
+              // Item ID (muted)
+              Text(
+                'ID: ${widget.itemId}',
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: Color(0xFF4A5154),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                  height: 1.2,
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // Department tag + Quantity pill
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  DepartmentTag(widget.department),
+                  _QuantityPill(quantity: widget.quantityInStock),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small, reusable quantity chip for consistent look
+class _QuantityPill extends StatelessWidget {
+  final String quantity;
+  const _QuantityPill({required this.quantity});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 84),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: ShapeDecoration(
+        color: Colors.white,
+        shape: StadiumBorder(
+          side: BorderSide(color: Colors.black.withOpacity(0.08)),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.inventory_2, size: 14, color: Color(0xFF101828)),
+          const SizedBox(width: 6),
+          Text(
+            quantity,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              color: Color(0xFF101828),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ========= Inventory Request Card =========
+
 class InventoryRequestCard extends StatelessWidget {
   final String itemName;
   final String requestId;
-  final String department; // department name (e.g., "Electrical", "Plumbing")
-  final String status;     // "Pending", "Approved", "Rejected"
+  final String department; // e.g., "Electrical", "Plumbing"
+  final String status;     // e.g., "Pending", "Approved", "Rejected"
   final VoidCallback? onTap;
 
   const InventoryRequestCard({
@@ -521,78 +508,78 @@ class InventoryRequestCard extends StatelessWidget {
     this.onTap,
   });
 
+  // Visual tokens (aligned with InventoryCard)
+  static const _textPrimary   = Color(0xFF101828);
+  static const _textSecondary = Color(0xFF4A5154);
+
   @override
   Widget build(BuildContext context) {
-    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
+    final radius = BorderRadius.circular(16);
 
     return Material(
       color: Colors.transparent,
-      child: Ink(
-        decoration: ShapeDecoration(
-          color: const Color(0xFFF6F7F9),
-          shape: shape.copyWith(
-            side: BorderSide(
-              width: 1,
-              color: Colors.black.withAlpha((0.10 * 255).toInt()),
-            ),
+      child: InkWell(
+        borderRadius: radius,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: radius,
+            border: Border.all(width: 1, color: Colors.black.withOpacity(0.08)),
           ),
-        ),
-        child: InkWell(
-          onTap: onTap,
-          customBorder: shape, // ensures splash follows the rounded shape
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top Row: Item Name + StatusTag
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        itemName,
-                        style: const TextStyle(
-                          color: Color(0xFF101828),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: -0.50,
-                          fontFamily: 'Inter',
-                        ),
-                        overflow: TextOverflow.ellipsis,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Title + Status tag (right)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      itemName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        color: _textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.3,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    StatusTag(status: status),
-                  ],
-                ),
-
-                const SizedBox(height: 4),
-
-                // Request ID
-                Text(
-                  'ID: $requestId',
-                  style: const TextStyle(
-                    color: Color(0xFF4A5154),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                    height: 1,
-                    fontFamily: 'Inter',
                   ),
+                  const SizedBox(width: 8),
+                  StatusTag(status: status, width: 96), // ← calls your StatusTag
+                ],
+              ),
+
+              const SizedBox(height: 6),
+
+              // ID line
+              Text(
+                'ID: $requestId',
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: _textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                  height: 1.2,
                 ),
+              ),
 
-                const SizedBox(height: 8),
+              const SizedBox(height: 12),
 
-                // Department Tag
-                DepartmentTag(department),
-              ],
-            ),
+              // Department chip (left-aligned, like InventoryCard)
+              DepartmentTag(department),
+            ],
           ),
         ),
       ),
     );
   }
 }
+
 
 // Notification Message card
 class NotificationMessageCard extends StatelessWidget {
@@ -754,41 +741,136 @@ class _UnreadDot extends StatelessWidget {
   }
 }
 
-// Repair Card
+// ==== AVATAR (image -> initials -> icon fallback) ============================
+
+/// Always shows an avatar when `show` is true.
+/// If `image` is null/empty, it renders a fallback (initials or person icon).
+class AvatarOrFallback extends StatelessWidget {
+  final bool show;
+  final String? image;            // asset path or network URL
+  final String? labelForInitials; // e.g. requester/tenant name or title
+
+  const AvatarOrFallback({
+    super.key,
+    required this.show,
+    this.image,
+    this.labelForInitials,
+  });
+
+  String _initials(String s) {
+    final parts = s.trim().split(RegExp(r'\s+'));
+    final first = parts.isNotEmpty ? parts.first : '';
+    final last  = parts.length > 1 ? parts.last : '';
+    final a = first.isNotEmpty ? first[0] : '';
+    final b = last.isNotEmpty  ? last[0]  : (parts.length == 1 && first.length > 1 ? first[1] : '');
+    return (a + b).toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!show) return const SizedBox.shrink();
+
+    final hasImage = image != null && image!.trim().isNotEmpty;
+
+    if (hasImage) {
+      final isNetwork = image!.startsWith('http://') || image!.startsWith('https://');
+      return CircleAvatar(
+        radius: 14,
+        backgroundColor: Colors.transparent,
+        backgroundImage: isNetwork ? NetworkImage(image!) : AssetImage(image!) as ImageProvider,
+        onBackgroundImageError: (_, __) {}, // quietly ignore errors
+      );
+    }
+
+    if (labelForInitials != null && labelForInitials!.trim().isNotEmpty) {
+      return CircleAvatar(
+        radius: 14,
+        backgroundColor: const Color(0xFFE5E7EB),
+        child: Text(
+          _initials(labelForInitials!),
+          style: const TextStyle(
+            color: Color(0xFF344054),
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+    }
+
+    return const CircleAvatar(
+      radius: 14,
+      backgroundColor: Color(0xFFE5E7EB),
+      child: Icon(Icons.person, size: 16, color: Color(0xFF667085)),
+    );
+  }
+}
+
+// ==== REPAIR CARD ============================================================
+
 class RepairCard extends StatelessWidget {
   // Required
   final String title;
   final String requestId;
-  final String date;         
-  final String status;     
+  final String reqDate;
+  final String? requestType; // (e.g. "Concern Slip", "Job Service")
+  final String statusTag;
+  final String? priority;
 
-  // For Admin side 
-  final String? unit;       
-  final String? priority;    
-  final String? department;   
-  final bool showAvatar;      
-  final String? avatarUrl;   
-  final String? requestType;
+  final String? departmentTag;
+
+  // Admin/staff side extras
+  final String? unit;
+  
+
+  /// Optional legacy avatar image (applies to all, if you want to show a photo).
+  /// If you have per-person photos, pass them through the *_PhotoUrl fields below instead.
+  final String? avatarUrl;
+
+  // --- Sources for assignee display (read from details) ----------------------
+  final bool? hasInitialAssessment;
+  final String? initialAssigneeName;
+  final String? initialAssigneeDepartment;
+  final String? initialAssigneePhotoUrl;
+
+  final bool? hasCompletionAssessment;
+  final String? completionAssigneeName;
+  final String? completionAssigneeDepartment;
+  final String? completionAssigneePhotoUrl;
+
+  final String? assignedTo;               // generic "Assigned To"
+  final String? assignedDepartment;
+  final String? assignedPhotoUrl;
 
   // Actions
-  final VoidCallback? onTap;      
-  final VoidCallback? onChatTap;  
+  final VoidCallback? onTap;
+  final VoidCallback? onChatTap;
 
   const RepairCard({
     super.key,
     required this.title,
     required this.requestId,
-    required this.date,
-    required this.status,
+    required this.reqDate,
+    required this.statusTag,
+    this.requestType,
     this.unit,
     this.priority,
-    this.department,    
-    this.showAvatar = false,
+    this.departmentTag,
     this.avatarUrl,
+    // assignment sources
+    this.hasInitialAssessment,
+    this.initialAssigneeName,
+    this.initialAssigneeDepartment,
+    this.initialAssigneePhotoUrl,
+    this.hasCompletionAssessment,
+    this.completionAssigneeName,
+    this.completionAssigneeDepartment,
+    this.completionAssigneePhotoUrl,
+    this.assignedTo,
+    this.assignedDepartment,
+    this.assignedPhotoUrl,
     this.onTap,
     this.onChatTap,
-    this.requestType,
-  }); 
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -797,6 +879,87 @@ class RepairCard extends StatelessWidget {
     const titleCol  = Color(0xFF101828);
     const sub1Color = Color(0xFF4A5154);
     const sub2Color = Color(0xFF667085);
+
+    // ---- Build assignee DATA (not widgets) so we can compact/collapse cleanly ----
+    final assignees = <_AssigneeData>[];
+
+    if ((assignedTo ?? '').trim().isNotEmpty) {
+      assignees.add(_AssigneeData(
+        name: assignedTo!.trim(),
+        department: assignedDepartment?.trim(),
+        photoUrl: (assignedPhotoUrl ?? '').trim().isNotEmpty
+            ? assignedPhotoUrl!.trim()
+            : (avatarUrl ?? ''),
+        requestType: requestType?.trim(),
+      ));
+    }
+
+    if (hasInitialAssessment == true && (initialAssigneeName ?? '').trim().isNotEmpty) {
+      assignees.add(_AssigneeData(
+        name: initialAssigneeName!.trim(),
+        department: initialAssigneeDepartment?.trim(),
+        photoUrl: (initialAssigneePhotoUrl ?? '').trim().isNotEmpty
+            ? initialAssigneePhotoUrl!.trim()
+            : null,
+        requestType: requestType?.trim(),
+      ));
+    }
+
+    if (hasCompletionAssessment == true && (completionAssigneeName ?? '').trim().isNotEmpty) {
+      assignees.add(_AssigneeData(
+        name: completionAssigneeName!.trim(),
+        department: completionAssigneeDepartment?.trim(),
+        photoUrl: (completionAssigneePhotoUrl ?? '').trim().isNotEmpty
+            ? completionAssigneePhotoUrl!.trim()
+            : null,
+        requestType: requestType?.trim(),
+      ));
+    }
+
+    // ---- Left cluster (compact, single-line) ----
+    Widget leftCluster;
+    if (assignees.isNotEmpty) {
+      final extraCount = assignees.length - 1;
+      leftCluster = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Compact assignee line that can shrink its tags
+          Flexible(
+            child: _AssigneeLine(
+              name: assignees.first.name,
+              department: assignees.first.department,
+              photoUrl: assignees.first.photoUrl,
+              requestType: assignees.first.requestType,
+              dense: true, // compact sizes for footer
+            ),
+          ),
+          if (extraCount > 0) ...[
+            const SizedBox(width: 6),
+            _MoreChip(count: extraCount),
+          ],
+        ],
+      );
+    } else {
+      // Fallback: department + request type, both constrained to avoid overflow
+      leftCluster = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if ((departmentTag! ?? '').trim().isNotEmpty) ...[
+            Flexible(child: _EllipsizedTag(child: DepartmentTag(departmentTag!.trim()))),
+            const SizedBox(width: 6),
+          ],
+          if ((requestType ?? '').trim().isNotEmpty)
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 120),
+              child: RequestTypeTag(
+                requestType!.trim(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+      );
+    }
 
     return Material(
       color: Colors.transparent,
@@ -816,7 +979,7 @@ class RepairCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Header: Title + Status
+                // Title + tags (top row)
                 Row(
                   children: [
                     Expanded(
@@ -838,15 +1001,16 @@ class RepairCard extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 6,
                       children: [
-                        PriorityTag(priority: priority!),
-                        StatusTag(status: status),
+                        if (priority != null && priority!.trim().isNotEmpty)
+                          PriorityTag(priority: priority!.trim()),
+                        StatusTag(status: statusTag),
                       ],
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
 
-                // ── Request ID
+                // Request ID
                 Row(
                   children: [
                     const Icon(Icons.tag, size: 14, color: sub1Color),
@@ -867,54 +1031,59 @@ class RepairCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
 
-                // ── Unit / Location
-                Row(
-                  children: [
-                    const Icon(Icons.place_outlined, size: 14, color: sub2Color),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        unit!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: sub2Color,
-                          fontSize: 13,
-                          fontFamily: 'Inter',
+                // Unit (optional)
+                if (unit != null && unit!.trim().isNotEmpty)
+                  Row(
+                    children: [
+                      const Icon(Icons.place_outlined, size: 14, color: sub2Color),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          unit!.trim(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: sub2Color,
+                            fontSize: 13,
+                            fontFamily: 'Inter',
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+ 
+                  // Date
+                  if (reqDate != null && reqDate!.trim().isNotEmpty)
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_today_outlined, size: 14, color: sub2Color),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          formatDateRequested(reqDate!.trim()),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: sub2Color,
+                            fontSize: 13,
+                            fontFamily: 'Inter',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
 
                 const SizedBox(height: 12),
                 const Divider(height: 1, color: Color(0xFFE6E7EA)),
                 const SizedBox(height: 12),
 
-                // ── Footer: (Avatar + Department) | (Date Pill + Chat IconPill)
+                // Footer: assignees (compact) | date | chat — single line, no scroll
                 Row(
                   children: [
-                    // Left group: avatar + department (like RepairCard)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (showAvatar) ...[
-                          Avatar(avatarUrl: avatarUrl),
-                          const SizedBox(width: 8),
-                        ],
-                        DepartmentTag(department!),
-                        const SizedBox(width: 8),
-                        if (requestType != null) ...[
-                          RequestTypeTag(requestType!),
-                        ],
-                      ],
-                    ),
-
-                    const Spacer(),
-
-                    // Right group: Pill (date) + IconPill (chat)
-                    Pill(icon: Icons.calendar_today, label: date, iconSize: 16),
-                    const SizedBox(width: 8),
+                    leftCluster, // don’t wrap with Flexible so it sizes naturally
+                    const Spacer(), // flexible spacing
                     IconPill(icon: Icons.chat_bubble_outline, onTap: onChatTap),
                   ],
                 ),
@@ -927,26 +1096,208 @@ class RepairCard extends StatelessWidget {
   }
 }
 
-// Maintenance Task
+/// Assignee line: circle avatar (photo or initials) + (optional) DepartmentTag + (optional) RequestTypeTag
+class _AssigneeLine extends StatelessWidget {
+  final String name;
+  final String? department;
+  final String? photoUrl;
+  final String? requestType;
+  final bool dense;
+
+  const _AssigneeLine({
+    super.key,
+    required this.name,
+    this.department,
+    this.photoUrl,
+    this.requestType,
+    this.dense = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final double avatarSize = dense ? 34 : 34;
+    final double reqMaxWidth = dense ? 120 : 120;
+
+    final widgets = <Widget>[
+      _buildAvatar(photoUrl, name, size: avatarSize),
+    ];
+
+    if ((department ?? '').trim().isNotEmpty) {
+      widgets.add(const SizedBox(width: 6)); // keep dept gap at 6px
+      widgets.add(
+        _EllipsizedTag(child: DepartmentTag(department!.trim())),
+      );
+    }
+
+    if ((requestType ?? '').trim().isNotEmpty) {
+      widgets.add(const SizedBox(width: 8)); // tighter gap (4px only)
+      widgets.add(
+        ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: reqMaxWidth),
+          child: RequestTypeTag(
+            requestType!.trim(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: widgets,
+    );
+  }
+
+  // ---- Avatar helpers ----
+  static Widget _buildAvatar(String? url, String name, {double size = 34}) {
+    final initials = _initials(name);
+    if (url == null || url.trim().isEmpty) {
+      return _fallbackCircle(initials, size);
+    }
+
+    final u = url.trim();
+    Widget image;
+
+    if (u.startsWith('http://') || u.startsWith('https://')) {
+      // Remote image
+      image = Image.network(
+        u,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _fallbackCircle(initials, size),
+      );
+    } else if (u.startsWith('assets/')) {
+      // Local asset
+      image = Image.asset(
+        u,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _fallbackCircle(initials, size),
+      );
+    } else {
+      // Could extend here to handle File paths (e.g., from ImagePicker)
+      return _fallbackCircle(initials, size);
+    }
+
+    return ClipOval(child: image);
+  }
+  static Widget _fallbackCircle(String initials, double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: const BoxDecoration(
+        color: Color(0xFFD9D9D9),
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        initials,
+        style: TextStyle(
+          fontFamily: 'Inter',
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: size * 0.36, // scale with avatar
+        ),
+      ),
+    );
+  }
+
+  static String _initials(String fullName) {
+    final parts = fullName
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return '';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first[0] + parts.last[0]).toUpperCase();
+  }
+}
+
+// --- Small helpers -----------------------------------------------------------
+
+class _AssigneeData {
+  final String name;
+  final String? department;
+  final String? photoUrl;
+  final String? requestType;
+  _AssigneeData({
+    required this.name,
+    this.department,
+    this.photoUrl,
+    this.requestType,
+  });
+}
+
+class _MoreChip extends StatelessWidget {
+  final int count;
+  const _MoreChip({super.key, required this.count});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: ShapeDecoration(
+        color: const Color(0xFFEFF1F5),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+      ),
+      child: Text(
+        '+$count',
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF475467),
+        ),
+      ),
+    );
+  }
+}
+
+/// Clips any tag widget on the right if space is tight (keeps single line).
+class _EllipsizedTag extends StatelessWidget {
+  final Widget child;
+  const _EllipsizedTag({super.key, required this.child});
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: child,
+      ),
+    );
+  }
+}
+
+
+// ==== MAINTENANCE CARD =======================================================
 class MaintenanceCard extends StatelessWidget {
-  // Required core fields
+  // Required
   final String title;
   final String requestId;
   final String date;
-  final String status; // "Scheduled" | "In Progress" | "Done"
+  final String status; // "Scheduled" | "In Progress" | "Done" | ...
 
-  // Optional / can be null from callers
+  // Optional
   final String? unit;
   final String? priority;   // "High" | "Medium" | "Low"
-  final String? department; // e.g. "Maintenance"
+  final String? department; // e.g. "Plumbing"
 
-  // Handlers (nullable is fine)
+  // Actions
   final VoidCallback? onTap;
   final VoidCallback? onChatTap;
 
-  // Avatar (same pattern as RepairCard)
+  // Avatar (generic)
   final bool showAvatar;
   final String? avatarUrl;
+
+  // Assessment assignee
+  final bool? hasInitialAssessment;
+  final String? initialAssigneeName;
+  final String? initialAssigneeDepartment;
+  final String? initialAssigneePhotoUrl;
 
   const MaintenanceCard({
     super.key,
@@ -961,11 +1312,14 @@ class MaintenanceCard extends StatelessWidget {
     this.onChatTap,
     this.showAvatar = false,
     this.avatarUrl,
+    this.hasInitialAssessment,
+    this.initialAssigneeName,
+    this.initialAssigneeDepartment,
+    this.initialAssigneePhotoUrl,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Safe fallbacks
     const cardBg    = Color(0xFFFFFFFF);
     const border    = Color(0xFFDDDEE0);
     const titleCol  = Color(0xFF101828);
@@ -976,10 +1330,42 @@ class MaintenanceCard extends StatelessWidget {
     final String priorityText = (priority == null || priority!.trim().isEmpty) ? 'Medium' : priority!.trim();
     final String deptText = (department == null || department!.trim().isEmpty) ? '-' : department!.trim();
 
+    // Assignee cluster (initial assessment vs fallback department)
+    Widget assigneeCluster;
+    if (hasInitialAssessment == true && (initialAssigneeName ?? '').trim().isNotEmpty) {
+      assigneeCluster = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AvatarOrFallback(
+            show: true,
+            image: initialAssigneePhotoUrl,
+            labelForInitials: initialAssigneeName!,
+          ),
+          const SizedBox(width: 8),
+          DepartmentTag(initialAssigneeDepartment ?? deptText),
+        ],
+      );
+    } else {
+      assigneeCluster = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (showAvatar) ...[
+            AvatarOrFallback(
+              show: showAvatar,
+              image: avatarUrl,
+              labelForInitials: title,
+            ),
+            const SizedBox(width: 8),
+          ],
+          DepartmentTag(deptText),
+        ],
+      );
+    }
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap, // null is OK (disabled)
+        onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Ink(
           decoration: ShapeDecoration(
@@ -994,7 +1380,7 @@ class MaintenanceCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Header: Title + Status
+                // Title + tags
                 Row(
                   children: [
                     Expanded(
@@ -1016,7 +1402,7 @@ class MaintenanceCard extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 6,
                       children: [
-                        PriorityTag(priority: priorityText), // safe
+                        PriorityTag(priority: priorityText),
                         StatusTag(status: status),
                       ],
                     ),
@@ -1024,7 +1410,7 @@ class MaintenanceCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
 
-                // ── Request ID
+                // Request ID
                 Row(
                   children: [
                     const Icon(Icons.tag, size: 14, color: sub1Color),
@@ -1045,7 +1431,7 @@ class MaintenanceCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
 
-                // ── Unit / Location
+                // Unit / Location
                 Row(
                   children: [
                     const Icon(Icons.place_outlined, size: 14, color: sub2Color),
@@ -1069,24 +1455,11 @@ class MaintenanceCard extends StatelessWidget {
                 const Divider(height: 1, color: Color(0xFFE6E7EA)),
                 const SizedBox(height: 12),
 
-                // ── Footer: (Avatar + Department) | (Date Pill + Chat IconPill)
+                // Footer: assignee/department | date/chat
                 Row(
                   children: [
-                    // Left group: avatar + department (like RepairCard)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (showAvatar) ...[
-                          Avatar(avatarUrl: avatarUrl),
-                          const SizedBox(width: 8),
-                        ],
-                        DepartmentTag(deptText),
-                      ],
-                    ),
-
+                    assigneeCluster,
                     const Spacer(),
-
-                    // Right group: Pill (date) + IconPill (chat)
                     Pill(icon: Icons.calendar_today, label: date, iconSize: 16),
                     const SizedBox(width: 8),
                     IconPill(icon: Icons.chat_bubble_outline, onTap: onChatTap),
@@ -1100,6 +1473,9 @@ class MaintenanceCard extends StatelessWidget {
     );
   }
 }
+
+
+
 
 /// Profile Section Cards
 

@@ -79,11 +79,13 @@ class DepartmentTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Color bg = const Color(0xFF666666);
-    switch (department.toLowerCase()) {
-      case 'general maintenance':
+    final departmentLower = department.toLowerCase();
+    
+    switch (departmentLower) {
+      case 'maintenance':
         bg = const Color(0xFF19B36E);
         break;
-      case 'civil/carpentry':
+      case 'carpentry':
         bg = const Color(0xFFF79009);
         break;
       case 'plumbing':
@@ -91,9 +93,19 @@ class DepartmentTag extends StatelessWidget {
         break;
       case 'electrical':
         bg = const Color(0xFFF95555);
+      case 'masonry':
+        bg = const Color(0xFF666666);
         break;
     }
-    return Tag(label: department, bg: bg, fg: Colors.white);
+    
+    // Capitalize the first letter of each word for display
+    String displayText = department
+        .toLowerCase()
+        .split(' ')
+        .map((word) => word.isNotEmpty ? word[0].toUpperCase() + word.substring(1) : '')
+        .join(' ');
+    
+    return Tag(label: displayText, bg: bg, fg: Colors.white);
   }
 }
 
@@ -116,7 +128,7 @@ class KeyValueRow extends StatelessWidget {
       fontSize: 13,
       fontFamily: 'Inter',
       fontWeight: FontWeight.w500,
-      height: 1.54,
+      height: -0.5,
     );
 
     return Row(
@@ -149,7 +161,7 @@ class StatusTag extends StatelessWidget {
     this.padding = const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     this.borderRadius = 100,
     this.fontWeight = FontWeight.w500,
-    this.width = 90,
+    this.width = 80,
     this.fgColor,
     this.bgColor,
   });
@@ -162,12 +174,18 @@ class StatusTag extends StatelessWidget {
 
   // Map of normalized status -> colors
   static const Map<String, _StatusStyle> _styles = {
-    'in progress': _StatusStyle(fg: Color(0xFF475467), bg: Color(0xFFEAECF0)),
-    'on hold':      _StatusStyle(fg: Color(0xFFF79009), bg: Color(0xFFFFFAEB)),
-    'assigned':    _StatusStyle(fg: Color(0xFF005CE7), bg: Color(0xFFF4F5FF)),
-    'done':        _StatusStyle(fg: Color(0xFF19B36E), bg: Color(0xFFE8F7F1)),
-    'pending':     _StatusStyle(fg: Color(0xFF7A5AF8), bg: Color(0xFFF4F5FF)),
-    'scheduled':   _StatusStyle(fg: Color(0xFF005CE7), bg: Color(0xFFF4F5FF)),
+  'pending':     _StatusStyle(fg: Color(0xFF667085), bg: Color(0xFFF2F4F7)), 
+  'in progress': _StatusStyle(fg: Color(0xFF1570EF), bg: Color(0xFFEFF4FF)), 
+  'on hold':     _StatusStyle(fg: Color(0xFFF79009), bg: Color(0xFFFFFAEB)), 
+  'assigned':    _StatusStyle(fg: Color(0xFF005CE7), bg: Color(0xFFE6F0FF)), 
+  'assessed':    _StatusStyle(fg: Color(0xFF475467), bg: Color(0xFFE5E7EB)), 
+  'scheduled':   _StatusStyle(fg: Color(0xFF7A5AF8), bg: Color(0xFFF4F5FF)), 
+  'done':        _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)),
+
+  // Inventory
+  'approved':    _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)), 
+  'rejected':    _StatusStyle(fg: Color(0xFFD92D20), bg: Color(0xFFFEF3F2)), 
+  'declined':    _StatusStyle(fg: Color(0xFFF79009), bg: Color(0xFFFEF3F2)), 
   };
 
   // Normalize "In-Progress", "in_progress", "in progress" → "in progress"
@@ -223,7 +241,6 @@ class _StatusStyle {
   final Color bg; // background color
   const _StatusStyle({required this.fg, required this.bg});
 }
-
 // Priority Tag
 class PriorityTag extends StatelessWidget {
   final String priority;
@@ -255,6 +272,12 @@ class PriorityTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _getPriorityColor();
+    
+    // Capitalize the first letter for display
+    String displayText = priority.isNotEmpty 
+      ? priority[0].toUpperCase() + priority.substring(1).toLowerCase()
+      : priority;
+    
     return Container(
       width: width,                
       padding: padding,
@@ -264,7 +287,7 @@ class PriorityTag extends StatelessWidget {
         borderRadius: BorderRadius.circular(100),
       ),
       child: Text(
-        priority,
+        displayText,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         textAlign: TextAlign.center,
@@ -279,23 +302,33 @@ class PriorityTag extends StatelessWidget {
   }
 }
 
-// Request Type Tag
+// Request Type Tag -----------------------------------------
+
+enum DisplayCasing { original, title, upper, lower }
+
 class RequestTypeTag extends StatelessWidget {
   final String? type;
 
-  // Style knobs (optional)
+  // Style knobs
   final double fontSize;
   final EdgeInsets padding;
   final double borderRadius;
   final FontWeight fontWeight;
   final double? width;
 
-  /// Optional color overrides
+  // Optional color overrides
   final Color? fgColor;
   final Color? bgColor;
 
   /// If true and [type] is null/empty, render nothing.
   final bool hideIfEmpty;
+
+  /// Text wrapping
+  final int? maxLines;
+  final TextOverflow? overflow;
+
+  /// How to render the label text (default = Title Case like "Concern Slip")
+  final DisplayCasing displayCasing;
 
   const RequestTypeTag(
     this.type, {
@@ -308,6 +341,9 @@ class RequestTypeTag extends StatelessWidget {
     this.fgColor,
     this.bgColor,
     this.hideIfEmpty = false,
+    this.maxLines,
+    this.overflow,
+    this.displayCasing = DisplayCasing.title,
   });
 
   // Default fallback
@@ -316,55 +352,86 @@ class RequestTypeTag extends StatelessWidget {
     bg: Color(0xFFEAECF0),
   );
 
-  // Map of request types
+  // Map of request types (lookup is done on the normalized key)
   static const Map<String, _TypeStyle> _styles = {
-    'concern slip':       _TypeStyle(fg: Color(0xFF2563EB), bg: Color(0xFFE0F2FE)),
-    'job service':        _TypeStyle(fg: Color(0xFF19B36E), bg: Color(0xFFE8F7F1)),
-    'work order permit':  _TypeStyle(fg: Color(0xFFF79009), bg: Color(0xFFFFFAEB)),
+    'concern slip': _TypeStyle(fg: Color(0xFF2563EB), bg: Color(0xFFE0F2FE)),
+    'job service': _TypeStyle(fg: Color(0xFF19B36E), bg: Color(0xFFE8F7F1)),
+    'work order':  _TypeStyle(fg: Color(0xFFF79009), bg: Color(0xFFFFFAEB)),
   };
 
-  static String _normalize(String s) =>
-      s.trim().toLowerCase().replaceAll(RegExp(r'[_\-]+'), ' ').replaceAll(RegExp(r'\s+'), ' ');
+  static String _normalize(String s) => s
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[_\-]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ');
 
   static _TypeStyle _styleFor(String? s) {
     if (s == null || s.trim().isEmpty) return _defaultStyle;
-    return _styles[_normalize(s)] ?? _defaultStyle;
+    final normalized = _normalize(s);
+    // Remove noisy prints; if you still want them in debug only:
+    // if (kDebugMode) debugPrint('Normalized "$s" to "$normalized"');
+    return _styles[normalized] ?? _defaultStyle;
+  }
+
+  static String _toTitleCase(String input) {
+    // Basic Title Case: split by whitespace and capitalize each word.
+    // Keeps words like "of", "and" capitalized as well (simple rule fits our tags).
+    return input
+        .trim()
+        .split(RegExp(r'\s+'))
+        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
+        .join(' ');
+  }
+
+  String _displayLabel(String raw) {
+    switch (displayCasing) {
+      case DisplayCasing.original:
+        return raw;
+      case DisplayCasing.title:
+        return _toTitleCase(raw);
+      case DisplayCasing.upper:
+        return raw.toUpperCase();
+      case DisplayCasing.lower:
+        return raw.toLowerCase();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if ((type == null || type!.trim().isEmpty) && hideIfEmpty) {
-      return const SizedBox.shrink();
-    }
+    final raw = (type?.trim() ?? '');
+    if (raw.isEmpty && hideIfEmpty) return const SizedBox.shrink();
 
     final mapped = _styleFor(type);
     final fg = fgColor ?? mapped.fg;
     final bg = bgColor ?? mapped.bg;
-    final label = (type?.trim().isNotEmpty ?? false) ? type!.trim() : 'Unknown';
 
-    final child = Container(
+    // Render label in your preferred casing (default Title Case → "Concern Slip")
+    final label = raw.isEmpty ? 'Unknown' : _displayLabel(raw);
+
+    final text = Text(
+      label,
+      maxLines: maxLines ?? 1,
+      overflow: overflow ?? TextOverflow.ellipsis,
+      style: TextStyle(
+        color: fg,
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        fontFamily: 'Inter',
+        letterSpacing: -0.2,
+      ),
+    );
+
+    final pill = Container(
       padding: padding,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(borderRadius),
       ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: fg,
-          fontSize: fontSize,
-          fontWeight: fontWeight,
-          fontFamily: 'Inter',
-          letterSpacing: -0.2,
-        ),
-      ),
+      child: text,
     );
 
-    // Optional fixed width
-    return width == null ? child : SizedBox(width: width, child: child);
+    return width == null ? pill : SizedBox(width: width, child: pill);
   }
 }
 
@@ -373,4 +440,63 @@ class _TypeStyle {
   final Color fg;
   final Color bg;
   const _TypeStyle({required this.fg, required this.bg});
+}
+
+// Announcement Classification Tag ----------------------------------------------
+class AnnouncementClassificationTag extends StatelessWidget {
+  final String classification;
+
+  const AnnouncementClassificationTag(this.classification, {super.key});
+
+  Color _getBackgroundColor(String classification) {
+    switch (classification.toLowerCase()) {
+      case 'utility interruption':
+        return const Color(0xFFEFF5FF); // blue background
+      case 'power outage':
+        return const Color(0xFFFDF6A3); // yellow background
+      case 'pest control':
+        return const Color(0xFF91E5B0); // green background
+      case 'maintenance':
+        return const Color(0xFFFFD4B1); // orange-ish
+      default:
+        return const Color(0xFFF5F5F7); // gray background
+    }
+  }
+
+  Color _getTextColor(String classification) {
+    switch (classification.toLowerCase()) {
+      case 'utility interruption':
+        return const Color(0xFF005CE7); // blue text
+      case 'power outage':
+        return const Color(0xFFF3B40D); // yellow text
+      case 'pest control':
+        return const Color(0xFF00A651); // green text
+      case 'maintenance':
+        return const Color(0xFFF97316); // orange-ish
+      default:
+        return const Color(0xFF7D7D7D); // gray text
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: _getBackgroundColor(classification),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        classification,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: _getTextColor(classification),
+        ),
+      ),
+    );
+  }
 }

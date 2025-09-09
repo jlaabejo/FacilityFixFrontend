@@ -4,14 +4,13 @@ import 'package:facilityfix/tenant/chat.dart';
 import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/notification.dart';
 import 'package:facilityfix/tenant/profile.dart';
-import 'package:facilityfix/tenant/reminder.dart';
 import 'package:facilityfix/tenant/request_forms.dart';
 import 'package:facilityfix/tenant/view_details.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:facilityfix/widgets/cards.dart';
-import 'package:facilityfix/widgets/helper_models.dart'; 
-import 'package:facilityfix/widgets/pop_up.dart';
+import 'package:facilityfix/widgets/helper_models.dart';
+import 'package:facilityfix/widgets/modals.dart';
 import 'package:flutter/material.dart';
 
 class WorkOrderPage extends StatefulWidget {
@@ -22,66 +21,122 @@ class WorkOrderPage extends StatefulWidget {
 }
 
 class _WorkOrderPageState extends State<WorkOrderPage> {
-  // Tabs
+  // Tabs (by request type)
   String _selectedTabLabel = "All";
 
-  // Filters
-  String _selectedClassification = "All"; // department filter
+  // Filters (Classification removed)
+  String _selectedStatus = 'All';
   final TextEditingController _searchController = TextEditingController();
 
   // Sample data (replace with backend)
   final List<WorkOrder> _all = [
+    // Concern Slip ----------------------------
+    // Concern Slip (Default)
     WorkOrder(
-      title: "Clogged Drainage",
-      requestId: "CS-2025-00321",
-      date: "Jul 12",
-      status: "Pending",
-      department: "Plumbing",
-      priority: "High",
+      title: 'Leaking faucet',
+      requestId: 'CS-2025-005',
+      date: 'Aug 22',
+      status: 'Pending',
+      department: 'Plumbing',
+      requestType: 'Concern Slip',
+      unit: 'A 1001',
+      priority: null,
     ),
+    // Concern Slip (assigned)
     WorkOrder(
-      title: "Broken Light",
-      requestId: "REQ-2025-010",
-      date: "Sept 28", // "Sep" and "Sept" both supported
-      status: "In Progress",
-      department: "Electrical",
-      showAvatar: true,
-      avatarAsset: 'assets/images/avatar.png',
+      title: 'Leaking faucet',
+      requestId: 'CS-2025-005',
+      date: 'Aug 22',
+      status: 'Assigned',
+      department: 'Plumbing',
+      requestType: 'Concern Slip',
+      unit: 'A 1001',
+      priority: null,
+      assignedTo: 'Juan Dela Cruz',
+      assignedDepartment: 'Plumbing',
+      assignedPhotoUrl: 'assets/images/avatar.png',
     ),
+    // Concern Slip (assessed)
     WorkOrder(
-      title: "Fixed Door Lock",
-      requestId: "REQ-2025-005",
-      date: "Sept 26",
-      status: "Done",
-      department: "Civil/Carpentry",
-      showAvatar: true,
+      title: 'Leaking faucet',
+      requestId: 'CS-2025-030',
+      date: 'Aug 23',
+      status: 'Done',
+      department: 'Plumbing',
+      requestType: 'Concern Slip',
+      unit: 'A 1001',
+      priority: 'High',
+      assignedTo: 'Juan Dela Cruz',
+      assignedDepartment: 'Plumbing',
+      assignedPhotoUrl: 'assets/images/avatar.png',
     ),
+    // Work Order Permit --------------------------------
+    // Work Order Permit (Approved)
     WorkOrder(
-      title: "AC not cooling",
-      requestId: "REQ-2025-014",
-      date: "Aug 3",
-      status: "In Progress",
-      department: "Maintenance",
-      showAvatar: true,
+      title: 'Leaking faucet',
+      requestId: 'WO-2025-014',
+      date: 'Aug 20',
+      status: 'Approved',
+      department: 'Plumbing',
+      requestType: 'Work Order',
+      unit: 'A 1001',
+      priority: 'High',
     ),
+    // Job Service --------------------------------
+    // Job Service (Assigned)
     WorkOrder(
-      title: "Leak under sink",
-      requestId: "REQ-2025-020",
-      date: "Aug 15",
-      status: "Pending",
-      department: "Plumbing",
-      priority: "Medium",
+      title: 'Leaking faucet',
+      requestId: 'CS-2025-021',
+      date: 'Aug 22',
+      status: 'Assigned',
+      department: 'Plumbing',
+      requestType: 'Job Service',
+      unit: 'A 1001',
+      priority: 'High',
+      hasInitialAssessment: true,
+      assignedTo: 'Juan Dela Cruz',
+      assignedDepartment: 'Plumbing',
+      assignedPhotoUrl: 'assets/images/avatar.png',
+    ),
+    // Job Service (Done / assessed)
+    WorkOrder(
+      title: 'Leaking faucet',
+      requestId: 'JS-2025-031',
+      date: 'Aug 23',
+      status: 'Done',
+      department: 'Plumbing',
+      requestType: 'Job Service',
+      unit: 'A 1001',
+      priority: 'High',
+      hasCompletionAssessment: true,
+      completionAssigneeName: 'Juan Dela Cruz',
+      completionAssigneeDepartment: 'Plumbing',
+      completionAssigneePhotoUrl: 'assets/images/avatar.png',
+    ),
+    // Job Service (On Hold)
+    WorkOrder(
+      title: 'Leaking faucet',
+      requestId: 'JS-2025-032',
+      date: 'Aug 23',
+      status: 'On Hold',
+      department: 'Plumbing',
+      requestType: 'Job Service',
+      unit: 'A 1001',
+      priority: 'High',
+      hasInitialAssessment: true,
+      initialAssigneeName: 'Juan Dela Cruz',
+      initialAssigneeDepartment: 'Plumbing',
     ),
   ];
 
-  // Refresh
+  // ===== Refresh =============================================================
   Future<void> _refresh() async {
     await Future<void>.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
     setState(() {});
   }
 
-  // Bottom nav
+  // ===== Bottom nav ==========================================================
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
@@ -104,7 +159,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     }
   }
 
-  // Popup flow to create request
+  // ===== Popup to create request ============================================
   void _showRequestDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -117,7 +172,9 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
           showDialog(
             context: context,
             builder: (_) => Dialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                 child: Column(
@@ -143,19 +200,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                       },
                     ),
                     ListTile(
-                      leading: const Icon(Icons.build_outlined),
-                      title: const Text('Work Order Request'),
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const ReminderPage(requestType: 'work order permit'),
-                          ),
-                        );
-                      },
-                    ),
-                    ListTile(
                       leading: const Icon(Icons.design_services_outlined),
                       title: const Text('Job Service Request'),
                       onTap: () {
@@ -163,7 +207,20 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const ReminderPage(requestType: 'job service permit'),
+                            builder: (_) => const RequestForm(requestType: 'Job Service'),
+                          ),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.build_outlined),
+                      title: const Text('Work Order Permit'),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const RequestForm(requestType: 'Work Order'),
                           ),
                         );
                       },
@@ -180,26 +237,28 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     );
   }
 
-  // ===== Filtering logic =====================================================
+  // ===== Filtering logic (classification removed) ============================
 
-  bool statusMatches(WorkOrder w) {
+  bool _tabMatchesByRequestType(WorkOrder w) {
+    final type = (w.requestType ?? '').toLowerCase().trim();
     switch (_selectedTabLabel.toLowerCase()) {
       case 'all':
         return true;
-      case 'pending':
-        return w.status.toLowerCase() == 'pending';       // ✅ fixed
-      case 'in progress':
-        return w.status.toLowerCase() == 'in progress';
-      case 'done':
-        return w.status.toLowerCase() == 'done';
+      case 'concern slip':
+        return type == 'concern slip';
+      case 'job service':
+        return type == 'job service';
+      case 'work order':
+        return type == 'work order';
       default:
         return true;
     }
   }
 
-  bool _departmentMatches(WorkOrder w) {
-    if (_selectedClassification == 'All') return true;
-    return (w.department ?? '').toLowerCase() == _selectedClassification.toLowerCase();
+  bool _statusMatches(WorkOrder w) {
+    if (_selectedStatus == 'All') return true;
+    return (w.status).toLowerCase().trim() == _selectedStatus.toLowerCase().trim();
+    // You can also normalize status further if needed.
   }
 
   bool _searchMatches(WorkOrder w) {
@@ -210,53 +269,104 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       w.requestId,
       w.department ?? '',
       w.unit ?? '',
-      w.status
+      w.status,
+      w.requestType ?? '',
     ].any((s) => s.toLowerCase().contains(q));
   }
 
-  List<WorkOrder> get _filtered {
-    return _all.where((w) => statusMatches(w) && _departmentMatches(w) && _searchMatches(w)).toList();
-  }
+  List<WorkOrder> get _filtered => _all
+      .where(_tabMatchesByRequestType)
+      .where(_statusMatches)
+      .where(_searchMatches)
+      .toList();
 
-  // Sort filtered items by LATEST date first using UiDateParser (descending)
+  // Sort filtered items by latest date first
   List<WorkOrder> get _filteredSorted {
     final list = List<WorkOrder>.from(_filtered);
     list.sort((a, b) => UiDateParser.parse(b.date).compareTo(UiDateParser.parse(a.date)));
     return list;
   }
 
-  // Dynamic tab counts (respect current department/search filters)
+  // Dynamic dropdown options (classification removed)
+  List<String> get _statusOptions {
+    final base = _all.where(_tabMatchesByRequestType).where(_searchMatches);
+    final set = <String>{};
+    for (final w in base) {
+      final s = (w.status).trim();
+      if (s.isNotEmpty) set.add(s);
+    }
+    final list = set.toList()..sort();
+    return ['All', ...list];
+  }
+
+  // Dynamic tab counts (no classification dependency)
   List<TabItem> get _tabs {
-    final all = _all.where((w) => _departmentMatches(w) && _searchMatches(w)).toList();
-    final pending    = all.where((w) => w.status.toLowerCase() == 'pending').length;
-    final inProgress = all.where((w) => w.status.toLowerCase() == 'in progress').length;
-    final done       = all.where((w) => w.status.toLowerCase() == 'done').length;
+    final visible = _all.where(_statusMatches).where(_searchMatches).toList();
+
+    int countFor(String type) =>
+        visible.where((w) => (w.requestType ?? '').toLowerCase() == type).length;
 
     return [
-      TabItem(label: 'All',         count: all.length),
-      TabItem(label: 'Pending',     count: pending),
-      TabItem(label: 'In Progress', count: inProgress),
-      TabItem(label: 'Done',        count: done),
+      TabItem(label: 'All', count: visible.length),
+      TabItem(label: 'Concern Slip', count: countFor('concern slip')),
+      TabItem(label: 'Job Service', count: countFor('job service')),
+      TabItem(label: 'Work Order', count: countFor('work order')),
     ];
   }
 
-  // Card builder
+  // ===== Routing helper ======================================================
+  String _routeLabelFor(WorkOrder w) {
+    final type = (w.requestType ?? '').toLowerCase().trim();
+    final status = (w.status).toLowerCase().trim();
+
+    switch (type) {
+      case 'concern slip':
+        if (status == 'pending') return 'concern slip';
+        if (status == 'assigned') return 'concern slip assigned';
+        if (status == 'assessed') return 'concern slip assessed';
+        return 'concern slip';
+      case 'job service':
+        if (status == 'done' || status == 'assessed' || status == 'closed') {
+          return 'job service assessed';
+        }
+        return 'job service assigned';
+      case 'work order':
+        return 'work order';
+      default:
+        return type.isEmpty ? 'concern slip' : type;
+    }
+  }
+
+  // ===== Card builder ========================================================
   Widget buildCard(WorkOrder w) {
     return RepairCard(
       title: w.title,
       requestId: w.requestId,
-      date: w.date,
-      status: w.status,
+      reqDate: w.date,
+      statusTag: w.status,
       unit: w.unit,
       priority: w.priority,
-      department: w.department,     
-      showAvatar: w.showAvatar,     
-      avatarUrl: w.avatarAsset,     
+      departmentTag: w.department,
+      hasInitialAssessment: w.hasInitialAssessment,
+      initialAssigneeName: w.initialAssigneeName,
+      initialAssigneeDepartment: w.initialAssigneeDepartment,
+      hasCompletionAssessment: w.hasCompletionAssessment,
+      completionAssigneeName: w.completionAssigneeName,
+      completionAssigneeDepartment: w.completionAssigneeDepartment,
+      assignedTo: w.assignedTo,
+      assignedDepartment: w.assignedDepartment,
+      // If your RepairCard expects `avatarUrl`, pass assignedPhotoUrl here:
+      avatarUrl: w.assignedPhotoUrl,
+      requestType: w.requestType,
       onTap: () {
+        final routeLabel = _routeLabelFor(w);
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const ViewDetailsPage(selectedTabLabel: 'repair detail'),
+            builder: (_) => ViewDetailsPage(
+              selectedTabLabel: routeLabel,
+              requestType: w.requestType,
+            ),
           ),
         );
       },
@@ -269,6 +379,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     );
   }
 
+  // ===== Lifecycle ===========================================================
   @override
   void initState() {
     super.initState();
@@ -281,9 +392,38 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     super.dispose();
   }
 
+  // ===== Helpers =============================================================
+  Widget _buildSearchField() {
+    return SizedBox(
+      height: 44,
+      child: TextField(
+        controller: _searchController,
+        onChanged: (_) => setState(() {}), // live search
+        decoration: InputDecoration(
+          hintText: 'Search by title, ID, status, unit…',
+          prefixIcon: const Icon(Icons.search),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          enabledBorder: const OutlineInputBorder(
+            borderSide: BorderSide(color: Color(0xFFE5E7EB)),
+            borderRadius: BorderRadius.all(Radius.circular(12)),
+          ),
+          focusedBorder: const OutlineInputBorder(
+            borderSide: BorderSide(color: Color(0xFF005CE7)),
+            borderRadius: BorderRadius.all(Radius.circular(12)),
+          ),
+          isDense: true,
+        ),
+      ),
+    );
+  }
+
+  // ===== UI ==================================================================
   @override
   Widget build(BuildContext context) {
-    final items = _filteredSorted; // latest first
+    final items = _filteredSorted;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -311,19 +451,31 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Search + Filter
-                    SearchAndFilterBar(
-                      searchController: _searchController,
-                      selectedClassification: _selectedClassification,
-                      classifications: const ['All', 'Electrical', 'Plumbing', 'Civil/Carpentry', 'Maintenance'],
-                      onSearchChanged: (_) => setState(() {}),
-                      onFilterChanged: (classification) {
-                        setState(() => _selectedClassification = classification);
-                      },
+                    // ===== Search + Status (classification removed) =====
+                    Row(
+                      children: [
+                        Expanded(child: _buildSearchField()),
+                        const SizedBox(width: 12),
+                        DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedStatus,
+                            items: _statusOptions
+                                .map((s) => DropdownMenuItem(
+                                      value: s,
+                                      child: Text(s),
+                                    ))
+                                .toList(),
+                            onChanged: (v) {
+                              if (v == null) return;
+                              setState(() => _selectedStatus = v.trim().isEmpty ? 'All' : v);
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
 
-                    // Status Tabs (dynamic counts)
+                    // Tabs: All / Concern Slip / Job Service / Work Order
                     StatusTabSelector(
                       tabs: _tabs,
                       selectedLabel: _selectedTabLabel,
@@ -334,9 +486,12 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                     // Header
                     Row(
                       children: [
-                        const Text(
-                          'Recent Requests',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        Text(
+                          'Recent $_selectedTabLabel',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         Container(
@@ -373,7 +528,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                 ),
               ),
 
-              // Add button (floating within padding)
+              // Add button
               Positioned(
                 bottom: 24,
                 right: 24,

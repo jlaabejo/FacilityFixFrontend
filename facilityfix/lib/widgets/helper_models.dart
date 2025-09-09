@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 class EmptyState extends StatelessWidget {
   const EmptyState();
@@ -231,21 +230,35 @@ class IconPill extends StatelessWidget {
   }
 }
 
-// ===== Work order Models ================================================================
+// ===== Work order Models View Details Repair ============================================================
 
+/// Represents a Work Order / Concern Slip / Job Service item
 class WorkOrder {
   final String title;
   final String requestId;
   final String date;
   final String status;
-
-  // Optional extras
   final String? unit;
   final String? priority;
   final String? department;
   final String? requestType;
-  final bool showAvatar;
-  final String? avatarAsset;
+
+  // New fields to support RepairCard
+  final String? avatarUrl;
+
+  final bool? hasInitialAssessment;
+  final String? initialAssigneeName;
+  final String? initialAssigneeDepartment;
+  final String? initialAssigneePhotoUrl;
+
+  final bool? hasCompletionAssessment;
+  final String? completionAssigneeName;
+  final String? completionAssigneeDepartment;
+  final String? completionAssigneePhotoUrl;
+
+  final String? assignedTo;
+  final String? assignedDepartment;
+  final String? assignedPhotoUrl;
 
   WorkOrder({
     required this.title,
@@ -256,10 +269,21 @@ class WorkOrder {
     this.priority,
     this.department,
     this.requestType,
-    this.showAvatar = false,
-    this.avatarAsset,
+    this.avatarUrl,
+    this.hasInitialAssessment,
+    this.initialAssigneeName,
+    this.initialAssigneeDepartment,
+    this.initialAssigneePhotoUrl,
+    this.hasCompletionAssessment,
+    this.completionAssigneeName,
+    this.completionAssigneeDepartment,
+    this.completionAssigneePhotoUrl,
+    this.assignedTo,
+    this.assignedDepartment,
+    this.assignedPhotoUrl,
   });
 }
+
 
 // Date
 class UiDateParser {
@@ -404,18 +428,7 @@ class ListItem extends ListEntry {
   ListItem(this.data);
 }
 
-/* ====================== MODELS / HELPERS ON HOLD ======================= */
-
-// On Hold Result
-class HoldResult {
-  final String reason;
-  final String? note;
-  final DateTime? resumeAt;
-  const HoldResult({required this.reason, this.note, this.resumeAt});
-}
-
-/// Format: Aug 28, 2025, 10:00 AM
-String formatDateTime(DateTime dt) => DateFormat('MMM d, y, h:mm a').format(dt);
+/// ====================== MODELS / HELPERS ON HOLD ======================= ///
 
 /// Compact banner shown at the top of details if request is On Hold.
 class OnHoldBanner extends StatelessWidget {
@@ -459,12 +472,10 @@ class OnHoldBanner extends StatelessWidget {
   }
 }
 
-/* ============ BOTTOM SHEET: PUT REQUEST ON HOLD ================= */
 
-/// Modal bottom sheet with:
-/// - Reason chips
-/// - Resume date/time picker
-/// - Optional note
+/// =============================================
+/// BOTTOM SHEET: PUT REQUEST ON HOLD (refined UI)
+/// =============================================
 class HoldBottomSheet extends StatefulWidget {
   final HoldResult? initial;
   const HoldBottomSheet({super.key, this.initial});
@@ -476,7 +487,8 @@ class HoldBottomSheet extends StatefulWidget {
 class _HoldBottomSheetState extends State<HoldBottomSheet> {
   final TextEditingController _note = TextEditingController();
 
-  final _reasons = const <String>[
+  // Reasons + optional icons
+  static const _reasons = <String>[
     'Waiting for materials',
     'Tenant unavailable',
     'Rescheduled',
@@ -484,6 +496,15 @@ class _HoldBottomSheetState extends State<HoldBottomSheet> {
     'Weather constraints',
     'Other',
   ];
+
+  static const Map<String, IconData> _reasonIcons = {
+    'Waiting for materials': Icons.inventory_2_outlined,
+    'Tenant unavailable': Icons.sentiment_dissatisfied_outlined,
+    'Rescheduled': Icons.event_repeat,
+    'Awaiting approval': Icons.verified_outlined,
+    'Weather constraints': Icons.thunderstorm_outlined,
+    'Other': Icons.more_horiz,
+  };
 
   late String _selectedReason;
   DateTime? _resumeAt;
@@ -502,23 +523,23 @@ class _HoldBottomSheetState extends State<HoldBottomSheet> {
     super.dispose();
   }
 
-  Future<void> pickDateTime() async {
+  Future<void> _pickDateTime() async {
     final now = DateTime.now();
     final base = _resumeAt ?? now;
 
-    // Pick date
     final pickedDate = await showDatePicker(
       context: context,
       initialDate: base,
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 3),
+      builder: (ctx, child) => _ThemedPicker(child: child),
     );
     if (pickedDate == null) return;
 
-    // Pick time (optional)
     final pickedTime = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(base),
+      builder: (ctx, child) => _ThemedPicker(child: child),
     );
 
     setState(() {
@@ -532,100 +553,124 @@ class _HoldBottomSheetState extends State<HoldBottomSheet> {
     });
   }
 
+  void _clearDateTime() {
+    setState(() => _resumeAt = null);
+  }
+
+  void _confirm() {
+    Navigator.pop(
+      context,
+      HoldResult(
+        reason: _selectedReason,
+        note: _note.text.trim().isEmpty ? null : _note.text.trim(),
+        resumeAt: _resumeAt,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final cs = Theme.of(context).colorScheme;
+    final media = MediaQuery.of(context);
+    final bottomInset = media.viewInsets.bottom;
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottomInset),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+    return SafeArea(
+      top: false,
+      child: Material(
+        color: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: EdgeInsets.only(bottom: bottomInset),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Grabber
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
-                  borderRadius: BorderRadius.circular(999),
-                ),
+              // Grabber + Title
+              const SizedBox(height: 8),
+              _Grabber(),
+              const SizedBox(height: 8),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: _SheetTitle('Put Request On Hold'),
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'Put Request On Hold',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 8),
 
-              // Reason chips
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children:
-                      _reasons.map((r) {
-                        final selected = r == _selectedReason;
-                        return ChoiceChip(
-                          label: Text(r),
-                          selected: selected,
-                          onSelected:
-                              (_) => setState(() => _selectedReason = r),
-                        );
-                      }).toList(),
-                ),
-              ),
-              const SizedBox(height: 14),
+              // Scrollable content
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _SectionLabel('Reason'),
+                      const SizedBox(height: 8),
+                      _ReasonChips(
+                        reasons: _reasons,
+                        icons: _reasonIcons,
+                        selected: _selectedReason,
+                        onChanged: (r) => setState(() => _selectedReason = r),
+                      ),
+                      const SizedBox(height: 16),
 
-              // Resume date/time picker
-              ResumeRow(resumeAt: _resumeAt, onPick: pickDateTime),
-              const SizedBox(height: 12),
+                      const _SectionLabel('Resume date & time'),
+                      const SizedBox(height: 8),
+                      _ResumePickerRow(
+                        valueText: _resumeAt == null
+                            ? 'Set date & time'
+                            : formatDateTime(_resumeAt!),
+                        onPick: _pickDateTime,
+                        onClear: _resumeAt == null ? null : _clearDateTime,
+                      ),
+                      const SizedBox(height: 16),
 
-              // Optional note
-              TextField(
-                controller: _note,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Note (optional)',
-                  hintText: 'Add extra details…',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // Actions
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
+                      const _SectionLabel('Note (optional)'),
+                      const SizedBox(height: 8),
+                      _NoteField(controller: _note),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(
-                          context,
-                          HoldResult(
-                            reason: _selectedReason,
-                            note:
-                                _note.text.trim().isEmpty
-                                    ? null
-                                    : _note.text.trim(),
-                            resumeAt: _resumeAt,
+                ),
+              ),
+
+              // Sticky action bar
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                        );
-                      },
-                      child: const Text('Confirm Hold'),
+                          side: BorderSide(color: cs.outlineVariant),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: cs.primary,
+                          foregroundColor: cs.onPrimary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          elevation: 0,
+                        ),
+                        icon: const Icon(Icons.pause_circle_outline),
+                        label: const Text('Confirm Hold'),
+                        onPressed: _confirm,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -635,49 +680,241 @@ class _HoldBottomSheetState extends State<HoldBottomSheet> {
   }
 }
 
-/// Row used to pick and show the resume datetime inside the bottom sheet.
-class ResumeRow extends StatelessWidget {
-  final DateTime? resumeAt;
-  final VoidCallback onPick;
-  const ResumeRow({required this.resumeAt, required this.onPick});
+/// Helper: themed wrapper for date/time pickers
+class _ThemedPicker extends StatelessWidget {
+  final Widget? child;
+  const _ThemedPicker({required this.child});
 
   @override
   Widget build(BuildContext context) {
-    final value =
-        resumeAt == null ? 'Pick date & time' : formatDateTime(resumeAt!);
-
-    return InkWell(
-      onTap: onPick,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF9FAFB),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.schedule, size: 20, color: Color(0xFF475467)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                value,
-                style: const TextStyle(
-                  color: Color(0xFF111827),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const Icon(
-              Icons.edit_calendar_outlined,
-              size: 20,
-              color: Color(0xFF9CA3AF),
-            ),
-          ],
+    final theme = Theme.of(context);
+    return Theme(
+      data: theme.copyWith(
+        colorScheme: theme.colorScheme.copyWith(
+          primary: theme.colorScheme.primary,
+          onPrimary: theme.colorScheme.onPrimary,
+          surface: Colors.white,
+          onSurface: theme.colorScheme.onSurface,
         ),
       ),
+      child: child ?? const SizedBox.shrink(),
+    );
+  }
+}
+
+/// Grabber
+class _Grabber extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 42,
+      height: 4,
+      decoration: BoxDecoration(
+        color: const Color(0xFFE5E7EB),
+        borderRadius: BorderRadius.circular(999),
+      ),
+    );
+  }
+}
+
+/// Title
+class _SheetTitle extends StatelessWidget {
+  final String text;
+  const _SheetTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        fontSize: 17,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.1,
+      ),
+    );
+  }
+}
+
+/// Section label
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: Color(0xFF475467),
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.15,
+      ),
+    );
+  }
+}
+
+/// Reason chips (pill style)
+class _ReasonChips extends StatelessWidget {
+  final List<String> reasons;
+  final Map<String, IconData> icons;
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  const _ReasonChips({
+    required this.reasons,
+    required this.icons,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: reasons.map((r) {
+        final isSelected = r == selected;
+        return ChoiceChip(
+          label: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icons[r] ?? Icons.more_horiz,
+                size: 16,
+                color: isSelected ? cs.onPrimary : cs.primary,
+              ),
+              const SizedBox(width: 6),
+              Text(r),
+            ],
+          ),
+          selected: isSelected,
+          onSelected: (_) => onChanged(r),
+          shape: StadiumBorder(
+            side: BorderSide(
+              color: isSelected ? cs.primary : const Color(0xFFE5E7EB),
+              width: 1,
+            ),
+          ),
+          labelPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          showCheckmark: false,
+          selectedColor: cs.primary,
+          backgroundColor: Colors.white,
+          labelStyle: TextStyle(
+            color: isSelected ? cs.onPrimary : const Color(0xFF111827),
+            fontWeight: FontWeight.w600,
+          ),
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        );
+      }).toList(),
+    );
+  }
+}
+
+/// Resume date/time row with Set & Clear actions
+class _ResumePickerRow extends StatelessWidget {
+  final String valueText;
+  final VoidCallback onPick;
+  final VoidCallback? onClear;
+
+  const _ResumePickerRow({
+    required this.valueText,
+    required this.onPick,
+    this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final hasValue = onClear != null;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.schedule, size: 20, color: Color(0xFF475467)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              valueText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF111827),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: onPick,
+            style: TextButton.styleFrom(
+              foregroundColor: cs.primary,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              minimumSize: const Size(0, 0),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            icon: const Icon(Icons.edit_calendar_outlined, size: 18),
+            label: const Text('Set'),
+          ),
+          if (hasValue) ...[
+            const SizedBox(width: 4),
+            TextButton(
+              onPressed: onClear,
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF9CA3AF),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                minimumSize: const Size(0, 0),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Clear'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Note field with soft outline + counter
+class _NoteField extends StatelessWidget {
+  final TextEditingController controller;
+  const _NoteField({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      maxLines: 3,
+      maxLength: 200,
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: 'Add extra details…',
+        counterText: '',
+        filled: true,
+        fillColor: const Color(0xFFF9FAFB),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        border: OutlineInputBorder(
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.4),
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+      style: const TextStyle(fontSize: 14),
     );
   }
 }
@@ -688,13 +925,29 @@ Future<HoldResult?> showHoldSheet(BuildContext context, {HoldResult? initial}) {
   return showModalBottomSheet<HoldResult>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
+    backgroundColor: Colors.transparent, // let our Material shape render
     builder: (ctx) => HoldBottomSheet(initial: initial),
   );
 }
+
+/// ================== YOUR EXISTING TYPES ==================
+/// Keep using your own HoldResult & formatDateTime implementations.
+class HoldResult {
+  final String reason;
+  final String? note;
+  final DateTime? resumeAt;
+  HoldResult({required this.reason, this.note, this.resumeAt});
+}
+
+// Expects you already have this util in your project.
+String formatDateTime(DateTime dt) {
+  // Implement as you already do elsewhere
+  // Example:
+  // return DateFormat('MMM d, yyyy • h:mm a').format(dt);
+  return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+}
+
 
 /* ================== WORK ORDER DETAILS ADMIN SIDE ================== */
 // =========================== Assign Staff Bottom Sheet =======================
@@ -1059,7 +1312,7 @@ class _AssignStaffBottomSheetState extends State<AssignStaffBottomSheet> {
                                               () => _selectedStaff = v,
                                             )
                                             : null,
-                                    activeColor: const Color(0xFF2563EB),
+                                    activeColor: const Color(0xFF005CE7),
                                   ),
                                 ],
                               ),
@@ -1434,7 +1687,10 @@ class _RejectBottomSheetState extends State<RejectBottomSheet> {
                           ),
                           child: const Text(
                             'Cancel',
-                            style: TextStyle(fontWeight: FontWeight.w700),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF005CE7), 
+                            ),
                           ),
                         ),
                       ),
@@ -1489,3 +1745,45 @@ class _RejectBottomSheetState extends State<RejectBottomSheet> {
   }
 }
 
+/// ===== Home Helpers  ====================================
+class SectionHeader extends StatelessWidget {
+  final String title;
+  final String actionLabel;
+  final VoidCallback? onActionTap; 
+
+  const SectionHeader({
+    super.key,
+    required this.title,
+    required this.actionLabel,
+    this.onActionTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        GestureDetector(
+          onTap: onActionTap,
+          child: Text(
+            actionLabel,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF005CE7),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}

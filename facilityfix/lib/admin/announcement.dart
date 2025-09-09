@@ -1,17 +1,18 @@
 import 'dart:async';
 import 'package:facilityfix/admin/calendar.dart';
-import 'package:facilityfix/admin/forms/announcement.dart';
 import 'package:facilityfix/admin/home.dart';
 import 'package:facilityfix/admin/inventory.dart';
 import 'package:facilityfix/admin/notification.dart';
+import 'package:facilityfix/admin/view_details/announcement_details.dart';
 import 'package:facilityfix/admin/workorder.dart';
-import 'package:facilityfix/tenant/view_details.dart';
-import 'package:facilityfix/widgets/buttons.dart';
-import 'package:facilityfix/widgets/cards.dart';
-import 'package:facilityfix/widgets/app&nav_bar.dart';
-import 'package:facilityfix/widgets/helper_models.dart';
-import 'package:facilityfix/widgets/pop_up.dart';
+import 'package:facilityfix/widgets/buttons.dart'; // AddButton lives here
+import 'package:facilityfix/widgets/cards.dart'; // AnnouncementCard, EmptyState
+import 'package:facilityfix/widgets/app&nav_bar.dart'; // CustomAppBar, NavBar, NavItem
+import 'package:facilityfix/widgets/helper_models.dart'; // Announcement model
 import 'package:flutter/material.dart';
+
+// Create form
+import 'package:facilityfix/admin/forms/announcement.dart'; // AnnouncementForm
 
 class AnnouncementPage extends StatefulWidget {
   const AnnouncementPage({super.key});
@@ -23,6 +24,7 @@ class AnnouncementPage extends StatefulWidget {
 class _AnnouncementPageState extends State<AnnouncementPage> {
   int _selectedIndex = 2;
 
+  // ---------------- Bottom Nav ----------------
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
@@ -50,8 +52,34 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
 
   // ===== Search, classification & read-status filters =====
   final TextEditingController _searchController = TextEditingController();
+
+  // Classification (announcement categories)
   String _selectedClassification = "All";
+  final List<String> _classifications = const [
+    'All',
+    'Utility Interruption',
+    'Power Outage',
+    'Pest Control',
+    'General Maintenance',
+  ];
+
+  // Status filter: string shown in UI + enum used in logic (kept in sync)
+  String _selectedStatus = 'All';
+  final List<String> _statuses = const ['All', 'Unread', 'Read', 'Recent'];
   AnnStatusFilter _statusFilter = AnnStatusFilter.all;
+
+  AnnStatusFilter _toFilter(String s) {
+    switch (s.toLowerCase()) {
+      case 'unread':
+        return AnnStatusFilter.unread;
+      case 'read':
+        return AnnStatusFilter.read;
+      case 'recent':
+        return AnnStatusFilter.recent;
+      default:
+        return AnnStatusFilter.all;
+    }
+  }
 
   // ===== Demo data (replace with backend) =====
   final List<Announcement> _all = [
@@ -164,28 +192,6 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
     }
   }
 
-  void _showRequestDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => CustomPopup(
-        title: 'Create Announcement',
-        message: 'Would you like to create a new announcement?',
-        primaryText: 'Yes',
-        onPrimaryPressed: () {
-          Navigator.of(context).pop();
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const AnnouncementForm(requestType: '',),
-            ),
-          );
-        },
-        secondaryText: 'Cancel',
-        onSecondaryPressed: () => Navigator.of(context).pop(),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final items = _filteredAnnouncements;
@@ -206,134 +212,112 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
           ),
         ],
       ),
+
+      // ↓↓↓ Add button bottom-right
+      floatingActionButton: AddButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const AnnouncementForm(requestType: ''),
+            ),
+          );
+        },
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+
       body: SafeArea(
-        child: Stack(
-          children: [
-            // Keep the RefreshIndicator on a scrollable child
-            RefreshIndicator(
-              onRefresh: _refresh,
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Search & classification filter
-                    SearchAndFilterBar(
-                      searchController: _searchController,
-                      selectedClassification: _selectedClassification,
-                      classifications: const [
-                        'All',
-                        'Utility Interruption',
-                        'Power Outage',
-                        'Pest Control',
-                        'General Maintenance',
-                      ],
-                      onSearchChanged: (_) => setState(() {}),
-                      onFilterChanged: (v) => setState(() => _selectedClassification = v),
-                    ),
-                    const SizedBox(height: 12),
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ========== TOP BAR: Search + Classification + Status ==========
+                SearchAndFilterBar(
+                  searchController: _searchController,
+                  selectedClassification: _selectedClassification,
+                  classifications: _classifications,
+                  onClassificationChanged: (v) =>
+                      setState(() => _selectedClassification = v),
 
-                    // Status segmented filter
-                    Row(
-                      children: [
-                        SegmentChip(
-                          label: 'All',
-                          selected: _statusFilter == AnnStatusFilter.all,
-                          onSelected: () => setState(() => _statusFilter = AnnStatusFilter.all),
-                        ),
-                        const SizedBox(width: 8),
-                        SegmentChip(
-                          label: 'Unread',
-                          selected: _statusFilter == AnnStatusFilter.unread,
-                          onSelected: () => setState(() => _statusFilter = AnnStatusFilter.unread),
-                        ),
-                        const SizedBox(width: 8),
-                        SegmentChip(
-                          label: 'Read',
-                          selected: _statusFilter == AnnStatusFilter.read,
-                          onSelected: () => setState(() => _statusFilter = AnnStatusFilter.read),
-                        ),
-                        const SizedBox(width: 8),
-                        SegmentChip(
-                          label: 'Recent',
-                          selected: _statusFilter == AnnStatusFilter.recent,
-                          onSelected: () => setState(() => _statusFilter = AnnStatusFilter.recent),
-                        ),
-                      ],
-                    ),
+                  selectedStatus: _selectedStatus,
+                  statuses: _statuses,
+                  onStatusChanged: (v) => setState(() {
+                    _selectedStatus = v;
+                    _statusFilter = _toFilter(v);
+                  }),
 
-                    const SizedBox(height: 16),
-                    Text(
-                      headerTitle(),
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // List
-                    Expanded(
-                      child: items.isEmpty
-                          ? const EmptyState()
-                          : ListView.separated(
-                              physics: const AlwaysScrollableScrollPhysics(),
-                              itemCount: items.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 12),
-                              itemBuilder: (_, i) {
-                                final a = items[i];
-                                final y = a.postedAt.year;
-                                final m = a.postedAt.month.toString().padLeft(2, '0');
-                                final d = a.postedAt.day.toString().padLeft(2, '0');
-                                final dateStr = '$y-$m-$d';
-
-                                // unread dot overlay + reduced opacity for read
-                                return Opacity(
-                                  opacity: a.isRead ? 0.85 : 1,
-                                  child: Stack(
-                                    children: [
-                                      AnnouncementCard(
-                                        title: a.title,
-                                        datePosted: dateStr,
-                                        details: a.details,
-                                        classification: a.classification,
-                                        onTap: () {
-                                          // mark as read on view
-                                          final idx = _all.indexOf(a);
-                                          if (idx != -1 && !_all[idx].isRead) {
-                                            setState(() => _all[idx] = _all[idx].copyWith(isRead: true));
-                                          }
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) => const ViewDetailsPage(
-                                                selectedTabLabel: 'announcement detail',
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                      if (!a.isRead)
-                                        const Positioned(
-                                          top: 10,
-                                          right: 10,
-                                          child: UnreadDot(),
-                                        ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
+                  onSearchChanged: (_) => setState(() {}),
                 ),
-              ),
-            ),
 
-            // Floating Add button (must be inside a Stack)
-            Positioned(
-              bottom: 24,
-              right: 24,
-              child: AddButton(onPressed: () => _showRequestDialog(context)),
+                const SizedBox(height: 16),
+
+                // ===== Header only (Add button moved to bottom-right) =====
+                Text(
+                  headerTitle(),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // ===== List =====
+                Expanded(
+                  child: items.isEmpty
+                      ? const EmptyState()
+                      : ListView.separated(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          itemCount: items.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          itemBuilder: (_, i) {
+                            final a = items[i];
+                            final y = a.postedAt.year;
+                            final m = a.postedAt.month.toString().padLeft(2, '0');
+                            final d = a.postedAt.day.toString().padLeft(2, '0');
+                            final dateStr = '$y-$m-$d';
+
+                            return Opacity(
+                              opacity: a.isRead ? 0.85 : 1,
+                              child: Stack(
+                                children: [
+                                  AnnouncementCard(
+                                    title: a.title,
+                                    datePosted: dateStr,
+                                    details: a.details,
+                                    classification: a.classification,
+                                    onTap: () {
+                                      final idx = _all.indexOf(a);
+                                      if (idx != -1 && !_all[idx].isRead) {
+                                        setState(() => _all[idx] = _all[idx].copyWith(isRead: true));
+                                      }
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => const AnnouncementDetails(
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                  if (!a.isRead)
+                                    const Positioned(
+                                      top: 10,
+                                      right: 10,
+                                      child: UnreadDot(),
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
       bottomNavigationBar: NavBar(

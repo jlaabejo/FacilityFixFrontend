@@ -1,114 +1,181 @@
-import 'package:flutter/material.dart';
-import 'package:facilityfix/widgets/tag.dart'; // StatusTag, PriorityTag
+import 'package:facilityfix/widgets/buttons.dart' as custom_buttons;
 import 'package:facilityfix/widgets/buttons.dart' as fx;
+import 'package:flutter/material.dart';
+import 'package:facilityfix/widgets/tag.dart'; // StatusTag, PriorityTag, RequestTypeTag, DepartmentTag
+import 'package:intl/intl.dart';
+
+// REPAIR DETAILS
 class RepairDetailsScreen extends StatelessWidget {
-  // ----- Required -----
-  final String title;
+  //  Basic Information
+  final String? title;
   final String requestId;
-  final String date;
-  final String requestType;      // "Repair" | "Concern Slip" | "Assessed Concern Slip" | "Job Service" | "Work Order Permit"
+  final String reqDate; // will display as: Aug 12, 2025
+  final String requestType; // Concern Slip | Job Service | Work Order / Work Order Permit
+  final String statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+  final String? priority; // High | Medium | Low
+
+  //  Tenant / Requester
+  final String requestedBy;
   final String unit;
-  final String description;      // main description / note
-  final String priority;
-  final List<String> attachments;
+  final String? scheduleAvailability; // will display as: Aug 12, 1:30 PM (if time exists)
 
-  // ----- Optional: status / tags -----
-  final String? statusTag;
+  //  Request Details
+  final String? description;
+  final List<String>? attachments;
 
-  // ----- Optional: Tenant / Requester -----
-  final String? requestedBy;
-  final String? department;
-  /// Example: tenant availability or target date; you can reuse for schedule
-  final String? scheduleAvailability;
+  final String? jobServiceNotes; // For Job Service; falls back to description if null/empty
 
-  // ----- Optional: assessed by (staff who assessed) -----
-  final String? assigneeName;     // assessed by name
-  final String? assigneeRole;     // assessed by role
-  final String? assessment;
-  final String? recommendation;
-  final String? dateAssessed;
-  final String? assigneeTitle;    // custom title for the assessed section
+  // Initial Assessment
+  final String? initialAssigneeName;
+  final String? initialAssigneeDepartment;
+  final String? initialDateAssessed;
+  final String? initialAssessment;
+  final String? initialRecommendation;
+  final List<String>? initialAssessedAttachments;
 
-  // ----- Optional: assigned to (the actual assignment after conversion) -----
+  // Completion Assessment
+  final String? completionAssigneeName;
+  final String? completionAssigneeDepartment;
+  final String? completionDateAssessed;
+  final String? completionAssessment;
+  final String? completionRecommendation;
+  final List<String>? completionAssessedAttachments;
+
+  //  Assigned To
   final String? assignedTo;
-  final String? assignedRole;
-  final String? assignedSchedule; // if you want a separate schedule for the assignment; fallback to scheduleAvailability
+  final String? assignedDepartment;
+  final String? assignedSchedule;
 
-  // ----- Optional: Job Service specialization -----
-  final String? notes;
-
-  // ----- Optional: Work Order Permit specialization -----
-  final String? accountType;
+  //  Work Order Permit Validation
   final String? permitId;
-  final String? issueDate;
-  final String? expirationDate;
-  final String? instructions;
+  final String? reqType;
+  final String? workScheduleFrom;
+  final String? workScheduleTo;
 
+  //  Contractor Profile
   final String? contractorName;
   final String? contractorCompany;
-  final String? contractorPhone;
+  final String? contractorNumber;
 
-  // ----- Optional CTA -----
+  // WO additional Notes
+  final String? workOrderNotes;
+
+  // CTA
   final String? actionLabel;
   final VoidCallback? onAction;
 
   const RepairDetailsScreen({
     super.key,
-    // required
-    required this.title,
+    // Basic
+    this.title,
     required this.requestId,
-    required this.date,
+    required this.reqDate,
     required this.requestType,
+    required this.statusTag,
+    this.priority,
+
+    // Tenant
+    required this.requestedBy,
     required this.unit,
-    required this.description,
-    required this.priority,
-    required this.attachments,
-    // optional status
-    this.statusTag,
-    // optional requester
-    this.requestedBy,
-    this.department,
     this.scheduleAvailability,
-    // optional assessed by
-    this.assigneeName,
-    this.assigneeRole,
-    this.assessment,
-    this.recommendation,
-    this.dateAssessed,
-    this.assigneeTitle,
-    // optional assigned to
+
+    // Request
+    this.description,
+    this.attachments,
+
+    // Additional notes on Job Service
+    this.jobServiceNotes,
+
+    // Initial Assessment
+    this.initialAssigneeName,
+    this.initialAssigneeDepartment,
+    this.initialDateAssessed,
+    this.initialAssessment,
+    this.initialRecommendation,
+    this.initialAssessedAttachments,
+
+    // Completion Assessment
+    this.completionAssigneeName,
+    this.completionAssigneeDepartment,
+    this.completionDateAssessed,
+    this.completionAssessment,
+    this.completionRecommendation,
+    this.completionAssessedAttachments,
+
+    // Assigned
     this.assignedTo,
-    this.assignedRole,
+    this.assignedDepartment,
     this.assignedSchedule,
 
-    // optional job service
-    this.notes,
-    // optional permit
-    this.accountType,
+    // Permit
     this.permitId,
-    this.issueDate,
-    this.expirationDate,
-    this.instructions,
+    this.reqType,
+    this.workScheduleFrom,
+    this.workScheduleTo,
 
+    // Contractor
     this.contractorName,
     this.contractorCompany,
-    this.contractorPhone,
+    this.contractorNumber,
+
+    // WO additional Notes
+    this.workOrderNotes,
 
     // CTA
     this.actionLabel,
     this.onAction,
   });
 
-  bool get _isJobService => _n(requestType) == 'job service';
-  bool get _isPermit     => _n(requestType) == 'work order permit';
+  static String _n(String s) => s
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[_\-]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ');
 
-  static String _n(String s) =>
-      s.trim().toLowerCase().replaceAll(RegExp(r'[_\-]+'), ' ').replaceAll(RegExp(r'\s+'), ' ');
+  bool get _isJobService => _n(requestType).startsWith('job service'); // tolerant
+  bool get _isPermit =>
+      _n(requestType) == 'work order permit' || _n(requestType) == 'work order';
+
+  bool get _hasAnyPermitData =>
+      (reqType?.trim().isNotEmpty ?? false) ||
+      (permitId?.trim().isNotEmpty ?? false) ||
+      (workScheduleFrom?.trim().isNotEmpty ?? false) ||
+      (workScheduleTo?.trim().isNotEmpty ?? false);
 
   @override
   Widget build(BuildContext context) {
-    final hasAssessmentBits = (assessment?.isNotEmpty ?? false) || (dateAssessed?.isNotEmpty ?? false);
-    final assigneeSectionTitle = assigneeTitle ?? (hasAssessmentBits ? 'Assessed by' : 'Assessed by');
+    // Which body to show in the main Request Details card
+    final bool showJobNotes =
+        _isJobService && (jobServiceNotes?.trim().isNotEmpty ?? false);
+    final String? detailsBody =
+        (showJobNotes ? jobServiceNotes : description)?.trim();
+    final bool showDetailsCard = detailsBody?.isNotEmpty ?? false;
+
+    // Work Order extra notes
+    final bool showWoNotes = workOrderNotes?.trim().isNotEmpty ?? false;
+
+    // Initial assessment presence
+    final bool hasInitialAssessment =
+        (initialAssigneeName?.trim().isNotEmpty ?? false) ||
+        (initialAssigneeDepartment?.trim().isNotEmpty ?? false) ||
+        (initialDateAssessed?.trim().isNotEmpty ?? false) ||
+        (initialAssessment?.trim().isNotEmpty ?? false) ||
+        (initialRecommendation?.trim().isNotEmpty ?? false) ||
+        ((initialAssessedAttachments ?? const []).isNotEmpty);
+
+    // Completion assessment presence
+    final bool hasCompletionAssessment =
+        (completionAssigneeName?.trim().isNotEmpty ?? false) ||
+        (completionAssigneeDepartment?.trim().isNotEmpty ?? false) ||
+        (completionDateAssessed?.trim().isNotEmpty ?? false) ||
+        (completionAssessment?.trim().isNotEmpty ?? false) ||
+        (completionRecommendation?.trim().isNotEmpty ?? false) ||
+        ((completionAssessedAttachments ?? const []).isNotEmpty);
+
+    final bool hasAssessmentBits = hasInitialAssessment || hasCompletionAssessment;
+
+    final String headerTitle =
+        (title?.trim().isNotEmpty ?? false) ? title!.trim() : requestType;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -119,14 +186,514 @@ class RepairDetailsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ================= Header (Title + Status) =================
+          // ===== Header =====
           Row(
             children: [
               Expanded(
                 child: Text(
-                  title,
+                  headerTitle,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF101828),
+                    letterSpacing: -0.25,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (statusTag.isNotEmpty) StatusTag(status: statusTag),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            requestId,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 14,
+              color: Color(0xFF475467),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // ===== Basic info =====
+          KeyValueRow.text(
+            label: 'Date Requested',
+            valueText: formatDateRequested(reqDate), // "Aug 12, 2025"
+          ),
+          const SizedBox(height: 8),
+          KeyValueRow(
+            label: 'Request Type',
+            value: RequestTypeTag(requestType, width: 140),
+          ),
+          if ((priority ?? '').isNotEmpty) ...[
+            const SizedBox(height: 8),
+            KeyValueRow(
+              label: 'Priority',
+              value: PriorityTag(priority: priority!, width: 100),
+            ),
+          ],
+
+          // ----- Divider -----
+          const SizedBox(height: 16),
+          ffDivider(),
+          const SizedBox(height: 14),
+
+          // ===== Requester Details =====
+          const _SectionTitle('Requester Details'),
+          const SizedBox(height: 8),
+          KeyValueRow.text(label: 'Requested By', valueText: requestedBy),
+          const SizedBox(height: 8),
+          KeyValueRow.text(label: 'Unit', valueText: unit),
+
+          const SizedBox(height: 14),
+          ffDivider(),
+          const SizedBox(height: 14),
+
+          // ===== Request Details =====
+          _Section(
+            title: "Request Details",
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if ((scheduleAvailability?.trim().isNotEmpty ?? false)) ...[
+                  KeyValueRow.text(
+                    label: 'Schedule Availability',
+                    valueText: formatSchedule(scheduleAvailability!.trim()),
+                    labelWidth: 160,
+                  ),
+                  const SizedBox(height: 8),
+                ],
+
+                if (showDetailsCard)
+                  _SectionCard(
+                    title: showJobNotes ? 'Notes' : 'Description',
+                    content: detailsBody!,
+                  ),
+
+                if ((attachments?.isNotEmpty ?? false)) ...[
+                  const SizedBox(height: 10),
+                  const _SectionTitle('Attachments'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: attachments!.map((u) => _thumb(u, h: 80, w: 140)).toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // ===== Assigned To =====
+          if ((assignedTo ?? '').isNotEmpty) ...[
+            const SizedBox(height: 14),
+            ffDivider(),
+            const SizedBox(height: 14),
+            _Section(
+              title: "Assigned To",
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _AvatarNameBlock(
+                    name: assignedTo!,
+                    department: assignedDepartment, // chip below the name
+                  ),
+                  if ((assignedSchedule ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    KeyValueRow.text(
+                      label: 'Schedule',
+                      valueText: formatSchedule(assignedSchedule!),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+
+          // ===== Assessment =====
+          if (hasAssessmentBits) ...[
+            const SizedBox(height: 14),
+            ffDivider(),
+            const SizedBox(height: 14),
+
+            _Section(
+              title: 'Assessment and Recommendation',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ---------------- Initial Assessment ----------------
+                  if (hasInitialAssessment) ...[
+                    if ((initialAssigneeName?.trim().isNotEmpty ?? false)) ...[
+                      _AvatarNameBlock(
+                        name: initialAssigneeName!.trim(),
+                        department: initialAssigneeDepartment?.trim(),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+
+                    if ((initialDateAssessed?.trim().isNotEmpty ?? false)) ...[
+                      KeyValueRow.text(
+                        label: 'Date Assessed',
+                        valueText: formatDateRequested(initialDateAssessed!.trim()),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    if ((initialAssessment?.trim().isNotEmpty ?? false)) ...[
+                      _SectionCard(
+                        title: "Assessment",
+                        content: initialAssessment!.trim(),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    if ((initialRecommendation?.trim().isNotEmpty ?? false)) ...[
+                      _SectionCard(
+                        title: "Recommendation",
+                        content: initialRecommendation!.trim(),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    if ((initialAssessedAttachments?.isNotEmpty ?? false)) ...[
+                      const _SectionTitle('Attachments'),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: initialAssessedAttachments!
+                            .map((u) => _thumb(u, h: 80, w: 140))
+                            .toList(),
+                      ),
+                    ],
+                  ],
+
+                  // ---------------- Completion Assessment ----------------
+                  if (hasCompletionAssessment) ...[
+                    if ((completionAssigneeName?.trim().isNotEmpty ?? false)) ...[
+                      _AvatarNameBlock(
+                        name: completionAssigneeName!.trim(),
+                        department: completionAssigneeDepartment?.trim(),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+
+                    if ((completionDateAssessed?.trim().isNotEmpty ?? false)) ...[
+                      KeyValueRow.text(
+                        label: 'Date Assessed',
+                        valueText: formatDateRequested(completionDateAssessed!.trim()),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    if ((completionAssessment?.trim().isNotEmpty ?? false)) ...[
+                      _SectionCard(
+                        title: "Assessment",
+                        content: completionAssessment!.trim(),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    if ((completionRecommendation?.trim().isNotEmpty ?? false)) ...[
+                      _SectionCard(
+                        title: "Recommendation",
+                        content: completionRecommendation!.trim(),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    if ((completionAssessedAttachments?.isNotEmpty ?? false)) ...[
+                      const _SectionTitle('Attachments'),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: completionAssessedAttachments!
+                            .map((u) => _thumb(u, h: 80, w: 140))
+                            .toList(),
+                      ),
+                    ],
+                  ],
+                ],
+              ),
+            ),
+          ],
+
+          // ===== Permit Details =====
+          if (_isPermit || _hasAnyPermitData) ...[
+            const SizedBox(height: 14),
+            ffDivider(),
+            const SizedBox(height: 14),
+            _Section(
+              title: "Permit Details",
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if ((reqType ?? '').isNotEmpty)
+                    KeyValueRow.text(label: 'Request Type', valueText: reqType!),
+                  if ((permitId ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    KeyValueRow.text(label: 'Permit ID', valueText: permitId!),
+                  ],
+                  if ((workScheduleFrom ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    const _SectionTitle('Work Schedule'),
+                    const SizedBox(height: 8),
+                    KeyValueRow.text(
+                      label: 'From',
+                      valueText: formatDateRequested(workScheduleFrom!),
+                    ),
+                  ],
+                  if ((workScheduleTo ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    KeyValueRow.text(
+                      label: 'To',
+                      valueText: formatDateRequested(workScheduleTo!),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+
+          // ===== Additional Notes (WO) =====
+          if (showWoNotes) ...[
+            const SizedBox(height: 8),
+            _Section(
+              title: "Notes",
+              child: _SectionCard(content: workOrderNotes!.trim()),
+            ),
+          ],
+
+          // ===== Contractor Profile =====
+          if ((contractorName?.isNotEmpty ?? false) ||
+              (contractorCompany?.isNotEmpty ?? false) ||
+              (contractorNumber?.isNotEmpty ?? false)) ...[
+            const SizedBox(height: 14),
+            ffDivider(),
+            const SizedBox(height: 14),
+            _Section(
+              title: "Contractor Profile",
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if ((contractorName ?? '').isNotEmpty)
+                    KeyValueRow.text(label: 'Name', valueText: contractorName!),
+                  if ((contractorCompany ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    KeyValueRow.text(label: 'Company', valueText: contractorCompany!),
+                  ],
+                  if ((contractorNumber ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    KeyValueRow.text(label: 'Phone', valueText: contractorNumber!),
+                  ],
+                ],
+              ),
+            ),
+          ],
+
+          // ===== CTA =====
+          if (onAction != null) ...[
+            const SizedBox(height: 16),
+            custom_buttons.FilledButton(
+              label: actionLabel ?? 'Next',
+              onPressed: onAction!,
+              backgroundColor: const Color(0xFF1F2937),
+              textColor: Colors.white,
+              height: 48,
+              borderRadius: 10,
+              withOuterBorder: false,
+              width: double.infinity,
+              isLoading: false,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Avatar + Name with DepartmentTag below (left aligned)
+class _AvatarNameBlock extends StatelessWidget {
+  final String name;
+  final String? department;
+  const _AvatarNameBlock({required this.name, this.department});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        // Avatar
+        Container(
+          width: 44,
+          height: 44,
+          decoration: const ShapeDecoration(
+            color: Color(0xFFD9D9D9),
+            shape: OvalBorder(
+              side: BorderSide(width: 1.68, color: Colors.white),
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            _initials(name),
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+
+        // Name + DepartmentTag (below)
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: Color(0xFF101828),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  height: 1.43,
+                  letterSpacing: 0.10,
+                ),
+              ),
+              if ((department ?? '').isNotEmpty) ...[
+                const SizedBox(height: 4),
+                DepartmentTag(department!),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  static String _initials(String fullName) {
+    final parts =
+        fullName.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+  }
+}
+
+// MAINTENANCE DETAILS
+class MaintenanceDetailsScreen extends StatefulWidget {
+  //
+  final String? title;
+  final String requestId;
+  final String reqDate; // Displays as: Aug 12, 2025
+  final String requestType; // Concern Slip | Job Service | Work Order / Work Order Permit
+  final String statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+
+  // ── Assigned To ────────────────────────────────────────────────────────────
+  final String? assignedTo;
+  final String? assignedDepartment;
+  final String? assignedSchedule; // formatted via formatSchedule if date-like
+
+  // ── Optional content blocks ────────────────────────────────────────────────
+  final String? location;
+  final String? description;
+  final List<String>? checklist;
+  final List<String>? attachments;
+  final String? adminNote;
+
+  // ── Final / assessed info (optional) ───────────────────────────────────────
+  final String? completionAssigneeName;
+  final String? completionAssigneeDepartment;
+  final String? completionDateAssessed; // formatted via formatSchedule
+  final String? completionAssessment; // "Assessment:"
+  final String? completionRecommendation; // "Recommendation:"
+  final List<String>? completionAssessedAttachments; // "AssessedAttachments:"
+
+  const MaintenanceDetailsScreen({
+    super.key,
+    // required header
+    required this.title,
+    required this.requestId,
+    required this.reqDate,
+    required this.requestType,
+    required this.statusTag,
+
+    // assigned to
+    this.assignedTo,
+    this.assignedDepartment,
+    this.assignedSchedule,
+
+    // optionals
+    this.location,
+    this.description,
+    this.checklist,
+    this.attachments,
+    this.adminNote,
+
+    // completion/assessed
+    this.completionAssigneeName,
+    this.completionAssigneeDepartment,
+    this.completionDateAssessed,
+    this.completionAssessment,
+    this.completionRecommendation,
+    this.completionAssessedAttachments,
+  });
+
+  @override
+  State<MaintenanceDetailsScreen> createState() => _MaintenanceDetailsScreenState();
+}
+
+class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
+  late final List<Map<String, dynamic>> _checklistState;
+
+  @override
+  void initState() {
+    super.initState();
+    _checklistState = (widget.checklist ?? const <String>[])
+        .map((item) => {"text": item, "checked": false})
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasAssigned =
+        (widget.assignedTo ?? '').trim().isNotEmpty ||
+        (widget.assignedDepartment ?? '').trim().isNotEmpty ||
+        (widget.assignedSchedule ?? '').trim().isNotEmpty;
+
+    // Final/assessed block
+    final assessedBy = (widget.completionAssigneeName ?? '').trim();
+    final assessedDept = (widget.completionAssigneeDepartment ?? '').trim();
+    final assessedDate = (widget.completionDateAssessed ?? '').trim();
+    final assessedText = (widget.completionAssessment ?? '').trim();
+    final recommendationText = (widget.completionRecommendation ?? '').trim();
+    final assessedAttachments = widget.completionAssessedAttachments ?? const <String>[];
+    final hasAssessmentBlock = assessedBy.isNotEmpty ||
+        assessedDept.isNotEmpty ||
+        assessedDate.isNotEmpty ||
+        assessedText.isNotEmpty ||
+        recommendationText.isNotEmpty ||
+        assessedAttachments.isNotEmpty;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header: Title + Status
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  (widget.title ?? '').trim().isEmpty ? 'Maintenance Task' : widget.title!,
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
@@ -135,733 +702,230 @@ class RepairDetailsScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              if ((statusTag ?? '').isNotEmpty) StatusTag(status: statusTag!),
+              StatusTag(status: widget.statusTag),
             ],
           ),
           const SizedBox(height: 4),
           Text(
-            requestId,
+            widget.requestId,
             style: const TextStyle(
-              fontSize: 14,
               color: Color(0xFF475467),
+              fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(height: 12),
 
-          // ===== Basic info rows =====
-          _infoRow('Submitted On', date),
-          const SizedBox(height: 8),
-          _infoRow('Request Type', requestType),
-
-          // ------------------ Divider ------------------
-          const SizedBox(height: 16),
-          _divider(),
-          const SizedBox(height: 12),
-
-          // ========== Tenant / Requester Details ==========
-          _sectionTitle('Tenant / Requester Details'),
-          const SizedBox(height: 8),
-          if ((requestedBy ?? '').isNotEmpty) ...[
-            _infoRow('Requested By', requestedBy!),
-            const SizedBox(height: 8),
-          ],
-          _infoRow('Unit', unit),
-          if ((department ?? '').isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _infoRow('Department', department!),
-          ],
-          if ((scheduleAvailability ?? '').isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _infoRow('Schedule Availability', scheduleAvailability!),
-          ],
-          if ((dateAssessed ?? '').isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _infoRow('Date Assessed', dateAssessed!),
-          ],
-
-          // ------------------ Divider ------------------
-          const SizedBox(height: 16),
-          _divider(),
-          const SizedBox(height: 12),
-
-          // ================= Request Details =================
-          _section(
-            title: "Request Details",
+          // Basic info (aligned rows)
+          _Section(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        "Priority",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF667085),
-                        ),
-                      ),
-                    ),
-                    PriorityTag(priority: priority),
-                  ],
+                KeyValueRow.text(
+                  label: 'Request Date',
+                  valueText: formatDateRequested(widget.reqDate),
                 ),
                 const SizedBox(height: 8),
-                if ((department ?? '').isNotEmpty)
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          "Department",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Color(0xFF667085),
-                          ),
-                        ),
-                      ),
-                      DepartmentTag(department!), // assumes you have this widget
-                    ],
+                KeyValueRow.text(
+                  label: 'Request Type',
+                  valueText: widget.requestType,
+                ),
+                if ((widget.location ?? '').trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  KeyValueRow.text(
+                    label: 'Location',
+                    valueText: widget.location!.trim(),
                   ),
+                ],
               ],
             ),
           ),
+          const SizedBox(height: 8),
 
-          // Job Service prefers "Notes"; else show Description
-          if (_isJobService && (notes ?? '').isNotEmpty)
-            _sectionCard(title: "Notes", content: notes!)
-          else
-            _sectionCard(title: "Description", content: description),
-
-          // ================= Assessed by =================
-          if ((assigneeName ?? '').isNotEmpty)
-            _personSection(
-              title: assigneeSectionTitle,
-              name: assigneeName!,
-              role: assigneeRole,
-              trailing: null,
+          // Description (optional)
+          if ((widget.description ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _SectionCard(
+              title: "Task Description",
+              content: widget.description!.trim(),
             ),
+          ],
 
-          // ================= Assessment & Recommendation =================
-          if (assessment != null || recommendation != null)
-            _section(
-              title: "Assessment & Recommendation",
+          // Assigned To (optional)
+          if (hasAssigned)
+            _Section(
+              title: "Assigned To",
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (assessment != null) _sectionCard(title: "Assessment", content: assessment!.trim()),
-                  if (recommendation != null)
-                    _sectionCard(title: "Recommendation", content: recommendation!.trim()),
+                  if ((widget.assignedTo ?? '').trim().isNotEmpty)
+                    KeyValueRow.text(label: 'Name', valueText: widget.assignedTo!.trim()),
+                  if ((widget.assignedDepartment ?? '').trim().isNotEmpty) const SizedBox(height: 8),
+                  if ((widget.assignedDepartment ?? '').trim().isNotEmpty)
+                    KeyValueRow.text(label: 'Department', valueText: widget.assignedDepartment!.trim()),
+                  if ((widget.assignedSchedule ?? '').trim().isNotEmpty) const SizedBox(height: 8),
+                  if ((widget.assignedSchedule ?? '').trim().isNotEmpty)
+                    KeyValueRow.text(
+                      label: 'Schedule',
+                      valueText: formatSchedule(widget.assignedSchedule!.trim()),
+                    ),
                 ],
               ),
             ),
 
-          // ================= Attachments =================
-          if (attachments.isNotEmpty)
-            _section(
-              title: "Attachments",
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: attachments.map((url) {
-                  final isNetwork = url.startsWith('http');
-                  final img = isNetwork
-                      ? Image.network(
-                          url,
-                          height: 80,
-                          width: 140,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stack) => _broken(),
-                        )
-                      : Image.asset(
-                          url,
-                          height: 80,
-                          width: 140,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stack) => _broken(),
-                        );
-                  return ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: img,
+          // Checklist (optional + interactive)
+          if ((widget.checklist ?? const <String>[]).isNotEmpty)
+            _Section(
+              title: "Checklist / Task Steps",
+              child: Column(
+                children: _checklistState.map((step) {
+                  final checked = step["checked"] as bool;
+                  return InkWell(
+                    onTap: () => setState(() => step["checked"] = !checked),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        children: [
+                          Icon(
+                            checked ? Icons.check_box : Icons.check_box_outline_blank,
+                            size: 20,
+                            color: const Color(0xFF111827),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              step["text"] as String,
+                              style: TextStyle(
+                                fontSize: 14,
+                                decoration: checked ? TextDecoration.lineThrough : TextDecoration.none,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   );
                 }).toList(),
               ),
             ),
 
-            // ================= Assigned to =================
-            if ((assignedTo ?? '').isNotEmpty)
-              _personSection(
-                title: 'Assigned To',
-                name: assignedTo!,
-              role: assignedRole,
-              trailing: (assignedSchedule ?? scheduleAvailability)?.isNotEmpty == true
-                  ? _infoRow('Schedule', (assignedSchedule ?? scheduleAvailability)!)
-                  : null,
-            ),
-            if (dateAssessed != null) _infoRow('Date Assessed', dateAssessed!),
-            
-            // ================= Permit-specific bits =================
-            if (_isPermit || _hasAnyPermitData)
-              _section(
-                title: "Permit Details",
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if ((accountType ?? '').isNotEmpty) _infoRow('Account Type', accountType!),
-                    if ((permitId ?? '').isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      _infoRow('Permit ID', permitId!),
-                    ],
-                    if ((issueDate ?? '').isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      _infoRow('Issue Date', issueDate!),
-                    ],
-                    if ((expirationDate ?? '').isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      _infoRow('Expiration Date', expirationDate!),
-                    ],
-                    if ((instructions ?? '').isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      _sectionCard(title: "Specific Instructions", content: instructions!),
-                    ],
-                  ],
-                ),
-              ),
-
-            // ================= Contractor Profile (optional) =================
-            if ((contractorName?.isNotEmpty ?? false) ||
-                (contractorCompany?.isNotEmpty ?? false) ||
-                (contractorPhone?.isNotEmpty ?? false))
-              _section(
-                title: "Contractor Profile",
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if ((contractorName ?? '').isNotEmpty) _infoRow('Name', contractorName!),
-                    if ((contractorCompany ?? '').isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      _infoRow('Company', contractorCompany!),
-                    ],
-                    if ((contractorPhone ?? '').isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      _infoRow('Phone', contractorPhone!),
-                    ],
-                  ],
-                ),
-              ),
-
-          // ================= Optional bottom CTA =================
-          if (onAction != null) ...[
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: onAction!,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1F2937),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: Text(actionLabel ?? 'Next'),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  bool get _hasAnyPermitData =>
-      (accountType?.isNotEmpty ?? false) ||
-      (permitId?.isNotEmpty ?? false) ||
-      (issueDate?.isNotEmpty ?? false) ||
-      (expirationDate?.isNotEmpty ?? false) ||
-      (instructions?.isNotEmpty ?? false);
-
-  // ---------- UI helpers ----------
-
-  Widget _infoRow(String label, String value) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF667085),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Flexible(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF344054),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _personSection({
-    required String title,
-    required String name,
-    String? role,
-    Widget? trailing,
-  }) {
-    return _section(
-      title: title,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: const Color(0xFFD9D9D9),
-                child: Text(
-                  _initials(name),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    if ((role ?? '').isNotEmpty)
-                      Text(
-                        role!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF7A5AF8),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (trailing != null) ...[
-            const SizedBox(height: 12),
-            trailing,
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionTitle(String text) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
-        color: Color(0xFF344054),
-      ),
-    );
-  }
-
-  Widget _section({required String title, required Widget child}) {
-    return Container(
-      margin: const EdgeInsets.only(top: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionTitle(title),
-          const SizedBox(height: 8),
-          child,
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionCard({required String title, required String content}) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: ShapeDecoration(
-        color: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          side: const BorderSide(color: Color(0xFFEAECF0), width: 1),
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: Color(0xFF101828),
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            content,
-            style: const TextStyle(
-              color: Color(0xFF475467),
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-              height: 1.54,
-              letterSpacing: 0.25,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _divider() => const Divider(
-        height: 1,
-        thickness: 1,
-        color: Color(0xFFEAECF0),
-      );
-
-  String _initials(String fullName) {
-    final parts = fullName.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
-    if (parts.isEmpty) return '';
-    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
-  }
-
-  Widget _broken() => Container(
-        height: 80,
-        width: 140,
-        color: const Color(0xFFEAECF0),
-        alignment: Alignment.center,
-        child: const Icon(Icons.broken_image, color: Color(0xFF98A2B3)),
-      );
-}
-
-// Maintenance Task 
-class MaintenanceDetailsScreen extends StatefulWidget {
-  final String title;
-  final String status;
-  final String maintenanceId;
-  final String dateCreated;
-  final String location;
-  final String description;
-  final String priority;
-  final String recurrence;
-  final String startDate;
-  final String nextDate;
-  final List<String> checklist;
-  final List<String> attachments;
-  final String adminNote;
-  final String? assessment;
-  final String? recommendation;
-
-  // Optional assignee
-  final String? assigneeName;
-  final String? assigneeRole;
-  final String assigneeSectionTitle;
-
-  const MaintenanceDetailsScreen({
-    super.key,
-    required this.title,
-    required this.status,
-    required this.maintenanceId,
-    required this.dateCreated,
-    required this.location,
-    required this.description,
-    required this.priority,
-    required this.recurrence,
-    required this.startDate,
-    required this.nextDate,
-    required this.checklist,
-    required this.attachments,
-    required this.adminNote,
-    this.assessment,
-    this.recommendation,
-    this.assigneeName,
-    this.assigneeRole,
-    this.assigneeSectionTitle = 'Assignee',
-  });
-
-  @override
-  State<MaintenanceDetailsScreen> createState() => _MaintenanceDetailsScreenState();
-}
-
-class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
-  late List<Map<String, dynamic>> checklistState;
-
-  @override
-  void initState() {
-    super.initState();
-    checklistState = widget.checklist.map((item) => {"text": item, "checked": false}).toList();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Title + Status
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  widget.title,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF101828)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              StatusTag(status: widget.status), // ← use your StatusTag
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            widget.maintenanceId,
-            style: const TextStyle(color: Color(0xFF475467), fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          const SizedBox(height: 12),
-
-          // Details (vertically aligned like RepairDetailsScreen)
-          _infoRow('Date Created', widget.dateCreated),
-          const SizedBox(height: 8),
-          _infoRow('Location', widget.location),
-
-          // Description
-          _sectionCard(title: "Task Description", content: widget.description),
-
-          // Priority
-          _section(
-            title: "Priority",
-            child: PriorityTag(priority: widget.priority), // ← use your PriorityTag
-          ),
-
-          // Schedule (also vertically aligned)
-          _section(
-            title: "Schedule",
-            child: Column(
-              children: [
-                _infoRow('Recurrence', widget.recurrence),
-                const SizedBox(height: 8),
-                _infoRow('Start Date', widget.startDate),
-                const SizedBox(height: 8),
-                _infoRow('Next Date', widget.nextDate),
-              ],
-            ),
-          ),
-
-          // Checklist
-          _section(
-            title: "Checklist / Task Steps",
-            child: Column(
-              children: checklistState.map((step) {
-                final checked = step["checked"] as bool;
-                return InkWell(
-                  onTap: () => setState(() => step["checked"] = !checked),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Row(
-                      children: [
-                        Icon(checked ? Icons.check_box : Icons.check_box_outline_blank, size: 20, color: const Color(0xFF111827)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            step["text"] as String,
-                            style: TextStyle(
-                              fontSize: 14,
-                              decoration: checked ? TextDecoration.lineThrough : TextDecoration.none,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-
-          // Recommendation (optional)
-          if ((widget.recommendation ?? '').isNotEmpty)
-            _sectionCard(title: "Recommendation", content: widget.recommendation!),
-
-          // Assessment (optional)
-          if ((widget.assessment ?? '').isNotEmpty)
-            _sectionCard(title: "Assessment", content: widget.assessment!),
-
-          // Assignee / Assessed by (optional)
-          if ((widget.assigneeName ?? '').isNotEmpty)
-            _section(
-              title: widget.assigneeSectionTitle,
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 22,
-                    backgroundColor: const Color(0xFFD9D9D9),
-                    child: Text(
-                      _initials(widget.assigneeName!),
-                      style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(widget.assigneeName!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                        if ((widget.assigneeRole ?? '').isNotEmpty)
-                          Text(widget.assigneeRole!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: Color(0xFF7A5AF8), fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          // Attachments
-          _section(
-            title: "Attachments",
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: widget.attachments.map((url) {
-                final isNet = url.startsWith('http');
-                final img = isNet
-                    ? Image.network(url, height: 84, width: 140, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _broken())
-                    : Image.asset(url, height: 84, width: 140, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _broken());
-                return ClipRRect(borderRadius: BorderRadius.circular(6), child: img);
-              }).toList(),
-            ),
-          ),
-
-          // Admin Notes
-          _section(
-            title: "Admin Notes",
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: const Color(0xFFEFF5FF), borderRadius: BorderRadius.circular(8)),
-              child: Row(
+          // Final / assessed block (optional)
+          if (hasAssessmentBlock)
+            _Section(
+              title: "Assessment and Recommendation",
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.warning, color: Color(0xFF005CE7), size: 22),
-                  const SizedBox(width: 10),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      widget.adminNote,
-                      style: const TextStyle(color: Color(0xFF005CE7), fontSize: 12.5, fontWeight: FontWeight.w500, height: 1.55),
+                  // Assessed By (only if any field is present)
+                  if (assessedBy.isNotEmpty || assessedDept.isNotEmpty || assessedDate.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Assessed By',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF101828),
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+
+                          if (assessedBy.isNotEmpty)
+                            KeyValueRow.text(label: 'Name', valueText: assessedBy),
+
+                          if (assessedDept.isNotEmpty) const SizedBox(height: 8),
+                          if (assessedDept.isNotEmpty)
+                            KeyValueRow.text(label: 'Department', valueText: assessedDept),
+
+                          if (assessedDate.isNotEmpty) const SizedBox(height: 8),
+                          if (assessedDate.isNotEmpty)
+                            KeyValueRow.text(label: 'Date', valueText: formatSchedule(assessedDate)),
+                        ],
+                      ),
                     ),
-                  ),
+
+                  // Assessment card
+                  if (assessedText.isNotEmpty) const SizedBox(height: 12),
+                  if (assessedText.isNotEmpty)
+                    _SectionCard(title: "Assessment", content: assessedText),
+
+                  // Recommendation card
+                  if (recommendationText.isNotEmpty) const SizedBox(height: 12),
+                  if (recommendationText.isNotEmpty)
+                    _SectionCard(title: "Recommendation", content: recommendationText),
+
+                  // Attachments
+                  if (assessedAttachments.isNotEmpty) const SizedBox(height: 12),
+                  if (assessedAttachments.isNotEmpty)
+                    _Section(
+                      title: "Assessed Attachments",
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: assessedAttachments
+                            .map((u) => _thumb(u, h: 80, w: 140))
+                            .toList(),
+                      ),
+                    ),
                 ],
               ),
             ),
-          ),
+
+          // Attachments (optional)
+          if ((widget.attachments ?? const <String>[]).isNotEmpty)
+            _Section(
+              title: "Attachments",
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: (widget.attachments ?? const <String>[])
+                    .map((u) => _thumb(u, h: 80, w: 140))
+                    .toList(),
+              ),
+            ),
+
+          // Admin Notes (optional)
+          if ((widget.adminNote ?? '').trim().isNotEmpty)
+            _Section(
+              title: "Admin Notes",
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF5FF),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.warning, color: Color(0xFF005CE7), size: 22),
+                    const SizedBox(width: 10),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        widget.adminNote!.trim(),
+                        style: const TextStyle(
+                          color: Color(0xFF005CE7),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                          height: 1.55,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
-
-  // ---------- Helpers (same pattern as your RepairDetailsScreen) ----------
-
-  Widget _infoRow(String label, String value) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(fontSize: 14, color: Color(0xFF667085)),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Flexible(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF344054)),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _section({required String title, required Widget child}) {
-    return Container(
-      margin: const EdgeInsets.only(top: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF344054))),
-          const SizedBox(height: 8),
-          child,
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionCard({required String title, required String content}) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: ShapeDecoration(
-        color: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          side: const BorderSide(color: Color(0xFFEAECF0), width: 1),
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: const TextStyle(color: Color(0xFF101828), fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: -0.5)),
-        const SizedBox(height: 4),
-        Text(content, style: const TextStyle(color: Color(0xFF475467), fontSize: 13, fontWeight: FontWeight.w400, height: 1.54, letterSpacing: 0.25)),
-      ]),
-    );
-  }
-
-  String _initials(String fullName) {
-    final parts = fullName.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
-    if (parts.isEmpty) return '';
-    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
-  }
-
-  Widget _broken() => Container(
-        height: 84,
-        width: 140,
-        color: const Color(0xFFEAECF0),
-        alignment: Alignment.center,
-        child: const Icon(Icons.broken_image, color: Color(0xFF98A2B3)),
-      );
 }
 
-class _InfoItem {
-  final String label;
-  final String value;
-  const _InfoItem({required this.label, required this.value});
-}
-
-// Announcement Viewimport 
+// Announcement Details Screen ------------------------------------------
 class AnnouncementDetailScreen extends StatelessWidget {
   final String title;
   final String datePosted;
@@ -886,135 +950,56 @@ class AnnouncementDetailScreen extends StatelessWidget {
     required this.contactEmail,
   });
 
-  Color _getBackgroundColor(String classification) {
-    switch (classification.toLowerCase()) {
-      case 'utility interruption':
-        return const Color(0xFFEFF5FF); // blue background
-      case 'power outage':
-        return const Color(0xFFFDF6A3); // yellow background
-      case 'pest control':
-        return const Color(0xFF91E5B0); // green background
-      case 'maintenance':
-        return const Color(0xFFFFD4B1); // Orange-ish
-      default:
-        return const Color(0xFFF5F5F7); // gray background for others
-    }
-  }
-
-  Color _getTextColor(String classification) {
-    switch (classification.toLowerCase()) {
-      case 'utility interruption':
-        return const Color(0xFF005CE7); // blue text
-      case 'power outage':
-        return const Color(0xFFF3B40D); // yellow text
-      case 'pest control':
-        return const Color(0xFF00A651); // green text
-      case 'maintenance':
-        return const Color(0xFFF97316); // Orange-ish
-      default:
-        return const Color(0xFF7D7D7D); // gray text
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final bgColor = _getBackgroundColor(classification);
-    final txtColor = _getTextColor(classification);
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       decoration: ShapeDecoration(
         color: const Color(0xFFFEFEFE),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header (title + date)
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: const ShapeDecoration(
-                    color: Color(0xFFD9D9D9),
-                    shape: OvalBorder(
-                      side: BorderSide(width: 1.68, color: Colors.white),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          color: Color(0xFF101828),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          height: 1.43,
-                          letterSpacing: 0.10,
-                        ),
-                      ),
-                      Text(
-                        datePosted,
-                        style: const TextStyle(
-                          color: Color(0xFF005CE7),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          height: 1.43,
-                          letterSpacing: 0.10,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Classification Tag 
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-              decoration: ShapeDecoration(
-                color: bgColor,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(130),
-                ),
-              ),
-              child: Text(
-                classification,
-                style: TextStyle(
-                  color: txtColor,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+            // ===== Header (title + date) =====
+            Text(
+              title,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF101828),
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.2,
               ),
             ),
-            const SizedBox(height: 16),
-
-            // Description Section
-            _buildSectionCard(
-              title: 'Description',
-              content: description,
+            const SizedBox(height: 4),
+            Text(
+              datePosted,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF475467),
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+              ),
             ),
 
-            // Location Section
+            const SizedBox(height: 16),
+
+            // ===== Classification Tag =====
+            AnnouncementClassificationTag(classification),
+            const SizedBox(height: 16),
+
+            // ===== Content Sections =====
+            _buildSectionCard(title: 'Description', content: description),
             _buildSectionCard(
               title: 'Location Affected',
               content: locationAffected,
             ),
-
-            // Schedule Section
             _buildSectionCard(
               title: 'Schedule',
               content: 'Start: $scheduleStart\nEnd: $scheduleEnd',
             ),
-
-            // Contact Section
             _buildSectionCard(
               title: 'Need Help?',
               content: '📱 $contactNumber\n📧 $contactEmail',
@@ -1034,12 +1019,12 @@ class AnnouncementDetailScreen extends StatelessWidget {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: ShapeDecoration(
         color: backgroundColor,
         shape: RoundedRectangleBorder(
           side: const BorderSide(color: Color(0xFFEAECF0), width: 1),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
         ),
       ),
       child: Column(
@@ -1048,21 +1033,22 @@ class AnnouncementDetailScreen extends StatelessWidget {
           Text(
             title,
             style: const TextStyle(
+              fontFamily: 'Inter',
               color: Color(0xFF101828),
               fontSize: 14,
-              fontWeight: FontWeight.w500,
-              letterSpacing: -0.5,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.3,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             content,
             style: const TextStyle(
+              fontFamily: 'Inter',
               color: Color(0xFF475467),
               fontSize: 13,
               fontWeight: FontWeight.w400,
-              height: 1.54,
-              letterSpacing: 0.25,
+              height: 1.5,
             ),
           ),
         ],
@@ -1071,366 +1057,95 @@ class AnnouncementDetailScreen extends StatelessWidget {
   }
 }
 
-// Inventory Detail Screen
 class InventoryDetailsScreen extends StatelessWidget {
-  // Header
-  final String itemName;           // e.g., 'Galvanized Screw 3mm'
-  final String sku;                // e.g., 'MAT-CIV-003'
-  final Widget? headerBadge;       // e.g., Tag(label: 'High Turnover', ...)
+  // ----- Item Details -----
+  // Basic Information
+  final String itemName;            // Item name or Requested item name
+  final String itemId;              // Item ID (show in header if not empty)
+  final String? dateAdded;          // e.g., 'Automated'
+  final String? classification;     // reused by request item details if you like
+  final String? department;         // e.g., 'Civil/Carpentry' (for item details only)
+  final String? status;             // Inventory Request e.g., Pending or Approved
 
-  // Meta
-  final String dateAdded;          // e.g., 'Automated'
-  final String classification;     // e.g., 'Materials'
-  final String brandName;          // e.g., '-'
-  final String department;         // e.g., 'Civil/Carpentry'
+  // divider
 
-  // Stock details
-  final String stockStatus;        // 'In Stock' | 'Out of Stock' | 'Critical'
-  final String quantityInStock;    // '150 pcs'
-  final String reorderLevel;       // '50 pcs'
-  final String unit;               // 'pcs'
+  // Stock and Supplier Details
+  // Stock (Item)
+  final String? stockStatus;        // 'In Stock' | 'Out of Stock' | 'Critical'
+  final String? quantity;           // '150 pcs'
+  final String? reorderLevel;       // '50 pcs'
+  final String? unit;               // 'pcs'
 
-  // Supplier
-  final String supplier;           // supplier name/text
-  final String warrantyUntil;      // 'DD / MM / YY'
+  // divider
+  // Supplier (Information) (optional)
+  final String? supplierName;
+  final String? supplierNumber;
+  final String? warrantyUntil;      // 'DD / MM / YY'
+
+  // divider
+  // Item details (Request)
+  final String? requestId;
+  final String? requestQuantity;
+  final String? dateNeeded;
+  final String? reqLocation;
+  final String? requestUnit;
+
+  // Requestor Details
+  final String? staffName;
+  final String? staffDepartment;
+
+  // divider
+  // Notes
+  final String? notes;
 
   const InventoryDetailsScreen({
     super.key,
+
+    // header
     required this.itemName,
-    required this.sku,
-    this.headerBadge,
-    required this.dateAdded,
-    required this.classification,
-    required this.brandName,
-    required this.department,
-    required this.stockStatus,
-    required this.quantityInStock,
-    required this.reorderLevel,
-    required this.unit,
-    required this.supplier,
-    required this.warrantyUntil,
+    required this.itemId,
+    this.status,
+
+    // item
+    this.dateAdded,
+    this.classification,
+    this.department,
+
+    // stock
+    this.stockStatus,
+    this.quantity,
+    this.reorderLevel,
+    this.unit,
+
+    // supplier
+    this.supplierName,
+    this.supplierNumber,
+    this.warrantyUntil,
+
+    // request
+    this.requestId,
+    this.requestQuantity,
+    this.dateNeeded,
+    this.reqLocation,
+    this.requestUnit,
+
+    // requestor
+    this.staffName,
+    this.staffDepartment,
+
+    // notes
+    this.notes,
   });
 
   @override
   Widget build(BuildContext context) {
     const titleStyle = TextStyle(
-      color: Colors.black,
-      fontSize: 16,
+      color: Color(0xFF101828),
+      fontSize: 20,
       fontFamily: 'Inter',
-      fontWeight: FontWeight.w500,
-      height: 1.5,
-      letterSpacing: 0.15,
-    );
-
-    const skuStyle = TextStyle(
-      color: Color(0xFF475467),
-      fontSize: 14,
-      fontFamily: 'Inter',
-      fontWeight: FontWeight.w500,
-      height: 1.14,
-      letterSpacing: -0.5,
-    );
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      decoration: ShapeDecoration(
-        color: const Color(0xFFFEFEFE),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header row
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(width: 0),
-              Expanded(child: Text(itemName, style: titleStyle)),
-              if (headerBadge != null) headerBadge!,
-            ],
-          ),
-          const SizedBox(height: 4),
-          SizedBox(width: 302, child: Text(sku, style: skuStyle)),
-          const SizedBox(height: 16),
-
-          // Meta details
-          Column(
-            children: [
-              KeyValueRow(
-                label: 'Date Added',
-                value: const Text(
-                  'Automated',
-                  style: TextStyle(
-                    color: Color(0xFF475467),
-                    fontSize: 13,
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.w400,
-                    height: 1.85,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              KeyValueRow(
-                label: 'Classification',
-                value: SizedBox(
-                  width: 120,
-                  child: Text(
-                    classification,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: Color(0xFF475467),
-                      fontSize: 13,
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w400,
-                      height: 1.85,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              KeyValueRow(
-                label: 'Brand Name',
-                value: SizedBox(
-                  width: 120,
-                  child: Text(
-                    brandName,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: Color(0xFF475467),
-                      fontSize: 13,
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w400,
-                      height: 1.85,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              KeyValueRow(
-                label: 'Department',
-                value: DepartmentTag(department),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Stock details section
-          _SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Stock Details',
-                        style: TextStyle(
-                          color: Colors.black,
-                          fontSize: 14,
-                          fontFamily: 'Inter',
-                          fontWeight: FontWeight.w500,
-                          height: 1.71,
-                          letterSpacing: 0.15,
-                        ),
-                      ),
-                    ),
-                    StockStatusTag(stockStatus),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                KeyValueRow(
-                  label: 'Quantity in Stock',
-                  value: SizedBox(
-                    width: 113,
-                    child: Text(
-                      quantityInStock,
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                        color: stockStatus.toLowerCase().contains('out')
-                            ? const Color(0xFFE84545)
-                            : const Color(0xFF24D063),
-                        fontSize: 14,
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w500,
-                        height: 1.43,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                KeyValueRow(
-                  label: 'Reorder Level',
-                  value: const SizedBox(
-                    width: 113,
-                    child: Text(
-                      '50 pcs',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                        color: Color(0xFFEF4444),
-                        fontSize: 14,
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w500,
-                        height: 1.43,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                KeyValueRow(
-                  label: 'Unit',
-                  value: SizedBox(
-                    width: 105,
-                    child: Text(
-                      unit,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        color: Color(0xFF475467),
-                        fontSize: 13,
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w400,
-                        height: 1.85,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Supplier info section
-          _SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Supplier Information',
-                  style: TextStyle(
-                    color: Color(0xFF101828),
-                    fontSize: 14,
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.w500,
-                    height: 1.14,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                KeyValueRow(
-                  label: 'Supplier',
-                  value: SizedBox(
-                    width: 113,
-                    child: Text(
-                      supplier,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        color: Color(0xFF475467),
-                        fontSize: 14,
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w400,
-                        height: 1.43,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                KeyValueRow(
-                  label: 'Warranty Until',
-                  value: SizedBox(
-                    width: 113,
-                    child: Text(
-                      warrantyUntil,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        color: Color(0xFF475467),
-                        fontSize: 14,
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w400,
-                        height: 1.43,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// ---------- Section card ----------
-class _SectionCard extends StatelessWidget {
-  final Widget child;
-  const _SectionCard({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: ShapeDecoration(
-        shape: RoundedRectangleBorder(
-          side: const BorderSide(width: 1, color: Color(0xFFEAECF0)),
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-      child: child,
-    );
-  }
-}
-
-// Inventory Request Details Screen
-// Inventory Request Details Screen
-class InventoryRequestDetailsScreen extends StatelessWidget {
-  final String itemName;
-  final String requestId;
-  final Widget? headerBadge;
-
-  // Meta
-  final String requestedDate;
-  final String requestedBy;
-  final String department;
-  final String neededBy;
-  final String location;
-
-  // Item details
-  final String classification;
-  final String quantity;
-  final String unit;
-
-  // Notes
-  final String notes;
-
-  final VoidCallback? onApprove;
-  final VoidCallback? onReject;
-
-  const InventoryRequestDetailsScreen({
-    super.key,
-    required this.itemName,
-    required this.requestId,
-    this.headerBadge,
-    required this.requestedDate,
-    required this.requestedBy,
-    required this.department,
-    required this.neededBy,
-    required this.location,
-    required this.classification,
-    required this.quantity,
-    required this.unit,
-    required this.notes,
-    this.onApprove,
-    this.onReject,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    const titleStyle = TextStyle(
-      color: Colors.black,
-      fontSize: 16,
-      fontFamily: 'Inter',
-      fontWeight: FontWeight.w500,
-      height: 1.5,
-      letterSpacing: 0.15,
+      fontWeight: FontWeight.w600,
+      height: 1.3,
+      letterSpacing: -0.2,
     );
 
     const idStyle = TextStyle(
@@ -1442,234 +1157,508 @@ class InventoryRequestDetailsScreen extends StatelessWidget {
       letterSpacing: -0.5,
     );
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      decoration: ShapeDecoration(
-        color: const Color(0xFFFEFEFE),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
+    // Prefer itemId; if empty, fall back to requestId
+    final String headerId = _firstNonEmpty([itemId, requestId]) ?? '-';
+
+    final List<Widget> sections = [];
+
+    // ===== Basic Information =====
+    final bool showBasicInfo = _any([dateAdded, classification, department]);
+    if (showBasicInfo) {
+      sections.add(
+        _Section(
+          title: 'Item Details',
+          child: Column(
+            children: [
+              if (_isNotEmpty(dateAdded))
+                KeyValueRow(label: 'Date Added', value: _kvText(dateAdded!)),
+              if (_isNotEmpty(classification)) const SizedBox(height: 8),
+              if (_isNotEmpty(classification))
+                KeyValueRow(label: 'Classification', value: _kvText(classification!)),
+              if (_isNotEmpty(department)) const SizedBox(height: 8),
+              if (_isNotEmpty(department))
+                KeyValueRow(label: 'Department', value: DepartmentTag(department!)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ===== Stock =====
+    final bool showStock = _any([stockStatus, quantity, reorderLevel, unit]);
+    if (showStock) {
+      sections.add(
+        _Section(
+          title: 'Stock Details',
+          child: Column(
+            children: [
+              if (_isNotEmpty(stockStatus)) const SizedBox(height: 8),
+              if (_isNotEmpty(stockStatus))
+                KeyValueRow(
+                  label: 'Stock Status',
+                  value: StockStatusTag(stockStatus!),
+                ),
+              if (_isNotEmpty(quantity)) const SizedBox(height: 8),
+              if (_isNotEmpty(quantity))
+                KeyValueRow(label: 'Quantity', value: _kvText(quantity!)),
+              if (_isNotEmpty(reorderLevel)) const SizedBox(height: 8),
+              if (_isNotEmpty(reorderLevel))
+                KeyValueRow(label: 'Reorder Level', value: _kvText(reorderLevel!)),
+              if (_isNotEmpty(unit)) const SizedBox(height: 8),
+              if (_isNotEmpty(unit))
+                KeyValueRow(label: 'Unit', value: _kvText(unit!)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ===== Supplier =====
+    final bool showSupplier = _any([supplierName, supplierNumber, warrantyUntil]);
+    if (showSupplier) {
+      sections.add(
+        _Section(
+          title: 'Supplier Information',
+          child: Column(
+            children: [
+              if (_isNotEmpty(supplierName))
+                KeyValueRow(label: 'Supplier Name', value: _kvText(supplierName!)),
+              if (_isNotEmpty(supplierNumber)) const SizedBox(height: 8),
+              if (_isNotEmpty(supplierNumber))
+                KeyValueRow(label: 'Supplier Number', value: _kvText(supplierNumber!)),
+              if (_isNotEmpty(warrantyUntil)) const SizedBox(height: 8),
+              if (_isNotEmpty(warrantyUntil))
+                KeyValueRow(label: 'Warranty Until', value: _kvText(warrantyUntil!)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ===== Request Item Details =====
+    final bool showRequestItem = _any([requestId, requestQuantity, dateNeeded, reqLocation, requestUnit]);
+    if (showRequestItem) {
+      sections.add(
+        _Section(
+          title: 'Request Item Details',
+          child: Column(
+            children: [
+              if (_isNotEmpty(requestId))
+                KeyValueRow(label: 'Request ID', value: _kvText(requestId!)),
+              if (_isNotEmpty(requestQuantity)) const SizedBox(height: 8),
+              if (_isNotEmpty(requestQuantity))
+                KeyValueRow(label: 'Quantity', value: _kvText(requestQuantity!)),
+              if (_isNotEmpty(requestUnit)) const SizedBox(height: 8),
+              if (_isNotEmpty(requestUnit))
+                KeyValueRow(label: 'Unit', value: _kvText(requestUnit!)),
+              if (_isNotEmpty(dateNeeded)) const SizedBox(height: 8),
+              if (_isNotEmpty(dateNeeded))
+                KeyValueRow(label: 'Date Needed', value: _kvText(dateNeeded!)),
+              if (_isNotEmpty(reqLocation)) const SizedBox(height: 8),
+              if (_isNotEmpty(reqLocation))
+                KeyValueRow(label: 'Location / Unit', value: _kvText(reqLocation!)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ===== Requestor Details =====
+    final bool showRequestor = _any([staffName, staffDepartment]);
+    if (showRequestor) {
+      sections.add(
+        _Section(
+          title: 'Requestor Details',
+          child: Column(
+            children: [
+              if (_isNotEmpty(staffName))
+                KeyValueRow(label: 'Staff Name', value: _kvText(staffName!)),
+              if (_isNotEmpty(staffDepartment)) const SizedBox(height: 8),
+              if (_isNotEmpty(staffDepartment))
+                KeyValueRow(label: 'Department', value: DepartmentTag(staffDepartment!)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ===== Notes =====
+    if (_isNotEmpty(notes)) {
+      sections.add(_SectionCard(title: 'Notes / Purpose', content: notes!));
+    }
+
+    // Interleave with dividers
+    final List<Widget> interspersed = [];
+    for (int i = 0; i < sections.length; i++) {
+      interspersed.add(sections[i]);
+      if (i < sections.length - 1) interspersed.add(_divider());
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row
+          // Header
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(width: 0),
               Expanded(child: Text(itemName, style: titleStyle)),
-              if (headerBadge != null) headerBadge!,
+              if (_isNotEmpty(status)) ...[
+                const SizedBox(width: 8),
+                StatusTag(status: status!.trim()),
+              ],
             ],
           ),
           const SizedBox(height: 4),
-          SizedBox(width: 302, child: Text(requestId, style: idStyle)),
-          const SizedBox(height: 16),
-
-          // Meta details
-          Column(
-            children: [
-              KeyValueRow(
-                label: 'Requested Date',
-                value: Text(
-                  requestedDate,
-                  style: const TextStyle(
-                    color: Color(0xFF475467),
-                    fontSize: 13,
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.w400,
-                    height: 1.85,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              KeyValueRow(
-                label: 'Requested By',
-                value: SizedBox(
-                  width: 160,
-                  child: Text(
-                    requestedBy,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: Color(0xFF475467),
-                      fontSize: 13,
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w400,
-                      height: 1.85,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              KeyValueRow(
-                label: 'Needed By',
-                value: SizedBox(
-                  width: 120,
-                  child: Text(
-                    neededBy,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: Color(0xFF475467),
-                      fontSize: 13,
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w400,
-                      height: 1.85,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              KeyValueRow(
-                label: 'Location / Unit',
-                value: SizedBox(
-                  width: 160,
-                  child: Text(
-                    location,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: Color(0xFF475467),
-                      fontSize: 13,
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w400,
-                      height: 1.85,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              KeyValueRow(
-                label: 'Department',
-                value: DepartmentTag(department),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Item details section
-          _SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Item Details',
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 14,
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.w500,
-                    height: 1.71,
-                    letterSpacing: 0.15,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                KeyValueRow(
-                  label: 'Classification',
-                  value: SizedBox(
-                    width: 120,
-                    child: Text(
-                      classification,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        color: Color(0xFF475467),
-                        fontSize: 13,
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w400,
-                        height: 1.85,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                KeyValueRow(
-                  label: 'Quantity',
-                  value: SizedBox(
-                    width: 113,
-                    child: Text(
-                      quantity,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        color: Color(0xFF475467),
-                        fontSize: 14,
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w500,
-                        height: 1.43,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                KeyValueRow(
-                  label: 'Unit',
-                  value: SizedBox(
-                    width: 105,
-                    child: Text(
-                      unit,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        color: Color(0xFF475467),
-                        fontSize: 13,
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w400,
-                        height: 1.85,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Notes section
-          _SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Notes / Purpose',
-                  style: TextStyle(
-                    color: Color(0xFF101828),
-                    fontSize: 14,
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.w500,
-                    height: 1.14,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  notes.isEmpty ? '-' : notes,
-                  style: const TextStyle(
-                    color: Color(0xFF475467),
-                    fontSize: 13,
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.w400,
-                    height: 1.54,
-                    letterSpacing: 0.25,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Action buttons (approve/reject)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              OutlinedButton(
-                onPressed: onReject,   // update status to "Rejected"
-                child: const Text('Reject'),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton(
-                onPressed: onApprove,  // update status to "Approved" and deduct stock
-                child: const Text('Approve'),
-              ),
-            ],
-          ),
+          Text(headerId, style: idStyle),
+          _divider(),
+          // Body
+          ...interspersed,
         ],
       ),
     );
   }
+
+  // ---------- Helpers ----------
+  static bool _isNotEmpty(String? s) => (s ?? '').trim().isNotEmpty;
+
+  static bool _any(List<String?> vals) {
+    for (final v in vals) {
+      if (_isNotEmpty(v)) return true;
+    }
+    return false;
+  }
+
+  static String? _firstNonEmpty(List<String?> vals) {
+    for (final v in vals) {
+      if (_isNotEmpty(v)) return v!.trim();
+    }
+    return null;
+  }
+
+  static Widget _kvText(String text) => Text(
+        text,
+        textAlign: TextAlign.right,
+        style: const TextStyle(
+          color: Color(0xFF475467),
+          fontSize: 13,
+          fontFamily: 'Inter',
+          fontWeight: FontWeight.w400,
+          height: 1.85,
+        ),
+      );
+
+  Widget _divider() => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Divider(thickness: 1, color: Color(0xFFE4E7EC)),
+      );
+}
+
+// UI HELPERS -------------------------------
+
+// Section shells
+class _Section extends StatelessWidget {
+  final String? title;
+  final Widget child;
+  const _Section({this.title, required this.child});
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title != null) ...[
+            Text(title!, style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+          ],
+          child,
+        ],
+      );
+}
+
+
+// "Aug 12, 2025"
+String formatDateRequested(String input) {
+  final s = input.trim();
+  if (s.isEmpty) return s;
+
+  DateTime? dt = DateTime.tryParse(s);
+
+  // Try common incoming patterns if ISO parse failed.
+  const patterns = <String>[
+    'MMMM d, yyyy',
+    'MMM d, yyyy',
+    'M/d/yyyy',
+    'M/d/yy',
+    'MM-dd-yyyy',
+    'yyyy-MM-dd',
+    'yyyy-MM-dd HH:mm',
+    'yyyy-MM-dd h:mm a',
+  ];
+  for (final p in patterns) {
+    if (dt != null) break;
+    try {
+      dt = DateFormat(p).parseStrict(s);
+    } catch (_) {}
+  }
+  if (dt == null) return input;
+
+  return DateFormat('MMM d, yyyy').format(dt);
+}
+
+// "Aug 12, 1:30 PM" if time exists; otherwise "Aug 12"
+String formatSchedule(String input) {
+  final s = input.trim();
+  if (s.isEmpty) return s;
+
+  DateTime? dt = DateTime.tryParse(s);
+
+  const patterns = <String>[
+    'MMMM d, yyyy h:mm a',
+    'MMM d, yyyy h:mm a',
+    'M/d/yyyy h:mm a',
+    'MM/dd/yyyy h:mm a',
+    'yyyy-MM-dd HH:mm',
+    'yyyy-MM-dd h:mm a',
+    'MMM d, h:mm a',
+    'MMMM d, h:mm a',
+    'M/d h:mm a',
+  ];
+  for (final p in patterns) {
+    if (dt != null) break;
+    try {
+      dt = DateFormat(p).parseStrict(s);
+    } catch (_) {}
+  }
+
+  // If still not parseable, normalize dash/spacing and return.
+  if (dt == null) {
+    final cleaned = s
+        .replaceAll(RegExp(r'\s*-\s*'), ' – ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return cleaned;
+  }
+
+  // Include time if present.
+  final hasTimeInText =
+      RegExp(r'\d{1,2}[:.]\d{2}').hasMatch(s) ||
+      RegExp(r'\b(am|pm)\b', caseSensitive: false).hasMatch(s);
+  final hasTimeInDt = dt.hour != 0 || dt.minute != 0 || dt.second != 0;
+
+  final fmt = (hasTimeInText || hasTimeInDt)
+      ? DateFormat('MMM d, h:mm a')
+      : DateFormat('MMM d');
+  return fmt.format(dt);
+}
+
+// ---- Small UI helpers ----
+Widget ffDivider() => const Divider(height: 1, thickness: 1, color: Color(0xFFEAECF0));
+
+Widget brokenThumb({double h = 80, double w = 140}) => Container(
+      height: h,
+      width: w,
+      color: const Color(0xFFEAECF0),
+      alignment: Alignment.center,
+      child: const Icon(Icons.broken_image, color: Color(0xFF98A2B3)),
+    );
+
+Widget _thumb(String url, {double h = 80, double w = 140}) {
+  final isNetwork = url.startsWith('http');
+  final img = isNetwork
+      ? Image.network(
+          url,
+          height: h,
+          width: w,
+          fit: BoxFit.cover,
+          errorBuilder: (context, _, __) => brokenThumb(h: h, w: w),
+        )
+      : Image.asset(
+          url,
+          height: h,
+          width: w,
+          fit: BoxFit.cover,
+          errorBuilder: (context, _, __) => brokenThumb(h: h, w: w),
+        );
+  return ClipRRect(borderRadius: BorderRadius.circular(4), child: img);
+}
+
+/// One unified row for label/value lines
+class KeyValueRow extends StatelessWidget {
+  final String label;
+  final Widget value;
+  final double labelWidth;
+
+  const KeyValueRow({
+    super.key,
+    required this.label,
+    required this.value,
+    this.labelWidth = 120,
+  });
+
+  /// Convenience: plain text value
+  factory KeyValueRow.text({
+    Key? key,
+    required String label,
+    required String valueText,
+    double labelWidth = 120,
+    TextStyle? valueStyle,
+  }) {
+    return KeyValueRow(
+      key: key,
+      label: label,
+      labelWidth: labelWidth,
+      value: Text(
+        valueText,
+        textAlign: TextAlign.right,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        softWrap: false,
+        style: (valueStyle ??
+            const TextStyle(
+              fontFamily: 'Inter',
+              color: Color(0xFF344054),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            )),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const labelStyle = TextStyle(
+      fontFamily: 'Inter',
+      color: Color(0xFF475467),
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+    );
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(width: labelWidth, child: Text(label, style: labelStyle)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: DefaultTextStyle(
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFF344054),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+              child: value,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Section Title
+class _SectionTitle extends StatelessWidget {
+  final String text;
+  const _SectionTitle(this.text, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontFamily: 'Inter',
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: Color(0xFF344054),
+      ),
+    );
+  }
+}
+
+/// Generic bordered card
+class _SectionCard extends StatelessWidget {
+  final String? title; // optional heading
+  final String? content; // optional body text
+  final Widget? child; // optional custom body
+  final EdgeInsets padding;
+  final EdgeInsets? margin;
+  final bool hideIfEmpty;
+
+  const _SectionCard({
+    super.key,
+    this.title,
+    this.content,
+    this.child,
+    this.padding = const EdgeInsets.all(12),
+    this.margin,
+    this.hideIfEmpty = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final trimmed = (content ?? '').trim();
+    final shouldHide = hideIfEmpty && child == null && trimmed.isEmpty;
+    if (shouldHide) return const SizedBox.shrink();
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: double.infinity),
+      child: Container(
+        margin: margin,
+        padding: padding,
+        decoration: ShapeDecoration(
+          color: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            side: const BorderSide(width: 1, color: Color(0xFFEAECF0)),
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if ((title ?? '').trim().isNotEmpty) ...[
+              Text(
+                title!.trim(),
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: Color(0xFF101828),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            if (trimmed.isNotEmpty) ...[
+              Text(
+                trimmed,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: Color(0xFF475467),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                  height: 1.54,
+                  letterSpacing: 0.25,
+                ),
+              ),
+            ],
+            if (child != null) ...[
+              if (trimmed.isNotEmpty) const SizedBox(height: 8),
+              child!,
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// simple initials helper used by avatar
+String _initials(String fullName) {
+  final parts = fullName.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  if (parts.isEmpty) return '';
+  if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+  return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
 }
 
 // Details Permit
@@ -1683,7 +1672,7 @@ class DetailsPermit extends StatelessWidget {
     this.notesHeading = 'Notes:',
     this.subHeading = 'Instructions:',
     this.onNext,
-    this.maxWidth,            // optional: cap overall width
+    this.maxWidth, // optional: cap overall width
     this.panelMaxWidth = 480, // optional: cap inner panel width
     this.primaryColor = const Color(0xFF005CE7),
     this.borderColor = const Color(0xFF818181),
@@ -1726,7 +1715,7 @@ class DetailsPermit extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Column(
-              mainAxisSize: MainAxisSize.max, 
+              mainAxisSize: MainAxisSize.max,
               children: [
                 const SizedBox(height: 24),
 
@@ -1784,12 +1773,16 @@ class DetailsPermit extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            
 
                             // Scrollable content area
                             Expanded(
                               child: Padding(
-                                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  12,
+                                  20,
+                                  12,
+                                ),
                                 child: Scrollbar(
                                   thumbVisibility: true,
                                   child: SingleChildScrollView(
@@ -1809,12 +1802,12 @@ class DetailsPermit extends StatelessWidget {
                             // Next Button
                             SafeArea(
                               top: false,
-                                child: fx.FilledButton(
-                                  label: "Next",
-                                  onPressed: onNext ?? () {},
-                                  width: double.infinity,
-                                  height: 80,           
-                                  backgroundColor: primaryColor,
+                              child: fx.FilledButton(
+                                label: "Next",
+                                onPressed: onNext ?? () {},
+                                width: double.infinity,
+                                height: 80,
+                                backgroundColor: primaryColor,
                               ),
                             ),
                           ],

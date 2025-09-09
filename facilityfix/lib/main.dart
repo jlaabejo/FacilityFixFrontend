@@ -1,4 +1,4 @@
-import 'package:facilityfix/admin/home.dart';
+import 'package:facilityfix/staff/home.dart';
 import 'package:flutter/material.dart';
 void main() {
   runApp(const MyApp());
@@ -23,7 +23,7 @@ class MyApp extends StatelessWidget {
         ),
         fontFamily: 'Inter',
       ),
-      home: HomePage()
+      home: HomePage(),
     );
   }
 }

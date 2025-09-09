@@ -1,3 +1,4 @@
+import 'package:facilityfix/widgets/forms.dart';
 import 'package:flutter/material.dart';
 class LogoutButton extends StatelessWidget {
   final VoidCallback onPressed;
@@ -53,7 +54,6 @@ class LogoutButton extends StatelessWidget {
   }
 }
 
-
 /// Password field with toggle visibility
 class PasswordInputField extends StatefulWidget {
   final String label;
@@ -96,7 +96,12 @@ class _PasswordInputFieldState extends State<PasswordInputField> {
         prefixIcon: widget.prefixIcon,
         suffixIcon: GestureDetector(
           onTap: _toggleVisibility,
-          child: Icon(_obscureText ? Icons.visibility_off : Icons.visibility),
+          child: Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Icon(
+              _obscureText ? Icons.visibility_off : Icons.visibility,
+            ),
+          ),
         ),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
@@ -296,4 +301,174 @@ class ProfileInfoWidget extends StatelessWidget {
       ],
     );
   }
+}
+
+// Edit Personal details
+class EditedPersonalDetails {
+  final String name;
+  final String email;
+  final String phone;
+
+  const EditedPersonalDetails({
+    required this.name,
+    required this.email,
+    required this.phone,
+  });
+}
+
+Future<EditedPersonalDetails?> showEditPersonalDetailsSheet({
+  required BuildContext context,          // parent context (for SnackBar)
+  required String initialName,
+  required String initialEmail,
+  required String initialPhone,
+  String title = 'Edit Personal Details',
+}) async {
+  final editUserName = TextEditingController(text: initialName);
+  final editEmail = TextEditingController(text: initialEmail);
+  final editPhone = TextEditingController(text: initialPhone);
+
+  EditedPersonalDetails? result;
+
+  try {
+    result = await showModalBottomSheet<EditedPersonalDetails>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 12,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 48,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE5E7EB),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  title,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 12),
+
+                // Username
+                InputField(
+                  label: 'Username',
+                  controller: editUserName,
+                  hintText: 'Enter username',
+                  isRequired: true,
+                  readOnly: false,
+                  keyboardType: TextInputType.name,
+                  prefixIcon: const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Icon(Icons.person),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Email
+                InputField(
+                  label: 'Email',
+                  controller: editEmail,
+                  hintText: 'Enter email',
+                  isRequired: true,
+                  readOnly: false,
+                  keyboardType: TextInputType.emailAddress,
+                  prefixIcon: const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Icon(Icons.mail),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Phone
+                InputField(
+                  label: 'Phone Number',
+                  controller: editPhone,
+                  hintText: 'Enter phone number',
+                  isRequired: true,
+                  readOnly: false,
+                  keyboardType: TextInputType.phone,
+                  prefixIcon: const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Icon(Icons.phone),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx, null),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF005CE7),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          final name = editUserName.text.trim();
+                          final email = editEmail.text.trim();
+                          final phone = editPhone.text.trim();
+
+                          if (name.isEmpty || email.isEmpty || phone.isEmpty) {
+                            // Use the PARENT context so the SnackBar shows above the sheet.
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Please complete all fields')),
+                            );
+                            return;
+                          }
+
+                          Navigator.pop(
+                            ctx,
+                            EditedPersonalDetails(
+                              name: name,
+                              email: email,
+                              phone: phone,
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: const Color(0xFF005CE7),
+                        ),
+                        child: const Text('Save'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  } finally {
+    editUserName.dispose();
+    editEmail.dispose();
+    editPhone.dispose();
+  }
+
+  return result;
 }

@@ -45,8 +45,34 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
 
   // ===== Search, classification & read-status filters =====
   final TextEditingController _searchController = TextEditingController();
+
+  // Classification (announcement categories)
   String _selectedClassification = "All";
+  final List<String> _classifications = const [
+    'All',
+    'Utility Interruption',
+    'Power Outage',
+    'Pest Control',
+    'General Maintenance',
+  ];
+
+  // Status filter: string shown in UI + enum used in logic (kept in sync)
+  String _selectedStatus = 'All';
+  final List<String> _statuses = const ['All', 'Unread', 'Read', 'Recent'];
   AnnStatusFilter _statusFilter = AnnStatusFilter.all;
+
+  AnnStatusFilter _toFilter(String s) {
+    switch (s.toLowerCase()) {
+      case 'unread':
+        return AnnStatusFilter.unread;
+      case 'read':
+        return AnnStatusFilter.read;
+      case 'recent':
+        return AnnStatusFilter.recent;
+      default:
+        return AnnStatusFilter.all;
+    }
+  }
 
   // ===== Demo data (replace with backend) =====
   final List<Announcement> _all = [
@@ -103,8 +129,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
   }
 
   // ===== Filtering logic =====
-  bool _isRecent(DateTime dt) =>
-      DateTime.now().difference(dt).inDays <= 7;
+  bool _isRecent(DateTime dt) => DateTime.now().difference(dt).inDays <= 7;
 
   bool _matchesClassification(String classification) {
     if (_selectedClassification == 'All') return true;
@@ -188,51 +213,27 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Search & classification filter
+                // ========== TOP BAR: Search + Classification + Status ==========
                 SearchAndFilterBar(
                   searchController: _searchController,
+
+                  // Classification (turns on the tune icon & bottom sheet)
                   selectedClassification: _selectedClassification,
-                  classifications: const [
-                    'All',
-                    'Utility Interruption',
-                    'Power Outage',
-                    'Pest Control',
-                    'General Maintenance',
-                  ],
+                  classifications: _classifications,
+                  onClassificationChanged: (v) =>
+                      setState(() => _selectedClassification = v),
+
+                  // Status (required by SearchAndFilterBar) — keeps chips in sync
+                  selectedStatus: _selectedStatus,
+                  statuses: _statuses,
+                  onStatusChanged: (v) => setState(() {
+                    _selectedStatus = v;
+                    _statusFilter = _toFilter(v);
+                  }),
+
+                  // Optional: react to search typing/submit
                   onSearchChanged: (_) => setState(() {}),
-                  onFilterChanged: (v) => setState(() => _selectedClassification = v),
                 ),
-                const SizedBox(height: 12),
-
-                // Status segmented filter
-                Row(
-                  children: [
-                    SegmentChip(
-                      label: 'All',
-                      selected: _statusFilter == AnnStatusFilter.all,
-                      onSelected: () => setState(() => _statusFilter = AnnStatusFilter.all),
-                    ),
-                    const SizedBox(width: 8),
-                    SegmentChip(
-                      label: 'Unread',
-                      selected: _statusFilter == AnnStatusFilter.unread,
-                      onSelected: () => setState(() => _statusFilter = AnnStatusFilter.unread),
-                    ),
-                    const SizedBox(width: 8),
-                    SegmentChip(
-                      label: 'Read',
-                      selected: _statusFilter == AnnStatusFilter.read,
-                      onSelected: () => setState(() => _statusFilter = AnnStatusFilter.read),
-                    ),
-                    const SizedBox(width: 8),
-                    SegmentChip(
-                      label: 'Recent',
-                      selected: _statusFilter == AnnStatusFilter.recent,
-                      onSelected: () => setState(() => _statusFilter = AnnStatusFilter.recent),
-                    ),
-                  ],
-                ),
-
                 const SizedBox(height: 16),
                 Text(
                   headerTitle(),
