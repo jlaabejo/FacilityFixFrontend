@@ -1,7 +1,7 @@
+import 'package:facilityfix/widgets/forgotPassword.dart';
 import 'package:flutter/material.dart';
 
 // Pages
-import 'package:facilityfix/landingpage/forgot_password.dart';
 import 'package:facilityfix/tenant/home.dart' as Tenant;
 import 'package:facilityfix/staff/home.dart' as Staff;
 import 'package:facilityfix/admin/home.dart' as Admin;
@@ -299,7 +299,7 @@ class _LogInState extends State<LogIn> {
                                 transitionDuration: Duration.zero,
                                 reverseTransitionDuration: Duration.zero,
                                 pageBuilder: (context, animation, secondaryAnimation) =>
-                                    const ForgotPassword(),
+                                    const ForgotPasswordEmailModal(),
                                 transitionsBuilder: (context, animation, secondaryAnimation, child) {
                                   return child;
                                 },

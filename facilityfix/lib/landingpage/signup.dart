@@ -1,7 +1,12 @@
 // Required imports
-import 'package:facilityfix/tenant/home.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/landingpage/choose.dart';
+
+// Role homepages
+import 'package:facilityfix/tenant/home.dart' as Tenant;
+import 'package:facilityfix/staff/home.dart' as Staff;
+import 'package:facilityfix/admin/home.dart' as Admin;
+
 class SignUp extends StatefulWidget {
   final String role;
   const SignUp({Key? key, required this.role}) : super(key: key);
@@ -16,16 +21,54 @@ class _SignUpState extends State<SignUp> {
   final firstNameController = TextEditingController();
   final lastNameController = TextEditingController();
   final birthdateController = TextEditingController();
-  final idController = TextEditingController();
+  final idController = TextEditingController();         // tenant/staff/admin id
   final emailController = TextEditingController();
-  final contactNumberController = TextEditingController();
+  final contactNumberController = TextEditingController(); // optional (PH)
   final passwordController = TextEditingController();
 
   bool _obscurePassword = true;
-  String? selectedClassification;
+  String? selectedClassification; // staff only
+
+  @override
+  void dispose() {
+    firstNameController.dispose();
+    lastNameController.dispose();
+    birthdateController.dispose();
+    idController.dispose();
+    emailController.dispose();
+    contactNumberController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  void _goToHome(String role) {
+    Widget dest;
+    switch (role.toLowerCase()) {
+      case 'admin':
+        dest = const Admin.HomePage();
+        break;
+      case 'staff':
+        dest = const Staff.HomePage();
+        break;
+      case 'tenant':
+      default:
+        dest = const Tenant.HomePage();
+        break;
+    }
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => dest),
+      (route) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final role = widget.role.toLowerCase();
+    final isTenant = role == 'tenant';
+    final isStaff  = role == 'staff';
+    final isAdmin  = role == 'admin';
+
     const inputPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 12);
     const borderStyle = OutlineInputBorder(
       borderRadius: BorderRadius.all(Radius.circular(12)),
@@ -43,11 +86,11 @@ class _SignUpState extends State<SignUp> {
       child: Scaffold(
         backgroundColor: Colors.black.withOpacity(0.5),
         body: GestureDetector(
-          onTap: () {},
+          onTap: () {}, // keep modal open when tapped
           child: Align(
             alignment: Alignment.bottomCenter,
             child: SizedBox(
-              height: 600, // Fixed modal height
+              height: 600,
               width: double.infinity,
               child: Container(
                 decoration: const BoxDecoration(
@@ -57,190 +100,190 @@ class _SignUpState extends State<SignUp> {
                     topRight: Radius.circular(24),
                   ),
                 ),
-
-              // Main content area
-              child: SafeArea(
-                top: false,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text(
-                          'Sign Up',
-                          style: TextStyle(
-                            color: Color(0xFF005CE7),
-                            fontSize: 30,
-                            fontWeight: FontWeight.w500,
-                            fontFamily: 'Inter',
+                child: SafeArea(
+                  top: false,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'Sign Up',
+                            style: TextStyle(
+                              color: Color(0xFF005CE7),
+                              fontSize: 30,
+                              fontWeight: FontWeight.w500,
+                              fontFamily: 'Inter',
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 24),
+                          const SizedBox(height: 24),
 
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-
-                              // First Name field with validation
-                              _buildValidatedField(
-                                controller: firstNameController,
-                                hint: "First Name",
-                              ),
-                              const SizedBox(height: 16),
-
-                              // Last Name field with validation
-                              _buildValidatedField(
-                                controller: lastNameController,
-                                hint: "Last Name",
-                              ),
-                              const SizedBox(height: 16),
-
-                              // Birthdate field with date picker
-                              TextFormField(
-                                controller: birthdateController,
-                                readOnly: true,
-                                onTap: () async {
-                                  DateTime? pickedDate = await showDatePicker(
-                                    context: context,
-                                    initialDate: DateTime.now(),
-                                    firstDate: DateTime(1900),
-                                    lastDate: DateTime.now(),
-                                  );
-                                  if (pickedDate != null) {
-                                    birthdateController.text =
-                                        "${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}";
-                                  }
-                                },
-                                decoration: InputDecoration(
-                                  hintText: "Birthdate",
-                                  hintStyle: hintTextStyle,
-                                  filled: true,
-                                  fillColor: Colors.white,
-                                  contentPadding: inputPadding,
-                                  border: borderStyle,
-                                  enabledBorder: borderStyle,
-                                  suffixIcon: const Icon(Icons.calendar_today, color: Colors.grey),
-                                ),
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) return 'Birthdate is required';
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 16),
-
-                              // ID field for tenant or staff
-                              if (widget.role == 'tenant') ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
                                 _buildValidatedField(
-                                  controller: idController,
-                                  hint: "Building & Unit No.",
+                                  controller: firstNameController,
+                                  hint: "First Name",
+                                ),
+                                const SizedBox(height: 16),
+                                _buildValidatedField(
+                                  controller: lastNameController,
+                                  hint: "Last Name",
                                 ),
                                 const SizedBox(height: 16),
 
-                                // Classification dropdown for staff
-                              ] else if (widget.role == 'staff') ...[
-                                DropdownButtonFormField<String>(
-                                  value: selectedClassification,
-                                  onChanged: (value) => setState(() => selectedClassification = value),
-                                  items: [
-                                    'General Maintenance',
-                                    'Plumbing',
-                                    'Electrician',
-                                  ].map((label) => DropdownMenuItem(
-                                        value: label,
-                                        child: Text(label),
-                                      ))
-                                      .toList(),
+                                // Birthdate
+                                TextFormField(
+                                  controller: birthdateController,
+                                  readOnly: true,
+                                  onTap: () async {
+                                    final picked = await showDatePicker(
+                                      context: context,
+                                      initialDate: DateTime.now(),
+                                      firstDate: DateTime(1900),
+                                      lastDate: DateTime.now(),
+                                    );
+                                    if (picked != null) {
+                                      birthdateController.text =
+                                          "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+                                    }
+                                  },
                                   decoration: InputDecoration(
-                                    hintText: "Classification",
+                                    hintText: "Birthdate",
                                     hintStyle: hintTextStyle,
                                     filled: true,
                                     fillColor: Colors.white,
                                     contentPadding: inputPadding,
                                     border: borderStyle,
                                     enabledBorder: borderStyle,
+                                    suffixIcon: const Icon(Icons.calendar_today, color: Colors.grey),
                                   ),
-                                  validator: (value) => value == null ? 'Please select classification' : null,
+                                  validator: (v) => (v == null || v.isEmpty)
+                                      ? 'Birthdate is required'
+                                      : null,
                                 ),
                                 const SizedBox(height: 16),
+
+                                // Role-specific fields
+                                if (isTenant) ...[
+                                  _buildValidatedField(
+                                    controller: idController,
+                                    hint: "Building & Unit No.",
+                                  ),
+                                  const SizedBox(height: 16),
+                                ] else if (isStaff) ...[
+                                  // Staff ID (required)
+                                  _buildValidatedField(
+                                    controller: idController,
+                                    hint: "Staff ID",
+                                  ),
+                                  const SizedBox(height: 16),
+                                  // Staff classification (required)
+                                  DropdownButtonFormField<String>(
+                                    value: selectedClassification,
+                                    onChanged: (v) => setState(() => selectedClassification = v),
+                                    items: const [
+                                      'General Maintenance',
+                                      'Plumbing',
+                                      'Electrician',
+                                    ].map((label) =>
+                                        DropdownMenuItem(value: label, child: Text(label)))
+                                      .toList(),
+                                    decoration: InputDecoration(
+                                      hintText: "Classification",
+                                      hintStyle: hintTextStyle,
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                      contentPadding: inputPadding,
+                                      border: borderStyle,
+                                      enabledBorder: borderStyle,
+                                    ),
+                                    validator: (v) => v == null ? 'Please select classification' : null,
+                                  ),
+                                  const SizedBox(height: 16),
+                                ] else if (isAdmin) ...[
+                                  _buildValidatedField(
+                                    controller: idController,
+                                    hint: "Admin ID",
+                                  ),
+                                  const SizedBox(height: 16),
+                                ],
+
+                                _buildValidatedEmailField(),
+                                const SizedBox(height: 16),
+
+                                // OPTIONAL contact number (+63 prefix shown, user types 10 digits)
+                                _buildOptionalPhoneField(),
+                                const SizedBox(height: 16),
+
+                                _buildValidatedPasswordField(),
                               ],
-
-                              // Email field with validation
-                              _buildValidatedEmailField(),
-                              const SizedBox(height: 16),
-
-                              // Phone field with validation
-                              _buildValidatedPhoneField(),
-                              const SizedBox(height: 16),
-                              _buildValidatedPasswordField(),
-                            ],
+                            ),
                           ),
-                        ),
 
-                        // Sign Up Button
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const SizedBox(height: 24),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF818181),
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                          // Sign Up Button
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const SizedBox(height: 24),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF818181),
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                  ),
+                                  onPressed: () {
+                                    if (_formKey.currentState!.validate()) {
+                                      // All good — go to role home
+                                      _goToHome(role);
+                                    }
+                                  },
+                                  child: const Text(
+                                    'Sign Up',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ),
-                                onPressed: () {
-                                  if (_formKey.currentState!.validate()) {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (context) => const HomePage()),
-                                    );
-                                  }
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+
+                          // Already have an account
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text('Already have an account? '),
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const ChooseRole(isLogin: true),
+                                    ),
+                                  );
                                 },
                                 child: const Text(
-                                  'Sign Up',
+                                  'Log in',
                                   style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
+                                    color: Colors.blue,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
                             ],
                           ),
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        // Already have an account
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text('Already have an account? '),
-                            GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const ChooseRole(isLogin: true),
-                                  ),
-                                );
-                              },
-                              child: const Text(
-                                'Log in',
-                                style: TextStyle(
-                                  color: Colors.blue,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                      ],
+                          const SizedBox(height: 24),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -249,11 +292,11 @@ class _SignUpState extends State<SignUp> {
           ),
         ),
       ),
-      ),
     );
   }
 
-// Validated text fields
+  // ------- Field builders -------
+
   Widget _buildValidatedField({required TextEditingController controller, required String hint}) {
     return TextFormField(
       controller: controller,
@@ -277,79 +320,72 @@ class _SignUpState extends State<SignUp> {
           borderSide: BorderSide(color: Color(0xFFE5E6E8), width: 1),
         ),
       ),
-      validator: (value) {
-        if (value == null || value.isEmpty) return '$hint is required';
+      validator: (v) => (v == null || v.isEmpty) ? '$hint is required' : null,
+    );
+  }
+
+  Widget _buildValidatedEmailField() {
+    return TextFormField(
+      controller: emailController,
+      keyboardType: TextInputType.emailAddress,
+      decoration: const InputDecoration(
+        hintText: "Email",
+        hintStyle: TextStyle(
+          color: Color(0xFF818181),
+          fontSize: 14,
+          fontFamily: 'Inter',
+          fontWeight: FontWeight.w500,
+        ),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(color: Color(0xFFE5E6E8), width: 1),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(color: Color(0xFFE5E6E8), width: 1),
+        ),
+      ),
+      validator: (v) {
+        if (v == null || v.isEmpty) return 'Email is required';
+        if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(v)) return 'Enter a valid email';
         return null;
       },
     );
   }
 
-// Email field with validation
-Widget _buildValidatedEmailField() {
-  return TextFormField(
-    controller: emailController,
-    keyboardType: TextInputType.emailAddress,
-    decoration: const InputDecoration(
-      hintText: "Email",
-      hintStyle: TextStyle(
-        color: Color(0xFF818181),
-        fontSize: 14,
-        fontFamily: 'Inter',
-        fontWeight: FontWeight.w500,
+  // OPTIONAL phone: allow empty; if not empty, must be 10 digits (without +63)
+  Widget _buildOptionalPhoneField() {
+    return TextFormField(
+      controller: contactNumberController,
+      keyboardType: TextInputType.phone,
+      maxLength: 11, // user may type 10 digits; keeping 11 visual room is fine
+      decoration: const InputDecoration(
+        hintText: "Contact Number (optional)",
+        hintStyle: TextStyle(color: Color(0xFF818181)),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(color: Color(0xFFE5E6E8), width: 1),
+        ),
+        counterText: "",
+        prefixText: "+63 ",
       ),
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-        borderSide: BorderSide(color: Color(0xFFE5E6E8), width: 1),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-        borderSide: BorderSide(color: Color(0xFFE5E6E8), width: 1),
-      ),
-    ),
-    validator: (value) {
-      if (value == null || value.isEmpty) return 'Email is required';
-      if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(value)) return 'Enter a valid email';
-      return null;
-    },
-  );
-}
+      validator: (v) {
+        if (v == null || v.trim().isEmpty) return null; // optional
+        final digitsOnly = v.replaceAll(RegExp(r'\D'), '');
+        if (!RegExp(r'^\d{10}$').hasMatch(digitsOnly)) {
+          return 'Enter 10 digits (exclude +63)';
+        }
+        return null;
+      },
+    );
+  }
 
-// Phone field with validation
-Widget _buildValidatedPhoneField() {
-  return TextFormField(
-    controller: contactNumberController,
-    keyboardType: TextInputType.phone,
-    maxLength: 11,
-    decoration: const InputDecoration(
-      hintText: "Contact Number",
-      hintStyle: TextStyle(color: Color(0xFF818181)),
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-        borderSide: BorderSide(color: Color(0xFFE5E6E8), width: 1),
-      ),
-      counterText: "",
-      prefixText: "+63 ",
-
-    ),
-    validator: (value) {
-      if (value == null || value.isEmpty) {
-        return 'Contact number is required';
-      }
-      if (!RegExp(r'^\d{10}$').hasMatch(value)) {
-        return 'Enter 10 digits (exclude +63)';
-      }
-      return null;
-    },
-  );
-}
-
-// Password field with validation 
   Widget _buildValidatedPasswordField() {
     return TextFormField(
       controller: passwordController,
@@ -369,14 +405,12 @@ Widget _buildValidatedPhoneField() {
             _obscurePassword ? Icons.visibility_off : Icons.visibility,
             color: const Color(0xFF818181),
           ),
-          onPressed: () => setState(() {
-            _obscurePassword = !_obscurePassword;
-          }),
+          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
         ),
       ),
-      validator: (value) {
-        if (value == null || value.isEmpty) return 'Password is required';
-        if (value.length < 6) return 'Password must be at least 6 characters';
+      validator: (v) {
+        if (v == null || v.isEmpty) return 'Password is required';
+        if (v.length < 6) return 'Password must be at least 6 characters';
         return null;
       },
     );
