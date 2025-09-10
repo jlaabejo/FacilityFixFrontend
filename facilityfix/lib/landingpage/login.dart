@@ -4,7 +4,24 @@ import 'package:flutter/services.dart';
 import 'package:facilityfix/tenant/home.dart' as Tenant;
 import 'package:facilityfix/staff/home.dart' as Staff;
 import 'package:facilityfix/admin/home.dart' as Admin;
-import 'package:facilityfix/widgets/forms.dart'; 
+import 'package:facilityfix/widgets/forms.dart';
+
+// 👇 per-role ping
+import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/config/env.dart';
+
+AppRole _toAppRole(String role) {
+  switch (role.toLowerCase()) {
+    case 'tenant':
+      return AppRole.tenant;
+    case 'staff':
+      return AppRole.staff;
+    case 'admin':
+      return AppRole.admin;
+    default:
+      return AppRole.tenant;
+  }
+}
 
 class LogIn extends StatefulWidget {
   final String role; // 'tenant' | 'staff' | 'admin'
@@ -22,13 +39,40 @@ class _LogInState extends State<LogIn> {
   final passwordController = TextEditingController();
   final buildingController = TextEditingController();
 
-  // External error captions for InputField (drive red border + custom caption)
   String? _emailErr;
   String? _idErr;
   String? _buildingErr;
   String? _passwordErr;
 
   bool _obscurePassword = true;
+
+  String get _normalizedRole => widget.role.toLowerCase();
+  bool get _isTenant => _normalizedRole == 'tenant';
+  bool get _isStaff => _normalizedRole == 'staff';
+  bool get _isAdmin => _normalizedRole == 'admin';
+
+  String get _idLabel {
+    if (_isTenant) return 'Tenant ID';
+    if (_isStaff) return 'Staff ID';
+    if (_isAdmin) return 'Admin ID';
+    return 'ID';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Ping the specific role’s baseUrl after open
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final api = APIService(roleOverride: _toAppRole(widget.role));
+      final ok = await api.testConnection();
+      if (!mounted) return;
+      if (!ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Server unreachable: ${api.baseUrl}')),
+        );
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -39,20 +83,7 @@ class _LogInState extends State<LogIn> {
     super.dispose();
   }
 
-  String get _normalizedRole => widget.role.toLowerCase();
-  bool get _isTenant => _normalizedRole == 'tenant';
-  bool get _isStaff  => _normalizedRole == 'staff';
-  bool get _isAdmin  => _normalizedRole == 'admin';
-
-  String get _idLabel {
-    if (_isTenant) return 'Tenant ID';
-    if (_isStaff)  return 'Staff ID';
-    if (_isAdmin)  return 'Admin ID';
-    return 'ID';
-    }
-
   bool _validate() {
-    // clear old errors
     _emailErr = null;
     _idErr = null;
     _buildingErr = null;
@@ -63,8 +94,6 @@ class _LogInState extends State<LogIn> {
     final building = buildingController.text.trim();
     final pass = passwordController.text;
 
-    // Required check via built-in validator on InputField (isRequired:true)
-    // but we also set external captions for specific messages:
     final emailRe = RegExp(r'^[\w\.-]+@([\w-]+\.)+[\w-]{2,}$');
 
     if (email.isEmpty) {
@@ -87,10 +116,8 @@ class _LogInState extends State<LogIn> {
       _passwordErr = 'Password must be at least 6 characters.';
     }
 
-    // Trigger Form validators (for red borders on required fields)
     _formKey.currentState?.validate();
-
-    setState(() {}); // refresh error captions
+    setState(() {});
     return _emailErr == null &&
         _idErr == null &&
         _buildingErr == null &&
@@ -123,7 +150,6 @@ class _LogInState extends State<LogIn> {
   }
 
   void _openForgotPassword() {
-    // Uses your ForgotPasswordEmailModal + sticky banner utilities
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -136,13 +162,6 @@ class _LogInState extends State<LogIn> {
 
   @override
   Widget build(BuildContext context) {
-    const hintTextStyle = TextStyle(
-      color: Color(0xFF818181),
-      fontSize: 14,
-      fontFamily: 'Inter',
-      fontWeight: FontWeight.w500,
-    );
-
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => Navigator.of(context).pop(), // tap outside to dismiss
@@ -179,23 +198,27 @@ class _LogInState extends State<LogIn> {
                           ),
                         ),
                         const SizedBox(height: 24),
-
                         Form(
                           key: _formKey,
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 24),
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.stretch,
                               children: [
                                 // Email
                                 InputField(
                                   label: 'Email',
                                   hintText: 'you@example.com',
                                   controller: emailController,
-                                  keyboardType: TextInputType.emailAddress,
+                                  keyboardType:
+                                      TextInputType.emailAddress,
                                   isRequired: true,
                                   errorText: _emailErr,
-                                  prefixIcon: const Icon(Icons.mail, color: Color(0xFF98A2B3)),
+                                  prefixIcon: const Icon(
+                                      Icons.mail,
+                                      color: Color(0xFF98A2B3)),
                                 ),
 
                                 // Role-specific fields
@@ -206,24 +229,33 @@ class _LogInState extends State<LogIn> {
                                     controller: idController,
                                     isRequired: true,
                                     errorText: _idErr,
-                                    prefixIcon: const Icon(Icons.badge_outlined, color: Color(0xFF98A2B3)),
+                                    prefixIcon: const Icon(
+                                        Icons.badge_outlined,
+                                        color: Color(0xFF98A2B3)),
                                   ),
                                   InputField(
                                     label: 'Building & Unit No.',
-                                    hintText: 'e.g., Tower A – 10F – 10B',
+                                    hintText:
+                                        'e.g., Tower A – 10F – 10B',
                                     controller: buildingController,
                                     isRequired: true,
                                     errorText: _buildingErr,
-                                    prefixIcon: const Icon(Icons.location_city_outlined, color: Color(0xFF98A2B3)),
+                                    prefixIcon: const Icon(
+                                        Icons.location_city_outlined,
+                                        color: Color(0xFF98A2B3)),
                                   ),
                                 ] else ...[
                                   InputField(
                                     label: _idLabel,
-                                    hintText: _isStaff ? 'e.g., S-000321' : 'e.g., ADM-0001',
+                                    hintText: _isStaff
+                                        ? 'e.g., S-000321'
+                                        : 'e.g., ADM-0001',
                                     controller: idController,
                                     isRequired: true,
                                     errorText: _idErr,
-                                    prefixIcon: const Icon(Icons.badge_outlined, color: Color(0xFF98A2B3)),
+                                    prefixIcon: const Icon(
+                                        Icons.badge_outlined,
+                                        color: Color(0xFF98A2B3)),
                                   ),
                                 ],
 
@@ -235,14 +267,22 @@ class _LogInState extends State<LogIn> {
                                   isRequired: true,
                                   obscureText: _obscurePassword,
                                   errorText: _passwordErr,
-                                  prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF98A2B3)),
+                                  prefixIcon: const Icon(
+                                      Icons.lock_outline,
+                                      color: Color(0xFF98A2B3)),
                                   suffixIcon: Padding(
-                                    padding: const EdgeInsets.only(right: 4), // 4px space from border
+                                    padding:
+                                        const EdgeInsets.only(right: 4),
                                     child: GestureDetector(
-                                      behavior: HitTestBehavior.translucent, // still clickable
-                                      onTap: () => setState(() => _obscurePassword = !_obscurePassword),
+                                      behavior: HitTestBehavior
+                                          .translucent,
+                                      onTap: () => setState(() =>
+                                          _obscurePassword =
+                                              !_obscurePassword),
                                       child: Icon(
-                                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                        _obscurePassword
+                                            ? Icons.visibility_off
+                                            : Icons.visibility,
                                         color: const Color(0xFF818181),
                                       ),
                                     ),
@@ -256,17 +296,20 @@ class _LogInState extends State<LogIn> {
 
                         // Login Button
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24),
                           child: SizedBox(
                             width: double.infinity,
                             height: 48,
                             child: ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF005CE7), // brand blue background
+                                backgroundColor:
+                                    const Color(0xFF005CE7),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius:
+                                      BorderRadius.circular(12),
                                 ),
-                                elevation: 0, // keep it flat & modern
+                                elevation: 0,
                               ),
                               onPressed: _handleLogin,
                               child: const Text(
@@ -275,7 +318,7 @@ class _LogInState extends State<LogIn> {
                                   fontSize: 14,
                                   fontFamily: 'Inter',
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.white, // white text for contrast
+                                  color: Colors.white,
                                 ),
                               ),
                             ),
@@ -284,7 +327,7 @@ class _LogInState extends State<LogIn> {
 
                         const SizedBox(height: 16),
 
-                        // Forgot Password (opens your bottom-sheet flow)
+                        // Forgot Password
                         GestureDetector(
                           onTap: _openForgotPassword,
                           child: const Text(

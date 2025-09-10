@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+
 import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/models/scenario_models.dart';
 import 'package:facilityfix/models/reading_model.dart';
@@ -19,7 +20,10 @@ class APIService {
   }
 
   Future<Map<String, dynamic>> fetchMessagesAndPath(
-      String phone, String firstName, String lastName) async {
+    String phone,
+    String firstName,
+    String lastName,
+  ) async {
     final res = await _client.post(
       Uri.parse('$baseUrl/messages'),
       headers: const {'Content-Type': 'application/json; charset=UTF-8'},
@@ -54,8 +58,9 @@ class APIService {
   }
 
   Future<Map<String, dynamic>> analyzeMessages(String filePath) async {
-    final uri =
-        Uri.parse('$baseUrl/analyze_messages?file_path=${Uri.encodeComponent(filePath)}');
+    final uri = Uri.parse(
+      '$baseUrl/analyze_messages?file_path=${Uri.encodeComponent(filePath)}',
+    );
     final res = await _client.get(uri);
     if (res.statusCode == 200) {
       return jsonDecode(res.body) as Map<String, dynamic>;
@@ -108,18 +113,32 @@ class APIService {
   }
 
   // ---- Utilities ----
+  /// Ping the backend with resilient probes. Treat 404 as "reachable".
   Future<bool> testConnection() async {
-    try {
-      final res = await _client
-          .get(
-            Uri.parse('$baseUrl/'),
-            headers: const {'Content-Type': 'application/json'},
-          )
-          .timeout(const Duration(seconds: 5));
-      return res.statusCode == 200;
-    } catch (_) {
-      return false;
+    const candidates = ['/', '/health', '/openapi.json', '/start', '/docs'];
+    for (final path in candidates) {
+      final uri = Uri.parse('$baseUrl$path');
+      try {
+        // Try HEAD first — no custom headers => no CORS preflight
+        final h = await _client.head(uri).timeout(const Duration(seconds: 4));
+        if ((h.statusCode >= 200 && h.statusCode < 400) ||
+            h.statusCode == 404 || // route missing but host reachable
+            h.statusCode == 405) {  // method not allowed, still proves reachability
+          return true;
+        }
+
+        // Fallback to GET (also without custom headers)
+        final g = await _client.get(uri).timeout(const Duration(seconds: 4));
+        if ((g.statusCode >= 200 && g.statusCode < 400) ||
+            g.statusCode == 404 ||
+            g.statusCode == 405) {
+          return true;
+        }
+      } catch (_) {
+        // try next candidate
+      }
     }
+    return false;
   }
 
   Future<List<Reading>> fetchAllReadings() async {

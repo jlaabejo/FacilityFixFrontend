@@ -16,15 +16,11 @@ class LoginOrSignup extends StatelessWidget {
       body: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.dark,
         child: Container(
-          // Soft gradient background (no animations)
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment(0, -1),
               end: Alignment(0, 0.65),
-              colors: [
-                Color(0xFFEAF2FF),
-                Colors.white,
-              ],
+              colors: [Color(0xFFEAF2FF), Colors.white],
             ),
           ),
           child: SafeArea(
@@ -38,7 +34,6 @@ class LoginOrSignup extends StatelessWidget {
                     height: 90,
                   ),
                 ),
-
                 const SizedBox(height: 32),
 
                 // Center card
@@ -49,11 +44,13 @@ class LoginOrSignup extends StatelessWidget {
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 420),
                         child: Container(
-                          padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+                          padding:
+                              const EdgeInsets.fromLTRB(24, 24, 24, 20),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                            border: Border.all(
+                                color: const Color(0xFFE5E7EB)),
                             boxShadow: const [
                               BoxShadow(
                                 color: Color(0x144B5563),
@@ -88,12 +85,12 @@ class LoginOrSignup extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 20),
-
-                              // Divider
-                              Container(height: 1, color: const Color(0xFFF1F5F9)),
+                              Container(
+                                  height: 1,
+                                  color: const Color(0xFFF1F5F9)),
                               const SizedBox(height: 20),
 
-                              // Log In (primary)
+                              // Log In
                               SizedBox(
                                 width: double.infinity,
                                 height: 48,
@@ -102,15 +99,16 @@ class LoginOrSignup extends StatelessWidget {
                                     backgroundColor: brandBlue,
                                     elevation: 0,
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius:
+                                          BorderRadius.circular(12),
                                     ),
                                   ),
                                   onPressed: () {
-                                    // No animation: simple MaterialPageRoute
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => const ChooseRole(isLogin: true),
+                                        builder: (_) =>
+                                            const ChooseRole(isLogin: true),
                                       ),
                                     );
                                   },
@@ -127,23 +125,25 @@ class LoginOrSignup extends StatelessWidget {
                               ),
                               const SizedBox(height: 12),
 
-                              // Sign Up (outlined secondary)
+                              // Sign Up
                               SizedBox(
                                 width: double.infinity,
                                 height: 48,
                                 child: OutlinedButton(
                                   style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: brandBlue, width: 1.5),
+                                    side: const BorderSide(
+                                        color: brandBlue, width: 1.5),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius:
+                                          BorderRadius.circular(12),
                                     ),
                                   ),
                                   onPressed: () {
-                                    // No animation: simple MaterialPageRoute
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => const ChooseRole(isLogin: false),
+                                        builder: (_) =>
+                                            const ChooseRole(isLogin: false),
                                       ),
                                     );
                                   },
@@ -166,9 +166,10 @@ class LoginOrSignup extends StatelessWidget {
                   ),
                 ),
 
-                // Footer (optional)
+                // Footer
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 16, left: 24, right: 24, top: 8),
+                  padding: const EdgeInsets.only(
+                      bottom: 16, left: 24, right: 24, top: 8),
                   child: Opacity(
                     opacity: 0.85,
                     child: Row(

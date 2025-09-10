@@ -258,7 +258,7 @@
 // }
 
 
-import 'package:facilityfix/landingpage/welcomepage.dart';
+import 'package:facilityfix/tenant/home.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -283,7 +283,7 @@ class MyApp extends StatelessWidget {
         ),
         fontFamily: 'Inter',
       ),
-      home: WelcomePage(), 
+      home: HomePage(), 
     );
   }
 }

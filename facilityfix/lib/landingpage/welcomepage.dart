@@ -2,9 +2,35 @@ import 'package:facilityfix/landingpage/choose.dart';
 import 'package:facilityfix/landingpage/login_or_signup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:facilityfix/services/api_services.dart'; // 👈 ping here
 
-class WelcomePage extends StatelessWidget {
+class WelcomePage extends StatefulWidget {
   const WelcomePage({super.key});
+
+  @override
+  State<WelcomePage> createState() => _WelcomePageState();
+}
+
+class _WelcomePageState extends State<WelcomePage> {
+  @override
+  void initState() {
+    super.initState();
+    // Run after first frame so ScaffoldMessenger is ready
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final api = APIService();
+      final ok = await api.testConnection();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok
+                ? 'Backend connection: SUCCESS (${api.baseUrl})'
+                : 'Backend connection: FAILED (${api.baseUrl})',
+          ),
+        ),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -16,15 +42,11 @@ class WelcomePage extends StatelessWidget {
       body: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.dark,
         child: Container(
-          // ✨ Soft gradient background (no animations)
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment(0, -1),
               end: Alignment(0, 0.65),
-              colors: [
-                Color(0xFFEAF2FF),
-                Colors.white,
-              ],
+              colors: [Color(0xFFEAF2FF), Colors.white],
             ),
           ),
           child: SafeArea(
@@ -33,10 +55,7 @@ class WelcomePage extends StatelessWidget {
                 // Logo
                 Padding(
                   padding: const EdgeInsets.only(top: 28),
-                  child: Image.asset(
-                    "assets/images/logo.png",
-                    height: 90,
-                  ),
+                  child: Image.asset("assets/images/logo.png", height: 90),
                 ),
 
                 // Center content
@@ -73,7 +92,6 @@ class WelcomePage extends StatelessWidget {
                             ),
                             const SizedBox(height: 28),
 
-                            // CTA (connectors/routes unchanged)
                             SizedBox(
                               width: double.infinity,
                               height: 48,
@@ -89,7 +107,8 @@ class WelcomePage extends StatelessWidget {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) => const LoginOrSignup(role: ''),
+                                      builder: (_) =>
+                                          const LoginOrSignup(role: ''),
                                     ),
                                   );
                                 },
@@ -106,7 +125,6 @@ class WelcomePage extends StatelessWidget {
                             ),
                             const SizedBox(height: 16),
 
-                            // Sign up inline link (routes/connectors unchanged)
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -124,12 +142,14 @@ class WelcomePage extends StatelessWidget {
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => const ChooseRole(isLogin: false),
+                                        builder: (_) =>
+                                            const ChooseRole(isLogin: false),
                                       ),
                                     );
                                   },
                                   child: const Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 2, vertical: 4),
                                     child: Text(
                                       'Sign Up Now',
                                       style: TextStyle(
@@ -150,9 +170,10 @@ class WelcomePage extends StatelessWidget {
                   ),
                 ),
 
-                // Subtle footer (optional polish)
+                // Footer
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 16, left: 24, right: 24, top: 8),
+                  padding: const EdgeInsets.only(
+                      bottom: 16, left: 24, right: 24, top: 8),
                   child: Opacity(
                     opacity: 0.85,
                     child: Row(
