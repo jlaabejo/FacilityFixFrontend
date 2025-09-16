@@ -44,9 +44,9 @@ routers_to_load = [
     ("app.routers.database", "Database"),
     ("app.routers.users", "Users"),
     ("app.routers.profiles", "Profiles"),
-    ("app.routers.repair_requests", "Repair Requests"),
-    ("app.routers.work_orders", "Work Orders")
-    
+    ("app.routers.concern_slips", "Concern Slips"),
+    ("app.routers.job_services", "Job Services"),
+    ("app.routers.work_order_permits", "Work Order Permits")
 ]
 
 successful_routers = []
