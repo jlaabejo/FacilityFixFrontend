@@ -1,14 +1,15 @@
-import 'package:facilityfix/widgets/buttons.dart';
+// lib/widgets/signup.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
 import 'package:facilityfix/landingpage/choose.dart';
-import 'package:facilityfix/tenant/home.dart'; // HomePage
-import 'package:facilityfix/widgets/forms.dart' hide DropdownField; // InputField, DropdownField
+import 'package:facilityfix/tenant/home.dart' as Tenant;
+import 'package:facilityfix/staff/home.dart' as Staff;
+import 'package:facilityfix/admin/home.dart' as Admin;
+import 'package:facilityfix/widgets/forms.dart';
 
-// 👇 optional per-role ping (same as in LogIn)
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/config/env.dart';
+import 'package:facilityfix/services/auth_storage.dart';
 
 AppRole _toAppRole(String role) {
   switch (role.toLowerCase()) {
@@ -36,18 +37,18 @@ class _SignUpState extends State<SignUp> {
 
   final firstNameController = TextEditingController();
   final lastNameController = TextEditingController();
-  final birthdateController = TextEditingController();
-  final idController = TextEditingController(); // tenant building/unit
+  final birthdateController = TextEditingController(); // UI-only; not sent
+  final idController = TextEditingController();        // tenant building/unit
   final emailController = TextEditingController();
   final contactNumberController = TextEditingController();
   final passwordController = TextEditingController();
 
-  // Staff classification
-  String? _selectedClassification;
-  final TextEditingController classificationOtherController =
-      TextEditingController();
+  // Staff department (renamed from classification)
+  String? _selectedStaffDepartment;
+  final TextEditingController staffDepartmentOtherController = TextEditingController();
 
   bool _submitted = false;
+  bool _loading = false;
 
   String? _firstNameErr;
   String? _lastNameErr;
@@ -56,27 +57,22 @@ class _SignUpState extends State<SignUp> {
   String? _emailErr;
   String? _contactErr;
   String? _passwordErr;
-  String? _staffClassErr;
+  String? _staffDeptErr;
 
   bool _obscurePassword = true;
 
   bool get _isTenant => widget.role.toLowerCase() == 'tenant';
-  bool get _isStaff => widget.role.toLowerCase() == 'staff';
-  bool get _isAdmin => widget.role.toLowerCase() == 'admin';
+  bool get _isStaff  => widget.role.toLowerCase() == 'staff';
+  bool get _isAdmin  => widget.role.toLowerCase() == 'admin';
 
   @override
   void initState() {
     super.initState();
-    // Optional: ping on open
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final api = APIService(roleOverride: _toAppRole(widget.role));
       final ok = await api.testConnection();
       if (!mounted) return;
-      if (!ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Server unreachable: ${api.baseUrl}')),
-        );
-      }
+      if (!ok) _snack('Server unreachable: ${api.baseUrl}');
     });
   }
 
@@ -89,8 +85,15 @@ class _SignUpState extends State<SignUp> {
     emailController.dispose();
     contactNumberController.dispose();
     passwordController.dispose();
-    classificationOtherController.dispose();
+    staffDepartmentOtherController.dispose();
     super.dispose();
+  }
+
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
+    );
   }
 
   Future<void> _pickBirthdate() async {
@@ -116,26 +119,29 @@ class _SignUpState extends State<SignUp> {
     _emailErr = null;
     _contactErr = null;
     _passwordErr = null;
-    _staffClassErr = null;
+    _staffDeptErr = null;
 
     final first = firstNameController.text.trim();
-    final last = lastNameController.text.trim();
-    final bday = birthdateController.text.trim();
+    final last  = lastNameController.text.trim();
+    final bday  = birthdateController.text.trim();
     final email = emailController.text.trim();
     final contact = contactNumberController.text.trim();
-    final pass = passwordController.text;
+    final pass  = passwordController.text;
 
     if (first.isEmpty) _firstNameErr = 'First Name is required.';
-    if (last.isEmpty) _lastNameErr = 'Last Name is required.';
-    if (bday.isEmpty) _birthdateErr = 'Birthdate is required.';
+    if (last.isEmpty)  _lastNameErr  = 'Last Name is required.';
+    if (bday.isEmpty)  _birthdateErr = 'Birthdate is required.'; // kept UI requirement
 
     if (_isTenant && idController.text.trim().isEmpty) {
       _tenantBuildingErr = 'Building & Unit No. is required.';
     }
 
-    if (_isStaff && _selectedClassification == 'Others') {
-      if (classificationOtherController.text.trim().isEmpty) {
-        _staffClassErr = 'Please specify your classification.';
+    if (_isStaff) {
+      final isOthers = _selectedStaffDepartment == 'Others';
+      if (_selectedStaffDepartment == null || _selectedStaffDepartment!.isEmpty) {
+        _staffDeptErr = 'Staff Department is required.';
+      } else if (isOthers && staffDepartmentOtherController.text.trim().isEmpty) {
+        _staffDeptErr = 'Please specify your Staff Department.';
       }
     }
 
@@ -166,32 +172,212 @@ class _SignUpState extends State<SignUp> {
         _contactErr == null &&
         _passwordErr == null;
 
-    final staffOk = !_isStaff || _staffClassErr == null;
+    final staffOk = !_isStaff || _staffDeptErr == null;
     return basicOk && staffOk;
   }
 
-  void _onSubmit() {
+  String _fallbackFromEmail(String? email) {
+    if (email == null || email.isEmpty) return 'User';
+    final at = email.indexOf('@');
+    if (at > 0) {
+      final part = email.substring(0, at).replaceAll(RegExp(r'[\.\_\-]'), ' ').trim();
+      if (part.isNotEmpty) return part;
+    }
+    return email;
+  }
+
+  // Helper: get FIRST NAME only for welcome message (with fallbacks)
+  String _firstNameFromProfile(Map<String, dynamic>? profile) {
+    if (profile == null) return 'User';
+    final first = (profile['first_name'] ?? '').toString().trim();
+    if (first.isNotEmpty) return first;
+
+    // fallback: try full_name -> first word
+    final full = (profile['full_name'] ?? '').toString().trim();
+    if (full.isNotEmpty) {
+      final parts = full.split(RegExp(r'\s+'));
+      if (parts.isNotEmpty && parts.first.isNotEmpty) return parts.first;
+    }
+
+    // fallback: email local-part
+    final email = (profile['email'] ?? '').toString();
+    final at = email.indexOf('@');
+    if (at > 0) return email.substring(0, at);
+
+    return 'User';
+  }
+
+  Future<void> _onSubmit() async {
     setState(() => _submitted = true);
     if (!_validate()) return;
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const HomePage()),
-    );
+    setState(() => _loading = true);
+
+    final api = APIService(roleOverride: _toAppRole(widget.role));
+    final first = firstNameController.text.trim();
+    final last  = lastNameController.text.trim();
+    final email = emailController.text.trim();
+    final pass  = passwordController.text;
+    final phone = contactNumberController.text.trim().isEmpty
+        ? null
+        : '+63${contactNumberController.text.trim()}';
+
+    try {
+      Map<String, dynamic> reg;
+      if (_isAdmin) {
+        reg = await api.registerAdmin(
+          firstName: first,
+          lastName: last,
+          email: email,
+          password: pass,
+          phoneNumber: phone,
+        );
+      } else if (_isStaff) {
+        final label = _selectedStaffDepartment == 'Others'
+            ? staffDepartmentOtherController.text.trim()
+            : (_selectedStaffDepartment ?? '');
+        reg = await api.registerStaff(
+          firstName: first,
+          lastName: last,
+          email: email,
+          password: pass,
+          staffDepartment: label,
+          phoneNumber: phone,
+        );
+      } else {
+        final buildingUnit = idController.text.trim();
+        reg = await api.registerTenant(
+          firstName: first,
+          lastName: last,
+          email: email,
+          password: pass,
+          buildingUnit: buildingUnit,
+          phoneNumber: phone,
+        );
+      }
+
+      final userId = (reg['user_id'] ?? '').toString();
+      if (userId.isEmpty) {
+        _snack('Registered, but user_id missing. Please log in manually.');
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const ChooseRole(isLogin: true)),
+        );
+        return;
+      }
+
+      // Auto-login
+      Map<String, dynamic> loginRes;
+      if (_isAdmin) {
+        loginRes = await api.loginRoleBased(
+          role: 'admin',
+          email: email,
+          userId: userId,
+          password: pass,
+        );
+      } else if (_isStaff) {
+        final dept = (_selectedStaffDepartment == 'Others'
+                ? staffDepartmentOtherController.text.trim()
+                : (_selectedStaffDepartment ?? ''))
+            .trim();
+        loginRes = await api.loginRoleBased(
+          role: 'staff',
+          email: email,
+          userId: userId,
+          password: pass,
+          staffDepartment: dept,
+        );
+      } else {
+        loginRes = await api.loginRoleBased(
+          role: 'tenant',
+          email: email,
+          userId: userId,
+          password: pass,
+          buildingUnitId: idController.text.trim(),
+        );
+      }
+
+      // Build fallback display name and ensure we save it
+      final backendFirst = (loginRes['first_name'] ?? '').toString().trim();
+      final backendLast = (loginRes['last_name'] ?? '').toString().trim();
+      final backendFull = (loginRes['full_name'] ?? '').toString().trim();
+
+      String finalFullName = '';
+      if (backendFull.isNotEmpty) {
+        finalFullName = backendFull;
+      } else if (backendFirst.isNotEmpty || backendLast.isNotEmpty) {
+        finalFullName = '${backendFirst} ${backendLast}'.trim();
+      } else if (first.isNotEmpty || last.isNotEmpty) {
+        finalFullName = '${first} ${last}'.trim();
+      } else {
+        finalFullName = _fallbackFromEmail((loginRes['email'] ?? email).toString());
+      }
+
+      // Derive sensible first/last split from finalFullName
+      String finalFirst = '';
+      String finalLast = '';
+      final parts = finalFullName.trim().split(RegExp(r'\s+'));
+      if (parts.isNotEmpty) {
+        finalFirst = parts.first;
+        if (parts.length > 1) finalLast = parts.sublist(1).join(' ');
+      }
+
+      // Save profile + token
+      final profile = <String, dynamic>{
+        'user_id': loginRes['user_id'] ?? userId,
+        'first_name': (backendFirst.isNotEmpty ? backendFirst : (first.isNotEmpty ? first : finalFirst)),
+        'last_name': (backendLast.isNotEmpty ? backendLast : (last.isNotEmpty ? last : finalLast)),
+        'full_name': finalFullName,
+        'email': loginRes['email'] ?? email,
+        'role': (loginRes['role'] ?? widget.role).toString(),
+        'building_unit': loginRes['building_unit'] ?? idController.text.trim(),
+      };
+      await AuthStorage.saveProfile(profile);
+
+      final idToken = (loginRes['id_token'] ?? loginRes['token'] ?? '').toString();
+      if (idToken.isNotEmpty) await AuthStorage.saveToken(idToken);
+
+      final role = (loginRes['role'] ?? widget.role).toString().toLowerCase();
+      Widget destination;
+      switch (role) {
+        case 'tenant':
+          destination = const Tenant.HomePage();
+          break;
+        case 'staff':
+          destination = const Staff.HomePage();
+          break;
+        case 'admin':
+          destination = const Admin.HomePage();
+          break;
+        default:
+          destination = const Tenant.HomePage();
+      }
+
+      if (!mounted) return;
+      // Use FIRST NAME only in welcome
+      final firstName = _firstNameFromProfile(profile);
+      _snack('Welcome $firstName');
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => destination));
+    } catch (e) {
+      _snack(e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => Navigator.of(context).pop(), // tap outside to dismiss
+      onTap: () => Navigator.of(context).pop(),
       child: Scaffold(
         backgroundColor: Colors.black.withOpacity(0.5),
         body: GestureDetector(
-          onTap: () {}, // prevent dismiss on content tap
+          onTap: () {},
           child: Align(
             alignment: Alignment.bottomCenter,
             child: SizedBox(
-              height: 600, // fixed modal height
+              height: 600,
               width: double.infinity,
               child: Container(
                 decoration: const BoxDecoration(
@@ -210,23 +396,22 @@ class _SignUpState extends State<SignUp> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text(
-                            'Sign Up',
-                            style: TextStyle(
+                          Text(
+                            'Sign Up as ${widget.role[0].toUpperCase()}${widget.role.substring(1)}',
+                            style: const TextStyle(
                               color: Color(0xFF005CE7),
-                              fontSize: 30,
-                              fontWeight: FontWeight.w500,
+                              fontSize: 26,
+                              fontWeight: FontWeight.w600,
                               fontFamily: 'Inter',
                             ),
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 20),
 
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 24),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                // First Name
                                 InputField(
                                   label: 'First Name',
                                   hintText: 'e.g., Juan',
@@ -234,8 +419,6 @@ class _SignUpState extends State<SignUp> {
                                   isRequired: true,
                                   errorText: _firstNameErr,
                                 ),
-
-                                // Last Name
                                 InputField(
                                   label: 'Last Name',
                                   hintText: 'e.g., Dela Cruz',
@@ -243,8 +426,6 @@ class _SignUpState extends State<SignUp> {
                                   isRequired: true,
                                   errorText: _lastNameErr,
                                 ),
-
-                                // Birthdate (read-only with picker)
                                 InputField(
                                   label: 'Birthdate',
                                   hintText: 'YYYY-MM-DD',
@@ -253,53 +434,44 @@ class _SignUpState extends State<SignUp> {
                                   readOnly: true,
                                   onTap: _pickBirthdate,
                                   errorText: _birthdateErr,
-                                  prefixIcon: const Icon(
-                                      Icons.calendar_today,
-                                      color: Color(0xFF98A2B3)),
+                                  prefixIcon: const Icon(Icons.calendar_today, color: Color(0xFF98A2B3)),
                                 ),
 
-                                // Tenant-only: Building & Unit
                                 if (_isTenant)
                                   InputField(
                                     label: 'Building & Unit No.',
-                                    hintText:
-                                        'e.g., Tower A – 10F – 10B',
+                                    hintText: 'e.g., Tower A – 10F – 10B',
                                     controller: idController,
                                     isRequired: true,
                                     errorText: _tenantBuildingErr,
-                                    prefixIcon: const Icon(
-                                        Icons.location_city_outlined,
-                                        color: Color(0xFF98A2B3)),
+                                    prefixIcon: const Icon(Icons.location_city_outlined, color: Color(0xFF98A2B3)),
                                   ),
 
-                                // Staff-only: Classification dropdown
                                 if (_isStaff) ...[
                                   DropdownField<String>(
-                                    label: 'Classification',
+                                    label: 'Staff Department',
                                     items: const [
-                                      'General Maintenance',
+                                      'Maintenance',
+                                      'Carpentry',
                                       'Plumbing',
-                                      'Electrician',
+                                      'Electrical',
+                                      'Masonry',
                                       'Others',
                                     ],
-                                    value: _selectedClassification,
+                                    value: _selectedStaffDepartment,
                                     onChanged: (v) => setState(() {
-                                      _selectedClassification = v;
-                                      if (v != 'Others') {
-                                        _staffClassErr = null;
-                                      }
+                                      _selectedStaffDepartment = v;
+                                      if (v != 'Others') _staffDeptErr = null;
                                     }),
                                     isRequired: _submitted,
-                                    requiredMessage:
-                                        'Classification is required.',
-                                    hintText: 'Select classification',
-                                    otherController:
-                                        classificationOtherController,
+                                    requiredMessage: 'Staff Department is required.',
+                                    hintText: 'Select department',
+                                    otherController: staffDepartmentOtherController,
                                   ),
-                                  if (_staffClassErr != null) ...[
+                                  if (_staffDeptErr != null) ...[
                                     const SizedBox(height: 4),
                                     Text(
-                                      _staffClassErr!,
+                                      _staffDeptErr!,
                                       style: const TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: 12,
@@ -311,20 +483,15 @@ class _SignUpState extends State<SignUp> {
                                   ],
                                 ],
 
-                                // Email
                                 InputField(
                                   label: 'Email',
                                   hintText: 'you@example.com',
                                   controller: emailController,
-                                  keyboardType:
-                                      TextInputType.emailAddress,
+                                  keyboardType: TextInputType.emailAddress,
                                   isRequired: true,
                                   errorText: _emailErr,
-                                  prefixIcon: const Icon(Icons.mail,
-                                      color: Color(0xFF98A2B3)),
+                                  prefixIcon: const Icon(Icons.mail, color: Color(0xFF98A2B3)),
                                 ),
-
-                                // Contact Number (+63 prefix; 10 digits only, optional)
                                 InputField(
                                   label: 'Contact Number',
                                   hintText: 'e.g., 9123456789',
@@ -345,8 +512,6 @@ class _SignUpState extends State<SignUp> {
                                     ),
                                   ),
                                 ),
-
-                                // Password
                                 InputField(
                                   label: 'Password',
                                   hintText: 'Enter your password',
@@ -354,22 +519,14 @@ class _SignUpState extends State<SignUp> {
                                   isRequired: true,
                                   obscureText: _obscurePassword,
                                   errorText: _passwordErr,
-                                  prefixIcon: const Icon(
-                                      Icons.lock_outline,
-                                      color: Color(0xFF98A2B3)),
+                                  prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF98A2B3)),
                                   suffixIcon: Padding(
-                                    padding:
-                                        const EdgeInsets.only(right: 4),
+                                    padding: const EdgeInsets.only(right: 4),
                                     child: GestureDetector(
-                                      behavior: HitTestBehavior
-                                          .translucent,
-                                      onTap: () => setState(() =>
-                                          _obscurePassword =
-                                              !_obscurePassword),
+                                      behavior: HitTestBehavior.translucent,
+                                      onTap: () => setState(() => _obscurePassword = !_obscurePassword),
                                       child: Icon(
-                                        _obscurePassword
-                                            ? Icons.visibility_off
-                                            : Icons.visibility,
+                                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
                                         color: const Color(0xFF818181),
                                       ),
                                     ),
@@ -381,40 +538,44 @@ class _SignUpState extends State<SignUp> {
 
                           const SizedBox(height: 8),
 
-                          // Sign Up Button
                           Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 24),
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
                             child: SizedBox(
                               width: double.infinity,
                               height: 48,
                               child: ElevatedButton(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor:
-                                      const Color(0xFF005CE7),
+                                  backgroundColor: const Color(0xFF005CE7),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
                                   elevation: 0,
                                 ),
-                                onPressed: _onSubmit,
-                                child: const Text(
-                                  'Sign Up',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontFamily: 'Inter',
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                                onPressed: _loading ? null : _onSubmit,
+                                child: _loading
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                        ),
+                                      )
+                                    : const Text(
+                                        'Sign Up',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontFamily: 'Inter',
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                      ),
                               ),
                             ),
                           ),
 
                           const SizedBox(height: 24),
 
-                          // Already have an account
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -424,8 +585,7 @@ class _SignUpState extends State<SignUp> {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) =>
-                                          const ChooseRole(isLogin: true),
+                                      builder: (_) => const ChooseRole(isLogin: true),
                                     ),
                                   );
                                 },

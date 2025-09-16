@@ -1,3 +1,4 @@
+// lib/widgets/login.dart
 import 'package:facilityfix/widgets/forgotPassword.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,9 +7,10 @@ import 'package:facilityfix/staff/home.dart' as Staff;
 import 'package:facilityfix/admin/home.dart' as Admin;
 import 'package:facilityfix/widgets/forms.dart';
 
-// 👇 per-role ping
+// per-role ping + backend calls
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/config/env.dart';
+import 'package:facilityfix/services/auth_storage.dart';
 
 AppRole _toAppRole(String role) {
   switch (role.toLowerCase()) {
@@ -25,7 +27,7 @@ AppRole _toAppRole(String role) {
 
 class LogIn extends StatefulWidget {
   final String role; // 'tenant' | 'staff' | 'admin'
-  const LogIn({Key? key, required this.role}) : super(key: key);
+  const LogIn({Key? key, required this.role, String? lanIp}) : super(key: key);
 
   @override
   State<LogIn> createState() => _LogInState();
@@ -35,63 +37,69 @@ class _LogInState extends State<LogIn> {
   final _formKey = GlobalKey<FormState>();
 
   final emailController = TextEditingController();
-  final idController = TextEditingController();
+  final userIdController = TextEditingController();
   final passwordController = TextEditingController();
-  final buildingController = TextEditingController();
+
+  // Role extras
+  final staffDeptController = TextEditingController();     // staffDepartment
+  final buildingUnitIdController = TextEditingController(); // buildingUnitId
 
   String? _emailErr;
-  String? _idErr;
-  String? _buildingErr;
+  String? _userIdErr;
   String? _passwordErr;
+  String? _deptErr;
+  String? _bunitErr;
 
   bool _obscurePassword = true;
+  bool _loading = false;
 
   String get _normalizedRole => widget.role.toLowerCase();
   bool get _isTenant => _normalizedRole == 'tenant';
   bool get _isStaff => _normalizedRole == 'staff';
   bool get _isAdmin => _normalizedRole == 'admin';
 
-  String get _idLabel {
-    if (_isTenant) return 'Tenant ID';
-    if (_isStaff) return 'Staff ID';
-    if (_isAdmin) return 'Admin ID';
-    return 'ID';
-  }
-
   @override
   void initState() {
     super.initState();
-    // Ping the specific role’s baseUrl after open
+    // Ping this role’s baseUrl right after opening
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final api = APIService(roleOverride: _toAppRole(widget.role));
       final ok = await api.testConnection();
       if (!mounted) return;
-      if (!ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Server unreachable: ${api.baseUrl}')),
-        );
-      }
+      if (!ok) _showSnack('Server unreachable: ${api.baseUrl}');
     });
   }
 
   @override
   void dispose() {
     emailController.dispose();
-    idController.dispose();
+    userIdController.dispose();
     passwordController.dispose();
-    buildingController.dispose();
+    staffDeptController.dispose();
+    buildingUnitIdController.dispose();
     super.dispose();
+  }
+
+  void _showSnack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   bool _validate() {
     _emailErr = null;
-    _idErr = null;
-    _buildingErr = null;
+    _userIdErr = null;
     _passwordErr = null;
+    _deptErr = null;
+    _bunitErr = null;
 
     final email = emailController.text.trim();
-    final id = idController.text.trim();
-    final building = buildingController.text.trim();
+    final userId = userIdController.text.trim();
     final pass = passwordController.text;
 
     final emailRe = RegExp(r'^[\w\.-]+@([\w-]+\.)+[\w-]{2,}$');
@@ -102,12 +110,8 @@ class _LogInState extends State<LogIn> {
       _emailErr = 'Enter a valid email address.';
     }
 
-    if (id.isEmpty) {
-      _idErr = '$_idLabel is required.';
-    }
-
-    if (_isTenant && building.isEmpty) {
-      _buildingErr = 'Building & Unit No. is required.';
+    if (userId.isEmpty) {
+      _userIdErr = (_isTenant ? 'Tenant ID' : _isStaff ? 'Staff ID' : 'Admin ID') + ' is required.';
     }
 
     if (pass.isEmpty) {
@@ -116,59 +120,107 @@ class _LogInState extends State<LogIn> {
       _passwordErr = 'Password must be at least 6 characters.';
     }
 
+    if (_isStaff) {
+      if (staffDeptController.text.trim().isEmpty) {
+        _deptErr = 'Department is required.';
+      }
+    }
+
+    if (_isTenant) {
+      if (buildingUnitIdController.text.trim().isEmpty) {
+        _bunitErr = 'Building & Unit ID is required.';
+      }
+    }
+
     _formKey.currentState?.validate();
     setState(() {});
     return _emailErr == null &&
-        _idErr == null &&
-        _buildingErr == null &&
-        _passwordErr == null;
+        _userIdErr == null &&
+        _passwordErr == null &&
+        _deptErr == null &&
+        _bunitErr == null;
   }
 
-  void _handleLogin() {
+  Future<void> _handleLogin() async {
     if (!_validate()) return;
 
-    Widget destination;
-    switch (_normalizedRole) {
-      case 'tenant':
-        destination = const Tenant.HomePage();
-        break;
-      case 'staff':
-        destination = const Staff.HomePage();
-        break;
-      case 'admin':
-        destination = const Admin.HomePage();
-        break;
-      default:
-        destination = const Tenant.HomePage();
-        break;
-    }
+    setState(() => _loading = true);
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => destination),
-    );
+    final api = APIService(roleOverride: _toAppRole(widget.role));
+    final email = emailController.text.trim();
+    final userId = userIdController.text.trim();
+    final pass = passwordController.text;
+    final dept = _isStaff ? staffDeptController.text.trim() : null;
+    final bunit = _isTenant ? buildingUnitIdController.text.trim() : null;
+
+    try {
+      final res = await api.loginRoleBased(
+        role: widget.role,
+        email: email,
+        userId: userId,
+        password: pass,
+        staffDepartment: dept,
+        buildingUnitId: bunit,
+      );
+
+      // Save profile + token
+      final profile = <String, dynamic>{
+        'user_id': res['user_id'] ?? userId,
+        'first_name': res['first_name'] ?? res['firstName'] ?? '',
+        'last_name': res['last_name'] ?? res['lastName'] ?? '',
+        'email': res['email'] ?? email,
+        'role': (res['role'] ?? widget.role).toString(),
+        'building_unit': res['building_unit'] ?? res['unit'] ?? bunit ?? '',
+      };
+      await AuthStorage.saveProfile(profile);
+
+      final idToken = (res['id_token'] ?? res['token'] ?? '').toString();
+      if (idToken.isNotEmpty) {
+        await AuthStorage.saveToken(idToken);
+      }
+
+      final role = (res['role'] ?? widget.role).toString().toLowerCase();
+      Widget destination;
+      switch (role) {
+        case 'tenant':
+          destination = const Tenant.HomePage();
+          break;
+        case 'staff':
+          destination = const Staff.HomePage();
+          break;
+        case 'admin':
+          destination = const Admin.HomePage();
+          break;
+        default:
+          destination = const Tenant.HomePage();
+      }
+
+      if (!mounted) return;
+      _showSnack('Welcome ${profile['user_id'] ?? ''}');
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => destination));
+    } catch (e) {
+      _showSnack(e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
-  void _openForgotPassword() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => const ForgotPasswordEmailModal(),
-    );
+  String get _idLabel {
+    if (_isTenant) return 'Tenant ID';
+    if (_isStaff) return 'Staff ID';
+    if (_isAdmin) return 'Admin ID';
+    return 'User ID';
   }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => Navigator.of(context).pop(), // tap outside to dismiss
+      onTap: () => Navigator.of(context).pop(),
       child: Scaffold(
         backgroundColor: Colors.black.withOpacity(0.5),
         body: GestureDetector(
-          onTap: () {}, // prevent dismiss on modal tap
+          onTap: () {},
           child: Align(
             alignment: Alignment.bottomCenter,
             child: Container(
@@ -188,78 +240,62 @@ class _LogInState extends State<LogIn> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text(
-                          'Log In',
-                          style: TextStyle(
+                        Text(
+                          'Log In as ${widget.role[0].toUpperCase()}${widget.role.substring(1)}',
+                          style: const TextStyle(
                             color: Color(0xFF005CE7),
-                            fontSize: 30,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w600,
                             fontFamily: 'Inter',
                           ),
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 20),
                         Form(
                           key: _formKey,
                           child: Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 24),
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
                             child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.stretch,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                // Email
                                 InputField(
                                   label: 'Email',
                                   hintText: 'you@example.com',
                                   controller: emailController,
-                                  keyboardType:
-                                      TextInputType.emailAddress,
+                                  keyboardType: TextInputType.emailAddress,
                                   isRequired: true,
                                   errorText: _emailErr,
-                                  prefixIcon: const Icon(
-                                      Icons.mail,
-                                      color: Color(0xFF98A2B3)),
+                                  prefixIcon: const Icon(Icons.mail, color: Color(0xFF98A2B3)),
                                 ),
-
-                                // Role-specific fields
-                                if (_isTenant) ...[
+                                InputField(
+                                  label: _idLabel,
+                                  hintText: _isTenant
+                                      ? 'e.g., T-000123'
+                                      : _isStaff
+                                          ? 'e.g., S-000321'
+                                          : 'e.g., ADM-0001',
+                                  controller: userIdController,
+                                  isRequired: true,
+                                  errorText: _userIdErr,
+                                  prefixIcon: const Icon(Icons.badge_outlined, color: Color(0xFF98A2B3)),
+                                ),
+                                if (_isStaff)
                                   InputField(
-                                    label: _idLabel,
-                                    hintText: 'e.g., T-000123',
-                                    controller: idController,
+                                    label: 'Department',
+                                    hintText: 'e.g., Electrical',
+                                    controller: staffDeptController,
                                     isRequired: true,
-                                    errorText: _idErr,
-                                    prefixIcon: const Icon(
-                                        Icons.badge_outlined,
-                                        color: Color(0xFF98A2B3)),
+                                    errorText: _deptErr,
+                                    prefixIcon: const Icon(Icons.apartment_outlined, color: Color(0xFF98A2B3)),
                                   ),
+                                if (_isTenant)
                                   InputField(
-                                    label: 'Building & Unit No.',
-                                    hintText:
-                                        'e.g., Tower A – 10F – 10B',
-                                    controller: buildingController,
+                                    label: 'Building & Unit ID',
+                                    hintText: 'e.g., B1-U502 (or TowerA-10F-10B)',
+                                    controller: buildingUnitIdController,
                                     isRequired: true,
-                                    errorText: _buildingErr,
-                                    prefixIcon: const Icon(
-                                        Icons.location_city_outlined,
-                                        color: Color(0xFF98A2B3)),
+                                    errorText: _bunitErr,
+                                    prefixIcon: const Icon(Icons.location_city_outlined, color: Color(0xFF98A2B3)),
                                   ),
-                                ] else ...[
-                                  InputField(
-                                    label: _idLabel,
-                                    hintText: _isStaff
-                                        ? 'e.g., S-000321'
-                                        : 'e.g., ADM-0001',
-                                    controller: idController,
-                                    isRequired: true,
-                                    errorText: _idErr,
-                                    prefixIcon: const Icon(
-                                        Icons.badge_outlined,
-                                        color: Color(0xFF98A2B3)),
-                                  ),
-                                ],
-
-                                // Password
                                 InputField(
                                   label: 'Password',
                                   hintText: 'Enter your password',
@@ -267,22 +303,14 @@ class _LogInState extends State<LogIn> {
                                   isRequired: true,
                                   obscureText: _obscurePassword,
                                   errorText: _passwordErr,
-                                  prefixIcon: const Icon(
-                                      Icons.lock_outline,
-                                      color: Color(0xFF98A2B3)),
+                                  prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF98A2B3)),
                                   suffixIcon: Padding(
-                                    padding:
-                                        const EdgeInsets.only(right: 4),
+                                    padding: const EdgeInsets.only(right: 4),
                                     child: GestureDetector(
-                                      behavior: HitTestBehavior
-                                          .translucent,
-                                      onTap: () => setState(() =>
-                                          _obscurePassword =
-                                              !_obscurePassword),
+                                      behavior: HitTestBehavior.translucent,
+                                      onTap: () => setState(() => _obscurePassword = !_obscurePassword),
                                       child: Icon(
-                                        _obscurePassword
-                                            ? Icons.visibility_off
-                                            : Icons.visibility,
+                                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
                                         color: const Color(0xFF818181),
                                       ),
                                     ),
@@ -296,31 +324,37 @@ class _LogInState extends State<LogIn> {
 
                         // Login Button
                         Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 24),
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
                           child: SizedBox(
                             width: double.infinity,
                             height: 48,
                             child: ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor:
-                                    const Color(0xFF005CE7),
+                                backgroundColor: const Color(0xFF005CE7),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
                                 elevation: 0,
                               ),
-                              onPressed: _handleLogin,
-                              child: const Text(
-                                'Log In',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontFamily: 'Inter',
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
-                                ),
-                              ),
+                              onPressed: _loading ? null : _handleLogin,
+                              child: _loading
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Log In',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontFamily: 'Inter',
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
                             ),
                           ),
                         ),
@@ -349,6 +383,17 @@ class _LogInState extends State<LogIn> {
           ),
         ),
       ),
+    );
+  }
+
+  void _openForgotPassword() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => const ForgotPasswordEmailModal(),
     );
   }
 }

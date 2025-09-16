@@ -1,162 +1,289 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'package:facilityfix/services/auth_storage.dart';
 import 'package:http/http.dart' as http;
-
 import 'package:facilityfix/config/env.dart';
-import 'package:facilityfix/models/scenario_models.dart';
-import 'package:facilityfix/models/reading_model.dart';
 
 class APIService {
-  final http.Client _client;
+  /// Current app role (used to pick base URL)
   final AppRole role;
-  late final String baseUrl;
+  /// Base URL resolved from AppEnv or provided explicitly
+  final String baseUrl;
+  /// Default headers applied to every request (merged with per-call headers)
+  Map<String, String> defaultHeaders;
 
-  APIService({http.Client? client, AppRole? roleOverride})
-      : _client = client ?? http.Client(),
-        role = roleOverride ?? AppEnv.role {
-    baseUrl = AppEnv.resolveBaseUrl(overrideRole: role);
-    // ignore: avoid_print
-    print('APIService init → role=$role | baseUrl=$baseUrl | kIsWeb=$kIsWeb');
+  /// Primary constructor: resolves baseUrl via AppEnv based on role (or override).
+  APIService({AppRole? roleOverride, Map<String, String>? headers})
+      : role = roleOverride ?? AppEnv.role,
+        baseUrl = AppEnv.baseUrlWithLan(roleOverride ?? AppEnv.role),
+        defaultHeaders = {
+          'Content-Type': 'application/json',
+          if (headers != null) ...headers,
+        };
+
+  /// Named constructor: use a literal baseUrl (ignores AppEnv).
+  APIService.fromBaseUrl(this.baseUrl, {Map<String, String>? headers})
+      : role = AppEnv.role,
+        defaultHeaders = {
+          'Content-Type': 'application/json',
+          if (headers != null) ...headers,
+        };
+
+  // -------------------- Low-level helpers --------------------
+
+  Map<String, String> _mergeHeaders(Map<String, String>? headers) {
+    if (headers == null || headers.isEmpty) return Map.of(defaultHeaders);
+    return {...defaultHeaders, ...headers};
   }
 
-  Future<Map<String, dynamic>> fetchMessagesAndPath(
-    String phone,
-    String firstName,
-    String lastName,
-  ) async {
-    final res = await _client.post(
-      Uri.parse('$baseUrl/messages'),
-      headers: const {'Content-Type': 'application/json; charset=UTF-8'},
-      body: jsonEncode({
-        'phone': phone,
-        'first_name': firstName,
-        'last_name': lastName,
-      }),
+  Uri _u(String path) => Uri.parse('$baseUrl$path');
+
+  Future<http.Response> get(String path, {Map<String, String>? headers}) {
+    return http.get(_u(path), headers: _mergeHeaders(headers));
+  }
+
+  Future<http.Response> delete(String path, {Map<String, String>? headers}) {
+    return http.delete(_u(path), headers: _mergeHeaders(headers));
+  }
+
+  Future<http.Response> post(
+    String path, {
+    Map<String, String>? headers,
+    Object? body,
+  }) {
+    return http.post(_u(path), headers: _mergeHeaders(headers), body: body);
+  }
+
+  Future<http.Response> put(
+    String path, {
+    Map<String, String>? headers,
+    Object? body,
+  }) {
+    return http.put(_u(path), headers: _mergeHeaders(headers), body: body);
+  }
+
+  // JSON convenience
+  Future<Map<String, dynamic>> postJson(
+    String path, {
+    Map<String, String>? headers,
+    Map<String, dynamic>? jsonBody,
+  }) async {
+    final r = await post(
+      path,
+      headers: _mergeHeaders(headers),
+      body: jsonEncode(jsonBody ?? {}),
     );
-    if (res.statusCode == 200) {
-      return jsonDecode(res.body) as Map<String, dynamic>;
+    if (r.statusCode >= 200 && r.statusCode < 300) {
+      return jsonDecode(r.body) as Map<String, dynamic>;
     }
-    // ignore: avoid_print
-    print('fetchMessagesAndPath ${res.statusCode} → ${res.body}');
-    throw Exception('Failed to fetch messages and path');
+    throw Exception('POST $path failed: ${r.statusCode} ${r.body}');
   }
 
-  Future<List<Map<String, dynamic>>> fetchSuggestions(String filePath) async {
-    final res = await _client.get(
-      Uri.parse('$baseUrl/suggestion?file_path=${Uri.encodeComponent(filePath)}'),
-    );
-    if (res.statusCode == 200) {
-      final decoded = jsonDecode(res.body);
-      if (decoded is Map<String, dynamic> && decoded['suggestions'] is List) {
-        return (decoded['suggestions'] as List).cast<Map<String, dynamic>>();
-      }
-      return [];
+  Future<Map<String, dynamic>> getJson(
+    String path, {
+    Map<String, String>? headers,
+  }) async {
+    final r = await get(path, headers: headers);
+    if (r.statusCode >= 200 && r.statusCode < 300) {
+      return jsonDecode(r.body) as Map<String, dynamic>;
     }
-    // ignore: avoid_print
-    print('fetchSuggestions ${res.statusCode} → ${res.body}');
-    return [];
+    throw Exception('GET $path failed: ${r.statusCode} ${r.body}');
   }
 
-  Future<Map<String, dynamic>> analyzeMessages(String filePath) async {
-    final uri = Uri.parse(
-      '$baseUrl/analyze_messages?file_path=${Uri.encodeComponent(filePath)}',
-    );
-    final res = await _client.get(uri);
-    if (res.statusCode == 200) {
-      return jsonDecode(res.body) as Map<String, dynamic>;
-    }
-    // ignore: avoid_print
-    print('analyzeMessages ${res.statusCode} → ${res.body}');
-    throw Exception('Failed to analyze messages: ${res.statusCode}');
-  }
+  // -------------------- Utilities --------------------
 
-  // ---- Scenario APIs ----
-  Future<ConfigResponse> startConversation() async {
-    final res = await _client.get(
-      Uri.parse('$baseUrl/start'),
-      headers: const {'Content-Type': 'application/json'},
-    );
-    if (res.statusCode == 200) {
-      return ConfigResponse.fromJson(jsonDecode(res.body));
-    }
-    // ignore: avoid_print
-    print('startConversation ${res.statusCode} → ${res.body}');
-    throw Exception('Failed to start conversation');
-  }
-
-  Future<ChatResponse> sendMessage(ChatRequest request) async {
-    final res = await _client.post(
-      Uri.parse('$baseUrl/chat'),
-      headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode(request.toJson()),
-    );
-    if (res.statusCode == 200) {
-      return ChatResponse.fromJson(jsonDecode(res.body));
-    }
-    // ignore: avoid_print
-    print('sendMessage ${res.statusCode} → ${res.body}');
-    throw Exception('Failed to send message');
-  }
-
-  Future<EvaluationResponse> evaluateConversation(EvaluationRequest request) async {
-    final res = await _client.post(
-      Uri.parse('$baseUrl/evaluate'),
-      headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode(request.toJson()),
-    );
-    if (res.statusCode == 200) {
-      return EvaluationResponse.fromJson(jsonDecode(res.body));
-    }
-    // ignore: avoid_print
-    print('evaluateConversation ${res.statusCode} → ${res.body}');
-    throw Exception('Failed to evaluate conversation');
-  }
-
-  // ---- Utilities ----
-  /// Ping the backend with resilient probes. Treat 404 as "reachable".
   Future<bool> testConnection() async {
-    const candidates = ['/', '/health', '/openapi.json', '/start', '/docs'];
-    for (final path in candidates) {
-      final uri = Uri.parse('$baseUrl$path');
+    final probes = ['/ping', '/health', '/'];
+    for (final p in probes) {
       try {
-        // Try HEAD first — no custom headers => no CORS preflight
-        final h = await _client.head(uri).timeout(const Duration(seconds: 4));
-        if ((h.statusCode >= 200 && h.statusCode < 400) ||
-            h.statusCode == 404 || // route missing but host reachable
-            h.statusCode == 405) {  // method not allowed, still proves reachability
-          return true;
-        }
-
-        // Fallback to GET (also without custom headers)
-        final g = await _client.get(uri).timeout(const Duration(seconds: 4));
-        if ((g.statusCode >= 200 && g.statusCode < 400) ||
-            g.statusCode == 404 ||
-            g.statusCode == 405) {
-          return true;
-        }
-      } catch (_) {
-        // try next candidate
-      }
+        final r = await http
+            .get(_u(p))
+            .timeout(const Duration(seconds: 4));
+        if (r.statusCode >= 200 && r.statusCode < 300) return true;
+      } catch (_) {}
     }
     return false;
   }
 
-  Future<List<Reading>> fetchAllReadings() async {
-    final res = await _client.get(Uri.parse('$baseUrl/resources/all'));
-    if (res.statusCode == 200) {
-      final decoded = jsonDecode(res.body);
-      if (decoded is List) {
-        return decoded
-            .map<Reading>((e) => Reading.fromJson(e as Map<String, dynamic>))
-            .toList();
-      } else if (decoded is Map && decoded['data'] is List) {
-        final list = decoded['data'] as List;
-        return list
-            .map<Reading>((e) => Reading.fromJson(e as Map<String, dynamic>))
-            .toList();
-      }
-      return [];
+  // -------------------- Register --------------------
+
+  Future<Map<String, dynamic>> registerAdmin({
+    required String firstName,
+    required String lastName,
+    required String email,
+    required String password,
+    String? phoneNumber,
+  }) {
+    final body = {
+      'first_name': firstName,
+      'last_name': lastName,
+      'email': email,
+      'password': password,
+      if (phoneNumber != null && phoneNumber.isNotEmpty)
+        'phone_number': phoneNumber,
+    };
+    return postJson('/auth/register/admin', jsonBody: body);
+  }
+
+  Future<Map<String, dynamic>> registerStaff({
+    required String firstName,
+    required String lastName,
+    required String email,
+    required String password,
+    required String staffDepartment,
+    String? phoneNumber,
+  }) {
+    final mapped = _deptToApiEnum(staffDepartment);
+    // ignore: avoid_print
+    print('[registerStaff] UI="$staffDepartment" → API="$mapped"');
+
+    final body = {
+      'first_name': firstName,
+      'last_name': lastName,
+      'email': email,
+      'password': password,
+      'classification': mapped,
+      if (phoneNumber != null && phoneNumber.isNotEmpty)
+        'phone_number': phoneNumber,
+    };
+
+    // ignore: avoid_print
+    print('[registerStaff] body=${jsonEncode(body)}');
+    return postJson('/auth/register/staff', jsonBody: body);
+  }
+
+  Future<Map<String, dynamic>> registerTenant({
+    required String firstName,
+    required String lastName,
+    required String email,
+    required String password,
+    required String buildingUnit,
+    String? phoneNumber,
+  }) {
+    final body = {
+      'first_name': firstName,
+      'last_name': lastName,
+      'email': email,
+      'password': password,
+      'building_unit': buildingUnit,
+      if (phoneNumber != null && phoneNumber.isNotEmpty)
+        'phone_number': phoneNumber,
+    };
+    return postJson('/auth/register/tenant', jsonBody: body);
+  }
+
+  String _deptToApiEnum(String v) {
+    final s = v.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+    switch (s) {
+      case 'maintenance':
+      case 'carpentry':
+      case 'plumbing':
+      case 'electrical':
+      case 'masonry':
+        return s;
+      default:
+        return s.isEmpty ? 'other' : s;
     }
-    throw Exception('Failed to fetch readings: ${res.statusCode} ${res.body}');
+  }
+
+  // -------------------- Login / Auth --------------------
+
+  Future<Map<String, dynamic>> loginRoleBased({
+    required String role,           // 'admin' | 'staff' | 'tenant'
+    required String email,
+    required String userId,
+    required String password,
+    String? staffDepartment,        // staff only
+    String? buildingUnitId,         // tenant only
+  }) async {
+    final body = <String, dynamic>{
+      'role': role.toLowerCase(),
+      'email': email,
+      'user_id': userId,
+      'password': password,
+    };
+    if (role.toLowerCase() == 'staff' && staffDepartment != null) {
+      body['staffDepartment'] = staffDepartment;
+    }
+    if (role.toLowerCase() == 'tenant' && buildingUnitId != null) {
+      body['buildingUnitId'] = buildingUnitId;
+    }
+
+    return postJson('/auth/login', jsonBody: body);
+  }
+
+  /// Example for protected calls using id_token (JWT).
+  Future<Map<String, dynamic>> me(String idToken) {
+    return getJson(
+      '/auth/me',
+      headers: {
+        'Authorization': 'Bearer $idToken',
+        'Content-Type': 'application/json',
+      },
+    );
+  }
+
+  /// Added method to fetch user profile (based on the incomplete code at the end)
+  Future<Map<String, dynamic>?> getUserProfile() async {
+    try {
+      final token = await AuthStorage.getToken();
+      if (token == null) return null;
+      
+      final response = await get(
+        '/user/profile',
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+      
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        if (jsonResponse['success'] == true) {
+          return jsonResponse['data'];
+        }
+      }
+    } catch (e) {
+      print('Error fetching user profile: $e');
+    }
+    return null;
   }
 }
+
+// /// Update user profile
+// Future<Map<String, dynamic>> updateProfile({
+//   required String token,
+//   String? firstName,
+//   String? lastName,
+//   String? email,
+//   String? phoneNumber,
+//   String? birthDate,
+//   String? department,
+// }) async {
+//   final body = {
+//     if (firstName != null) 'first_name': firstName,
+//     if (lastName != null) 'last_name': lastName,
+//     if (email != null) 'email': email,
+//     if (phoneNumber != null) 'phone_number': phoneNumber,
+//     if (birthDate != null) 'birthdate': birthDate,
+//     if (department != null) 'department': department,
+//   };
+
+//   try {
+//     final response = await put(
+//       '/user/profile', // Adjust this endpoint based on your API
+//       headers: {
+//         'Authorization': 'Bearer $token',
+//         'Content-Type': 'application/json',
+//       },
+//       body: jsonEncode(body),
+//     );
+
+//     if (response.statusCode >= 200 && response.statusCode < 300) {
+//       return jsonDecode(response.body) as Map<String, dynamic>;
+//     } else {
+//       throw Exception('Failed to update profile: ${response.statusCode} ${response.body}');
+//     }
+//   } catch (e) {
+//     throw Exception('Profile update failed: $e');
+//   }
+// }

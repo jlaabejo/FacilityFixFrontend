@@ -15,11 +15,7 @@ class InputField extends StatelessWidget {
   final int maxLines;
   final bool readOnly;
   final VoidCallback? onTap;
-
-  /// External error message (drives red border + our custom caption)
   final String? errorText;
-
-  /// Optional input formatters (e.g. for numbers only, uppercase, etc.)
   final List<TextInputFormatter>? inputFormatters;
 
   // ---- Styles & helpers ----
@@ -549,6 +545,12 @@ class DropdownField<T> extends StatefulWidget {
   /// Inline "Others" text field controller (shown when selection equals 'Others')
   final TextEditingController? otherController;
 
+  /// OPTIONAL: compact layout like TextField.decoration.isDense
+  final bool? isDense;
+
+  /// OPTIONAL: override internal padding of the field
+  final EdgeInsetsGeometry? contentPadding;
+
   const DropdownField({
     super.key,
     required this.label,
@@ -569,6 +571,9 @@ class DropdownField<T> extends StatefulWidget {
     this.suffixIcon,
     // others
     this.otherController,
+    // NEW optional sizing controls
+    this.isDense,
+    this.contentPadding,
   });
 
   @override
@@ -613,11 +618,17 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
     required Widget? prefixIcon,
     required Widget? suffixIcon,
   }) {
+    // If caller didn’t provide, fall back to comfy defaults
+    final bool dense = widget.isDense ?? true;
+    final EdgeInsetsGeometry padding =
+        widget.contentPadding ??
+        EdgeInsets.symmetric(horizontal: 16, vertical: dense ? 10 : 14);
+
     return InputDecoration(
       hintText: hintText,
       hintStyle: _hintStyle,
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      isDense: dense,
+      contentPadding: padding,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Color(0xFF475467)),
@@ -630,12 +641,10 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Color(0xFF005CE7), width: 1.5),
       ),
-      // Red when invalid and not focused:
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Color(0xFFD92D20), width: 1.5),
       ),
-      // Keep blue when focused even if invalid:
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Color(0xFF005CE7), width: 1.5),
@@ -747,8 +756,7 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
   Widget build(BuildContext context) {
     final hint = widget.hintText ?? 'Select ${widget.label}...';
 
-    // We hide Flutter's built-in error text and render our own below.
-    // Non-null validator (' ') triggers the error border visually.
+    // Hide Flutter’s default error text (we show our own caption below)
     String? _requiredValidator(Object? val, {bool isMulti = false}) {
       if (!widget.isRequired) return null;
       if (isMulti) {
@@ -764,16 +772,15 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Label (NO ASTERISK)
           Text(widget.label, style: _titleStyle),
           const SizedBox(height: 8),
 
-          // ===== SINGLE-SELECT =====
+          // SINGLE-SELECT
           if (!widget.isMultiSelect)
             DropdownButtonFormField<T>(
               value: widget.value,
               isExpanded: true,
-              isDense: false,
+              isDense: widget.isDense ?? false, // optional
               alignment: AlignmentDirectional.centerStart,
               menuMaxHeight: 320,
               style: _valueStyle,
@@ -781,8 +788,10 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
               dropdownColor: Colors.white,
               autovalidateMode: AutovalidateMode.always,
               items: widget.items
-                  .map((item) =>
-                      DropdownMenuItem<T>(value: item, child: Text(item.toString(), style: _itemStyle)))
+                  .map((item) => DropdownMenuItem<T>(
+                        value: item,
+                        child: Text(item.toString(), style: _itemStyle),
+                      ))
                   .toList(),
               onChanged: (val) {
                 setState(() => _showOtherInput = _isOthers(val));
@@ -794,11 +803,11 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
                 prefixIcon: widget.prefixIcon,
                 suffixIcon: widget.suffixIcon,
               ).copyWith(
-                errorStyle: const TextStyle(fontSize: 0, height: 0), // hide default helper
+                errorStyle: const TextStyle(fontSize: 0, height: 0),
               ),
             ),
 
-          // ===== MULTI-SELECT (read-only shell that opens a dialog) =====
+          // MULTI-SELECT shell (opens dialog)
           if (widget.isMultiSelect)
             TextFormField(
               readOnly: true,
@@ -808,8 +817,8 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
               decoration: _decoration(
                 hintText: hint,
                 prefixIcon: widget.prefixIcon,
-                suffixIcon: widget.suffixIcon ??
-                    const Icon(Icons.arrow_drop_down, color: Color(0xFF475467)),
+                suffixIcon:
+                    widget.suffixIcon ?? const Icon(Icons.arrow_drop_down, color: Color(0xFF475467)),
               ).copyWith(
                 errorStyle: const TextStyle(fontSize: 0, height: 0),
               ),
@@ -825,7 +834,7 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
               },
             ),
 
-          // ===== “Others” inline input (only when needed) =====
+          // “Others” inline input
           if (_showOtherInput && widget.otherController != null) ...[
             const SizedBox(height: 12),
             TextFormField(
@@ -840,7 +849,6 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
                 errorStyle: const TextStyle(fontSize: 0, height: 0),
               ),
               validator: (v) {
-                // If "Others" is chosen, require some text
                 if (_showOtherInput && (v == null || v.trim().isEmpty)) {
                   return ' ';
                 }
@@ -849,16 +857,16 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
             ),
           ],
 
-          // ===== Custom error caption (only when invalid) =====
+          // Custom error caption (only when invalid)
           Builder(
-            builder: (context) {
-              final formFieldState = Form.of(context);
-              // We compute invalid state by running the same condition again:
+            builder: (_) {
               final isInvalid = widget.isRequired &&
                   ((widget.isMultiSelect
                           ? ((widget.selectedValues ?? const []).isEmpty)
                           : widget.value == null) ||
-                      (_showOtherInput && widget.otherController != null && (widget.otherController!.text.trim().isEmpty)));
+                      (_showOtherInput &&
+                          widget.otherController != null &&
+                          (widget.otherController!.text.trim().isEmpty)));
 
               if (!isInvalid) return const SizedBox.shrink();
               return Padding(

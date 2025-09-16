@@ -39,7 +39,7 @@ class UserRegistrationRequest {
     required this.role,
     this.buildingId,
     this.unitId,
-    this.department,
+    this.department, String? staffId,
   });
 
   Map<String, dynamic> toJson() {

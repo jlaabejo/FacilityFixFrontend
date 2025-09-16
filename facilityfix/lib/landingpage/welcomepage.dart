@@ -2,10 +2,10 @@ import 'package:facilityfix/landingpage/choose.dart';
 import 'package:facilityfix/landingpage/login_or_signup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:facilityfix/services/api_services.dart'; // 👈 ping here
+import 'package:facilityfix/services/api_services.dart'; 
 
 class WelcomePage extends StatefulWidget {
-  const WelcomePage({super.key});
+  const WelcomePage({super.key, String? lanIp});
 
   @override
   State<WelcomePage> createState() => _WelcomePageState();

@@ -1,14 +1,15 @@
-// lib/config/env.dart
-import 'dart:io';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 
 enum AppRole { tenant, staff, admin }
 
 class AppEnv {
   static AppRole role = AppRole.tenant;
 
-  // I already change
-  static const _WEB_API = 'http://10.243.215.130:8000'; 
+  /// When testing on a physical device, set this to your laptop’s LAN IP.
+  /// Example: '192.168.1.84' (Make sure backend runs with --host 0.0.0.0)
+  static String? lanIp = '192.168.1.84';
+
+  static const String _WEB_API = 'http://localhost:8000';
 
   static const Map<AppRole, String> _webHosts = {
     AppRole.tenant: _WEB_API,
@@ -22,19 +23,31 @@ class AppEnv {
     AppRole.admin:  'http://10.0.2.2:8000',
   };
 
-  static const Map<AppRole, String> _iosSimHosts = {
-    AppRole.tenant: 'http://127.0.0.1:8000',
-    AppRole.staff:  'http://127.0.0.1:8000',
-    AppRole.admin:  'http://127.0.0.1:8000',
+  static Map<AppRole, String> _deviceHosts(String ip) => {
+    AppRole.tenant: 'http://192.168.1.84:8000',
+    AppRole.staff:  'http://192.168.1.84:8000',
+    AppRole.admin:  'http://192.168.1.84:8000',
   };
 
-  static const String _lanHost = _WEB_API; // fallback
+  /// Default per-platform base URL (localhost for web/desktop, emulator loopback, etc.)
+  static String baseUrlFor(AppRole role) {
+    if (kIsWeb) return _webHosts[role]!;
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        // Android emulator → 10.0.2.2 (maps to host's localhost)
+        return _androidEmuHosts[role]!;
+      case TargetPlatform.iOS:
+        // iOS simulator can use localhost
+        return 'http://localhost:8000';
+      default:
+        // Windows/macOS/Linux desktop apps
+        return _webHosts[role]!;
+    }
+  }
 
-  static String resolveBaseUrl({AppRole? overrideRole}) {
-    final r = overrideRole ?? role;
-    if (kIsWeb) return _webHosts[r]!;
-    if (Platform.isAndroid) return _androidEmuHosts[r]!;
-    if (Platform.isIOS) return _iosSimHosts[r]!;
-    return _lanHost;
+  /// Prefer LAN IP only when explicitly set (for physical devices)
+  static String baseUrlWithLan(AppRole role) {
+    if (lanIp == null || lanIp!.isEmpty) return baseUrlFor(role);
+    return _deviceHosts(lanIp!)[role]!;
   }
 }
