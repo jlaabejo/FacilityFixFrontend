@@ -1,5 +1,6 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:http/http.dart' as http;
 import '../models/api_models.dart';
 
@@ -9,17 +10,18 @@ class FacilityFixAPIService {
   String? _authToken;
 
   FacilityFixAPIService({http.Client? client, String? lanIp})
-      : _client = client ?? http.Client() {
+    : _client = client ?? http.Client() {
     if (kIsWeb) {
       // Web app running on the same PC as backend
       baseUrl = 'http://localhost:8000';
     } else if (defaultTargetPlatform == TargetPlatform.android) {
       // Android:
       // - emulator: 10.0.2.2
-      // - real device on Wi-Fi: pass your PC's LAN IP (could be change based sa mag oopen ng backend nad front at the same time) 
-      baseUrl = (lanIp != null && lanIp.isNotEmpty)
-          ? 'http://192.168.1.84:8000'   // provided LAN IP
-          : 'http://10.0.2.2:8000'; // emulator default
+      // - real device on Wi-Fi: pass your PC's LAN IP (could be change based sa mag oopen ng backend nad front at the same time)
+      baseUrl =
+          (lanIp != null && lanIp.isNotEmpty)
+              ? 'http://192.168.18.10:8000' // provided LAN IP
+              : 'http://10.0.2.2:8000'; // emulator default
     } else if (defaultTargetPlatform == TargetPlatform.iOS) {
       // iOS simulator shares host network
       baseUrl = 'http://localhost:8000';
@@ -29,10 +31,12 @@ class FacilityFixAPIService {
     }
 
     // ignore: avoid_print
-    print('[FacilityFix] APIService initialized with baseUrl: $baseUrl (kIsWeb=$kIsWeb, platform=$defaultTargetPlatform)');
+    print(
+      '[FacilityFix] APIService initialized with baseUrl: $baseUrl (kIsWeb=$kIsWeb, platform=$defaultTargetPlatform)',
+    );
   }
 
-  // Auth token management 
+  // Auth token management
   void setAuthToken(String token) {
     _authToken = token;
     // ignore: avoid_print
@@ -55,15 +59,19 @@ class FacilityFixAPIService {
     return headers;
   }
 
-  // Connectivity 
+  // Connectivity
   Future<bool> testConnection() async {
     try {
       final uri = Uri.parse('$baseUrl/health'); // prefer /health
       // ignore: avoid_print
       print('[FacilityFix] Testing connection: $uri');
-      final response = await _client.get(uri).timeout(const Duration(seconds: 5));
+      final response = await _client
+          .get(uri)
+          .timeout(const Duration(seconds: 5));
       // ignore: avoid_print
-      print('[FacilityFix] /health status: ${response.statusCode} body: ${response.body}');
+      print(
+        '[FacilityFix] /health status: ${response.statusCode} body: ${response.body}',
+      );
       return response.statusCode == 200;
     } catch (e) {
       // ignore: avoid_print
@@ -85,11 +93,15 @@ class FacilityFixAPIService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final authResponse = AuthResponse.fromJson(data); // expects accessToken, tokenType
+        final authResponse = AuthResponse.fromJson(
+          data,
+        ); // expects accessToken, tokenType
         setAuthToken(authResponse.accessToken);
         return authResponse;
       }
-      throw Exception('Failed to exchange token: ${response.statusCode} ${response.body}');
+      throw Exception(
+        'Failed to exchange token: ${response.statusCode} ${response.body}',
+      );
     } catch (e) {
       // ignore: avoid_print
       print('[FacilityFix] Error during token exchange: $e');
@@ -111,7 +123,9 @@ class FacilityFixAPIService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return UserResponse.fromJson(data);
       }
-      throw Exception('Failed to register user: ${response.statusCode} ${response.body}');
+      throw Exception(
+        'Failed to register user: ${response.statusCode} ${response.body}',
+      );
     } catch (e) {
       // ignore: avoid_print
       print('[FacilityFix] Error during user registration: $e');
@@ -120,7 +134,9 @@ class FacilityFixAPIService {
   }
 
   // REPAIR REQUESTS
-  Future<RepairRequestResponse> submitRepairRequest(RepairRequestSubmission request) async {
+  Future<RepairRequestResponse> submitRepairRequest(
+    RepairRequestSubmission request,
+  ) async {
     try {
       final response = await _client.post(
         Uri.parse('$baseUrl/repair-requests/'),
@@ -128,13 +144,17 @@ class FacilityFixAPIService {
         body: jsonEncode(request.toJson()),
       );
       // ignore: avoid_print
-      print('[FacilityFix] Submit repair request response: ${response.statusCode}');
+      print(
+        '[FacilityFix] Submit repair request response: ${response.statusCode}',
+      );
 
       if (response.statusCode == 201) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return RepairRequestResponse.fromJson(data);
       }
-      throw Exception('Failed to submit repair request: ${response.statusCode} ${response.body}');
+      throw Exception(
+        'Failed to submit repair request: ${response.statusCode} ${response.body}',
+      );
     } catch (e) {
       // ignore: avoid_print
       print('[FacilityFix] Error submitting repair request: $e');
@@ -142,20 +162,26 @@ class FacilityFixAPIService {
     }
   }
 
-  Future<List<RepairRequestResponse>> getUserRepairRequests(String userId) async {
+  Future<List<RepairRequestResponse>> getUserRepairRequests(
+    String userId,
+  ) async {
     try {
       final response = await _client.get(
         Uri.parse('$baseUrl/repair-requests/$userId'),
         headers: _headers,
       );
-    // ignore: avoid_print
-      print('[FacilityFix] Get user repair requests response: ${response.statusCode}');
+      // ignore: avoid_print
+      print(
+        '[FacilityFix] Get user repair requests response: ${response.statusCode}',
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as List;
         return data.map((e) => RepairRequestResponse.fromJson(e)).toList();
       }
-      throw Exception('Failed to get repair requests: ${response.statusCode} ${response.body}');
+      throw Exception(
+        'Failed to get repair requests: ${response.statusCode} ${response.body}',
+      );
     } catch (e) {
       // ignore: avoid_print
       print('[FacilityFix] Error getting repair requests: $e');
@@ -170,13 +196,17 @@ class FacilityFixAPIService {
         headers: _headers,
       );
       // ignore: avoid_print
-      print('[FacilityFix] Get all repair requests response: ${response.statusCode}');
+      print(
+        '[FacilityFix] Get all repair requests response: ${response.statusCode}',
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as List;
         return data.map((e) => RepairRequestResponse.fromJson(e)).toList();
       }
-      throw Exception('Failed to get all repair requests: ${response.statusCode} ${response.body}');
+      throw Exception(
+        'Failed to get all repair requests: ${response.statusCode} ${response.body}',
+      );
     } catch (e) {
       // ignore: avoid_print
       print('[FacilityFix] Error getting all repair requests: $e');
@@ -190,20 +220,27 @@ class FacilityFixAPIService {
     String? notes,
   }) async {
     try {
-      final body = <String, dynamic>{'status': status, if (notes != null) 'notes': notes};
+      final body = <String, dynamic>{
+        'status': status,
+        if (notes != null) 'notes': notes,
+      };
       final response = await _client.patch(
         Uri.parse('$baseUrl/repair-requests/$requestId/status'),
         headers: _headers,
         body: jsonEncode(body),
       );
       // ignore: avoid_print
-      print('[FacilityFix] Update repair request status response: ${response.statusCode}');
+      print(
+        '[FacilityFix] Update repair request status response: ${response.statusCode}',
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return RepairRequestResponse.fromJson(data);
       }
-      throw Exception('Failed to update repair request status: ${response.statusCode} ${response.body}');
+      throw Exception(
+        'Failed to update repair request status: ${response.statusCode} ${response.body}',
+      );
     } catch (e) {
       // ignore: avoid_print
       print('[FacilityFix] Error updating repair request status: $e');
@@ -226,7 +263,9 @@ class FacilityFixAPIService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return WorkOrderResponse.fromJson(data);
       }
-      throw Exception('Failed to create work order: ${response.statusCode} ${response.body}');
+      throw Exception(
+        'Failed to create work order: ${response.statusCode} ${response.body}',
+      );
     } catch (e) {
       // ignore: avoid_print
       print('[FacilityFix] Error creating work order: $e');
@@ -241,13 +280,17 @@ class FacilityFixAPIService {
         headers: _headers,
       );
       // ignore: avoid_print
-      print('[FacilityFix] Get assigned work orders response: ${response.statusCode}');
+      print(
+        '[FacilityFix] Get assigned work orders response: ${response.statusCode}',
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as List;
         return data.map((e) => WorkOrderResponse.fromJson(e)).toList();
       }
-      throw Exception('Failed to get assigned work orders: ${response.statusCode} ${response.body}');
+      throw Exception(
+        'Failed to get assigned work orders: ${response.statusCode} ${response.body}',
+      );
     } catch (e) {
       // ignore: avoid_print
       print('[FacilityFix] Error getting assigned work orders: $e');
@@ -261,20 +304,27 @@ class FacilityFixAPIService {
     String? notes,
   }) async {
     try {
-      final body = <String, dynamic>{'status': status, if (notes != null) 'notes': notes};
+      final body = <String, dynamic>{
+        'status': status,
+        if (notes != null) 'notes': notes,
+      };
       final response = await _client.patch(
         Uri.parse('$baseUrl/api/work-orders/$workOrderId/status'),
         headers: _headers,
         body: jsonEncode(body),
       );
       // ignore: avoid_print
-      print('[FacilityFix] Update work order status response: ${response.statusCode}');
+      print(
+        '[FacilityFix] Update work order status response: ${response.statusCode}',
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return WorkOrderResponse.fromJson(data);
       }
-      throw Exception('Failed to update work order status: ${response.statusCode} ${response.body}');
+      throw Exception(
+        'Failed to update work order status: ${response.statusCode} ${response.body}',
+      );
     } catch (e) {
       // ignore: avoid_print
       print('[FacilityFix] Error updating work order status: $e');
@@ -282,7 +332,7 @@ class FacilityFixAPIService {
     }
   }
 
-  //  USERS 
+  //  USERS
   Future<List<UserResponse>> getAllUsers() async {
     try {
       final response = await _client.get(
@@ -296,7 +346,9 @@ class FacilityFixAPIService {
         final data = jsonDecode(response.body) as List;
         return data.map((e) => UserResponse.fromJson(e)).toList();
       }
-      throw Exception('Failed to get users: ${response.statusCode} ${response.body}');
+      throw Exception(
+        'Failed to get users: ${response.statusCode} ${response.body}',
+      );
     } catch (e) {
       // ignore: avoid_print
       print('[FacilityFix] Error getting users: $e');
@@ -317,7 +369,9 @@ class FacilityFixAPIService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return UserResponse.fromJson(data);
       }
-      throw Exception('Failed to get user: ${response.statusCode} ${response.body}');
+      throw Exception(
+        'Failed to get user: ${response.statusCode} ${response.body}',
+      );
     } catch (e) {
       // ignore: avoid_print
       print('[FacilityFix] Error getting user: $e');
@@ -325,7 +379,10 @@ class FacilityFixAPIService {
     }
   }
 
-  Future<UserResponse> updateUser(String userId, UserUpdateRequest request) async {
+  Future<UserResponse> updateUser(
+    String userId,
+    UserUpdateRequest request,
+  ) async {
     try {
       final response = await _client.put(
         Uri.parse('$baseUrl/users/$userId'),
@@ -339,7 +396,9 @@ class FacilityFixAPIService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return UserResponse.fromJson(data);
       }
-      throw Exception('Failed to update user: ${response.statusCode} ${response.body}');
+      throw Exception(
+        'Failed to update user: ${response.statusCode} ${response.body}',
+      );
     } catch (e) {
       // ignore: avoid_print
       print('[FacilityFix] Error updating user: $e');
@@ -347,7 +406,7 @@ class FacilityFixAPIService {
     }
   }
 
-  //  DB Utils 
+  //  DB Utils
   Future<bool> testDatabaseConnection() async {
     try {
       final response = await _client.get(
@@ -355,7 +414,9 @@ class FacilityFixAPIService {
         headers: _headers,
       );
       // ignore: avoid_print
-      print('[FacilityFix] Test database connection response: ${response.statusCode}');
+      print(
+        '[FacilityFix] Test database connection response: ${response.statusCode}',
+      );
       return response.statusCode == 200;
     } catch (e) {
       // ignore: avoid_print
@@ -371,12 +432,65 @@ class FacilityFixAPIService {
         headers: _headers,
       );
       // ignore: avoid_print
-      print('[FacilityFix] Initialize sample data response: ${response.statusCode}');
+      print(
+        '[FacilityFix] Initialize sample data response: ${response.statusCode}',
+      );
       return response.statusCode == 200;
     } catch (e) {
       // ignore: avoid_print
       print('[FacilityFix] Error initializing sample data: $e');
       return false;
+    }
+  }
+
+  Future<Map<String, dynamic>> getCurrentUserProfile(String token) async {
+    try {
+      final response = await _client.get(
+        Uri.parse('$baseUrl/auth/profile'),
+        headers: {
+          'Content-Type': 'application/json; charset=UTF-8',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      print(
+        '[FacilityFix] Get current user profile response: ${response.statusCode}',
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return data;
+      }
+      throw Exception(
+        'Failed to get user profile: ${response.statusCode} ${response.body}',
+      );
+    } catch (e) {
+      print('[FacilityFix] Error getting user profile: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAllConcernSlips() async {
+    try {
+      final response = await _client.get(
+        Uri.parse('$baseUrl/concern-slips/'),
+        headers: _headers,
+      );
+
+      print(
+        '[FacilityFix] Get all concern slips response: ${response.statusCode}',
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as List;
+        return data.cast<Map<String, dynamic>>();
+      }
+      throw Exception(
+        'Failed to get concern slips: ${response.statusCode} ${response.body}',
+      );
+    } catch (e) {
+      print('[FacilityFix] Error getting concern slips: $e');
+      rethrow;
     }
   }
 

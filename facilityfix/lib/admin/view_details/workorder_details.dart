@@ -12,8 +12,13 @@ import 'package:facilityfix/admin/inventory.dart';
 
 class WorkOrderDetailsPage extends StatefulWidget {
   final String selectedTabLabel;
+  final Map<String, dynamic>? concernSlipData;
 
-  const WorkOrderDetailsPage({super.key, required this.selectedTabLabel});
+  const WorkOrderDetailsPage({
+    super.key,
+    required this.selectedTabLabel,
+    this.concernSlipData,
+  });
 
   @override
   State<WorkOrderDetailsPage> createState() => _WorkOrderDetailsPageState();
@@ -42,24 +47,76 @@ class _WorkOrderDetailsPageState extends State<WorkOrderDetailsPage> {
 
   // Base type flags
   bool get _isConcernSlip => _kind.startsWith('concern slip');
-  bool get _isJobService  => _kind.startsWith('job service');
-  bool get _isWorkPermit  => _kind.startsWith('work order');
+  bool get _isJobService => _kind.startsWith('job service');
+  bool get _isWorkPermit => _kind.startsWith('work order');
   bool get _isMaintenance => _kind == 'maintenance';
 
   // --- Granular status flags (used ONLY to decide if sticky actions show) ---
   // Concern Slip
-  bool get _isConcernSlipPending  => _kind == 'concern slip';
+  bool get _isConcernSlipPending => _kind == 'concern slip';
   bool get _isConcernSlipAssigned => _kind == 'concern slip assigned';
-  bool get _isConcernSlipDone     => _kind == 'concern slip assessed' || _kind == 'assessed concern slip';
+  bool get _isConcernSlipDone =>
+      _kind == 'concern slip assessed' || _kind == 'assessed concern slip';
 
   // Job Service
-  bool get _isJobServicePending  => _kind == 'job service';
+  bool get _isJobServicePending => _kind == 'job service';
   bool get _isJobServiceAssigned => _kind == 'job service assigned';
-  bool get _isJobServiceDone     => _kind == 'job service assessed';
+  bool get _isJobServiceDone => _kind == 'job service assessed';
 
   // Work Order
-  bool get _isWorkOrderPending  => _kind == 'work order';
+  bool get _isWorkOrderPending => _kind == 'work order';
   bool get _isWorkOrderApproved => _kind == 'work order approved';
+
+  String _formatDate(dynamic dateStr) {
+    if (dateStr == null) return 'N/A';
+    try {
+      final date = DateTime.parse(dateStr.toString());
+      return '${date.month}/${date.day}/${date.year}';
+    } catch (e) {
+      return 'N/A';
+    }
+  }
+
+  String _formatStatus(String? status) {
+    switch (status?.toLowerCase()) {
+      case 'pending':
+        return 'Pending';
+      case 'in_progress':
+        return 'In Progress';
+      case 'completed':
+        return 'Done';
+      default:
+        return 'Pending';
+    }
+  }
+
+  String _formatPriority(String? priority) {
+    switch (priority?.toLowerCase()) {
+      case 'high':
+        return 'High';
+      case 'medium':
+        return 'Medium';
+      case 'low':
+        return 'Low';
+      default:
+        return 'Medium';
+    }
+  }
+
+  String _formatCategory(String? category) {
+    switch (category?.toLowerCase()) {
+      case 'plumbing':
+        return 'Plumbing';
+      case 'electrical':
+        return 'Electrical';
+      case 'hvac':
+        return 'HVAC';
+      case 'general':
+        return 'General';
+      default:
+        return 'General';
+    }
+  }
 
   // ---------------- Bottom Nav ----------------
   final List<NavItem> _navItems = const [
@@ -89,82 +146,109 @@ class _WorkOrderDetailsPageState extends State<WorkOrderDetailsPage> {
 
   // ---------------- Builder for detail body ----------------
   Widget _buildDetails() {
+    final data = widget.concernSlipData;
+
     switch (_kind) {
       // ---------- Concern Slip ----------
       // Concern Slip (Default)
       case 'concern slip':
         return RepairDetailsScreen(
-          // Basic Information (ALL required fields provided)
-          title: "Leaking Faucet",
-          requestId: "CS-2025-00123",
-          reqDate: "August 2, 2025",
+          title: data?['title'] ?? "Leaking Faucet",
+          requestId: data?['id'] ?? "CS-2025-00123",
+          reqDate:
+              data != null ? _formatDate(data['created_at']) : "August 2, 2025",
           requestType: "Concern Slip",
-          statusTag: 'Pending',
+          statusTag: data != null ? _formatStatus(data['status']) : 'Pending',
 
-          // Requester
-          requestedBy: 'Erika De Guzman',
-          unit: "A 1001",
-          scheduleAvailability: "August 19, 2025 2:30 PM",
+          // Requester - using placeholder since user data not in concern_slips table
+          requestedBy: 'Tenant User',
+          unit: data?['unit_id'] ?? "A 1001",
+          scheduleAvailability:
+              data != null
+                  ? _formatDate(data['created_at'])
+                  : "August 19, 2025 2:30 PM",
 
-          // Request Details (description is required)
-          description: "I’d like to report a clogged drainage issue in the bathroom.",
-          attachments: const ["assets/images/upload1.png", "assets/images/upload2.png"],
+          // Request Details
+          description:
+              data?['description'] ??
+              "I'd like to report a clogged drainage issue in the bathroom.",
+          attachments:
+              data?['attachments']?.cast<String>() ??
+              const ["assets/images/upload1.png", "assets/images/upload2.png"],
         );
 
       // Concern Slip (Assigned)
       case 'concern slip assigned':
         return RepairDetailsScreen(
-          // Basic Information
-          title: "Leaking Faucet",
-          requestId: "CS-2025-00123",
-          reqDate: "August 2, 2025",
+          title: data?['title'] ?? "Leaking Faucet",
+          requestId: data?['id'] ?? "CS-2025-00123",
+          reqDate:
+              data != null ? _formatDate(data['created_at']) : "August 2, 2025",
           requestType: "Concern Slip",
-          statusTag: 'Assigned',
-          priority: 'High',
+          statusTag: data != null ? _formatStatus(data['status']) : 'Assigned',
+          priority: data != null ? _formatPriority(data['priority']) : 'High',
 
           // Requestor Details
-          requestedBy: 'Erika De Guzman',
-          unit: "A 1001",
-          scheduleAvailability: "August 19, 2025 2:30 PM",
+          requestedBy: 'Tenant User',
+          unit: data?['unit_id'] ?? "A 1001",
+          scheduleAvailability:
+              data != null
+                  ? _formatDate(data['created_at'])
+                  : "August 19, 2025 2:30 PM",
 
           // Request Details
-          description: "I’d like to report a clogged drainage issue in the bathroom.",
-          attachments: const ["assets/images/upload1.png", "assets/images/upload2.png"],
+          description:
+              data?['description'] ??
+              "I'd like to report a clogged drainage issue in the bathroom.",
+          attachments:
+              data?['attachments']?.cast<String>() ??
+              const ["assets/images/upload1.png", "assets/images/upload2.png"],
 
-          // Assignment
+          // Assignment - using placeholder data since assignment info not in current schema
           assignedTo: 'Juan Dela Cruz',
-          assignedDepartment: 'Plumbing',
+          assignedDepartment:
+              data != null ? _formatCategory(data['category']) : 'Plumbing',
           assignedSchedule: 'August 20, 2025 9:00 AM',
         );
 
       // Concern Slip (Assessed)
       case 'concern slip assessed':
         return RepairDetailsScreen(
-          // Basic Information
-          title: "Leaking Faucet",
-          requestId: "CS-2025-00123",
-          reqDate: "August 2, 2025",
+          title: data?['title'] ?? "Leaking Faucet",
+          requestId: data?['id'] ?? "CS-2025-00123",
+          reqDate:
+              data != null ? _formatDate(data['created_at']) : "August 2, 2025",
           requestType: "Concern Slip",
-          statusTag: 'Done',
-          priority: 'High',
+          statusTag: data != null ? _formatStatus(data['status']) : 'Done',
+          priority: data != null ? _formatPriority(data['priority']) : 'High',
 
           // Requestor Details
-          requestedBy: 'Erika De Guzman',
-          unit: "A 1001",
-          scheduleAvailability: "August 19, 2025 2:30 PM",
+          requestedBy: 'Tenant User',
+          unit: data?['unit_id'] ?? "A 1001",
+          scheduleAvailability:
+              data != null
+                  ? _formatDate(data['created_at'])
+                  : "August 19, 2025 2:30 PM",
 
           // Request Details
-          description: "I’d like to report a clogged drainage issue in the bathroom.",
-          attachments: const ["assets/images/upload1.png", "assets/images/upload2.png"],
+          description:
+              data?['description'] ??
+              "I'd like to report a clogged drainage issue in the bathroom.",
+          attachments:
+              data?['attachments']?.cast<String>() ??
+              const ["assets/images/upload1.png", "assets/images/upload2.png"],
 
-          // Assessed By
+          // Assessed By - using placeholder since assessment data not in current schema
           initialAssigneeName: 'Juan Dela Cruz',
-          initialAssigneeDepartment: 'Plumbing',
+          initialAssigneeDepartment:
+              data != null ? _formatCategory(data['category']) : 'Plumbing',
           initialDateAssessed: 'August 20, 2025',
 
           // Assessment and Recommendation
-          initialAssessment: 'Drainage is clogged due to accumulated debris.',
-          initialRecommendation: 'Perform professional cleaning; consider replacing the drainage cover.',
+          initialAssessment:
+              'Issue has been resolved according to the reported description.',
+          initialRecommendation:
+              'Regular maintenance recommended to prevent future occurrences.',
           initialAssessedAttachments: const ["assets/images/upload2.png"],
         );
 
@@ -172,16 +256,20 @@ class _WorkOrderDetailsPageState extends State<WorkOrderDetailsPage> {
       // Job Service (Default)
       case 'job service':
         return RepairDetailsScreen(
-          title: "Leaking Faucet",
-          requestId: "JS-2025-031",
-          reqDate: "August 2, 2025",
+          title: data?['title'] ?? "Leaking Faucet",
+          requestId: data?['id'] ?? "JS-2025-031",
+          reqDate:
+              data != null ? _formatDate(data['created_at']) : "August 2, 2025",
           requestType: "Job Service",
-          statusTag: 'Pending',
-          priority: 'High',
+          statusTag: data != null ? _formatStatus(data['status']) : 'Pending',
+          priority: data != null ? _formatPriority(data['priority']) : 'High',
 
           requestedBy: 'Erika De Guzman',
-          unit: "A 1001",
-          scheduleAvailability: "August 19, 2025 2:30 PM",
+          unit: data?['unit_id'] ?? "A 1001",
+          scheduleAvailability:
+              data != null
+                  ? _formatDate(data['created_at'])
+                  : "August 19, 2025 2:30 PM",
 
           jobServiceNotes: "Please expedite; recurring issue.",
         );
@@ -189,67 +277,84 @@ class _WorkOrderDetailsPageState extends State<WorkOrderDetailsPage> {
       // Job Service (Assigned)
       case 'job service assigned':
         return RepairDetailsScreen(
-          title: "Leaking Faucet",
-          requestId: "JS-2025-031",
-          reqDate: "August 2, 2025",
+          title: data?['title'] ?? "Leaking Faucet",
+          requestId: data?['id'] ?? "JS-2025-031",
+          reqDate:
+              data != null ? _formatDate(data['created_at']) : "August 2, 2025",
           requestType: "Job Service",
-          statusTag: 'Assigned',
-          priority: 'High',
+          statusTag: data != null ? _formatStatus(data['status']) : 'Assigned',
+          priority: data != null ? _formatPriority(data['priority']) : 'High',
 
           requestedBy: 'Erika De Guzman',
-          unit: "A 1001",
-          scheduleAvailability: "August 19, 2025 2:30 PM",
+          unit: data?['unit_id'] ?? "A 1001",
+          scheduleAvailability:
+              data != null
+                  ? _formatDate(data['created_at'])
+                  : "August 19, 2025 2:30 PM",
 
           jobServiceNotes: "Please expedite; recurring issue.",
 
           assignedTo: 'Juan Dela Cruz',
-          assignedDepartment: 'Plumbing',
+          assignedDepartment:
+              data != null ? _formatCategory(data['category']) : 'Plumbing',
           assignedSchedule: 'August 20, 2025 9:00 AM',
         );
 
       // Job Service (On Hold)
       case 'job service on hold':
         return RepairDetailsScreen(
-          title: "Leaking Faucet",
-          requestId: "JS-2025-034",
-          reqDate: "August 2, 2025",
+          title: data?['title'] ?? "Leaking Faucet",
+          requestId: data?['id'] ?? "JS-2025-034",
+          reqDate:
+              data != null ? _formatDate(data['created_at']) : "August 2, 2025",
           requestType: "Job Service",
           statusTag: 'On Hold',
-          priority: 'High',
+          priority: data != null ? _formatPriority(data['priority']) : 'High',
 
           requestedBy: 'Erika De Guzman',
-          unit: "A 1001",
-          scheduleAvailability: "August 19, 2025 2:30 PM",
+          unit: data?['unit_id'] ?? "A 1001",
+          scheduleAvailability:
+              data != null
+                  ? _formatDate(data['created_at'])
+                  : "August 19, 2025 2:30 PM",
 
           jobServiceNotes: "Please expedite; recurring issue.",
 
           assignedTo: 'Juan Dela Cruz',
-          assignedDepartment: 'Plumbing',
+          assignedDepartment:
+              data != null ? _formatCategory(data['category']) : 'Plumbing',
           assignedSchedule: 'August 20, 2025 9:00 AM',
         );
 
       // Job Service (Assessed)
       case 'job service assessed':
         return RepairDetailsScreen(
-          title: "Leaking Faucet",
-          requestId: "JS-2025-032",
-          reqDate: "August 2, 2025",
+          title: data?['title'] ?? "Leaking Faucet",
+          requestId: data?['id'] ?? "JS-2025-032",
+          reqDate:
+              data != null ? _formatDate(data['created_at']) : "August 2, 2025",
           requestType: "Job Service",
-          statusTag: 'Done',
-          priority: 'High',
+          statusTag: data != null ? _formatStatus(data['status']) : 'Done',
+          priority: data != null ? _formatPriority(data['priority']) : 'High',
 
           requestedBy: 'Erika De Guzman',
-          unit: "A 1001",
-          scheduleAvailability: "August 19, 2025 2:30 PM",
+          unit: data?['unit_id'] ?? "A 1001",
+          scheduleAvailability:
+              data != null
+                  ? _formatDate(data['created_at'])
+                  : "August 19, 2025 2:30 PM",
 
           jobServiceNotes: "Please expedite; recurring issue.",
 
           completionAssigneeName: 'Juan Dela Cruz',
-          completionAssigneeDepartment: 'Plumbing',
+          completionAssigneeDepartment:
+              data != null ? _formatCategory(data['category']) : 'Plumbing',
           completionDateAssessed: 'August 20, 2025 9:00 AM',
 
-          completionAssessment: 'Drainage is clogged due to accumulated debris.',
-          completionRecommendation: 'Perform professional cleaning; consider replacing the drainage cover.',
+          completionAssessment:
+              'Drainage is clogged due to accumulated debris.',
+          completionRecommendation:
+              'Perform professional cleaning; consider replacing the drainage cover.',
           completionAssessedAttachments: const ["assets/images/upload2.png"],
         );
 
@@ -257,18 +362,23 @@ class _WorkOrderDetailsPageState extends State<WorkOrderDetailsPage> {
       // Work Order (Pending/Approved) — sample detail blocks preserved
       case 'work order':
         return RepairDetailsScreen(
-          title: "Leaking Faucet",
-          requestId: "WO-2025-014",
-          reqDate: "August 2, 2025",
+          title: data?['title'] ?? "Leaking Faucet",
+          requestId: data?['id'] ?? "WO-2025-014",
+          reqDate:
+              data != null ? _formatDate(data['created_at']) : "August 2, 2025",
           requestType: "Work Order",
-          statusTag: 'Pending',
-          priority: 'High',
+          statusTag: data != null ? _formatStatus(data['status']) : 'Pending',
+          priority: data != null ? _formatPriority(data['priority']) : 'High',
 
           requestedBy: 'Erika De Guzman',
-          unit: "A 1001",
-          scheduleAvailability: "August 19, 2025 2:30 PM",
+          unit: data?['unit_id'] ?? "A 1001",
+          scheduleAvailability:
+              data != null
+                  ? _formatDate(data['created_at'])
+                  : "August 19, 2025 2:30 PM",
 
-          reqType: 'Plumbing',
+          reqType:
+              data != null ? _formatCategory(data['category']) : 'Plumbing',
           permitId: 'WO-P-77821',
           workScheduleFrom: 'August 31, 2025 | 2 pm',
           workScheduleTo: 'August 31, 2025 | 4 pm',
@@ -277,23 +387,30 @@ class _WorkOrderDetailsPageState extends State<WorkOrderDetailsPage> {
           contractorCompany: 'CoolAir Services PH',
           contractorNumber: '+63 917 555 1234',
 
-          workOrderNotes: "AC unit is not cooling effectively; inspection requested.",
+          workOrderNotes:
+              data?['description'] ??
+              "AC unit is not cooling effectively; inspection requested.",
         );
 
       case 'work order approved':
         return RepairDetailsScreen(
-          title: "Leaking Faucet",
-          requestId: "WO-2025-014",
-          reqDate: "August 2, 2025",
+          title: data?['title'] ?? "Leaking Faucet",
+          requestId: data?['id'] ?? "WO-2025-014",
+          reqDate:
+              data != null ? _formatDate(data['created_at']) : "August 2, 2025",
           requestType: "Work Order",
           statusTag: 'Approved',
-          priority: 'High',
+          priority: data != null ? _formatPriority(data['priority']) : 'High',
 
           requestedBy: 'Erika De Guzman',
-          unit: "A 1001",
-          scheduleAvailability: "August 19, 2025 2:30 PM",
+          unit: data?['unit_id'] ?? "A 1001",
+          scheduleAvailability:
+              data != null
+                  ? _formatDate(data['created_at'])
+                  : "August 19, 2025 2:30 PM",
 
-          reqType: 'Plumbing',
+          reqType:
+              data != null ? _formatCategory(data['category']) : 'Plumbing',
           permitId: 'WO-P-77821',
           workScheduleFrom: 'August 31, 2025 | 2 pm',
           workScheduleTo: 'August 31, 2025 | 4 pm',
@@ -302,51 +419,79 @@ class _WorkOrderDetailsPageState extends State<WorkOrderDetailsPage> {
           contractorCompany: 'CoolAir Services PH',
           contractorNumber: '+63 917 555 1234',
 
-          workOrderNotes: "AC unit is not cooling effectively; inspection requested.",
+          workOrderNotes:
+              data?['description'] ??
+              "AC unit is not cooling effectively; inspection requested.",
         );
 
       // ---------- Maintenance ----------
       case 'maintenance detail':
         return MaintenanceDetailsScreen(
-          title: 'Quarterly Pipe Inspection',
-          requestId: 'MT-P-2025-011',
-          reqDate: 'August 30, 2025',
+          title: data?['title'] ?? 'Quarterly Pipe Inspection',
+          requestId: data?['id'] ?? 'MT-P-2025-011',
+          reqDate:
+              data != null
+                  ? _formatDate(data['created_at'])
+                  : 'August 30, 2025',
           requestType: 'Maintenance Task',
-          statusTag: 'Scheduled',
+          statusTag: data != null ? _formatStatus(data['status']) : 'Scheduled',
 
           // optional blocks
-          location: 'Tower A - 5th Floor',
-          description: 'Routine quarterly inspection of the main water lines on 5F.',
-          checklist: const ['Shut off main valve', 'Inspect joints', 'Check for leaks'],
-          attachments: const ['assets/images/upload1.png'],
+          location: data?['location'] ?? 'Tower A - 5th Floor',
+          description:
+              data?['description'] ??
+              'Routine quarterly inspection of the main water lines on 5F.',
+          checklist: const [
+            'Shut off main valve',
+            'Inspect joints',
+            'Check for leaks',
+          ],
+          attachments:
+              data?['attachments']?.cast<String>() ??
+              const ['assets/images/upload1.png'],
 
           // assigned
           assignedTo: 'Juan Dela Cruz',
-          assignedDepartment: 'Plumbing',
+          assignedDepartment:
+              data != null ? _formatCategory(data['category']) : 'Plumbing',
           assignedSchedule: 'August 30, 2025 10:00 AM',
         );
 
       case 'maintenance assessed':
         return MaintenanceDetailsScreen(
-          title: 'Quarterly Pipe Inspection',
-          requestId: 'MT-P-2025-011',
-          reqDate: 'August 30, 2025',
+          title: data?['title'] ?? 'Quarterly Pipe Inspection',
+          requestId: data?['id'] ?? 'MT-P-2025-011',
+          reqDate:
+              data != null
+                  ? _formatDate(data['created_at'])
+                  : 'August 30, 2025',
           requestType: 'Maintenance Task',
-          statusTag: 'Done',
+          statusTag: data != null ? _formatStatus(data['status']) : 'Done',
 
           // optional blocks
-          location: 'Tower A - 5th Floor',
-          description: 'Routine quarterly inspection of the main water lines on 5F.',
-          checklist: const ['Shut off main valve', 'Inspect joints', 'Check for leaks'],
-          attachments: const ['assets/images/upload1.png'],
+          location: data?['location'] ?? 'Tower A - 5th Floor',
+          description:
+              data?['description'] ??
+              'Routine quarterly inspection of the main water lines on 5F.',
+          checklist: const [
+            'Shut off main valve',
+            'Inspect joints',
+            'Check for leaks',
+          ],
+          attachments:
+              data?['attachments']?.cast<String>() ??
+              const ['assets/images/upload1.png'],
 
           // completion summary
           completionAssigneeName: 'Juan Dela Cruz',
-          completionAssigneeDepartment: 'Plumbing',
+          completionAssigneeDepartment:
+              data != null ? _formatCategory(data['category']) : 'Plumbing',
           completionDateAssessed: 'August 20, 2025 9:00 AM',
 
-          completionAssessment: 'Drainage is clogged due to accumulated debris.',
-          completionRecommendation: 'Perform professional cleaning; consider replacing the drainage cover.',
+          completionAssessment:
+              'Drainage is clogged due to accumulated debris.',
+          completionRecommendation:
+              'Perform professional cleaning; consider replacing the drainage cover.',
           completionAssessedAttachments: const ["assets/images/upload2.png"],
         );
 
@@ -380,20 +525,19 @@ class _WorkOrderDetailsPageState extends State<WorkOrderDetailsPage> {
   }) async {
     return showDialog(
       context: context,
-      builder: (_) => CustomPopup(
-        title: title,
-        message: message,
-        primaryText: primaryText,
-        onPrimaryPressed: () {
-          Navigator.of(context).pop();
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => WorkOrderPage(),
-            ),
-          );
-        },
-      ),
+      builder:
+          (_) => CustomPopup(
+            title: title,
+            message: message,
+            primaryText: primaryText,
+            onPrimaryPressed: () {
+              Navigator.of(context).pop();
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => WorkOrderPage()),
+              );
+            },
+          ),
     );
   }
 
@@ -409,13 +553,14 @@ class _WorkOrderDetailsPageState extends State<WorkOrderDetailsPage> {
 
     await showDialog(
       context: context,
-      builder: (_) => CustomPopup(
-        title: 'Request Rejected',
-        message:
-            'Reason: ${result.reason}${(result.note?.isNotEmpty ?? false) ? "\n\nNote: ${result.note}" : ""}',
-        primaryText: 'OK',
-        onPrimaryPressed: () => Navigator.of(context).pop(),
-      ),
+      builder:
+          (_) => CustomPopup(
+            title: 'Request Rejected',
+            message:
+                'Reason: ${result.reason}${(result.note?.isNotEmpty ?? false) ? "\n\nNote: ${result.note}" : ""}',
+            primaryText: 'OK',
+            onPrimaryPressed: () => Navigator.of(context).pop(),
+          ),
     );
   }
 
@@ -522,7 +667,7 @@ class _WorkOrderDetailsPageState extends State<WorkOrderDetailsPage> {
           tooltip: 'Reject this permit',
         ),
         right: custom_buttons.FilledButton(
-          label: 'Accept', 
+          label: 'Accept',
           icon: Icons.check_circle_outline,
           onPressed: _approvePermit,
           withOuterBorder: false,
@@ -558,9 +703,9 @@ class _WorkOrderDetailsPageState extends State<WorkOrderDetailsPage> {
   Widget _barTwoButtons({required Widget left, required Widget right}) {
     return SafeArea(
       top: false,
-      bottom: false, 
+      bottom: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16), 
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
         decoration: const BoxDecoration(
           color: Colors.white,
           border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),

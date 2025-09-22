@@ -5,12 +5,15 @@ import '../models/api_models.dart';
 class AuthService {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
   final FacilityFixAPIService _apiService = FacilityFixAPIService();
-  
+
   User? get currentUser => _firebaseAuth.currentUser;
   Stream<User?> get authStateChanges => _firebaseAuth.authStateChanges();
 
   // Sign in with email and password
-  Future<AuthResponse> signInWithEmailAndPassword(String email, String password) async {
+  Future<AuthResponse> signInWithEmailAndPassword(
+    String email,
+    String password,
+  ) async {
     try {
       // Sign in with Firebase
       final credential = await _firebaseAuth.signInWithEmailAndPassword(
@@ -23,7 +26,7 @@ class AuthService {
 
       // Exchange token with backend
       final authResponse = await _apiService.exchangeToken(idToken!);
-      
+
       return authResponse;
     } catch (e) {
       print('[FacilityFix] Sign in error: $e');
@@ -73,7 +76,7 @@ class AuthService {
 
       // Exchange token with backend
       final authResponse = await _apiService.exchangeToken(idToken!);
-      
+
       return authResponse;
     } catch (e) {
       print('[FacilityFix] Registration error: $e');
@@ -117,6 +120,21 @@ class AuthService {
     } catch (e) {
       print('[FacilityFix] Refresh auth error: $e');
       throw Exception('Failed to refresh authentication: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> getCurrentUser() async {
+    try {
+      final user = _firebaseAuth.currentUser;
+      if (user != null) {
+        final idToken = await user.getIdToken();
+        final userResponse = await _apiService.getCurrentUserProfile(idToken!);
+        return userResponse;
+      }
+      return null;
+    } catch (e) {
+      print('[FacilityFix] Get current user error: $e');
+      return null;
     }
   }
 }
