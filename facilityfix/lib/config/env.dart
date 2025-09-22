@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 
 enum AppRole { tenant, staff, admin }
 
@@ -7,26 +8,26 @@ class AppEnv {
 
   /// When testing on a physical device, set this to your laptop’s LAN IP.
   /// Example: '192.168.1.84' (Make sure backend runs with --host 0.0.0.0)
-  static String? lanIp = '192.168.1.84';
+  static String? lanIp = '192.168.18.10';
 
   static const String _WEB_API = 'http://localhost:8000';
 
   static const Map<AppRole, String> _webHosts = {
     AppRole.tenant: _WEB_API,
-    AppRole.staff:  _WEB_API,
-    AppRole.admin:  _WEB_API,
+    AppRole.staff: _WEB_API,
+    AppRole.admin: _WEB_API,
   };
 
   static const Map<AppRole, String> _androidEmuHosts = {
     AppRole.tenant: 'http://10.0.2.2:8000',
-    AppRole.staff:  'http://10.0.2.2:8000',
-    AppRole.admin:  'http://10.0.2.2:8000',
+    AppRole.staff: 'http://10.0.2.2:8000',
+    AppRole.admin: 'http://10.0.2.2:8000',
   };
 
   static Map<AppRole, String> _deviceHosts(String ip) => {
-    AppRole.tenant: 'http://192.168.1.84:8000',
-    AppRole.staff:  'http://192.168.1.84:8000',
-    AppRole.admin:  'http://192.168.1.84:8000',
+    AppRole.tenant: 'http://192.168.18.10:8000',
+    AppRole.staff: 'http://192.168.18.10:8000',
+    AppRole.admin: 'http://192.168.18.10:8000',
   };
 
   /// Default per-platform base URL (localhost for web/desktop, emulator loopback, etc.)

@@ -4,11 +4,13 @@ import 'package:facilityfix/admin/inventory.dart';
 import 'package:facilityfix/admin/notification.dart';
 import 'package:facilityfix/admin/profile.dart';
 import 'package:facilityfix/admin/workorder.dart';
+import 'package:facilityfix/admin/view_details/workorder_details.dart';
 import 'package:facilityfix/widgets/analytics.dart';
 import 'package:facilityfix/widgets/cards.dart';
-import 'package:facilityfix/widgets/helper_models.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
+import 'package:facilityfix/services/auth_service.dart';
+import 'package:facilityfix/services/api_services.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,9 +22,13 @@ class HomePage extends StatefulWidget {
 class _HomeState extends State<HomePage> {
   int _selectedIndex = 0;
 
-  // Fake admin display
-  static const String _userName = 'Admin';
+  String _userName = 'Admin';
   static const String _roleLabel = 'Property Management';
+
+  List<Map<String, dynamic>> _recentConcernSlips = [];
+  int _totalRepairRequests = 0;
+  int _maintenanceDue = 0;
+  bool _isLoading = true;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -31,6 +37,68 @@ class _HomeState extends State<HomePage> {
     NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+    _loadDashboardData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final authService = AuthService();
+      final user = await authService.getCurrentUser();
+      if (user != null && user['firstName'] != null) {
+        setState(() {
+          _userName = user['firstName'];
+        });
+      }
+    } catch (e) {
+      print('Error loading user data: $e');
+    }
+  }
+
+  Future<void> _loadDashboardData() async {
+    try {
+      final apiService = APIService();
+
+      final concernSlips = await apiService.getAllConcernSlips();
+
+      final pendingRequests =
+          concernSlips
+              .where(
+                (slip) =>
+                    slip['status'] == 'pending' ||
+                    slip['status'] == 'in_progress',
+              )
+              .length;
+
+      final sortedSlips = List<Map<String, dynamic>>.from(concernSlips);
+      sortedSlips.sort((a, b) {
+        try {
+          final dateA = DateTime.parse(a['created_at'] ?? '');
+          final dateB = DateTime.parse(b['created_at'] ?? '');
+          return dateB.compareTo(dateA); // Most recent first
+        } catch (e) {
+          return 0;
+        }
+      });
+      final recentSlips = sortedSlips.take(5).toList();
+
+      setState(() {
+        _recentConcernSlips = recentSlips;
+        _totalRepairRequests = pendingRequests;
+        _maintenanceDue = 0;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading dashboard data: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   void _onTabTapped(int index) {
     final destinations = [
@@ -87,7 +155,6 @@ class _HomeState extends State<HomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Greeting
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -124,13 +191,12 @@ class _HomeState extends State<HomePage> {
               ),
               const SizedBox(height: 16),
 
-              // Quick status cards
               Row(
-                children: const [
+                children: [
                   Expanded(
                     child: StatusCard(
                       title: 'Repair\tRequest',
-                      count: '1',
+                      count: _totalRepairRequests.toString(),
                       icon: Icons.settings_outlined,
                       iconColor: Color(0xFF005CE8),
                       backgroundColor: Color(0xFFEFF4FF),
@@ -141,7 +207,7 @@ class _HomeState extends State<HomePage> {
                   Expanded(
                     child: StatusCard(
                       title: 'Maintenance\tDue',
-                      count: '0',
+                      count: _maintenanceDue.toString(),
                       icon: Icons.check_circle_rounded,
                       iconColor: Color(0xFF24D164),
                       backgroundColor: Color(0xFFF0FDF4),
@@ -152,10 +218,8 @@ class _HomeState extends State<HomePage> {
               ),
               const SizedBox(height: 24),
 
-              // Recent Repair Tasks
               SectionHeader(
                 title: 'Recent Repair Request',
-                actionLabel: 'View all',
                 onActionTap: () {
                   Navigator.push(
                     context,
@@ -166,132 +230,102 @@ class _HomeState extends State<HomePage> {
                 },
               ),
               const SizedBox(height: 12),
-              Column(
-                children: [
-                  RepairCard(
-                    title: 'Leaking faucet',
-                    requestId: 'CS-2025-031',
-                    reqDate: 'Aug 23',
-                    statusTag: 'Done',
-                    departmentTag: 'Plumbing',
-                    requestType: 'Concern Slip',
-                    unit: 'A 1001',
-                    priority: 'High',
 
-                    // Avatar
-                    hasCompletionAssessment: true,
-                    completionAssigneeName: 'Juan Dela Cruz',
-                    completionAssigneeDepartment: 'Plumbing',
-                    completionAssigneePhotoUrl: 'assets/images/avatar.png',
-                    onTap: () {},
-                    onChatTap: () {},
-                  ),
-                  const SizedBox(height: 12),
-                  RepairCard(
-                    title: 'Leaking faucet',
-                    requestId: 'JS-2025-031',
-                    reqDate: 'Aug 23',
-                    statusTag: 'Done',
-                    departmentTag: 'Plumbing',
-                    requestType: 'Job Service',
-                    unit: 'A 1001',
-                    priority: 'High',
-
-                    // Avatar
-                    hasCompletionAssessment: true,
-                    completionAssigneeName: 'Juan Dela Cruz',
-                    completionAssigneeDepartment: 'Plumbing',
-                    // completionAssigneePhotoUrl: 'assets/images/avatar.png',
-                    onTap: () {},
-                    onChatTap: () {},
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // Recent Maintenance Tasks
-              SectionHeader(
-                title: 'Recent Maintenance',
-                actionLabel: 'View all',
-                onActionTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const WorkOrderPage(),
+              _isLoading
+                  ? Center(child: CircularProgressIndicator())
+                  : _recentConcernSlips.isEmpty
+                  ? Container(
+                    padding: EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[200]!),
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              Column(
-                children: [
-                  MaintenanceCard(
-                    title: 'Quarterly Pipe Inspection',
-                    requestId: 'MT-P-2025-011',
-                    date: 'Aug 28',
-                    status: 'In Progress',
-                    department: 'Plumbing',
-                    unit: 'Tower A - 5th Floor',
-                    priority: 'High',
-
-                    // Avatar
-                    hasInitialAssessment: true,
-                    initialAssigneeName: 'Juan Dela Cruz',
-                    initialAssigneeDepartment: 'Plumbing',
-                    initialAssigneePhotoUrl: 'assets/images/avatar.png',
-
-                    onTap: () {},
-                    onChatTap: () {},
-                  ),
-                  const SizedBox(height: 12),
-                  MaintenanceCard(
-                    title: 'Quarterly Pipe Inspection',
-                    requestId: 'MT-P-2025-011',
-                    date: 'Aug 28',
-                    status: 'Done',
-                    department: 'Plumbing',
-                    unit: 'Tower A - 5th Floor',
-                    priority: 'High',
-
-                    // Avatar
-                    hasInitialAssessment: true,
-                    initialAssigneeName: 'Juan Dela Cruz',
-                    initialAssigneeDepartment: 'Plumbing',
-                    initialAssigneePhotoUrl: 'assets/images/avatar.png',
-
-                    onTap: () {},
-                    onChatTap: () {},
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // Announcements
-              SectionHeader(
-                title: 'Latest Announcement',
-                actionLabel: 'View all',
-                onActionTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const AnnouncementPage(),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.inbox_outlined,
+                          size: 48,
+                          color: Colors.grey[400],
+                        ),
+                        SizedBox(height: 12),
+                        Text(
+                          'No recent repair requests',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'New concern slips will appear here',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                      ],
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              AnnouncementCard(
-                title: 'Utility Interruption',
-                datePosted: '3 hours ago',
-                details:
-                    'Temporary shutdown in pipelines for maintenance cleaning.',
-                classification: 'utility interruption',
-                onTap: () {},
-              ),
+                  )
+                  : Column(
+                    children:
+                        _recentConcernSlips.map((slip) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: RepairCard(
+                              title: slip['title'] ?? 'Untitled Request',
+                              requestId: slip['id'] ?? 'N/A',
+                              reqDate: _formatDate(slip['created_at']),
+                              statusTag: _formatStatus(slip['status']),
+                              departmentTag: _formatCategory(slip['category']),
+                              requestType: 'Concern Slip',
+                              unit: slip['unit_id'] ?? 'N/A',
+                              priority: _formatPriority(slip['priority']),
+                              hasCompletionAssessment:
+                                  slip['status'] == 'completed',
+                              completionAssigneeName: 'Admin Staff',
+                              completionAssigneeDepartment: _formatCategory(
+                                slip['category'],
+                              ),
+                              onTap: () async {
+                                try {
+                                  final apiService = APIService();
+                                  final concernSlipData = await apiService
+                                      .getConcernSlipById(slip['id']);
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder:
+                                          (_) => WorkOrderDetailsPage(
+                                            selectedTabLabel: 'concern slip',
+                                            concernSlipData: concernSlipData,
+                                          ),
+                                    ),
+                                  );
+                                } catch (e) {
+                                  print('Error fetching concern slip data: $e');
+                                  // Fallback navigation without data
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder:
+                                          (_) => WorkOrderDetailsPage(
+                                            selectedTabLabel: 'concern slip',
+                                          ),
+                                    ),
+                                  );
+                                }
+                              },
+                              onChatTap: () {},
+                            ),
+                          );
+                        }).toList(),
+                  ),
+
               const SizedBox(height: 24),
 
-              // Analytics
-              const _SectionHeader(title: 'Analytics'),
+              const SectionHeader(title: 'Analytics'),
               const SizedBox(height: 12),
               WeeklyAnalyticsChartCard(
                 xLabels: const [
@@ -305,7 +339,7 @@ class _HomeState extends State<HomePage> {
                 ],
                 repairCounts: const [4, 6, 3, 10, 2, 5, 1],
                 maintenanceCounts: const [2, 1, 6, 7, 3, 2, 8],
-                highlightIndex: DateTime.now().weekday % 7, // optional
+                highlightIndex: DateTime.now().weekday % 7,
               ),
             ],
           ),
@@ -319,13 +353,63 @@ class _HomeState extends State<HomePage> {
       ),
     );
   }
+
+  String _formatDate(dynamic dateStr) {
+    if (dateStr == null) return 'N/A';
+    try {
+      final date = DateTime.parse(dateStr.toString());
+      return '${date.month}/${date.day}';
+    } catch (e) {
+      return 'N/A';
+    }
+  }
+
+  String _formatStatus(String? status) {
+    switch (status?.toLowerCase()) {
+      case 'pending':
+        return 'Pending';
+      case 'in_progress':
+        return 'In Progress';
+      case 'completed':
+        return 'Done';
+      default:
+        return 'Pending';
+    }
+  }
+
+  String _formatCategory(String? category) {
+    switch (category?.toLowerCase()) {
+      case 'plumbing':
+        return 'Plumbing';
+      case 'electrical':
+        return 'Electrical';
+      case 'hvac':
+        return 'HVAC';
+      case 'general':
+        return 'General';
+      default:
+        return 'General';
+    }
+  }
+
+  String _formatPriority(String? priority) {
+    switch (priority?.toLowerCase()) {
+      case 'high':
+        return 'High';
+      case 'medium':
+        return 'Medium';
+      case 'low':
+        return 'Low';
+      default:
+        return 'Medium';
+    }
+  }
 }
 
-/// Simple “section header + View all” row to match tenant side
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, this.actionLabel});
+class SectionHeader extends StatelessWidget {
+  const SectionHeader({required this.title, this.onActionTap});
   final String title;
-  final String? actionLabel;
+  final VoidCallback? onActionTap;
 
   @override
   Widget build(BuildContext context) {
@@ -341,14 +425,13 @@ class _SectionHeader extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        if (actionLabel != null)
-          TextButton(
-            onPressed: () {},
-            child: Text(
-              actionLabel!,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
+        TextButton(
+          onPressed: onActionTap,
+          child: Text(
+            'View all',
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
+        ),
       ],
     );
   }
