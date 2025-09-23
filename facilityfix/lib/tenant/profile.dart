@@ -22,6 +22,7 @@ class ProfilePage extends StatefulWidget {
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
+
 class _ProfilePageState extends State<ProfilePage> {
   int _selectedIndex = 3;
 
@@ -37,7 +38,8 @@ class _ProfilePageState extends State<ProfilePage> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController phoneNumberController = TextEditingController();
   final TextEditingController birthDateController = TextEditingController();
-  final TextEditingController buildingUnitNoController = TextEditingController();
+  final TextEditingController buildingUnitNoController =
+      TextEditingController();
 
   final ImagePicker _picker = ImagePicker();
   File? _profileImageFile;
@@ -51,7 +53,9 @@ class _ProfilePageState extends State<ProfilePage> {
   ImageProvider get _profileImageProvider {
     if (_profileImageFile != null) return FileImage(_profileImageFile!);
     // If profile map has a network photo_url, attempt NetworkImage fallback:
-    if (_profileMap != null && _profileMap!['photo_url'] != null && _profileMap!['photo_url'].toString().isNotEmpty) {
+    if (_profileMap != null &&
+        _profileMap!['photo_url'] != null &&
+        _profileMap!['photo_url'].toString().isNotEmpty) {
       try {
         return NetworkImage(_profileMap!['photo_url'].toString());
       } catch (_) {
@@ -101,7 +105,8 @@ class _ProfilePageState extends State<ProfilePage> {
     _profileMap = Map<String, dynamic>.from(saved);
 
     // If the saved profile includes a local file path, set it
-    if (_profileMap!['photo_path'] != null && _profileMap!['photo_path'].toString().isNotEmpty) {
+    if (_profileMap!['photo_path'] != null &&
+        _profileMap!['photo_path'].toString().isNotEmpty) {
       final candidate = _profileMap!['photo_path'].toString();
       try {
         final f = File(candidate);
@@ -122,13 +127,29 @@ class _ProfilePageState extends State<ProfilePage> {
     }
 
     // Candidate key lists for first/last/full name
-    final firstCandidates = ['first_name', 'firstName', 'given_name', 'givenName'];
-    final lastCandidates  = ['last_name', 'lastName', 'family_name', 'familyName'];
-    final fullCandidates  = ['full_name', 'fullName', 'name', 'displayName', 'display_name'];
+    final firstCandidates = [
+      'first_name',
+      'firstName',
+      'given_name',
+      'givenName',
+    ];
+    final lastCandidates = [
+      'last_name',
+      'lastName',
+      'family_name',
+      'familyName',
+    ];
+    final fullCandidates = [
+      'full_name',
+      'fullName',
+      'name',
+      'displayName',
+      'display_name',
+    ];
 
     final firstVal = extractFirstNonEmpty(firstCandidates);
-    final lastVal  = extractFirstNonEmpty(lastCandidates);
-    final fullVal  = extractFirstNonEmpty(fullCandidates);
+    final lastVal = extractFirstNonEmpty(lastCandidates);
+    final fullVal = extractFirstNonEmpty(fullCandidates);
 
     String fullName = '';
 
@@ -137,12 +158,17 @@ class _ProfilePageState extends State<ProfilePage> {
       fullName = fullVal;
     } else if (firstVal.isNotEmpty || lastVal.isNotEmpty) {
       // Use title-cased first + DB last_name exactly as stored
-      final firstPart = firstVal.isNotEmpty ? _titleCaseFirstOnly(firstVal) : '';
+      final firstPart =
+          firstVal.isNotEmpty ? _titleCaseFirstOnly(firstVal) : '';
       final lastPart = lastVal.isNotEmpty ? lastVal.trim() : '';
-      fullName = [firstPart, lastPart].where((s) => s.isNotEmpty).join(' ').trim();
+      fullName =
+          [firstPart, lastPart].where((s) => s.isNotEmpty).join(' ').trim();
     } else {
       // fallback to email local-part (nicer form) or user id
-      final emailRaw = (_profileMap!['email'] ?? _profileMap!['user_email'] ?? '').toString().trim();
+      final emailRaw =
+          (_profileMap!['email'] ?? _profileMap!['user_email'] ?? '')
+              .toString()
+              .trim();
       if (emailRaw.isNotEmpty) {
         final at = emailRaw.indexOf('@');
         final local = at > 0 ? emailRaw.substring(0, at) : emailRaw;
@@ -151,7 +177,10 @@ class _ProfilePageState extends State<ProfilePage> {
       }
 
       if (fullName.isEmpty) {
-        final idRaw = (_profileMap!['user_id'] ?? _profileMap!['id'] ?? '').toString().trim();
+        final idRaw =
+            (_profileMap!['user_id'] ?? _profileMap!['id'] ?? '')
+                .toString()
+                .trim();
         fullName = idRaw.isNotEmpty ? idRaw : 'User';
       }
     }
@@ -160,14 +189,31 @@ class _ProfilePageState extends State<ProfilePage> {
     nameController.text = fullName;
 
     // Tenant ID (prefer user_id then id)
-    _tenantId = (_profileMap!['user_id'] ?? _profileMap!['id'] ?? '').toString();
+    _tenantId =
+        (_profileMap!['user_id'] ?? _profileMap!['id'] ?? '').toString();
 
     emailController.text = (_profileMap!['email'] ?? '').toString();
-    final phone = (_profileMap!['phone_number'] ?? _profileMap!['phone'] ?? _profileMap!['phoneNumber'] ?? '').toString();
+    final phone =
+        (_profileMap!['phone_number'] ??
+                _profileMap!['phone'] ??
+                _profileMap!['phoneNumber'] ??
+                '')
+            .toString();
     phoneNumberController.text = phone.isNotEmpty ? phone : '+63 ';
-    final bdayRaw = (_profileMap!['birthdate'] ?? _profileMap!['birth_date'] ?? _profileMap!['birthDate'] ?? '').toString();
-    birthDateController.text = bdayRaw.isNotEmpty ? formatPrettyFromString(bdayRaw) : '';
-    buildingUnitNoController.text = (_profileMap!['building_unit'] ?? _profileMap!['buildingUnit'] ?? _profileMap!['unit'] ?? '').toString();
+    final bdayRaw =
+        (_profileMap!['birthdate'] ??
+                _profileMap!['birth_date'] ??
+                _profileMap!['birthDate'] ??
+                '')
+            .toString();
+    birthDateController.text =
+        bdayRaw.isNotEmpty ? formatPrettyFromString(bdayRaw) : '';
+    buildingUnitNoController.text =
+        (_profileMap!['building_unit'] ??
+                _profileMap!['buildingUnit'] ??
+                _profileMap!['unit'] ??
+                '')
+            .toString();
 
     if (!mounted) return;
     setState(() {});
@@ -302,14 +348,15 @@ class _ProfilePageState extends State<ProfilePage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => EditProfileModal(
-        role: UserRole.tenant,
-        initialFullName: nameController.text,
-        initialBirthDate: birthDateController.text,
-        initialUserEmail: emailController.text,
-        initialContactNumber: phoneNumberController.text,
-        initialBuildingUnitNo: buildingUnitNoController.text, // optional
-      ),
+      builder:
+          (_) => EditProfileModal(
+            role: UserRole.tenant,
+            initialFullName: nameController.text,
+            initialBirthDate: birthDateController.text,
+            initialUserEmail: emailController.text,
+            initialContactNumber: phoneNumberController.text,
+            initialBuildingUnitNo: buildingUnitNoController.text, // optional
+          ),
     );
 
     if (updated == null || !mounted) return;
@@ -325,19 +372,27 @@ class _ProfilePageState extends State<ProfilePage> {
       if (parts.isNotEmpty) {
         firstPart = _titleCaseFirstOnly(parts.first);
         if (parts.length > 1) {
-          lastPart = parts.sublist(1).join(' ').trim(); // preserve exact last name casing/spacing user entered
+          lastPart =
+              parts
+                  .sublist(1)
+                  .join(' ')
+                  .trim(); // preserve exact last name casing/spacing user entered
         }
       }
     }
 
-    final titleCasedFull = [if (firstPart.isNotEmpty) firstPart, if (lastPart.isNotEmpty) lastPart].join(' ').trim();
+    final titleCasedFull =
+        [
+          if (firstPart.isNotEmpty) firstPart,
+          if (lastPart.isNotEmpty) lastPart,
+        ].join(' ').trim();
 
     setState(() {
-      nameController.text           = titleCasedFull;
-      birthDateController.text      = formatPrettyFromString(updated.birthDate);
+      nameController.text = titleCasedFull;
+      birthDateController.text = formatPrettyFromString(updated.birthDate);
       buildingUnitNoController.text = updated.buildingUnitNo ?? '';
-      emailController.text          = updated.userEmail;
-      phoneNumberController.text    = updated.contactNumber;
+      emailController.text = updated.userEmail;
+      phoneNumberController.text = updated.contactNumber;
     });
 
     // Merge updated fields into persisted profile map and save
@@ -350,7 +405,8 @@ class _ProfilePageState extends State<ProfilePage> {
       // save raw birthdate (store as YYYY-MM-DD if modal returns that)
       'birthdate': _normalizeBirthDateForSave(updated.birthDate),
       // store building/unit as a single string (preserve what modal returns)
-      'building_unit': updated.buildingUnitNo ?? _profileMap?['building_unit'] ?? '',
+      'building_unit':
+          updated.buildingUnitNo ?? _profileMap?['building_unit'] ?? '',
       // ensure we don't clobber user_id if present
       'user_id': _profileMap?['user_id'] ?? _tenantId,
     };
@@ -367,15 +423,16 @@ class _ProfilePageState extends State<ProfilePage> {
     }
 
     // Save tenant id if not already present
-    if ((_profileMap?['user_id'] ?? '').toString().isEmpty && _tenantId.isNotEmpty) {
+    if ((_profileMap?['user_id'] ?? '').toString().isEmpty &&
+        _tenantId.isNotEmpty) {
       _profileMap = {...?_profileMap, 'user_id': _tenantId};
     }
 
     await AuthStorage.saveProfile(_profileMap ?? {});
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Profile updated')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Profile updated')));
   }
 
   Map<String, String>? _parseBuildingUnit(String raw) {
@@ -384,7 +441,9 @@ class _ProfilePageState extends State<ProfilePage> {
 
     // Common patterns:
     // "Building A • Unit 1001" or "Bldg A • Unit 1001"
-    final regex1 = RegExp(r'(?i)(?:building|bldg)\s*[:]?\s*([^\s•,]+).*?(?:unit)\s*[:]?\s*([^\s•,]+)');
+    final regex1 = RegExp(
+      r'(?i)(?:building|bldg)\s*[:]?\s*([^\s•,]+).*?(?:unit)\s*[:]?\s*([^\s•,]+)',
+    );
     final m1 = regex1.firstMatch(s);
     if (m1 != null) {
       return {'building_id': m1.group(1) ?? '', 'unit_id': m1.group(2) ?? ''};
@@ -457,7 +516,10 @@ class _ProfilePageState extends State<ProfilePage> {
               ProfileInfoWidget(
                 profileImage: _profileImageProvider,
                 fullName: nameController.text,
-                staffId: _tenantId.isNotEmpty ? 'Tenant ID: #$_tenantId' : 'Tenant ID: —',
+                staffId:
+                    _tenantId.isNotEmpty
+                        ? 'Tenant ID: #$_tenantId'
+                        : 'Tenant ID: —',
                 onTap: () => _openPhotoPickerSheet(context),
               ),
               const SizedBox(height: 24),
@@ -466,7 +528,11 @@ class _ProfilePageState extends State<ProfilePage> {
               SectionCard(
                 title: 'Personal Details',
                 trailing: IconButton(
-                  icon: const Icon(Icons.edit, size: 20, color: Colors.blueGrey),
+                  icon: const Icon(
+                    Icons.edit,
+                    size: 20,
+                    color: Colors.blueGrey,
+                  ),
                   tooltip: 'Edit personal details',
                   onPressed: _openEditAllDetailsSheet,
                 ),
@@ -479,14 +545,18 @@ class _ProfilePageState extends State<ProfilePage> {
                     const SizedBox(height: 10),
                     DetailRow(
                       label: 'Building Unit No',
-                      value: buildingUnitNoController.text.isEmpty
-                          ? '—'
-                          : buildingUnitNoController.text,
+                      value:
+                          buildingUnitNoController.text.isEmpty
+                              ? '—'
+                              : buildingUnitNoController.text,
                     ),
                     const SizedBox(height: 10),
                     DetailRow(label: 'Email', value: emailController.text),
                     const SizedBox(height: 10),
-                    DetailRow(label: 'Contact Number', value: phoneNumberController.text),
+                    DetailRow(
+                      label: 'Contact Number',
+                      value: phoneNumberController.text,
+                    ),
                     const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerLeft,
@@ -530,24 +600,27 @@ class _ProfilePageState extends State<ProfilePage> {
                 onPressed: () {
                   showDialog(
                     context: context,
-                    builder: (_) => CustomPopup(
-                      title: 'Confirm Logout',
-                      message: 'Are you sure you want to logout?',
-                      primaryText: 'Yes',
-                      onPrimaryPressed: () async {
-                        Navigator.of(context).pop();
-                        // Clear saved auth/profile
-                        await AuthStorage.clear();
-                        // Navigate to welcome (clears nav stack)
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(builder: (_) => const WelcomePage()),
-                          (route) => false,
-                        );
-                      },
-                      secondaryText: 'No',
-                      onSecondaryPressed: () => Navigator.of(context).pop(),
-                    ),
+                    builder:
+                        (_) => CustomPopup(
+                          title: 'Confirm Logout',
+                          message: 'Are you sure you want to logout?',
+                          primaryText: 'Yes',
+                          onPrimaryPressed: () async {
+                            Navigator.of(context).pop();
+                            // Clear saved auth/profile
+                            await AuthStorage.clear();
+                            // Navigate to welcome (clears nav stack)
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const WelcomePage(),
+                              ),
+                              (route) => false,
+                            );
+                          },
+                          secondaryText: 'No',
+                          onSecondaryPressed: () => Navigator.of(context).pop(),
+                        ),
                   );
                 },
               ),

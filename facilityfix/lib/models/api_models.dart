@@ -25,10 +25,11 @@ class UserRegistrationRequest {
   final String firstName;
   final String lastName;
   final String phoneNumber;
+  final String birthDate;
   final String role;
   final String? buildingId;
   final String? unitId;
-  final String? department;
+  final String? staffDepartment;
 
   UserRegistrationRequest({
     required this.email,
@@ -36,10 +37,11 @@ class UserRegistrationRequest {
     required this.firstName,
     required this.lastName,
     required this.phoneNumber,
+    required this.birthDate,
     required this.role,
     this.buildingId,
     this.unitId,
-    this.department, String? staffId,
+    this.staffDepartment,
   });
 
   Map<String, dynamic> toJson() {
@@ -49,10 +51,11 @@ class UserRegistrationRequest {
       'first_name': firstName,
       'last_name': lastName,
       'phone_number': phoneNumber,
+      'birth_date': birthDate,
       'role': role,
       if (buildingId != null) 'building_id': buildingId,
       if (unitId != null) 'unit_id': unitId,
-      if (department != null) 'department': department,
+      if (staffDepartment != null) 'staff_department': staffDepartment,
     };
   }
 }
@@ -64,6 +67,7 @@ class UserResponse {
   final String firstName;
   final String lastName;
   final String phoneNumber;
+  final String birthDate;
   final String role;
   final String? buildingId;
   final String? unitId;
@@ -77,6 +81,7 @@ class UserResponse {
     required this.firstName,
     required this.lastName,
     required this.phoneNumber,
+    required this.birthDate,
     required this.role,
     this.buildingId,
     this.unitId,
@@ -92,6 +97,7 @@ class UserResponse {
       firstName: json['first_name'],
       lastName: json['last_name'],
       phoneNumber: json['phone_number'],
+      birthDate: json['birth_date'],
       role: json['role'],
       buildingId: json['building_id'],
       unitId: json['unit_id'],
@@ -106,6 +112,7 @@ class UserUpdateRequest {
   final String? firstName;
   final String? lastName;
   final String? phoneNumber;
+  final String? birthDate;
   final String? department;
   final String? status;
 
@@ -113,6 +120,7 @@ class UserUpdateRequest {
     this.firstName,
     this.lastName,
     this.phoneNumber,
+    this.birthDate,
     this.department,
     this.status,
   });
@@ -122,6 +130,7 @@ class UserUpdateRequest {
     if (firstName != null) data['first_name'] = firstName;
     if (lastName != null) data['last_name'] = lastName;
     if (phoneNumber != null) data['phone_number'] = phoneNumber;
+    if (birthDate != null) data['birth_date'] = birthDate;
     if (department != null) data['department'] = department;
     if (status != null) data['status'] = status;
     return data;
@@ -200,7 +209,8 @@ class RepairRequestResponse {
       assignedTo: json['assigned_to'],
       attachments: json['attachments']?.cast<String>(),
       createdAt: DateTime.parse(json['created_at']),
-      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at']) : null,
+      updatedAt:
+          json['updated_at'] != null ? DateTime.parse(json['updated_at']) : null,
     );
   }
 }
@@ -230,7 +240,8 @@ class WorkOrderCreation {
       'description': description,
       'priority': priority,
       if (assignedTo != null) 'assigned_to': assignedTo,
-      if (scheduledDate != null) 'scheduled_date': scheduledDate!.toIso8601String(),
+      if (scheduledDate != null)
+        'scheduled_date': scheduledDate!.toIso8601String(),
     };
   }
 }
@@ -269,9 +280,12 @@ class WorkOrderResponse {
       priority: json['priority'],
       status: json['status'],
       assignedTo: json['assigned_to'],
-      scheduledDate: json['scheduled_date'] != null ? DateTime.parse(json['scheduled_date']) : null,
+      scheduledDate: json['scheduled_date'] != null
+          ? DateTime.parse(json['scheduled_date'])
+          : null,
       createdAt: DateTime.parse(json['created_at']),
-      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at']) : null,
+      updatedAt:
+          json['updated_at'] != null ? DateTime.parse(json['updated_at']) : null,
     );
   }
 }

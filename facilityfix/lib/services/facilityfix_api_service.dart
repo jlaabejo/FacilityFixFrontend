@@ -20,7 +20,7 @@ class FacilityFixAPIService {
       // - real device on Wi-Fi: pass your PC's LAN IP (could be change based sa mag oopen ng backend nad front at the same time)
       baseUrl =
           (lanIp != null && lanIp.isNotEmpty)
-              ? 'http://192.168.18.10:8000' // provided LAN IP
+              ? 'http://192.168.1.84:8000' // provided LAN IP
               : 'http://10.0.2.2:8000'; // emulator default
     } else if (defaultTargetPlatform == TargetPlatform.iOS) {
       // iOS simulator shares host network

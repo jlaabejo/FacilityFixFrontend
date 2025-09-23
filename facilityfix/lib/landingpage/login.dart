@@ -37,26 +37,15 @@ class _LogInState extends State<LogIn> {
   final _formKey = GlobalKey<FormState>();
 
   final emailController = TextEditingController();
-  final userIdController = TextEditingController();
   final passwordController = TextEditingController();
 
-  // Role extras
-  final staffDeptController = TextEditingController();     // staffDepartment
-  final buildingUnitIdController = TextEditingController(); // buildingUnitId
-
   String? _emailErr;
-  String? _userIdErr;
   String? _passwordErr;
-  String? _deptErr;
-  String? _bunitErr;
 
   bool _obscurePassword = true;
   bool _loading = false;
 
   String get _normalizedRole => widget.role.toLowerCase();
-  bool get _isTenant => _normalizedRole == 'tenant';
-  bool get _isStaff => _normalizedRole == 'staff';
-  bool get _isAdmin => _normalizedRole == 'admin';
 
   @override
   void initState() {
@@ -73,10 +62,7 @@ class _LogInState extends State<LogIn> {
   @override
   void dispose() {
     emailController.dispose();
-    userIdController.dispose();
     passwordController.dispose();
-    staffDeptController.dispose();
-    buildingUnitIdController.dispose();
     super.dispose();
   }
 
@@ -93,13 +79,9 @@ class _LogInState extends State<LogIn> {
 
   bool _validate() {
     _emailErr = null;
-    _userIdErr = null;
     _passwordErr = null;
-    _deptErr = null;
-    _bunitErr = null;
 
     final email = emailController.text.trim();
-    final userId = userIdController.text.trim();
     final pass = passwordController.text;
 
     final emailRe = RegExp(r'^[\w\.-]+@([\w-]+\.)+[\w-]{2,}$');
@@ -110,35 +92,28 @@ class _LogInState extends State<LogIn> {
       _emailErr = 'Enter a valid email address.';
     }
 
-    if (userId.isEmpty) {
-      _userIdErr = (_isTenant ? 'Tenant ID' : _isStaff ? 'Staff ID' : 'Admin ID') + ' is required.';
-    }
-
     if (pass.isEmpty) {
       _passwordErr = 'Password is required.';
     } else if (pass.length < 6) {
       _passwordErr = 'Password must be at least 6 characters.';
     }
 
-    if (_isStaff) {
-      if (staffDeptController.text.trim().isEmpty) {
-        _deptErr = 'Department is required.';
-      }
-    }
-
-    if (_isTenant) {
-      if (buildingUnitIdController.text.trim().isEmpty) {
-        _bunitErr = 'Building & Unit ID is required.';
-      }
-    }
-
     _formKey.currentState?.validate();
     setState(() {});
-    return _emailErr == null &&
-        _userIdErr == null &&
-        _passwordErr == null &&
-        _deptErr == null &&
-        _bunitErr == null;
+    return _emailErr == null && _passwordErr == null;
+  }
+
+  String _firstFromProfile(Map<String, dynamic> p, String fallbackEmail) {
+    final first = (p['first_name'] ?? '').toString().trim();
+    if (first.isNotEmpty) return first;
+    final full = (p['full_name'] ?? '').toString().trim();
+    if (full.isNotEmpty) {
+      final parts = full.split(RegExp(r'\s+'));
+      if (parts.isNotEmpty && parts.first.isNotEmpty) return parts.first;
+    }
+    final at = fallbackEmail.indexOf('@');
+    if (at > 0) return fallbackEmail.substring(0, at);
+    return 'User';
   }
 
   Future<void> _handleLogin() async {
@@ -148,38 +123,47 @@ class _LogInState extends State<LogIn> {
 
     final api = APIService(roleOverride: _toAppRole(widget.role));
     final email = emailController.text.trim();
-    final userId = userIdController.text.trim();
     final pass = passwordController.text;
-    final dept = _isStaff ? staffDeptController.text.trim() : null;
-    final bunit = _isTenant ? buildingUnitIdController.text.trim() : null;
 
     try {
+      // Backend accepts email+password; 'role' sent but ignored by backend (ok).
       final res = await api.loginRoleBased(
         role: widget.role,
         email: email,
-        userId: userId,
         password: pass,
-        staffDepartment: dept,
-        buildingUnitId: bunit,
       );
 
-      // Save profile + token
-      final profile = <String, dynamic>{
-        'user_id': res['user_id'] ?? userId,
-        'first_name': res['first_name'] ?? res['firstName'] ?? '',
-        'last_name': res['last_name'] ?? res['lastName'] ?? '',
-        'email': res['email'] ?? email,
-        'role': (res['role'] ?? widget.role).toString(),
-        'building_unit': res['building_unit'] ?? res['unit'] ?? bunit ?? '',
-      };
-      await AuthStorage.saveProfile(profile);
+      // Read snake_case response
+      final Map<String, dynamic> profile =
+          (res['profile'] is Map<String, dynamic>) ? (res['profile'] as Map<String, dynamic>) : <String, dynamic>{};
 
-      final idToken = (res['id_token'] ?? res['token'] ?? '').toString();
+      final role = ((res['role'] ?? profile['role'] ?? widget.role).toString()).toLowerCase();
+
+      // Build and save a complete local profile in snake_case
+      final localProfile = <String, dynamic>{
+        'user_id': profile['user_id'] ?? res['user_id'],
+        'first_name': profile['first_name'] ?? '',
+        'last_name': profile['last_name'] ?? '',
+        'full_name': profile['full_name'] ??
+            '${(profile['first_name'] ?? '').toString()} ${(profile['last_name'] ?? '').toString()}'.trim(),
+        'birth_date': profile['birth_date'],
+        'email': res['email'] ?? profile['email'] ?? email,
+        'phone_number': profile['phone_number'],
+        'role': role,
+        'building_unit': profile['building_unit'],
+
+        // staff-only 
+        'staff_department': profile['staff_department'],
+      };
+      await AuthStorage.saveProfile(localProfile);
+
+      // Token (snake_case primary; fallbacks included)
+      final idToken = (res['id_token'] ?? res['token'] ?? res['idToken'] ?? '').toString();
       if (idToken.isNotEmpty) {
         await AuthStorage.saveToken(idToken);
       }
 
-      final role = (res['role'] ?? widget.role).toString().toLowerCase();
+      // Route by role
       Widget destination;
       switch (role) {
         case 'tenant':
@@ -196,20 +180,14 @@ class _LogInState extends State<LogIn> {
       }
 
       if (!mounted) return;
-      _showSnack('Welcome ${profile['user_id'] ?? ''}');
+      final first = _firstFromProfile(localProfile, localProfile['email'] ?? email);
+      _showSnack('Welcome $first');
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => destination));
     } catch (e) {
       _showSnack(e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  String get _idLabel {
-    if (_isTenant) return 'Tenant ID';
-    if (_isStaff) return 'Staff ID';
-    if (_isAdmin) return 'Admin ID';
-    return 'User ID';
   }
 
   @override
@@ -267,36 +245,6 @@ class _LogInState extends State<LogIn> {
                                   prefixIcon: const Icon(Icons.mail, color: Color(0xFF98A2B3)),
                                 ),
                                 InputField(
-                                  label: _idLabel,
-                                  hintText: _isTenant
-                                      ? 'e.g., T-000123'
-                                      : _isStaff
-                                          ? 'e.g., S-000321'
-                                          : 'e.g., ADM-0001',
-                                  controller: userIdController,
-                                  isRequired: true,
-                                  errorText: _userIdErr,
-                                  prefixIcon: const Icon(Icons.badge_outlined, color: Color(0xFF98A2B3)),
-                                ),
-                                if (_isStaff)
-                                  InputField(
-                                    label: 'Department',
-                                    hintText: 'e.g., Electrical',
-                                    controller: staffDeptController,
-                                    isRequired: true,
-                                    errorText: _deptErr,
-                                    prefixIcon: const Icon(Icons.apartment_outlined, color: Color(0xFF98A2B3)),
-                                  ),
-                                if (_isTenant)
-                                  InputField(
-                                    label: 'Building & Unit ID',
-                                    hintText: 'e.g., B1-U502 (or TowerA-10F-10B)',
-                                    controller: buildingUnitIdController,
-                                    isRequired: true,
-                                    errorText: _bunitErr,
-                                    prefixIcon: const Icon(Icons.location_city_outlined, color: Color(0xFF98A2B3)),
-                                  ),
-                                InputField(
                                   label: 'Password',
                                   hintText: 'Enter your password',
                                   controller: passwordController,
@@ -352,8 +300,7 @@ class _LogInState extends State<LogIn> {
                                         fontSize: 14,
                                         fontFamily: 'Inter',
                                         fontWeight: FontWeight.w600,
-                                        color: Colors.white,
-                                      ),
+                                        color: Colors.white),
                                     ),
                             ),
                           ),

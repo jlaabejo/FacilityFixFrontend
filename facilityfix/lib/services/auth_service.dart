@@ -41,6 +41,7 @@ class AuthService {
     required String firstName,
     required String lastName,
     required String phoneNumber,
+    required String birthDate,
     required String role,
     String? buildingId,
     String? unitId,
@@ -66,10 +67,11 @@ class AuthService {
         firstName: firstName,
         lastName: lastName,
         phoneNumber: phoneNumber,
+        birthDate: birthDate,
         role: role,
         buildingId: buildingId,
         unitId: unitId,
-        department: department,
+        staffDepartment: department,
       );
 
       final userResponse = await _apiService.registerUser(registrationRequest);

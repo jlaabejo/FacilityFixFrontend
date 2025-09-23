@@ -37,7 +37,7 @@ class _SignUpState extends State<SignUp> {
 
   final firstNameController = TextEditingController();
   final lastNameController = TextEditingController();
-  final birthdateController = TextEditingController(); // UI-only; not sent
+  final birthDateController = TextEditingController(); // UI-only text; sent to API as birth_date
   final idController = TextEditingController();        // tenant building/unit
   final emailController = TextEditingController();
   final contactNumberController = TextEditingController();
@@ -52,7 +52,7 @@ class _SignUpState extends State<SignUp> {
 
   String? _firstNameErr;
   String? _lastNameErr;
-  String? _birthdateErr;
+  String? _birthDateErr;
   String? _tenantBuildingErr;
   String? _emailErr;
   String? _contactErr;
@@ -80,7 +80,7 @@ class _SignUpState extends State<SignUp> {
   void dispose() {
     firstNameController.dispose();
     lastNameController.dispose();
-    birthdateController.dispose();
+    birthDateController.dispose();
     idController.dispose();
     emailController.dispose();
     contactNumberController.dispose();
@@ -96,7 +96,7 @@ class _SignUpState extends State<SignUp> {
     );
   }
 
-  Future<void> _pickBirthdate() async {
+  Future<void> _pickBirthDate() async {
     final now = DateTime.now();
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -105,16 +105,16 @@ class _SignUpState extends State<SignUp> {
       lastDate: now,
     );
     if (picked != null) {
-      birthdateController.text =
+      birthDateController.text =
           "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
-      setState(() => _birthdateErr = null);
+      setState(() => _birthDateErr = null);
     }
   }
 
   bool _validate() {
     _firstNameErr = null;
     _lastNameErr = null;
-    _birthdateErr = null;
+    _birthDateErr = null;
     _tenantBuildingErr = null;
     _emailErr = null;
     _contactErr = null;
@@ -123,14 +123,40 @@ class _SignUpState extends State<SignUp> {
 
     final first = firstNameController.text.trim();
     final last  = lastNameController.text.trim();
-    final bday  = birthdateController.text.trim();
+    final bday  = birthDateController.text.trim();
     final email = emailController.text.trim();
     final contact = contactNumberController.text.trim();
     final pass  = passwordController.text;
 
     if (first.isEmpty) _firstNameErr = 'First Name is required.';
     if (last.isEmpty)  _lastNameErr  = 'Last Name is required.';
-    if (bday.isEmpty)  _birthdateErr = 'Birthdate is required.'; // kept UI requirement
+
+    // Birthdate validation (YYYY-MM-DD, logical checks, >= 18yo)
+    if (bday.isEmpty) {
+      _birthDateErr = 'Birthdate is required.';
+    } else {
+      final re = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+      if (!re.hasMatch(bday)) {
+        _birthDateErr = 'Use format YYYY-MM-DD.';
+      } else {
+        try {
+          final parts = bday.split('-').map(int.parse).toList();
+          final dt = DateTime(parts[0], parts[1], parts[2]);
+          final now = DateTime.now();
+          if (dt.isAfter(now)) {
+            _birthDateErr = 'Birthdate cannot be in the future.';
+          } else {
+            int age = now.year - dt.year;
+            final hadBirthday =
+                (now.month > dt.month) || (now.month == dt.month && now.day >= dt.day);
+            if (!hadBirthday) age -= 1;
+            if (age < 18) _birthDateErr = 'You must be at least 18 years old.';
+          }
+        } catch (_) {
+          _birthDateErr = 'Enter a valid date.';
+        }
+      }
+    }
 
     if (_isTenant && idController.text.trim().isEmpty) {
       _tenantBuildingErr = 'Building & Unit No. is required.';
@@ -166,7 +192,7 @@ class _SignUpState extends State<SignUp> {
     setState(() {});
     final basicOk = _firstNameErr == null &&
         _lastNameErr == null &&
-        _birthdateErr == null &&
+        _birthDateErr == null &&
         _tenantBuildingErr == null &&
         _emailErr == null &&
         _contactErr == null &&
@@ -216,6 +242,7 @@ class _SignUpState extends State<SignUp> {
     final api = APIService(roleOverride: _toAppRole(widget.role));
     final first = firstNameController.text.trim();
     final last  = lastNameController.text.trim();
+    final bday  = birthDateController.text.trim(); // <-- birthDate value
     final email = emailController.text.trim();
     final pass  = passwordController.text;
     final phone = contactNumberController.text.trim().isEmpty
@@ -228,6 +255,7 @@ class _SignUpState extends State<SignUp> {
         reg = await api.registerAdmin(
           firstName: first,
           lastName: last,
+          birthDate: bday, // mapped by APIService to 'birth_date'
           email: email,
           password: pass,
           phoneNumber: phone,
@@ -239,6 +267,7 @@ class _SignUpState extends State<SignUp> {
         reg = await api.registerStaff(
           firstName: first,
           lastName: last,
+          birthDate: bday, // mapped by APIService to 'birth_date'
           email: email,
           password: pass,
           staffDepartment: label,
@@ -249,6 +278,7 @@ class _SignUpState extends State<SignUp> {
         reg = await api.registerTenant(
           firstName: first,
           lastName: last,
+          birthDate: bday, // mapped by APIService to 'birth_date'
           email: email,
           password: pass,
           buildingUnit: buildingUnit,
@@ -273,32 +303,23 @@ class _SignUpState extends State<SignUp> {
         loginRes = await api.loginRoleBased(
           role: 'admin',
           email: email,
-          userId: userId,
           password: pass,
         );
       } else if (_isStaff) {
-        final dept = (_selectedStaffDepartment == 'Others'
-                ? staffDepartmentOtherController.text.trim()
-                : (_selectedStaffDepartment ?? ''))
-            .trim();
         loginRes = await api.loginRoleBased(
           role: 'staff',
           email: email,
-          userId: userId,
           password: pass,
-          staffDepartment: dept,
         );
       } else {
         loginRes = await api.loginRoleBased(
           role: 'tenant',
           email: email,
-          userId: userId,
           password: pass,
-          buildingUnitId: idController.text.trim(),
         );
       }
 
-      // Build fallback display name and ensure we save it
+      // Build and save profile + token
       final backendFirst = (loginRes['first_name'] ?? '').toString().trim();
       final backendLast = (loginRes['last_name'] ?? '').toString().trim();
       final backendFull = (loginRes['full_name'] ?? '').toString().trim();
@@ -314,21 +335,12 @@ class _SignUpState extends State<SignUp> {
         finalFullName = _fallbackFromEmail((loginRes['email'] ?? email).toString());
       }
 
-      // Derive sensible first/last split from finalFullName
-      String finalFirst = '';
-      String finalLast = '';
-      final parts = finalFullName.trim().split(RegExp(r'\s+'));
-      if (parts.isNotEmpty) {
-        finalFirst = parts.first;
-        if (parts.length > 1) finalLast = parts.sublist(1).join(' ');
-      }
-
-      // Save profile + token
       final profile = <String, dynamic>{
         'user_id': loginRes['user_id'] ?? userId,
-        'first_name': (backendFirst.isNotEmpty ? backendFirst : (first.isNotEmpty ? first : finalFirst)),
-        'last_name': (backendLast.isNotEmpty ? backendLast : (last.isNotEmpty ? last : finalLast)),
+        'first_name': backendFirst.isNotEmpty ? backendFirst : first,
+        'last_name': backendLast.isNotEmpty ? backendLast : last,
         'full_name': finalFullName,
+        'birth_date': bday, // store snake_case
         'email': loginRes['email'] ?? email,
         'role': (loginRes['role'] ?? widget.role).toString(),
         'building_unit': loginRes['building_unit'] ?? idController.text.trim(),
@@ -355,7 +367,6 @@ class _SignUpState extends State<SignUp> {
       }
 
       if (!mounted) return;
-      // Use FIRST NAME only in welcome
       final firstName = _firstNameFromProfile(profile);
       _snack('Welcome $firstName');
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => destination));
@@ -429,11 +440,11 @@ class _SignUpState extends State<SignUp> {
                                 InputField(
                                   label: 'Birthdate',
                                   hintText: 'YYYY-MM-DD',
-                                  controller: birthdateController,
+                                  controller: birthDateController,
                                   isRequired: true,
                                   readOnly: true,
-                                  onTap: _pickBirthdate,
-                                  errorText: _birthdateErr,
+                                  onTap: _pickBirthDate,
+                                  errorText: _birthDateErr,
                                   prefixIcon: const Icon(Icons.calendar_today, color: Color(0xFF98A2B3)),
                                 ),
 

@@ -13,7 +13,7 @@ import 'package:facilityfix/widgets/modals.dart';
 import 'package:facilityfix/widgets/profile.dart';
 import 'package:facilityfix/widgets/forgotPassword.dart';
 import 'package:facilityfix/services/auth_storage.dart';
-import 'package:intl/intl.dart'; 
+import 'package:intl/intl.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -46,11 +46,13 @@ class _ProfilePageState extends State<ProfilePage> {
   // In-memory persisted profile map
   Map<String, dynamic>? _profileMap;
   String _staffId = '';
-  String _fullName = 'User'; // Store full name separately for profile section
+  String _fullName = 'User';
 
   ImageProvider get _profileImageProvider {
     if (_profileImageFile != null) return FileImage(_profileImageFile!);
-    if (_profileMap != null && _profileMap!['photo_url'] != null && _profileMap!['photo_url'].toString().isNotEmpty) {
+    if (_profileMap != null &&
+        _profileMap!['photo_url'] != null &&
+        _profileMap!['photo_url'].toString().isNotEmpty) {
       try {
         return NetworkImage(_profileMap!['photo_url'].toString());
       } catch (_) {}
@@ -64,72 +66,60 @@ class _ProfilePageState extends State<ProfilePage> {
     _loadSavedProfile();
   }
 
-Future<void> _loadSavedProfile() async {
-  final saved = await AuthStorage.getProfile();
-  print('[StaffProfilePage] Raw saved data: $saved');
+  Future<void> _loadSavedProfile() async {
+    final saved = await AuthStorage.getProfile();
+    print('[StaffProfilePage] Raw saved data: $saved');
 
-  if (saved == null) {
+    if (saved == null) {
+      setState(() {
+        _fullName = 'User';
+        emailController.text = '';
+        phoneNumberController.text = '';
+        birthDateController.text = '';
+        staffDepartmentController.text = '';
+        _staffId = '';
+      });
+      return;
+    }
+
+    _profileMap = Map<String, dynamic>.from(saved);
+
+    print('Available keys in saved profile: ${_profileMap!.keys.toList()}');
+
+    final firstName = (_profileMap!['first_name'] ?? '').toString();
+    final lastName = (_profileMap!['last_name'] ?? '').toString();
+    final email = (_profileMap!['email'] ?? '').toString();
+    final phone = (_profileMap!['phone_number'] ?? '').toString();
+    final staffDept = (_profileMap!['staff_department'] ?? '').toString();
+    final staffId = (_profileMap!['user_id'] ?? _profileMap!['id'] ?? '').toString();
+    final birthDate = (_profileMap!['birthdate'] ?? _profileMap!['birth_date'] ?? '').toString();
+
+    final fullName = '$firstName $lastName'.trim();
+
+    print(
+        'Extracted data: fullName=$fullName, email=$email, phone=$phone, staff_department=$staffDept, staffId=$staffId, birthDate=$birthDate');
+
     setState(() {
-      _fullName = 'User';
-      emailController.text = '';
-      phoneNumberController.text = '';
-      birthDateController.text = '';
-      staffDepartmentController.text = '';
-      _staffId = '';
+      _fullName = fullName.isNotEmpty ? fullName : 'User';
+      emailController.text = email;
+      phoneNumberController.text = phone;
+      staffDepartmentController.text = staffDept;
+      _staffId = staffId;
+      birthDateController.text =
+          birthDate.isNotEmpty ? _formatBirthDateForDisplay(birthDate) : '';
     });
-    return;
   }
 
-  _profileMap = Map<String, dynamic>.from(saved);
-
-  // DEBUG: Print all keys to see what's actually in the saved data
-  print('Available keys in saved profile: ${_profileMap!.keys.toList()}');
-
-  // Extract data using DIRECT field access - use the exact field names from your database
-  final firstName = (_profileMap!['first_name'] ?? '').toString();
-  final lastName = (_profileMap!['last_name'] ?? '').toString();
-  final email = (_profileMap!['email'] ?? '').toString();
-  final phone = (_profileMap!['phone_number'] ?? _profileMap!['phone'] ?? '').toString();
-  
-  // FIX: Look for 'classification' first, then other department fields
-  final department = (_profileMap!['classification'] ?? 
-                     _profileMap!['department'] ?? 
-                     _profileMap!['staff_department'] ?? '').toString();
-  
-  final staffId = (_profileMap!['user_id'] ?? _profileMap!['id'] ?? '').toString();
-  final birthDate = (_profileMap!['birthdate'] ?? _profileMap!['birth_date'] ?? '').toString();
-
-  // Build full name for profile section
-  final fullName = '$firstName $lastName'.trim();
-  
-  print('Extracted data: fullName=$fullName, email=$email, phone=$phone, department=$department, staffId=$staffId, birthDate=$birthDate');
-
-  setState(() {
-    _fullName = fullName.isNotEmpty ? fullName : 'User';
-    emailController.text = email;
-    phoneNumberController.text = phone;
-    staffDepartmentController.text = department;
-    _staffId = staffId;
-    birthDateController.text = birthDate.isNotEmpty ? _formatBirthDateForDisplay(birthDate) : '';
-  });
-}
-
-  // Format birth date for display (e.g., "Jan 01, 1990")
   String _formatBirthDateForDisplay(String dateString) {
     if (dateString.isEmpty) return '';
-    
     try {
-      // Try to parse ISO format (YYYY-MM-DD)
       if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dateString)) {
         final date = DateTime.parse(dateString);
         return DateFormat('MMM dd, yyyy').format(date);
       }
-      
-      // Try to parse other common formats
       final date = DateTime.parse(dateString);
       return DateFormat('MMM dd, yyyy').format(date);
     } catch (_) {
-      // Return the original string if parsing fails
       return dateString;
     }
   }
@@ -263,7 +253,7 @@ Future<void> _loadSavedProfile() async {
       ),
       builder: (_) => EditProfileModal(
         role: UserRole.staff,
-        initialFullName: _fullName, // Use the stored full name
+        initialFullName: _fullName,
         initialBirthDate: birthDateController.text,
         initialUserEmail: emailController.text,
         initialContactNumber: phoneNumberController.text,
@@ -273,17 +263,19 @@ Future<void> _loadSavedProfile() async {
 
     if (updated == null || !mounted) return;
 
-    // Split name into first and last for storage
     final parts = updated.fullName.trim().split(RegExp(r'\s+'));
     final firstName = parts.isNotEmpty ? parts.first : '';
     final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
 
     setState(() {
-      _fullName = updated.fullName; // Update the displayed full name
+      _fullName = updated.fullName;
       emailController.text = updated.userEmail;
       phoneNumberController.text = updated.contactNumber;
-      staffDepartmentController.text = updated.staffDepartment ?? staffDepartmentController.text;
-      birthDateController.text = updated.birthDate.isNotEmpty ? _formatBirthDateForDisplay(updated.birthDate) : '';
+      staffDepartmentController.text =
+          updated.staffDepartment ?? staffDepartmentController.text;
+      birthDateController.text = updated.birthDate.isNotEmpty
+          ? _formatBirthDateForDisplay(updated.birthDate)
+          : '';
     });
 
     _profileMap = {
@@ -292,7 +284,7 @@ Future<void> _loadSavedProfile() async {
       'last_name': lastName,
       'email': updated.userEmail,
       'phone_number': updated.contactNumber,
-      'department': updated.staffDepartment ?? _profileMap?['department'],
+      'staff_department': updated.staffDepartment ?? _profileMap?['staff_department'],
       'birthdate': _normalizeBirthDateForSave(updated.birthDate),
     };
 
@@ -342,13 +334,12 @@ Future<void> _loadSavedProfile() async {
             children: [
               ProfileInfoWidget(
                 profileImage: _profileImageProvider,
-                fullName: _fullName, // Use the stored full name
-                staffId: _staffId.isNotEmpty ? 'Staff ID: #$_staffId' : 'Staff ID: —',
+                fullName: _fullName,
+                staffId:
+                    _staffId.isNotEmpty ? 'Staff ID: #$_staffId' : 'Staff ID: —',
                 onTap: () => _openPhotoPickerSheet(context),
               ),
               const SizedBox(height: 24),
-
-              // PERSONAL DETAILS - REMOVED NAME FIELD
               SectionCard(
                 title: 'Personal Details',
                 trailing: IconButton(
@@ -358,14 +349,13 @@ Future<void> _loadSavedProfile() async {
                 ),
                 child: Column(
                   children: [
-                    // Birth Date
                     DetailRow(
                       label: 'Birth Date',
-                      value: birthDateController.text.isNotEmpty ? birthDateController.text : '—',
+                      value: birthDateController.text.isNotEmpty
+                          ? birthDateController.text
+                          : '—',
                     ),
                     const SizedBox(height: 10),
-                    
-                    // Staff Department
                     DetailRow(
                       label: 'Staff Department',
                       value: staffDepartmentController.text.isNotEmpty
@@ -373,8 +363,6 @@ Future<void> _loadSavedProfile() async {
                           : '—',
                     ),
                     const SizedBox(height: 10),
-                    
-                    // Email
                     DetailRow(
                       label: 'Email',
                       value: emailController.text.isNotEmpty
@@ -382,8 +370,6 @@ Future<void> _loadSavedProfile() async {
                           : '—',
                     ),
                     const SizedBox(height: 10),
-                    
-                    // Contact Number
                     DetailRow(
                       label: 'Contact Number',
                       value: phoneNumberController.text.isNotEmpty
@@ -408,7 +394,6 @@ Future<void> _loadSavedProfile() async {
                   ],
                 ),
               ),
-
               const SizedBox(height: 18),
               SectionCard(
                 title: 'Settings',
@@ -442,12 +427,14 @@ Future<void> _loadSavedProfile() async {
                         await AuthStorage.clear();
                         Navigator.pushAndRemoveUntil(
                           context,
-                          MaterialPageRoute(builder: (_) => const WelcomePage()),
+                          MaterialPageRoute(
+                              builder: (_) => const WelcomePage()),
                           (route) => false,
                         );
                       },
                       secondaryText: 'No',
-                      onSecondaryPressed: () => Navigator.of(context).pop(),
+                      onSecondaryPressed: () =>
+                          Navigator.of(context).pop(),
                     ),
                   );
                 },
