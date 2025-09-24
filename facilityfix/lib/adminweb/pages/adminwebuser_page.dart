@@ -32,7 +32,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
       'name': 'Juan Dela Cruz',
       'role': 'Staff',
       'department': 'Maintenance',
-      'status': 'Online',
+      'status': 'Offline',
       'email': 'juan.delacruz@facility.com',
       'lastActive': '5 min ago'
     },
@@ -41,7 +41,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
       'name': 'Erika De Guzman',
       'role': 'Tenant',
       'department': '',
-      'status': 'Offline',
+      'status': 'Pending',
       'email': 'erika.deguzman@tenant.com',
       'lastActive': '2 hours ago'
     },
@@ -87,10 +87,10 @@ class _AdminUserPageState extends State<AdminUserPage> {
       'work_maintenance': '/work/maintenance',
       'work_repair': '/work/repair',
       'calendar': '/calendar',
-      'inventory_view': '/inventory/view',
-      'inventory_add': '/inventory/add',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
       'analytics': '/analytics',
-      'notice': '/notice',
+      'announcement': '/announcement',
       'settings': '/settings',
     };
     return pathMap[routeKey];
@@ -151,33 +151,51 @@ class _AdminUserPageState extends State<AdminUserPage> {
     );
   }
 
+  // ---- Role Styles ----
+final Map<String, Map<String, Color>> roleStyles = {
+  'Admin': {
+    'bg': Color(0xFFDDEAFE), // light blue
+    'text': Color(0xFF1D4ED8), // dark blue
+  },
+  'Staff': {
+    'bg': Color(0xFFE5E7EB), // light gray
+    'text': Color(0xFF374151), // dark gray
+  },
+  'Tenant': {
+    'bg': Color(0xFFFEF9C3), // light yellow
+    'text': Color(0xFFB45309), // orange
+  },
+};
+
+  // ---- Status Styles ----
+  final Map<String, Map<String, Color>> statusStyles = {
+    'Online': {
+      'bg': Color(0xFFD1FAE5), // light green
+      'text': Color(0xFF047857), // dark green
+    },
+    'Offline': {
+      'bg': Color(0xFFFEE2E2), // light red
+      'text': Color(0xFFB91C1C), // dark red
+    },
+    'Pending': {
+      'bg': Color(0xFFFFEDD5), // light orange
+      'text': Color(0xFF9A3412), // dark orange
+    },
+    'Rejected': {
+      'bg': Color(0xFFE5E7EB), // light gray
+      'text': Color(0xFF374151), // dark gray
+    },
+  };
+
   // ---- Role Badge Widget ----
   Widget _buildRoleBadge(String role) {
-    Color backgroundColor;
-    Color textColor;
-
-    switch (role) {
-      case 'Admin':
-        backgroundColor = Colors.blue.shade100;
-        textColor = Colors.blue.shade700;
-        break;
-      case 'Staff':
-        backgroundColor = Colors.grey.shade200;
-        textColor = Colors.grey.shade700;
-        break;
-      case 'Tenant':
-        backgroundColor = Colors.yellow.shade100;
-        textColor = Colors.orange.shade700;
-        break;
-      default:
-        backgroundColor = Colors.grey.shade200;
-        textColor = Colors.grey.shade700;
-    }
+    final style = roleStyles[role] ??
+        {'bg': Colors.grey.shade200, 'text': Colors.grey.shade700};
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: backgroundColor,
+        color: style['bg'],
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
@@ -185,7 +203,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: textColor,
+          color: style['text'],
         ),
       ),
     );
@@ -193,10 +211,13 @@ class _AdminUserPageState extends State<AdminUserPage> {
 
   // ---- Status Badge Widget ----
   Widget _buildStatusBadge(String status) {
+    final style = statusStyles[status] ??
+        {'bg': Colors.grey.shade200, 'text': Colors.grey.shade700};
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: status == 'Online' ? Colors.green.shade100 : Colors.red.shade100,
+        color: style['bg'],
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
@@ -204,169 +225,133 @@ class _AdminUserPageState extends State<AdminUserPage> {
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: status == 'Online' ? Colors.green.shade700 : Colors.red.shade700,
+          color: style['text'],
         ),
       ),
     );
   }
 
   // ---- User Actions Menu ----
-  void _showUserActions(BuildContext context, Map<String, dynamic> user) {
-    showModalBottomSheet(
+  void _showActionMenu(BuildContext context, Map<String, dynamic> user, Offset position) {
+    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+
+    final bool isPending = user['status'] == 'Pending';
+
+    showMenu(
       context: context,
-      builder: (BuildContext context) {
-        return Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(position.dx, position.dy, 0, 0),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem(
+          value: 'view',
+          child: Row(
             children: [
-              Text(
-                'Actions for ${user['name']}',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.edit, color: Colors.blue),
-                title: const Text('Edit User'),
-                onTap: () {
-                  Navigator.pop(context);
-                  // TODO: Implement edit user functionality
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Edit ${user['name']} - Feature coming soon!')),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.lock_reset, color: Colors.orange),
-                title: const Text('Reset Password'),
-                onTap: () {
-                  Navigator.pop(context);
-                  // TODO: Implement reset password functionality
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Reset password for ${user['name']} - Feature coming soon!')),
-                  );
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  user['status'] == 'Online' ? Icons.block : Icons.check_circle,
-                  color: user['status'] == 'Online' ? Colors.red : Colors.green,
-                ),
-                title: Text(user['status'] == 'Online' ? 'Deactivate User' : 'Activate User'),
-                onTap: () {
-                  Navigator.pop(context);
-                  // TODO: Implement user activation/deactivation
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        '${user['status'] == 'Online' ? 'Deactivate' : 'Activate'} ${user['name']} - Feature coming soon!'
-                      ),
-                    ),
-                  );
-                },
-              ),
-              if (user['role'] != 'Admin')
-                ListTile(
-                  leading: const Icon(Icons.delete, color: Colors.red),
-                  title: const Text('Delete User'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    // Show confirmation dialog
-                    showDialog(
-                      context: context,
-                      builder: (BuildContext context) {
-                        return AlertDialog(
-                          title: const Text('Delete User'),
-                          content: Text('Are you sure you want to delete ${user['name']}? This action cannot be undone.'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('Cancel'),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                                // TODO: Implement delete functionality
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Delete ${user['name']} - Feature coming soon!')),
-                                );
-                              },
-                              style: TextButton.styleFrom(foregroundColor: Colors.red),
-                              child: const Text('Delete'),
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                ),
+              Icon(Icons.visibility_outlined, color: Colors.green[600], size: 18),
+              const SizedBox(width: 12),
+              Text("View", style: TextStyle(color: Colors.green[600], fontSize: 14)),
             ],
           ),
-        );
-      },
-    );
-  }
+        ),
 
-  // ---- Create New User Dialog ----
-  void _showCreateUserDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Create New User'),
-          content: const SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+        if (isPending) ...[
+          PopupMenuItem(
+            value: 'approve',
+            child: Row(
               children: [
-                TextField(
-                  decoration: InputDecoration(
-                    labelText: 'Full Name',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                SizedBox(height: 16),
-                TextField(
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                SizedBox(height: 16),
-                TextField(
-                  decoration: InputDecoration(
-                    labelText: 'Department',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
+                Icon(Icons.check_circle_outline, color: Colors.blue[600], size: 18),
+                const SizedBox(width: 12),
+                Text("Approve", style: TextStyle(color: Colors.blue[600], fontSize: 14)),
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+          PopupMenuItem(
+            value: 'reject',
+            child: Row(
+              children: [
+                Icon(Icons.cancel_outlined, color: Colors.orange[600], size: 18),
+                const SizedBox(width: 12),
+                Text("Reject", style: TextStyle(color: Colors.orange[600], fontSize: 14)),
+              ],
             ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                // TODO: Implement create user functionality
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Create user - Feature coming soon!')),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Create'),
+          ),
+        ]
+        else ...[
+          PopupMenuItem(
+            value: 'edit',
+            child: Row(
+              children: [
+                Icon(Icons.edit_outlined, color: Colors.blue[600], size: 18),
+                const SizedBox(width: 12),
+                Text("Edit", style: TextStyle(color: Colors.blue[600], fontSize: 14)),
+              ],
             ),
-          ],
-        );
-      },
-    );
+          ),
+        ],
+        PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline, color: Colors.red[600], size: 18),
+              const SizedBox(width: 12),
+              Text("Delete", style: TextStyle(color: Colors.red[600], fontSize: 14)),
+            ],
+          ),
+        ),
+      ],
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      elevation: 8,
+    ).then((value) {
+      if (value != null) {
+        _handleActionSelection(value, user);
+      }
+    });
   }
+
+  void _handleActionSelection(String action, Map<String, dynamic> user) {
+    switch (action) {
+      case 'view':
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Viewing user: ${user['name']}")),
+        );
+        break;
+
+      case 'approve':
+        setState(() {
+          user['status'] = 'Active';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("${user['name']} approved")),
+        );
+        break;
+
+      case 'reject':
+        setState(() {
+          user['status'] = 'Rejected'; // or Inactive, depending on your flow
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("${user['name']} rejected")),
+        );
+        break;
+
+      case 'edit':
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Editing user: ${user['name']}")),
+        );
+        break;
+
+      case 'delete':
+        setState(() {
+          //_users.remove(user);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Deleted user: ${user['name']}")),
+        );
+        break;
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -405,28 +390,30 @@ class _AdminUserPageState extends State<AdminUserPage> {
                 TextButton(
                   onPressed: () => context.go('/dashboard'),
                   style: TextButton.styleFrom(
-                    foregroundColor: Colors.grey.shade600,
+                    foregroundColor: Colors.black,
                     padding: EdgeInsets.zero,
                   ),
                   child: const Text('Dashboard'),
                 ),
                 const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
                 TextButton(
-                  onPressed: null,
+                  onPressed: () => context.go('/user/users'),
                   style: TextButton.styleFrom(
-                    foregroundColor: Colors.grey.shade600,
+                    foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                   ),
                   child: const Text('User and Role Management'),
                 ),
                 const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(
-                    'Users',
-                    style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w500),
+                TextButton(
+                  onPressed: null,
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                   ),
+                  child: const Text('Users'),
                 ),
+                
               ],
             ),
             const SizedBox(height: 32),
@@ -470,7 +457,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
                 _buildFilterDropdown(
                   'Status',
                   _selectedStatusFilter,
-                  ['All Status', 'Online', 'Offline'],
+                  ['All Status', 'Online', 'Offline', 'Pending'],
                   (value) => setState(() => _selectedStatusFilter = value),
                 ),
                 const SizedBox(width: 16),
@@ -514,20 +501,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
                 ),
                 const SizedBox(width: 12),
 
-                // Create New Button
-                ElevatedButton.icon(
-                  onPressed: _showCreateUserDialog,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Create New'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
+                
               ],
             ),
             const SizedBox(height: 32),
@@ -630,7 +604,10 @@ class _AdminUserPageState extends State<AdminUserPage> {
                                 // Role Badge
                                 Expanded(
                                   flex: 2,
-                                  child: _buildRoleBadge(user['role']),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: _buildRoleBadge(user['role']),
+                                  ),
                                 ),
 
                                 // Department
@@ -645,14 +622,26 @@ class _AdminUserPageState extends State<AdminUserPage> {
                                 // Status Badge
                                 Expanded(
                                   flex: 2,
-                                  child: _buildStatusBadge(user['status']),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: _buildStatusBadge(user['status']),
+                                  ),
                                 ),
 
                                 // Actions Button
-                                IconButton(
-                                  icon: const Icon(Icons.more_vert, size: 20),
-                                  onPressed: () => _showUserActions(context, user),
+                                Builder(
+                                  builder: (context) {
+                                    return IconButton(
+                                      icon: const Icon(Icons.more_vert, color: Colors.grey, size: 20),
+                                      onPressed: () {
+                                        final rbx = context.findRenderObject() as RenderBox;
+                                        final position = rbx.localToGlobal(Offset.zero);
+                                        _showActionMenu(context, user, position);
+                                      },
+                                    );
+                                  },
                                 ),
+
                               ],
                             ),
                           );

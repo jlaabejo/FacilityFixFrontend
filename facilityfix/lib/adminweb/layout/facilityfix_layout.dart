@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../popupwidgets/webnotification_popup.dart';
 
 class FacilityFixLayout extends StatefulWidget {
   final Widget body;
@@ -27,11 +29,20 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
   // Track hover states for navigation items
   Map<String, bool> _hovered = {};
 
+  // Debug logging toggle for highlight component
+  final bool _enableHighlightLogs = true;
+
+  void _logHighlight(String message) {
+    if (!_enableHighlightLogs) return;
+    debugPrint('[Highlight] $message');
+  }
+
   @override
   void initState() {
     super.initState();
     // Auto-expand sections if current route is a child
     _autoExpandForCurrentRoute();
+    _logHighlight('initState -> currentRoute=${widget.currentRoute}, expanded=$_expanded');
   }
 
   // Automatically expand parent dropdown if child route is active
@@ -47,10 +58,28 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
 
   // Handle navigation when item is clicked
   void _handleNavigation(String routeKey) {
+    _logHighlight('Navigate -> $routeKey');
     if (widget.onNavigate != null) {
       widget.onNavigate!(routeKey);
     } else {
       print('Navigate to $routeKey');
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant FacilityFixLayout oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.currentRoute != oldWidget.currentRoute) {
+      _logHighlight('Route changed: ${oldWidget.currentRoute} -> ${widget.currentRoute}');
+      if (widget.currentRoute.startsWith('user_')) {
+        _logHighlight('Active section: user');
+      } else if (widget.currentRoute.startsWith('work_')) {
+        _logHighlight('Active section: work');
+      } else if (widget.currentRoute.startsWith('inventory_')) {
+        _logHighlight('Active section: inventory');
+      } else {
+        _logHighlight('Active top-level item: ${widget.currentRoute}');
+      }
     }
   }
 
@@ -124,7 +153,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       _dropdownNav(
                         icon: Icons.group,
                         title: 'User and Role Management',
-                        key: 'user',
+                        sectionKey: 'user',
                         children: [
                           _subNavItem('Users', 'user_users'),
                           _subNavItem('Roles Management', 'user_roles'),
@@ -136,7 +165,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       _dropdownNav(
                         icon: Icons.build_outlined,
                         title: 'Work Orders',
-                        key: 'work',
+                        sectionKey: 'work',
                         children: [
                           _subNavItem('Maintenance Tasks', 'work_maintenance'),
                           _subNavItem('Repair Tasks', 'work_repair'),
@@ -152,10 +181,10 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       _dropdownNav(
                         icon: Icons.inventory_2_outlined,
                         title: 'Inventory Management',
-                        key: 'inventory',
+                        sectionKey: 'inventory',
                         children: [
-                          _subNavItem('View Inventory', 'inventory_view'),
-                          _subNavItem('Add Inventory', 'inventory_add'),
+                          _subNavItem('Inventory Items', 'inventory_items'),
+                          _subNavItem('Inventory Request', 'inventory_request'),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -164,8 +193,8 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       _navItem(Icons.analytics_outlined, 'Analytics', 'analytics'),
                       const SizedBox(height: 4),
                       
-                      // Notice navigation item
-                      _navItem(Icons.campaign_outlined, 'Notice', 'notice'),
+                      // Announcement navigation item
+                      _navItem(Icons.campaign_outlined, 'Announcement', 'announcement'),
                     ],
                   ),
                 ),
@@ -221,17 +250,22 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       // Header action buttons (retained original design)
                       Row(
                         children: [
-                          IconButton(
-                            icon: const Icon(Icons.dashboard_outlined),
-                            onPressed: () {},
-                          ),
+                          
                           IconButton(
                             icon: const Icon(Icons.notifications_outlined),
-                            onPressed: () {},
+                            //onPressed: () => _showNotificationsDialog(), - if backend is integrated na
+                            onPressed: () {
+                              NotificationDialog.show(
+                                context, 
+                                NotificationSampleData.getSampleNotifications()
+                              );
+                            },
                           ),
                           IconButton(
                             icon: const Icon(Icons.person, color: Colors.grey),
-                            onPressed: () {},
+                            onPressed: () {
+                              context.go('/profile');
+                            },
                           ),
                         ],
                       )
@@ -262,8 +296,14 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
     final isHovered = _hovered[routeKey] ?? false;
     
     return MouseRegion(
-      onEnter: (_) => setState(() => _hovered[routeKey] = true),
-      onExit: (_) => setState(() => _hovered[routeKey] = false),
+      onEnter: (_) {
+        //_logHighlight('Hover ON -> $routeKey');
+        setState(() => _hovered[routeKey] = true);
+      },
+      onExit: (_) {
+        //_logHighlight('Hover OFF -> $routeKey');
+        setState(() => _hovered[routeKey] = false);
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         margin: const EdgeInsets.symmetric(vertical: 2),
@@ -333,7 +373,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
   Widget _dropdownNav({
     required IconData icon,
     required String title,
-    required String key,
+    required String sectionKey,
     required List<Widget> children,
   }) {
     // Check if any child is currently selected
@@ -342,12 +382,18 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
       return valueKey?.value == widget.currentRoute;
     });
     
-    final isExpanded = _expanded[key] == true;
-    final isHovered = _hovered[key] ?? false;
+    final isExpanded = _expanded[sectionKey] == true;
+    final isHovered = _hovered[sectionKey] ?? false;
     
     return MouseRegion(
-      onEnter: (_) => setState(() => _hovered[key] = true),
-      onExit: (_) => setState(() => _hovered[key] = false),
+      onEnter: (_) {
+        _logHighlight('Hover ON -> section:$sectionKey');
+        setState(() => _hovered[sectionKey] = true);
+      },
+      onExit: (_) {
+        _logHighlight('Hover OFF -> section:$sectionKey');
+        setState(() => _hovered[sectionKey] = false);
+      },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -375,8 +421,10 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
               color: Colors.transparent,
               child: InkWell(
                 onTap: () {
+                  final next = !isExpanded;
+                  _logHighlight('Toggle expand -> section:$sectionKey -> $next');
                   setState(() {
-                    _expanded[key] = !isExpanded;
+                    _expanded[sectionKey] = next;
                   });
                 },
                 borderRadius: BorderRadius.circular(8),
@@ -455,8 +503,14 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
     
     return MouseRegion(
       key: ValueKey(routeKey),
-      onEnter: (_) => setState(() => _hovered[routeKey] = true),
-      onExit: (_) => setState(() => _hovered[routeKey] = false),
+      onEnter: (_) {
+        _logHighlight('Hover ON -> sub:$routeKey');
+        setState(() => _hovered[routeKey] = true);
+      },
+      onExit: (_) {
+        _logHighlight('Hover OFF -> sub:$routeKey');
+        setState(() => _hovered[routeKey] = false);
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         margin: const EdgeInsets.symmetric(vertical: 1),

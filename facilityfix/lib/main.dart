@@ -1,4 +1,5 @@
 
+import 'package:facilityfix/adminweb/pages/adminwebcalendar_page.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'adminweb/pages/login_page.dart';
@@ -14,6 +15,14 @@ import 'adminweb/pages/workmaintenance_form.dart';
 import 'adminweb/pages/internalmaintenance_viewform.dart';
 import 'adminweb/pages/externalmaintenance_form.dart';
 import 'adminweb/pages/externalmaintenance_viewform.dart';
+import 'adminweb/pages/admininventoryitems_page.dart';
+import 'adminweb/pages/webinventoryitems_viewdetails.dart';
+import 'adminweb/pages/admininventoryrequest_page.dart';
+import 'adminweb/pages/adminwebanalytics_page.dart';
+import 'adminweb/pages/adminwebannouncement_page.dart';
+import 'adminweb/pages/createwebannouncement_page.dart';
+import 'adminweb/pages/adminsettings_page.dart';
+import 'adminweb/pages/adminwebprofile_page.dart';
 
 void main() {
   runApp(MyApp());
@@ -68,40 +77,40 @@ class MyApp extends StatelessWidget {
       GoRoute(
         path: '/calendar',
         name: 'calendar',
-        builder: (context, state) => const PlaceholderPage(title: 'Calendar'),
+        builder: (context, state) => const AdminWebCalendarPage(),
       ),
       
       // Inventory Management routes
       GoRoute(
-        path: '/inventory/view',
-        name: 'inventory_view',
-        builder: (context, state) => const PlaceholderPage(title: 'View Inventory'),
+        path: '/inventory/items',
+        name: 'inventory_items',
+        builder: (context, state) => const InventoryManagementItemsPage(),
       ),
       GoRoute(
-        path: '/inventory/add',
-        name: 'inventory_add',
-        builder: (context, state) => const PlaceholderPage(title: 'Add Inventory'),
+        path: '/inventory/request',
+        name: 'inventory_request',
+        builder: (context, state) => const InventoryRequestPage(),
       ),
       
       // Analytics route
       GoRoute(
         path: '/analytics',
         name: 'analytics',
-        builder: (context, state) => const PlaceholderPage(title: 'Analytics'),
+        builder: (context, state) => const AdminWebAnalyticsPage(),
       ),
       
-      // Notice route
+      // Announcement route
       GoRoute(
-        path: '/notice',
-        name: 'notice',
-        builder: (context, state) => const PlaceholderPage(title: 'Notice'),
+        path: '/announcement',
+        name: 'announcement',
+        builder: (context, state) => const AdminWebAnnouncementPage(),
       ),
       
       // Settings route
       GoRoute(
         path: '/settings',
         name: 'settings',
-        builder: (context, state) => const PlaceholderPage(title: 'Settings'),
+        builder: (context, state) => const AdminWebSettingsPage(),
       ),
       
       // Logout route (can redirect back to login)
@@ -138,6 +147,24 @@ class MyApp extends StatelessWidget {
         path: '/adminweb/pages/adminrepair_wop_page',
         name: 'work_repair_workorderpermit',
         builder: (context, state) => const RepairWorkOrderPermitPage(),
+      ),
+      GoRoute(
+        path: '/inventory/item/:itemId',
+        name: 'inventory_item_details',
+        builder: (context, state) {
+          final itemId = state.pathParameters['itemId']!;
+          return InventoryItemDetailsPage(itemId: itemId);
+        },
+      ),
+      GoRoute(
+        path: '/adminweb/pages/createannouncement',
+        name: 'create_announcement',
+        builder: (context, state) => const CreateAnnouncementPage(),
+      ),
+      GoRoute(
+        path: '/profile',
+        name: 'profile',
+        builder: (context, state) => const AdminWebProfilePage(),
       ),
     ],
     
@@ -228,10 +255,10 @@ class PlaceholderPage extends StatelessWidget {
       'work_maintenance': '/work/maintenance',
       'work_repair': '/work/repair',
       'calendar': 'calendar',
-      'inventory_view': 'inventory_view',
-      'inventory_add': 'inventory_add',
+      'inventory_items': 'inventory_items',
+      'inventory_request': 'inventory_request',
       'analytics': 'analytics',
-      'notice': 'notice',
+      'announcement': 'announcement',
       'settings': 'settings',
       'logout': 'logout',
     };
@@ -247,10 +274,10 @@ class PlaceholderPage extends StatelessWidget {
       'work_maintenance': '/work/maintenance',
       'work_repair': '/work/repair',
       'calendar': '/calendar',
-      'inventory_view': '/inventory/view',
-      'inventory_add': '/inventory/add',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
       'analytics': '/analytics',
-      'notice': '/notice',
+      'announcement': '/announcement',
       'settings': '/settings',
       'logout': '/logout',
     };

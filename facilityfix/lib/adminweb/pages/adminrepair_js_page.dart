@@ -20,10 +20,10 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       'work_maintenance': '/work/maintenance',
       'work_repair': '/work/repair',
       'calendar': '/calendar',
-      'inventory_view': '/inventory/view',
-      'inventory_add': '/inventory/add',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
       'analytics': '/analytics',
-      'notice': '/notice',
+      'announcement': '/announcement',
       'settings': '/settings',
     };
     return pathMap[routeKey];
