@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
-import '../popupwidgets/createmaintenancedialogue_popup.dart';
+// import '../popupwidgets/createinventory_popup.dart';
 
-class AdminMaintenancePage extends StatefulWidget {
-  const AdminMaintenancePage({super.key});
+class InventoryManagementItemsPage extends StatefulWidget {
+  const InventoryManagementItemsPage({super.key});
 
   @override
-  State<AdminMaintenancePage> createState() => _AdminMaintenancePageState();
+  State<InventoryManagementItemsPage> createState() => _InventoryManagementItemsPageState();
 }
 
-class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
-  // Helper function to convert routeKey to actual route path
+class _InventoryManagementItemsPageState extends State<InventoryManagementItemsPage> {
+  // Route mapping helper function
   String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
       'dashboard': '/dashboard',
@@ -29,7 +29,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     return pathMap[routeKey];
   }
 
-  // Handle logout functionality
+  // Logout functionality
   void _handleLogout(BuildContext context) {
     showDialog(
       context: context,
@@ -45,7 +45,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                context.go('/'); // Go back to login page
+                context.go('/');
               },
               child: const Text('Logout'),
             ),
@@ -55,37 +55,42 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     );
   }
 
-  // Sample data for the table
-  final List<Map<String, dynamic>> _tasks = [
+  // Sample inventory data
+  final List<Map<String, dynamic>> _inventoryItems = [
     {
-      'id': 'PM-GEN-LIGHT-001',
-      'location': 'Bldg A - Basement',
-      'task': 'Elevator Maintenance',
-      'status': 'In Progress',
-      'date': '05-21-2025',
-      'recurrence': '3 Months',
+      'itemNo': 'MAT-CIV-003',
+      'itemName': 'Galvanized Screw 3mm',
+      'stock': '150',
+      'tag': 'High-Turnover',
+      'status': 'In Stock',
     },
     {
-      'id': 'PM-GEN-LIGHT-001',
-      'location': 'UNIT 210',
-      'task': 'Light Inspection',
-      'status': 'New',
-      'date': '05-30-2025',
-      'recurrence': '1 Month',
+      'itemNo': 'ELC-WIR-012',
+      'itemName': 'Electrical Wire 12AWG',
+      'stock': '25',
+      'tag': 'Critical',
+      'status': 'Low Stock',
+    },
+    {
+      'itemNo': 'PLB-PIP-006',
+      'itemName': 'PVC Pipe 6 inch',
+      'stock': '0',
+      'tag': 'Essential',
+      'status': 'Out of Stock',
     },
   ];
 
-
+  // Column widths for table
   final List<double> _colW = <double>[
-    160, // ID
-    180, // LOCATION
-    240, // TASK TITLE
-    140, // STATUS
-    120, // DATE
-    100, // RECURRENCE
-    48, // ACTION
+    180, // ITEM NO.
+    340, // ITEM NAME
+    120, // STOCK
+    140, // TAG
+    120, // STATUS
+    48,  // ACTION
   ];
 
+  // Fixed width cell helper
   Widget _fixedCell(int i, Widget child, {Alignment align = Alignment.centerLeft}) {
     return SizedBox(
       width: _colW[i],
@@ -93,18 +98,171 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     );
   }
 
-Text _ellipsis(String s, {TextStyle? style}) => Text(
-  s,
-  maxLines: 1,
-  overflow: TextOverflow.ellipsis,
-  softWrap: false,
-  style: style,
-);
+  // Text with ellipsis helper
+  Text _ellipsis(String s, {TextStyle? style}) => Text(
+    s,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    softWrap: false,
+    style: style,
+  );
+
+  // Action dropdown menu methods
+  void _showActionMenu(BuildContext context, Map<String, dynamic> item, Offset position) {
+    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    
+    showMenu(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(position.dx, position.dy, 0, 0),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem(
+          value: 'view',
+          child: Row(
+            children: [
+              Icon(
+                Icons.visibility_outlined,
+                color: Colors.green[600],
+                size: 18,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'View',
+                style: TextStyle(
+                  color: Colors.green[600],
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'edit',
+          child: Row(
+            children: [
+              Icon(
+                Icons.edit_outlined,
+                color: Colors.blue[600],
+                size: 18,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Edit',
+                style: TextStyle(
+                  color: Colors.blue[600],
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(
+                Icons.delete_outline,
+                color: Colors.red[600],
+                size: 18,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Delete',
+                style: TextStyle(
+                  color: Colors.red[600],
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      elevation: 8,
+    ).then((value) {
+      if (value != null) {
+        _handleActionSelection(value, item);
+      }
+    });
+  }
+
+  // Handle action selection
+  void _handleActionSelection(String action, Map<String, dynamic> item) {
+    switch (action) {
+      case 'view':
+        _viewItem(item);
+        break;
+      case 'edit':
+        _editItem(item);
+        break;
+      case 'delete':
+        _deleteItem(item);
+        break;
+    }
+  }
+
+  // View item method
+  void _viewItem(Map<String, dynamic> item) {
+    context.go('/inventory/item/${item['itemNo']}');
+  }
+
+  // Edit item method
+  void _editItem(Map<String, dynamic> item) {
+    // Implement edit functionality
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Edit item: ${item['id']}'),
+        backgroundColor: Colors.blue,
+      ),
+    );
+  }
+
+  // Delete item method
+  void _deleteItem(Map<String, dynamic> item) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Item'),
+          content: Text('Are you sure you want to delete item ${item['id']}?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // Remove item from list
+                setState(() {
+                  _inventoryItems.removeWhere((t) => t['id'] == item['id']);
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Item ${item['id']} deleted'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red,
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return FacilityFixLayout(
-      currentRoute: 'work_maintenance',
+      currentRoute: 'inventory_items',
       onNavigate: (routeKey) {
         final routePath = _getRoutePath(routeKey);
         if (routePath != null) {
@@ -118,7 +276,7 @@ Text _ellipsis(String s, {TextStyle? style}) => Text(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header section with title and Create New button
+            // Header Section with breadcrumbs and Create New button
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -126,7 +284,7 @@ Text _ellipsis(String s, {TextStyle? style}) => Text(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "Work Orders",
+                      "Inventory Management",
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
@@ -134,6 +292,7 @@ Text _ellipsis(String s, {TextStyle? style}) => Text(
                       ),
                     ),
                     const SizedBox(height: 8),
+                    // Breadcrumb navigation
                     Row(
                       children: [
                         Text(
@@ -150,7 +309,7 @@ Text _ellipsis(String s, {TextStyle? style}) => Text(
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          "Work Orders",
+                          "Inventory Management",
                           style: TextStyle(
                             fontSize: 14,
                             color: Colors.grey[600],
@@ -163,7 +322,7 @@ Text _ellipsis(String s, {TextStyle? style}) => Text(
                         ),
                         const SizedBox(width: 4),
                         const Text(
-                          "Maintenance Tasks",
+                          "Inventory Items",
                           style: TextStyle(
                             fontSize: 14,
                             color: Colors.black87,
@@ -174,65 +333,48 @@ Text _ellipsis(String s, {TextStyle? style}) => Text(
                     ),
                   ],
                 ),
+                // Create New button
                 ElevatedButton.icon(
-                  onPressed: () => showCreateMaintenanceTaskDialog(context),
-                  icon: const Icon(Icons.add, size: 22), 
+                  onPressed: () {
+                    // showCreateInventoryDialog(context); // You'll need to implement this
+                    // For now, just show a simple dialog
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Create New Item'),
+                        content: const Text('Create inventory item dialog will go here'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Close'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.add, size: 22),
                   label: const Text(
                     "Create New",
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      fontSize: 16, 
+                      fontSize: 16,
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1976D2),
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18), 
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30), 
+                      borderRadius: BorderRadius.circular(30),
                     ),
-                    elevation: 2, // slight shadow for emphasis
+                    elevation: 2,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 32),
 
-            // Summary cards
-            Row(
-              children: [
-                _buildSummaryCard(
-                  "FIRE SAFETY",
-                  "3/5 Passed",
-                  "Next: July 2025",
-                  Colors.white,
-                ),
-                const SizedBox(width: 16),
-                _buildSummaryCard(
-                  "EARTHQUAKE",
-                  "1/2 Passed",
-                  "Next: Sept 2025",
-                  Colors.white,
-                ),
-                const SizedBox(width: 16),
-                _buildSummaryCard(
-                  "ELECTRICAL",
-                  "2/3 Passed",
-                  "Next: Jan 2026",
-                  Colors.white,
-                ),
-                const SizedBox(width: 16),
-                _buildSummaryCard(
-                  "PENDING ITEMS",
-                  "8",
-                  "Total Pending",
-                  Colors.white,
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-
-            // Table section
+            // Main Content Container
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -254,15 +396,17 @@ Text _ellipsis(String s, {TextStyle? style}) => Text(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          "Maintenance Tasks",
+                          "Inventory Items",
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
                             color: Colors.black87,
                           ),
                         ),
+                        // Search and Filter section
                         Row(
                           children: [
+                            // Search field
                             Container(
                               width: 240,
                               height: 40,
@@ -291,6 +435,7 @@ Text _ellipsis(String s, {TextStyle? style}) => Text(
                               ),
                             ),
                             const SizedBox(width: 12),
+                            // Filter button
                             Container(
                               height: 40,
                               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -323,65 +468,81 @@ Text _ellipsis(String s, {TextStyle? style}) => Text(
                       ],
                     ),
                   ),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: Colors.grey[400],
+                  ),
 
-                  // Table content
+                  // Data Table
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
-                        child: DataTable(
-                            columnSpacing: 16,
-                            headingRowHeight: 56,
-                            dataRowHeight: 64,
-                            headingTextStyle: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey[600],
-                              letterSpacing: 0.5,
-                            ),
-                            dataTextStyle: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.black87,
-                            ),
-                            columns: [
-                              DataColumn(label: _fixedCell(0, const Text("ID"))),
-                              DataColumn(label: _fixedCell(1, const Text("LOCATION"))),
-                              DataColumn(label: _fixedCell(2, const Text("TASK TITLE"))),
-                              DataColumn(label: _fixedCell(3, const Text("STATUS"))),
-                              DataColumn(label: _fixedCell(4, const Text("DATE"))),
-                              DataColumn(label: _fixedCell(5, const Text("RECURRENCE"))),
-                              DataColumn(label: _fixedCell(6, const Text(""))),
-                            ],
-                            rows: _tasks.map((task) {
-                              return DataRow(
-                                cells: [
-                                  DataCell(_fixedCell(0, _ellipsis(
-                                    task['id'],
-                                    style: TextStyle(color: Colors.grey[700], fontSize: 13),
-                                  ))),
-                                  DataCell(_fixedCell(1, _ellipsis(task['location']))),
-                                  DataCell(_fixedCell(2, _ellipsis(task['task']))),
-                                  DataCell(_fixedCell(3, _buildStatusChip(task['status']))),
-                                  DataCell(_fixedCell(4, _ellipsis(task['date']))),
-                                  DataCell(_fixedCell(5, _ellipsis(task['recurrence']))),
-                                  DataCell(_fixedCell(6, Icon(
-                                    Icons.more_vert,
-                                    color: Colors.grey[400],
-                                    size: 20,
-                                  ), align: Alignment.center)),
-                                ],
-                              );
-                            }).toList(),
-                          ),
-                        
+                    child: DataTable(
+                      columnSpacing: 30,
+                      headingRowHeight: 56,
+                      dataRowHeight: 64,
+                      headingRowColor: MaterialStateProperty.all(Colors.grey[50]),
+                      headingTextStyle: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[600],
+                        letterSpacing: 0.5,
                       ),
-                    
-                  // Pagination
+                      dataTextStyle: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.black87,
+                      ),
+                      columns: [
+                        DataColumn(label: _fixedCell(0, const Text("ITEM NO."))),
+                        DataColumn(label: _fixedCell(1, const Text("ITEM NAME"))),
+                        DataColumn(label: _fixedCell(2, const Text("STOCK"))),
+                        DataColumn(label: _fixedCell(3, const Text("TAG"))),
+                        DataColumn(label: _fixedCell(4, const Text("STATUS"))),
+                        DataColumn(label: _fixedCell(5, const Text(""))),
+                      ],
+                      rows: _inventoryItems.map((item) {
+                        return DataRow(
+                          cells: [
+                            DataCell(_fixedCell(0, _ellipsis(
+                              item['itemNo'],
+                              style: TextStyle(color: Colors.grey[700], fontSize: 13),
+                            ))),
+                            DataCell(_fixedCell(1, _ellipsis(item['itemName']))),
+                            DataCell(_fixedCell(2, _ellipsis(item['stock']))),
+                            DataCell(_fixedCell(3, _buildTagChip(item['tag']))),
+                            DataCell(_fixedCell(4, _buildStatusChip(item['status']))),
+                            DataCell(_fixedCell(5,
+                            Builder(builder: (context) {
+                              return IconButton(
+                                onPressed: () {
+                                  final rbx = context.findRenderObject() as RenderBox;
+                                  final position = rbx.localToGlobal(Offset.zero);
+                                  _showActionMenu(context, item, position);
+                                },
+                                icon: Icon(Icons.more_vert, color: Colors.grey[400], size: 20),
+                              );
+                            }),
+                          align: Alignment.center,
+                        )),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: Colors.grey[400],
+                  ),
+
+                  // Pagination section
                   Padding(
                     padding: const EdgeInsets.all(20.0),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "Showing 1 to 2 of 2 entries",
+                          "Showing 1 to ${_inventoryItems.length} of ${_inventoryItems.length} entries",
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 14,
@@ -454,68 +615,69 @@ Text _ellipsis(String s, {TextStyle? style}) => Text(
     );
   }
 
-  // Widget for summary cards
-  Widget _buildSummaryCard(String title, String value, String subtitle, Color backgroundColor) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey[200]!),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[600],
-                letterSpacing: 0.5,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey[600],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Widget for status chips
-  Widget _buildStatusChip(String status) {
+  // Tag chip widget
+  Widget _buildTagChip(String tag) {
     Color bgColor;
     Color textColor;
-    switch (status) {
-      case 'In Progress':
+    
+    switch (tag) {
+      case 'High-Turnover':
+        bgColor = const Color(0xFFE8F5E8);
+        textColor = const Color(0xFF2E7D32);
+        break;
+      case 'Critical':
         bgColor = const Color(0xFFFFEBEE);
         textColor = const Color(0xFFD32F2F);
         break;
-      case 'New':
-        bgColor = const Color(0xFFE3F2FD);
-        textColor = const Color(0xFF1976D2);
+      case 'Essential':
+        bgColor = const Color(0xFFFFF3E0);
+        textColor = const Color(0xFFE65100);
         break;
       default:
         bgColor = Colors.grey[100]!;
         textColor = Colors.grey[700]!;
     }
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        tag,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  // Status chip widget
+  Widget _buildStatusChip(String status) {
+    Color bgColor;
+    Color textColor;
+    
+    switch (status) {
+      case 'In Stock':
+        bgColor = const Color(0xFFE3F2FD);
+        textColor = const Color(0xFF1976D2);
+        break;
+      case 'Low Stock':
+        bgColor = const Color(0xFFFFF3E0);
+        textColor = const Color(0xFFE65100);
+        break;
+      case 'Out of Stock':
+        bgColor = const Color(0xFFFFEBEE);
+        textColor = const Color(0xFFD32F2F);
+        break;
+      default:
+        bgColor = Colors.grey[100]!;
+        textColor = Colors.grey[700]!;
+    }
+    
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
