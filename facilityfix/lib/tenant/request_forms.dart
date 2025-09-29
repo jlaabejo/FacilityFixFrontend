@@ -10,13 +10,15 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:intl/intl.dart';
-import 'package:facilityfix/services/api_services.dart'; // Added API service import for backend integration
 
 class RequestForm extends StatefulWidget {
   /// Allowed: "Concern Slip", "Job Service", "Work Order"
   final String requestType;
 
-  const RequestForm({super.key, required this.requestType});
+  const RequestForm({
+    super.key,
+    required this.requestType,
+  });
 
   @override
   State<RequestForm> createState() => _RequestFormState();
@@ -50,11 +52,13 @@ class _RequestFormState extends State<RequestForm> {
   // ----- Form + validation -----
   final _formKey = GlobalKey<FormState>();
   bool _submitted = false; // <- drives inline error visibility
-  bool _isSubmitting = false; // Added loading state for API calls
 
   void _showSnack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -113,73 +117,21 @@ class _RequestFormState extends State<RequestForm> {
 
   // Local state
   String _requestTypeValue = ''; // dropdown selection for work order type
-  bool _hasContractors = false; // list not empty?
+  bool _hasContractors = false;  // list not empty?
   PlatformFile? selectedFile;
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
-  }
+    // Prefill some common "Auto-filled" values (replace with real auth/unit data)
+    final now = DateTime.now();
+    dateRequestedController.text = DateFormat('MMM d, yyyy h:mm a').format(now);
+    reqIdController.text = 'REQ-${now.millisecondsSinceEpoch.toString().substring(5)}';
+    unitController.text = 'Tower A - Unit 10B';
+    nameController.text = 'John Doe';
 
-  Future<void> _loadUserData() async {
-    try {
-      final apiService = APIService();
-      final userProfile = await apiService.getUserProfile();
-
-      if (userProfile != null) {
-        final now = DateTime.now();
-
-        // Generate request ID
-        reqIdController.text =
-            'REQ-${now.millisecondsSinceEpoch.toString().substring(5)}';
-
-        // Set current date
-        dateRequestedController.text = DateFormat(
-          'MMM d, yyyy h:mm a',
-        ).format(now);
-
-        // Extract user's full name
-        final firstName = userProfile['first_name'] ?? '';
-        final lastName = userProfile['last_name'] ?? '';
-        final fullName = '$firstName $lastName'.trim();
-        nameController.text = fullName.isNotEmpty ? fullName : 'User';
-
-        // Extract building and unit information
-        final buildingUnit = userProfile['building_unit'] ?? '';
-        unitController.text =
-            buildingUnit.isNotEmpty ? buildingUnit : 'Building - Unit';
-
-        // For Work Order -> permit
-        permitIdController.text =
-            'PERMIT-${now.year}${now.month.toString().padLeft(2, '0')}-0012';
-      } else {
-        // Fallback to basic values if profile fetch fails
-        final now = DateTime.now();
-        reqIdController.text =
-            'REQ-${now.millisecondsSinceEpoch.toString().substring(5)}';
-        dateRequestedController.text = DateFormat(
-          'MMM d, yyyy h:mm a',
-        ).format(now);
-        nameController.text = 'User';
-        unitController.text = 'Building - Unit';
-        permitIdController.text =
-            'PERMIT-${now.year}${now.month.toString().padLeft(2, '0')}-0012';
-      }
-    } catch (e) {
-      print('Error loading user data: $e');
-      // Fallback to basic values
-      final now = DateTime.now();
-      reqIdController.text =
-          'REQ-${now.millisecondsSinceEpoch.toString().substring(5)}';
-      dateRequestedController.text = DateFormat(
-        'MMM d, yyyy h:mm a',
-      ).format(now);
-      nameController.text = 'User';
-      unitController.text = 'Building - Unit';
-      permitIdController.text =
-          'PERMIT-${now.year}${now.month.toString().padLeft(2, '0')}-0012';
-    }
+    // For Work Order -> permit
+    permitIdController.text = 'PERMIT-${now.year}${now.month.toString().padLeft(2, '0')}-0012';
   }
 
   @override
@@ -201,20 +153,19 @@ class _RequestFormState extends State<RequestForm> {
   void _showRequestDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder:
-          (_) => CustomPopup(
-            title: 'Success',
-            message:
-                'Your ${widget.requestType.toLowerCase()} has been submitted successfully and is now listed under Work Order Management.',
-            primaryText: 'Go to Work Orders',
-            onPrimaryPressed: () {
-              Navigator.of(context).pop(); // close dialog
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const WorkOrderPage()),
-              );
-            },
-          ),
+      builder: (_) => CustomPopup(
+        title: 'Success',
+        message:
+            'Your ${widget.requestType.toLowerCase()} has been submitted successfully and is now listed under Work Order Management.',
+        primaryText: 'Go to Work Orders',
+        onPrimaryPressed: () {
+          Navigator.of(context).pop(); // close dialog
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const WorkOrderPage()),
+          );
+        },
+      ),
     );
   }
 
@@ -232,16 +183,11 @@ class _RequestFormState extends State<RequestForm> {
     if (!_submitted) return null;
     switch (key) {
       case 'title':
-        return titleController.text.trim().isEmpty
-            ? 'Task title is required.'
-            : null;
+        return titleController.text.trim().isEmpty ? 'Task title is required.' : null;
       case 'desc':
-        return descriptionController.text.trim().isEmpty
-            ? 'Description is required.'
-            : null;
+        return descriptionController.text.trim().isEmpty ? 'Description is required.' : null;
       case 'avail':
-        if (availabilityController.text.trim().isEmpty)
-          return 'Availability is required.';
+        if (availabilityController.text.trim().isEmpty) return 'Availability is required.';
         return _parseDT(availabilityController.text.trim()) == null
             ? 'Invalid date & time.'
             : null;
@@ -255,12 +201,9 @@ class _RequestFormState extends State<RequestForm> {
     if (!_submitted) return null;
     switch (key) {
       case 'notes':
-        return descriptionController.text.trim().isEmpty
-            ? 'Notes are required.'
-            : null;
+        return descriptionController.text.trim().isEmpty ? 'Notes are required.' : null;
       case 'avail':
-        if (availabilityController.text.trim().isEmpty)
-          return 'Availability is required.';
+        if (availabilityController.text.trim().isEmpty) return 'Availability is required.';
         return _parseDT(availabilityController.text.trim()) == null
             ? 'Invalid date & time.'
             : null;
@@ -274,27 +217,19 @@ class _RequestFormState extends State<RequestForm> {
     if (!_submitted) return null;
     switch (key) {
       case 'type':
-        return _requestTypeValue.trim().isEmpty
-            ? 'Request type is required.'
-            : null;
+        return _requestTypeValue.trim().isEmpty ? 'Request type is required.' : null;
       case 'from':
-        if (validFromController.text.trim().isEmpty)
-          return 'Start is required.';
-        return _parseDT(validFromController.text.trim()) == null
-            ? 'Invalid date & time.'
-            : null;
+        if (validFromController.text.trim().isEmpty) return 'Start is required.';
+        return _parseDT(validFromController.text.trim()) == null ? 'Invalid date & time.' : null;
       case 'to':
         if (validToController.text.trim().isEmpty) return 'End is required.';
         final from = _parseDT(validFromController.text.trim());
         final to = _parseDT(validToController.text.trim());
         if (to == null) return 'Invalid date & time.';
-        if (from != null && !to.isAfter(from))
-          return 'End must be later than start.';
+        if (from != null && !to.isAfter(from)) return 'End must be later than start.';
         return null;
       case 'contractors':
-        return !_hasContractors
-            ? 'Please add at least one contractor/personnel.'
-            : null;
+        return !_hasContractors ? 'Please add at least one contractor/personnel.' : null;
       default:
         return null;
     }
@@ -307,7 +242,8 @@ class _RequestFormState extends State<RequestForm> {
             _errCS('desc') != null ||
             _errCS('avail') != null;
       case 'Job Service':
-        return _errJS('notes') != null || _errJS('avail') != null;
+        return _errJS('notes') != null ||
+            _errJS('avail') != null;
       case 'Work Order':
         return _errWO('type') != null ||
             _errWO('from') != null ||
@@ -318,7 +254,7 @@ class _RequestFormState extends State<RequestForm> {
     }
   }
 
-  void _onSubmit() async {
+  void _onSubmit() {
     // Mark as submitted so errorText becomes visible
     setState(() => _submitted = true);
 
@@ -331,37 +267,8 @@ class _RequestFormState extends State<RequestForm> {
       return;
     }
 
-    // Only handle Concern Slip for now (as per backend files provided)
-    if (type != 'Concern Slip') {
-      _showRequestDialog(context);
-      return;
-    }
-
-    setState(() => _isSubmitting = true);
-
-    try {
-      final apiService = APIService();
-
-      String category = 'general';
-
-      await apiService.submitConcernSlip(
-        title: titleController.text.trim(),
-        description: descriptionController.text.trim(),
-        location: unitController.text.trim(), // Use actual unit as location
-        category: category,
-        priority: 'medium', // Default priority - could be made configurable
-        unitId: unitController.text.trim(),
-        attachments: [], //
-      );
-
-      // Show success dialog
-      _showRequestDialog(context);
-    } catch (e) {
-      print('Error submitting concern slip: $e');
-      _showSnack('Failed to submit concern slip: ${e.toString()}');
-    } finally {
-      setState(() => _isSubmitting = false);
-    }
+    // Passed all checks → show success dialog
+    _showRequestDialog(context);
   }
 
   // ----- UI sections -----
@@ -370,15 +277,9 @@ class _RequestFormState extends State<RequestForm> {
       case 'Concern Slip':
         return [
           const Text('Detail Information', style: TextStyle(fontSize: 20)),
-          const Text(
-            'Enter Detail Information',
-            style: TextStyle(fontSize: 14),
-          ),
+          const Text('Enter Detail Information', style: TextStyle(fontSize: 14)),
           const SizedBox(height: 16),
-          const Text(
-            'Basic Information',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-          ),
+          const Text('Basic Information', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
           const SizedBox(height: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -406,8 +307,9 @@ class _RequestFormState extends State<RequestForm> {
               InputField(
                 label: 'Building & Unit No.',
                 controller: unitController,
-                hintText: 'Building - Unit',
+                hintText: 'Auto-filled',
                 isRequired: true,
+                readOnly: true,
                 prefixIcon: const Padding(
                   padding: EdgeInsets.all(8.0),
                   child: Icon(Icons.apartment),
@@ -417,18 +319,16 @@ class _RequestFormState extends State<RequestForm> {
               InputField(
                 label: 'Name',
                 controller: nameController,
-                hintText: 'Enter your name',
+                hintText: 'Auto-filled',
                 isRequired: true,
+                readOnly: true,
                 prefixIcon: const Padding(
                   padding: EdgeInsets.all(8.0),
                   child: Icon(Icons.person),
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Request Details',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              ),
+              const Text('Request Details', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
               InputField(
                 label: 'Task Title',
@@ -472,15 +372,9 @@ class _RequestFormState extends State<RequestForm> {
       case 'Job Service':
         return [
           const Text('Detail Information', style: TextStyle(fontSize: 20)),
-          const Text(
-            'Enter Detail Information',
-            style: TextStyle(fontSize: 14),
-          ),
+          const Text('Enter Detail Information', style: TextStyle(fontSize: 14)),
           const SizedBox(height: 16),
-          const Text(
-            'Basic Information',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-          ),
+          const Text('Basic Information', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
           const SizedBox(height: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -508,8 +402,9 @@ class _RequestFormState extends State<RequestForm> {
               InputField(
                 label: 'Building & Unit No.',
                 controller: unitController,
-                hintText: 'Building - Unit',
+                hintText: 'Auto-filled',
                 isRequired: true,
+                readOnly: true,
                 prefixIcon: const Padding(
                   padding: EdgeInsets.all(8.0),
                   child: Icon(Icons.apartment),
@@ -519,18 +414,16 @@ class _RequestFormState extends State<RequestForm> {
               InputField(
                 label: 'Name',
                 controller: nameController,
-                hintText: 'Enter your name',
+                hintText: 'Auto-filled',
                 isRequired: true,
+                readOnly: true,
                 prefixIcon: const Padding(
                   padding: EdgeInsets.all(8.0),
                   child: Icon(Icons.person),
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Request Details',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              ),
+              const Text('Request Details', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
               InputField(
                 label: 'Notes',
@@ -562,15 +455,9 @@ class _RequestFormState extends State<RequestForm> {
       case 'Work Order':
         return [
           const Text('Permit Validation', style: TextStyle(fontSize: 20)),
-          const Text(
-            'Enter Detail Information',
-            style: TextStyle(fontSize: 14),
-          ),
+          const Text('Enter Detail Information', style: TextStyle(fontSize: 14)),
           const SizedBox(height: 16),
-          const Text(
-            'Basic Information',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-          ),
+          const Text('Basic Information', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
           const SizedBox(height: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -598,8 +485,9 @@ class _RequestFormState extends State<RequestForm> {
               InputField(
                 label: 'Building & Unit No.',
                 controller: unitController,
-                hintText: 'Building - Unit',
+                hintText: 'Auto-filled',
                 isRequired: true,
+                readOnly: true,
                 prefixIcon: const Padding(
                   padding: EdgeInsets.all(8.0),
                   child: Icon(Icons.apartment),
@@ -609,18 +497,16 @@ class _RequestFormState extends State<RequestForm> {
               InputField(
                 label: 'Name',
                 controller: nameController,
-                hintText: 'Enter your name',
+                hintText: 'Auto-filled',
                 isRequired: true,
+                readOnly: true,
                 prefixIcon: const Padding(
                   padding: EdgeInsets.all(8.0),
                   child: Icon(Icons.person),
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Permit Validation',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              ),
+              const Text('Permit Validation', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
 
               // Request Type (dropdown w/ required message)
@@ -632,7 +518,7 @@ class _RequestFormState extends State<RequestForm> {
                   setState(() => _requestTypeValue = v ?? '');
                   _formKey.currentState?.validate();
                 },
-                isRequired: _submitted, // only show built-in error after submit
+                isRequired: _submitted,                      // only show built-in error after submit
                 requiredMessage: 'Request type is required.',
                 hintText: 'Select request type',
               ),
@@ -640,10 +526,7 @@ class _RequestFormState extends State<RequestForm> {
               if (_errWO('type') != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 6, left: 4),
-                  child: Text(
-                    _errWO('type')!,
-                    style: const TextStyle(color: Colors.red, fontSize: 12),
-                  ),
+                  child: Text(_errWO('type')!, style: const TextStyle(color: Colors.red, fontSize: 12)),
                 ),
 
               const SizedBox(height: 8),
@@ -694,24 +577,18 @@ class _RequestFormState extends State<RequestForm> {
               ),
               const SizedBox(height: 8),
 
-              const Text(
-                'List of Contractors/Personnel',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              ),
+              const Text('List of Contractors/Personnel', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
               MultiContractorInputField(
                 isRequired: true,
                 onChanged: (contractorList) {
-                  setState(() => _hasContractors = contractorList.isNotEmpty);
+                  setState(() => _hasContractors = (contractorList?.isNotEmpty ?? false));
                 },
               ),
               if (_errWO('contractors') != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 6, left: 4),
-                  child: Text(
-                    _errWO('contractors')!,
-                    style: const TextStyle(color: Colors.red, fontSize: 12),
-                  ),
+                  child: Text(_errWO('contractors')!, style: const TextStyle(color: Colors.red, fontSize: 12)),
                 ),
             ],
           ),
@@ -733,27 +610,28 @@ class _RequestFormState extends State<RequestForm> {
   Widget build(BuildContext context) {
     final title = switch (widget.requestType) {
       'Concern Slip' => 'New Concern Slip',
-      'Job Service' => 'New Job Service',
-      'Work Order' => 'New Work Order Permit',
-      _ => 'New Request',
+      'Job Service'  => 'New Job Service',
+      'Work Order'   => 'New Work Order Permit',
+      _               => 'New Request',
     };
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: CustomAppBar(title: title, leading: const BackButton()),
+      appBar: CustomAppBar(
+        title: title,
+        leading: const BackButton(),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 24,
-            bottom: 120,
-          ),
+          padding: const EdgeInsets.only(left: 24, right: 24, top: 24, bottom: 120),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [...getFormFields(), const SizedBox(height: 24)],
+              children: [
+                ...getFormFields(),
+                const SizedBox(height: 24),
+              ],
             ),
           ),
         ),
@@ -774,11 +652,11 @@ class _RequestFormState extends State<RequestForm> {
                 width: double.infinity,
                 height: 48,
                 child: fx.FilledButton(
-                  label: _isSubmitting ? 'Submitting...' : 'Create Task',
+                  label: 'Create Task',
                   backgroundColor: const Color(0xFF005CE7),
                   withOuterBorder: false,
                   elevation: 0,
-                  onPressed: _isSubmitting ? () {} : _onSubmit,
+                  onPressed: _onSubmit,
                 ),
               ),
             ),

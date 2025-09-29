@@ -12,7 +12,6 @@ import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/helper_models.dart';
 import 'package:facilityfix/widgets/modals.dart';
 import 'package:flutter/material.dart';
-import 'package:facilityfix/services/api_services.dart'; // Import APIService
 
 class WorkOrderPage extends StatefulWidget {
   const WorkOrderPage({super.key});
@@ -29,55 +28,112 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   String _selectedStatus = 'All';
   final TextEditingController _searchController = TextEditingController();
 
-  List<WorkOrder> _all = [];
-  bool _isLoading = true;
+  // Sample data (replace with backend)
+  final List<WorkOrder> _all = [
+    // Concern Slip ----------------------------
+    // Concern Slip (Default)
+    WorkOrder(
+      title: 'Leaking faucet',
+      requestId: 'CS-2025-005',
+      date: 'Aug 22',
+      status: 'Pending',
+      department: 'Plumbing',
+      requestType: 'Concern Slip',
+      unit: 'A 1001',
+      priority: null,
+    ),
+    // Concern Slip (assigned)
+    WorkOrder(
+      title: 'Leaking faucet',
+      requestId: 'CS-2025-005',
+      date: 'Aug 22',
+      status: 'Assigned',
+      department: 'Plumbing',
+      requestType: 'Concern Slip',
+      unit: 'A 1001',
+      priority: null,
+      assignedTo: 'Juan Dela Cruz',
+      assignedDepartment: 'Plumbing',
+      assignedPhotoUrl: 'assets/images/avatar.png',
+    ),
+    // Concern Slip (assessed)
+    WorkOrder(
+      title: 'Leaking faucet',
+      requestId: 'CS-2025-030',
+      date: 'Aug 23',
+      status: 'Done',
+      department: 'Plumbing',
+      requestType: 'Concern Slip',
+      unit: 'A 1001',
+      priority: 'High',
+      assignedTo: 'Juan Dela Cruz',
+      assignedDepartment: 'Plumbing',
+      assignedPhotoUrl: 'assets/images/avatar.png',
+    ),
+    // Work Order Permit --------------------------------
+    // Work Order Permit (Approved)
+    WorkOrder(
+      title: 'Leaking faucet',
+      requestId: 'WO-2025-014',
+      date: 'Aug 20',
+      status: 'Approved',
+      department: 'Plumbing',
+      requestType: 'Work Order',
+      unit: 'A 1001',
+      priority: 'High',
+    ),
+    // Job Service --------------------------------
+    // Job Service (Assigned)
+    WorkOrder(
+      title: 'Leaking faucet',
+      requestId: 'CS-2025-021',
+      date: 'Aug 22',
+      status: 'Assigned',
+      department: 'Plumbing',
+      requestType: 'Job Service',
+      unit: 'A 1001',
+      priority: 'High',
+      hasInitialAssessment: true,
+      assignedTo: 'Juan Dela Cruz',
+      assignedDepartment: 'Plumbing',
+      assignedPhotoUrl: 'assets/images/avatar.png',
+    ),
+    // Job Service (Done / assessed)
+    WorkOrder(
+      title: 'Leaking faucet',
+      requestId: 'JS-2025-031',
+      date: 'Aug 23',
+      status: 'Done',
+      department: 'Plumbing',
+      requestType: 'Job Service',
+      unit: 'A 1001',
+      priority: 'High',
+      hasCompletionAssessment: true,
+      completionAssigneeName: 'Juan Dela Cruz',
+      completionAssigneeDepartment: 'Plumbing',
+      completionAssigneePhotoUrl: 'assets/images/avatar.png',
+    ),
+    // Job Service (On Hold)
+    WorkOrder(
+      title: 'Leaking faucet',
+      requestId: 'JS-2025-032',
+      date: 'Aug 23',
+      status: 'On Hold',
+      department: 'Plumbing',
+      requestType: 'Job Service',
+      unit: 'A 1001',
+      priority: 'High',
+      hasInitialAssessment: true,
+      initialAssigneeName: 'Juan Dela Cruz',
+      initialAssigneeDepartment: 'Plumbing',
+    ),
+  ];
 
   // ===== Refresh =============================================================
   Future<void> _refresh() async {
-    await _loadConcernSlips();
-  }
-
-  Future<void> _loadConcernSlips() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final apiService = APIService();
-      final concernSlips = await apiService.getTenantConcernSlips();
-
-      if (concernSlips != null && mounted) {
-        setState(() {
-          // Convert Map data to WorkOrder objects
-          _all =
-              concernSlips.map<WorkOrder>((data) {
-                return WorkOrder(
-                  title: data['title'] ?? 'Untitled',
-                  requestId: data['id'] ?? '',
-                  date: data['created_at'] ?? '',
-                  status: data['status'] ?? 'pending',
-                  unit: data['location'] ?? '',
-                  priority: data['priority'] ?? 'medium',
-                  department: data['category'] ?? '',
-                  requestType: 'Concern Slip',
-                  hasInitialAssessment: false,
-                  initialAssigneeName: '',
-                  initialAssigneeDepartment: '',
-                  hasCompletionAssessment: false,
-                  completionAssigneeName: '',
-                  completionAssigneeDepartment: '',
-                  assignedTo: '',
-                  assignedDepartment: '',
-                  assignedPhotoUrl: '',
-                );
-              }).toList();
-        });
-      }
-    } catch (e) {
-      print('Error loading concern slips: $e');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+    setState(() {});
   }
 
   // ===== Bottom nav ==========================================================
@@ -107,96 +163,77 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   void _showRequestDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder:
-          (_) => CustomPopup(
-            title: 'Create a Request',
-            message: 'Would you like to create a new request?',
-            primaryText: 'Yes, Continue',
-            onPrimaryPressed: () {
-              Navigator.of(context).pop();
-              showDialog(
-                context: context,
-                builder:
-                    (_) => Dialog(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 20,
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text(
-                              'What type of request would you like to create?',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 16),
-                            ListTile(
-                              leading: const Icon(Icons.assignment_outlined),
-                              title: const Text('Concern Slip'),
-                              onTap: () {
-                                Navigator.of(context).pop();
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder:
-                                        (_) => const RequestForm(
-                                          requestType: 'Concern Slip',
-                                        ),
-                                  ),
-                                );
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(
-                                Icons.design_services_outlined,
-                              ),
-                              title: const Text('Job Service Request'),
-                              onTap: () {
-                                Navigator.of(context).pop();
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder:
-                                        (_) => const RequestForm(
-                                          requestType: 'Job Service',
-                                        ),
-                                  ),
-                                );
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.build_outlined),
-                              title: const Text('Work Order Permit'),
-                              onTap: () {
-                                Navigator.of(context).pop();
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder:
-                                        (_) => const RequestForm(
-                                          requestType: 'Work Order',
-                                        ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
+      builder: (_) => CustomPopup(
+        title: 'Create a Request',
+        message: 'Would you like to create a new request?',
+        primaryText: 'Yes, Continue',
+        onPrimaryPressed: () {
+          Navigator.of(context).pop();
+          showDialog(
+            context: context,
+            builder: (_) => Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'What type of request would you like to create?',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                      textAlign: TextAlign.center,
                     ),
-              );
-            },
-            secondaryText: 'Cancel',
-            onSecondaryPressed: () => Navigator.of(context).pop(),
-          ),
+                    const SizedBox(height: 16),
+                    ListTile(
+                      leading: const Icon(Icons.assignment_outlined),
+                      title: const Text('Concern Slip'),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const RequestForm(requestType: 'Concern Slip'),
+                          ),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.design_services_outlined),
+                      title: const Text('Job Service Request'),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const RequestForm(requestType: 'Job Service'),
+                          ),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.build_outlined),
+                      title: const Text('Work Order Permit'),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const RequestForm(requestType: 'Work Order'),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+        secondaryText: 'Cancel',
+        onSecondaryPressed: () => Navigator.of(context).pop(),
+      ),
     );
   }
 
@@ -220,8 +257,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
 
   bool _statusMatches(WorkOrder w) {
     if (_selectedStatus == 'All') return true;
-    return (w.status).toLowerCase().trim() ==
-        _selectedStatus.toLowerCase().trim();
+    return (w.status).toLowerCase().trim() == _selectedStatus.toLowerCase().trim();
     // You can also normalize status further if needed.
   }
 
@@ -238,20 +274,16 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     ].any((s) => s.toLowerCase().contains(q));
   }
 
-  List<WorkOrder> get _filtered =>
-      _all
-          .where(_tabMatchesByRequestType)
-          .where(_statusMatches)
-          .where(_searchMatches)
-          .toList();
+  List<WorkOrder> get _filtered => _all
+      .where(_tabMatchesByRequestType)
+      .where(_statusMatches)
+      .where(_searchMatches)
+      .toList();
 
   // Sort filtered items by latest date first
   List<WorkOrder> get _filteredSorted {
     final list = List<WorkOrder>.from(_filtered);
-    list.sort(
-      (a, b) =>
-          UiDateParser.parse(b.date).compareTo(UiDateParser.parse(a.date)),
-    );
+    list.sort((a, b) => UiDateParser.parse(b.date).compareTo(UiDateParser.parse(a.date)));
     return list;
   }
 
@@ -272,9 +304,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     final visible = _all.where(_statusMatches).where(_searchMatches).toList();
 
     int countFor(String type) =>
-        visible
-            .where((w) => (w.requestType ?? '').toLowerCase() == type)
-            .length;
+        visible.where((w) => (w.requestType ?? '').toLowerCase() == type).length;
 
     return [
       TabItem(label: 'All', count: visible.length),
@@ -333,11 +363,10 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder:
-                (_) => ViewDetailsPage(
-                  selectedTabLabel: routeLabel,
-                  requestType: w.requestType,
-                ),
+            builder: (_) => ViewDetailsPage(
+              selectedTabLabel: routeLabel,
+              requestType: w.requestType,
+            ),
           ),
         );
       },
@@ -355,7 +384,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   void initState() {
     super.initState();
     _searchController.addListener(() => setState(() {}));
-    _loadConcernSlips();
   }
 
   @override
@@ -374,11 +402,10 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
         decoration: InputDecoration(
           hintText: 'Search by title, ID, status, unit…',
           prefixIcon: const Icon(Icons.search),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 0,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           enabledBorder: const OutlineInputBorder(
             borderSide: BorderSide(color: Color(0xFFE5E7EB)),
             borderRadius: BorderRadius.all(Radius.circular(12)),
@@ -419,138 +446,87 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
           onRefresh: _refresh,
           child: Stack(
             children: [
-              _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ===== Search + Status (classification removed) =====
+                    Row(
                       children: [
-                        // ===== Search + Status (classification removed) =====
-                        Row(
-                          children: [
-                            Expanded(child: _buildSearchField()),
-                            const SizedBox(width: 12),
-                            DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: _selectedStatus,
-                                items:
-                                    _statusOptions
-                                        .map(
-                                          (s) => DropdownMenuItem(
-                                            value: s,
-                                            child: Text(s),
-                                          ),
-                                        )
-                                        .toList(),
-                                onChanged: (v) {
-                                  if (v == null) return;
-                                  setState(
-                                    () =>
-                                        _selectedStatus =
-                                            v.trim().isEmpty ? 'All' : v,
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Tabs: All / Concern Slip / Job Service / Work Order
-                        StatusTabSelector(
-                          tabs: _tabs,
-                          selectedLabel: _selectedTabLabel,
-                          onTabSelected:
-                              (label) =>
-                                  setState(() => _selectedTabLabel = label),
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Header
-                        Row(
-                          children: [
-                            Text(
-                              'Recent $_selectedTabLabel',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF2F4F7),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                '${items.length}',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF475467),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        // List
-                        Expanded(
-                          child:
-                              items.isEmpty
-                                  ? Center(
-                                    child: Container(
-                                      padding: const EdgeInsets.all(32),
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Icon(
-                                            Icons.assignment_outlined,
-                                            size: 64,
-                                            color: Colors.grey[400],
-                                          ),
-                                          const SizedBox(height: 16),
-                                          Text(
-                                            'No ${_selectedTabLabel.toLowerCase()} requests yet',
-                                            style: const TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.w600,
-                                              color: Color(0xFF374151),
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            'Tap the + button below to create your first request',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.grey[600],
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  )
-                                  : ListView.separated(
-                                    physics:
-                                        const AlwaysScrollableScrollPhysics(),
-                                    itemCount: items.length,
-                                    separatorBuilder:
-                                        (_, __) => const SizedBox(height: 12),
-                                    itemBuilder: (_, i) => buildCard(items[i]),
-                                  ),
+                        Expanded(child: _buildSearchField()),
+                        const SizedBox(width: 12),
+                        DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedStatus,
+                            items: _statusOptions
+                                .map((s) => DropdownMenuItem(
+                                      value: s,
+                                      child: Text(s),
+                                    ))
+                                .toList(),
+                            onChanged: (v) {
+                              if (v == null) return;
+                              setState(() => _selectedStatus = v.trim().isEmpty ? 'All' : v);
+                            },
+                          ),
                         ),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 16),
+
+                    // Tabs: All / Concern Slip / Job Service / Work Order
+                    StatusTabSelector(
+                      tabs: _tabs,
+                      selectedLabel: _selectedTabLabel,
+                      onTabSelected: (label) => setState(() => _selectedTabLabel = label),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Header
+                    Row(
+                      children: [
+                        Text(
+                          'Recent $_selectedTabLabel',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF2F4F7),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '${items.length}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF475467),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // List
+                    Expanded(
+                      child: items.isEmpty
+                          ? const EmptyState()
+                          : ListView.separated(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              itemCount: items.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              itemBuilder: (_, i) => buildCard(items[i]),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
 
               // Add button
               Positioned(
