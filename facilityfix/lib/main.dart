@@ -1,3 +1,4 @@
+
 // import 'package:facilityfix/adminweb/pages/adminwebcalendar_page.dart';
 // import 'package:flutter/material.dart';
 // import 'package:go_router/go_router.dart';
@@ -22,9 +23,9 @@
 // import 'adminweb/pages/createwebannouncement_page.dart';
 // import 'adminweb/pages/adminsettings_page.dart';
 // import 'adminweb/pages/adminwebprofile_page.dart';
-
 // // import 'package:facilityfix/staff/home.dart';
 // // import 'package:flutter/material.dart';
+
 // void main() {
 //   runApp(MyApp());
 // }
@@ -91,6 +92,14 @@
 //         path: '/inventory/request',
 //         name: 'inventory_request',
 //         builder: (context, state) => const InventoryRequestPage(),
+//         path: '/inventory/view',
+//         name: 'inventory_view',
+//         builder: (context, state) => const PlaceholderPage(title: 'View Inventory'),
+//       ),
+//       GoRoute(
+//         path: '/inventory/add',
+//         name: 'inventory_add',
+//         builder: (context, state) => const PlaceholderPage(title: 'Add Inventory'),
 //       ),
       
 //       // Analytics route
@@ -105,6 +114,14 @@
 //         path: '/announcement',
 //         name: 'announcement',
 //         builder: (context, state) => const AdminWebAnnouncementPage(),
+//         builder: (context, state) => const PlaceholderPage(title: 'Analytics'),
+//       ),
+      
+//       // Notice route
+//       GoRoute(
+//         path: '/notice',
+//         name: 'notice',
+//         builder: (context, state) => const PlaceholderPage(title: 'Notice'),
 //       ),
       
 //       // Settings route
@@ -199,7 +216,6 @@
 //     super.key,
 //     required this.title,
 //   });
-
 //   @override
 //   Widget build(BuildContext context) {
 //     // Get current route to pass to layout
@@ -287,7 +303,106 @@
 //   }
 // }
 
+//   @override
+//   Widget build(BuildContext context) {
+//     // Get current route to pass to layout
+//     final String currentRoute = GoRouterState.of(context).name ?? '';
+    
+//     return FacilityFixLayout(
+//       currentRoute: _getRouteKey(currentRoute),
+//       onNavigate: (routeKey) {
+//         // Convert routeKey to actual route path
+//         final routePath = _getRoutePath(routeKey);
+//         if (routePath != null) {
+//           context.go(routePath);
+//         }
+//       },
+//       body: Scaffold(
+//         body: Center(
+//           child: Column(
+//             mainAxisAlignment: MainAxisAlignment.center,
+//             children: [
+//               Icon(
+//                 Icons.construction,
+//                 size: 64,
+//                 color: Colors.grey[400],
+//               ),
+//               const SizedBox(height: 16),
+//               Text(
+//                 title,
+//                 style: const TextStyle(
+//                   fontSize: 24,
+//                   fontWeight: FontWeight.bold,
+//                 ),
+//               ),
+//               const SizedBox(height: 8),
+//               Text(
+//                 'This page is under construction',
+//                 style: TextStyle(
+//                   fontSize: 16,
+//                   color: Colors.grey[600],
+//                 ),
+//               ),
+//             ],
+//           ),
+//         ),
+//       ),
+//     );
+//   }
+  
+//   // Helper function to convert route name to routeKey used in layout
+//   String _getRouteKey(String routeName) {
+//     final Map<String, String> routeMap = {
+//       'dashboard': 'dashboard',
+//       'user_users': 'user_users',
+//       'user_roles': 'user_roles',
+//       'work_maintenance': '/work/maintenance',
+//       'work_repair': '/work/repair',
+//       'calendar': 'calendar',
+//       'inventory_view': 'inventory_view',
+//       'inventory_add': 'inventory_add',
+//       'analytics': 'analytics',
+//       'notice': 'notice',
+//       'settings': 'settings',
+//       'logout': 'logout',
+//     };
+//     return routeMap[routeName] ?? 'dashboard';
+//   }
+  
+//   // Helper function to convert routeKey to actual route path
+//   String? _getRoutePath(String routeKey) {
+//     final Map<String, String> pathMap = {
+//       'dashboard': '/dashboard',
+//       'user_users': '/user/users',
+//       'user_roles': '/user/roles',
+//       'work_maintenance': '/work/maintenance',
+//       'work_repair': '/work/repair',
+//       'calendar': '/calendar',
+//       'inventory_view': '/inventory/view',
+//       'inventory_add': '/inventory/add',
+//       'analytics': '/analytics',
+//       'notice': '/notice',
+//       'settings': '/settings',
+//       'logout': '/logout',
+//     };
+//     return pathMap[routeKey];
+//   }
+// }
 
+
+
+import 'package:facilityfix/landingpage/welcomepage.dart';
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -303,3 +418,8 @@
       ),
     );
   }
+      home: WelcomePage(), 
+    );
+  }
+}
+

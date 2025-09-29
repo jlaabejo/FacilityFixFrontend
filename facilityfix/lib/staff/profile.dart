@@ -1,5 +1,5 @@
+// lib/staff/profile.dart
 import 'dart:io';
-
 import 'package:facilityfix/landingpage/welcomepage.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/home.dart';
@@ -9,9 +9,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
-import 'package:facilityfix/widgets/forms.dart';
 import 'package:facilityfix/widgets/modals.dart';
 import 'package:facilityfix/widgets/profile.dart';
+import 'package:facilityfix/widgets/forgotPassword.dart';
+import 'package:facilityfix/services/auth_storage.dart';
+import 'package:intl/intl.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -35,21 +37,101 @@ class _ProfilePageState extends State<ProfilePage> {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController phoneNumberController = TextEditingController();
-  final ImagePicker _picker = ImagePicker();
+  final TextEditingController birthDateController = TextEditingController();
+  final TextEditingController staffDepartmentController = TextEditingController();
 
+  final ImagePicker _picker = ImagePicker();
   File? _profileImageFile;
+
+  // In-memory persisted profile map
+  Map<String, dynamic>? _profileMap;
+  String _staffId = '';
+  String _fullName = 'User';
 
   ImageProvider get _profileImageProvider {
     if (_profileImageFile != null) return FileImage(_profileImageFile!);
+    if (_profileMap != null &&
+        _profileMap!['photo_url'] != null &&
+        _profileMap!['photo_url'].toString().isNotEmpty) {
+      try {
+        return NetworkImage(_profileMap!['photo_url'].toString());
+      } catch (_) {}
+    }
     return const AssetImage('assets/images/profile.png');
   }
 
   @override
   void initState() {
     super.initState();
-    nameController.text = 'Jasper Lorredo';
-    emailController.text = 'japser_lorredo@example.com';
-    phoneNumberController.text = '+63 912 345 6789';
+    _loadSavedProfile();
+  }
+
+  Future<void> _loadSavedProfile() async {
+    final saved = await AuthStorage.getProfile();
+    print('[StaffProfilePage] Raw saved data: $saved');
+
+    if (saved == null) {
+      setState(() {
+        _fullName = 'User';
+        emailController.text = '';
+        phoneNumberController.text = '';
+        birthDateController.text = '';
+        staffDepartmentController.text = '';
+        _staffId = '';
+      });
+      return;
+    }
+
+    _profileMap = Map<String, dynamic>.from(saved);
+
+    print('Available keys in saved profile: ${_profileMap!.keys.toList()}');
+
+    final firstName = (_profileMap!['first_name'] ?? '').toString();
+    final lastName = (_profileMap!['last_name'] ?? '').toString();
+    final email = (_profileMap!['email'] ?? '').toString();
+    final phone = (_profileMap!['phone_number'] ?? '').toString();
+    final staffDept = (_profileMap!['staff_department'] ?? '').toString();
+    final staffId = (_profileMap!['user_id'] ?? _profileMap!['id'] ?? '').toString();
+    final birthDate = (_profileMap!['birthdate'] ?? _profileMap!['birth_date'] ?? '').toString();
+
+    final fullName = '$firstName $lastName'.trim();
+
+    print(
+        'Extracted data: fullName=$fullName, email=$email, phone=$phone, staff_department=$staffDept, staffId=$staffId, birthDate=$birthDate');
+
+    setState(() {
+      _fullName = fullName.isNotEmpty ? fullName : 'User';
+      emailController.text = email;
+      phoneNumberController.text = phone;
+      staffDepartmentController.text = staffDept;
+      _staffId = staffId;
+      birthDateController.text =
+          birthDate.isNotEmpty ? _formatBirthDateForDisplay(birthDate) : '';
+    });
+  }
+
+  String _formatBirthDateForDisplay(String dateString) {
+    if (dateString.isEmpty) return '';
+    try {
+      if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dateString)) {
+        final date = DateTime.parse(dateString);
+        return DateFormat('MMM dd, yyyy').format(date);
+      }
+      final date = DateTime.parse(dateString);
+      return DateFormat('MMM dd, yyyy').format(date);
+    } catch (_) {
+      return dateString;
+    }
+  }
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    emailController.dispose();
+    phoneNumberController.dispose();
+    birthDateController.dispose();
+    staffDepartmentController.dispose();
+    super.dispose();
   }
 
   void _onTabTapped(int index) {
@@ -105,8 +187,15 @@ class _ProfilePageState extends State<ProfilePage> {
                     allowMultiple: false,
                   );
                   if (result != null && result.files.isNotEmpty) {
-                    final file = File(result.files.first.path!);
-                    setState(() => _profileImageFile = file);
+                    final path = result.files.first.path;
+                    if (path != null) {
+                      final file = File(path);
+                      setState(() {
+                        _profileImageFile = file;
+                        _profileMap = {...?_profileMap, 'photo_path': path};
+                        AuthStorage.saveProfile(_profileMap ?? {});
+                      });
+                    }
                   }
                   if (context.mounted) Navigator.pop(ctx);
                 },
@@ -115,11 +204,16 @@ class _ProfilePageState extends State<ProfilePage> {
                 leading: const Icon(Icons.camera_alt_outlined),
                 title: const Text('Take a photo'),
                 onTap: () async {
-                  final XFile? photo =
-                      await _picker.pickImage(source: ImageSource.camera);
+                  final XFile? photo = await _picker.pickImage(
+                    source: ImageSource.camera,
+                  );
                   if (photo != null) {
                     final file = File(photo.path);
-                    setState(() => _profileImageFile = file);
+                    setState(() {
+                      _profileImageFile = file;
+                      _profileMap = {...?_profileMap, 'photo_path': photo.path};
+                      AuthStorage.saveProfile(_profileMap ?? {});
+                    });
                   }
                   if (context.mounted) Navigator.pop(ctx);
                 },
@@ -134,6 +228,83 @@ class _ProfilePageState extends State<ProfilePage> {
         );
       },
     );
+  }
+
+  Future<void> _openForgotPasswordEmail() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => const ForgotPasswordEmailModal(),
+    );
+  }
+
+  Future<void> _openEditAllDetailsSheet() async {
+    final updated = await showModalBottomSheet<EditedProfileData>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => EditProfileModal(
+        role: UserRole.staff,
+        initialFullName: _fullName,
+        initialBirthDate: birthDateController.text,
+        initialUserEmail: emailController.text,
+        initialContactNumber: phoneNumberController.text,
+        initialStaffDepartment: staffDepartmentController.text,
+      ),
+    );
+
+    if (updated == null || !mounted) return;
+
+    final parts = updated.fullName.trim().split(RegExp(r'\s+'));
+    final firstName = parts.isNotEmpty ? parts.first : '';
+    final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+
+    setState(() {
+      _fullName = updated.fullName;
+      emailController.text = updated.userEmail;
+      phoneNumberController.text = updated.contactNumber;
+      staffDepartmentController.text =
+          updated.staffDepartment ?? staffDepartmentController.text;
+      birthDateController.text = updated.birthDate.isNotEmpty
+          ? _formatBirthDateForDisplay(updated.birthDate)
+          : '';
+    });
+
+    _profileMap = {
+      ...?_profileMap,
+      'first_name': firstName,
+      'last_name': lastName,
+      'email': updated.userEmail,
+      'phone_number': updated.contactNumber,
+      'staff_department': updated.staffDepartment ?? _profileMap?['staff_department'],
+      'birthdate': _normalizeBirthDateForSave(updated.birthDate),
+    };
+
+    await AuthStorage.saveProfile(_profileMap ?? {});
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Profile updated')),
+    );
+  }
+
+  String _normalizeBirthDateForSave(String prettyOrIso) {
+    final trimmed = prettyOrIso.trim();
+    final isoRe = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+    if (isoRe.hasMatch(trimmed)) return trimmed;
+    try {
+      final dt = DateTime.parse(trimmed);
+      return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return trimmed;
+    }
   }
 
   @override
@@ -163,8 +334,9 @@ class _ProfilePageState extends State<ProfilePage> {
             children: [
               ProfileInfoWidget(
                 profileImage: _profileImageProvider,
-                name: nameController.text,
-                staffId: 'Staff ID: #S12345',
+                fullName: _fullName,
+                staffId:
+                    _staffId.isNotEmpty ? 'Staff ID: #$_staffId' : 'Staff ID: —',
                 onTap: () => _openPhotoPickerSheet(context),
               ),
               const SizedBox(height: 24),
@@ -173,63 +345,50 @@ class _ProfilePageState extends State<ProfilePage> {
                 trailing: IconButton(
                   icon: const Icon(Icons.edit, size: 20, color: Colors.blueGrey),
                   tooltip: 'Edit personal details',
-                  onPressed: () async {
-                    // Uses the no-password version of the sheet (username, email, phone)
-                    final updated = await showEditPersonalDetailsSheet(
-                      context: context,
-                      initialName: nameController.text,
-                      initialEmail: emailController.text,
-                      initialPhone: phoneNumberController.text,
-                    );
-
-                    if (updated == null || !mounted) return;
-
-                    setState(() {
-                      nameController.text = updated.name;
-                      emailController.text = updated.email;
-                      phoneNumberController.text = updated.phone;
-                    });
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Personal details updated')),
-                    );
-                  },
+                  onPressed: _openEditAllDetailsSheet,
                 ),
                 child: Column(
                   children: [
-                    InputField(
-                      label: 'Name',
-                      controller: nameController,
-                      hintText: 'Auto-filled',
-                      isRequired: true,
-                      readOnly: true,
-                      prefixIcon: const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Icon(Icons.person),
-                      ),
+                    DetailRow(
+                      label: 'Birth Date',
+                      value: birthDateController.text.isNotEmpty
+                          ? birthDateController.text
+                          : '—',
                     ),
                     const SizedBox(height: 10),
-                    InputField(
+                    DetailRow(
+                      label: 'Staff Department',
+                      value: staffDepartmentController.text.isNotEmpty
+                          ? staffDepartmentController.text
+                          : '—',
+                    ),
+                    const SizedBox(height: 10),
+                    DetailRow(
                       label: 'Email',
-                      controller: emailController,
-                      hintText: 'Auto-filled',
-                      isRequired: true,
-                      readOnly: true,
-                      prefixIcon: const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Icon(Icons.mail),
-                      ),
+                      value: emailController.text.isNotEmpty
+                          ? emailController.text
+                          : '—',
                     ),
                     const SizedBox(height: 10),
-                    InputField(
-                      label: 'Phone Number',
-                      controller: phoneNumberController,
-                      hintText: 'Auto-filled',
-                      isRequired: true,
-                      readOnly: true,
-                      prefixIcon: const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Icon(Icons.phone),
+                    DetailRow(
+                      label: 'Contact Number',
+                      value: phoneNumberController.text.isNotEmpty
+                          ? phoneNumberController.text
+                          : '—',
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: _openForgotPasswordEmail,
+                        child: const Text(
+                          'Forgot password?',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF005CE7),
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -263,15 +422,19 @@ class _ProfilePageState extends State<ProfilePage> {
                       title: 'Confirm Logout',
                       message: 'Are you sure you want to logout?',
                       primaryText: 'Yes',
-                      onPrimaryPressed: () {
+                      onPrimaryPressed: () async {
                         Navigator.of(context).pop();
-                        Navigator.pushReplacement(
+                        await AuthStorage.clear();
+                        Navigator.pushAndRemoveUntil(
                           context,
-                          MaterialPageRoute(builder: (_) => const WelcomePage()),
+                          MaterialPageRoute(
+                              builder: (_) => const WelcomePage()),
+                          (route) => false,
                         );
                       },
                       secondaryText: 'No',
-                      onSecondaryPressed: () => Navigator.of(context).pop(),
+                      onSecondaryPressed: () =>
+                          Navigator.of(context).pop(),
                     ),
                   );
                 },

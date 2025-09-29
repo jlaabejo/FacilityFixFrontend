@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 // REPAIR DETAILS
 class RepairDetailsScreen extends StatelessWidget {
   //  Basic Information
-  final String? title;
+  final String? title; //requestTitle
   final String requestId;
   final String reqDate; // will display as: Aug 12, 2025
   final String requestType; // Concern Slip | Job Service | Work Order / Work Order Permit
@@ -16,7 +16,7 @@ class RepairDetailsScreen extends StatelessWidget {
 
   //  Tenant / Requester
   final String requestedBy;
-  final String unit;
+  final String unit; //buildingUnitNo
   final String? scheduleAvailability; // will display as: Aug 12, 1:30 PM (if time exists)
 
   //  Request Details
