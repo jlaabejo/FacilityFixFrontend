@@ -25,7 +25,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
   bool _pinToDashboard = false;
   List<File> _attachedFiles = [];
 
-  // Dropdown options based on your requirements
+  // Dropdown options 
   final List<String> _audienceOptions = ['Tenant', 'Staff', 'All'];
   
   final List<Map<String, dynamic>> _typeOptions = [
@@ -264,12 +264,12 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
         }
       },
       // Important: let THIS be the only scroll view at this level.
-      // Important: this entire "body:" replaces your current one
+      // Important: this entire "body:" replaces the current one
       body: LayoutBuilder(
         builder: (context, constraints) {
           final hasBoundedHeight = constraints.hasBoundedHeight;
 
-          // Build the actual page content once, then optionally wrap it with a ConstrainedBox
+          // Build the actual page content once,(optionally) wrap it with a ConstrainedBox
           final content = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min, // shrink-wrap vertically
@@ -288,25 +288,27 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                   ),
                   const SizedBox(height: 8),
                   Row(
-                    children: [
-                      Text("Dashboard",
-                          style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-                      Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey[600]),
-                      const SizedBox(width: 4),
-                      Text("announcement",
-                          style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-                      Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey[600]),
-                      const SizedBox(width: 4),
-                      const Text(
-                        "Create Announcement",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w500,
+                      children: [
+                        TextButton(
+                          onPressed: () => context.go('/dashboard'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                          child: const Text('Dashboard'),
                         ),
-                      ),
-                    ],
-                  ),
+                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        TextButton(
+                          onPressed: null,
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                          child: const Text('Announcement'),
+                        ),
+                        
+                      ],
+                    ),
                 ],
               ),
               const SizedBox(height: 32),
@@ -735,7 +737,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                                   ),
                                 ),
                                 Switch(
-                                  value: _pinToDashboard, // your bool state
+                                  value: _pinToDashboard, // bool state
                                   onChanged: (value) {
                                     setState(() {
                                       _pinToDashboard = value;
@@ -773,7 +775,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
             ],
           );
 
-          // Only ONE scroll view here. If parent has a finite height, we stretch to it.
+          // Only ONE scroll view. If parent has a finite height, it we stretch to it.
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
             child: hasBoundedHeight
@@ -781,7 +783,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                     constraints: BoxConstraints(minHeight: constraints.maxHeight),
                     child: content,
                   )
-                : content, // if unbounded, don't force a minHeight (avoids h=Infinity)
+                : content, // if unbounded, don't force a minHeight
           );
         },
       ),

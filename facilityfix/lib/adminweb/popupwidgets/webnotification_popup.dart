@@ -16,7 +16,7 @@ class NotificationDialog extends StatefulWidget {
     showDialog(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.transparent, // No dark overlay like typical dialogs
+      barrierColor: Colors.transparent, // No dark overlay
       builder: (BuildContext context) {
         return NotificationDialog(notifications: notifications);
       },
@@ -30,7 +30,7 @@ class _NotificationDialogState extends State<NotificationDialog> {
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      alignment: Alignment.topRight, // Position at top-right like notification panels
+      alignment: Alignment.topRight, // Position at top-right
       insetPadding: const EdgeInsets.only(top: 60, right: 20, left: 20),
       child: Container(
         width: MediaQuery.of(context).size.width * 0.4,

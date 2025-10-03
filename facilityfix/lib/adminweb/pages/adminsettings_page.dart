@@ -3,11 +3,14 @@ import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 
 class AdminWebSettingsPage extends StatefulWidget {
-  const AdminWebSettingsPage({super.key});
+  final ValueChanged<String> onThemeChanged;
+
+  const AdminWebSettingsPage({super.key, required this.onThemeChanged});
 
   @override
   State<AdminWebSettingsPage> createState() => _AdminWebSettingsPageState();
 }
+
 
 class _AdminWebSettingsPageState extends State<AdminWebSettingsPage> {
   // Route mapping helper function 
@@ -227,16 +230,24 @@ class _AdminWebSettingsPageState extends State<AdminWebSettingsPage> {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Text(
-                          "Dashboard",
-                          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                        TextButton(
+                          onPressed: () => context.go('/dashboard'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                          child: const Text('Dashboard'),
                         ),
-                        Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey[600]),
-                        const SizedBox(width: 4),
-                        const Text(
-                          "Settings",
-                          style: TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w500),
+                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        TextButton(
+                          onPressed: null,
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                          child: const Text('Settings'),
                         ),
+                        
                       ],
                     ),
                   ],
@@ -313,7 +324,10 @@ class _AdminWebSettingsPageState extends State<AdminWebSettingsPage> {
                         value: _selectedTheme,
                         label: "Theme",
                         items: _themeOptions,
-                        onChanged: (value) => setState(() => _selectedTheme = value!),
+                        onChanged: (value) {
+                          setState(() => _selectedTheme = value!);
+                          widget.onThemeChanged(_selectedTheme); 
+                        },
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -327,12 +341,12 @@ class _AdminWebSettingsPageState extends State<AdminWebSettingsPage> {
                     ),
                   ],
                 ),
-                _buildDropdown(
-                  value: _defaultPriority,
-                  label: "Default Task Priority",
-                  items: _priorityOptions,
-                  onChanged: (value) => setState(() => _defaultPriority = value!),
-                ),
+                // _buildDropdown(
+                //   value: _defaultPriority,
+                //   label: "Default Task Priority",
+                //   items: _priorityOptions,
+                //   onChanged: (value) => setState(() => _defaultPriority = value!),
+                // ),
               ],
             ),
 
@@ -349,12 +363,12 @@ class _AdminWebSettingsPageState extends State<AdminWebSettingsPage> {
                   value: _emailNotifications,
                   onChanged: (value) => setState(() => _emailNotifications = value),
                 ),
-                _buildSwitchTile(
-                  title: "SMS Notifications",
-                  subtitle: "Receive notifications via SMS",
-                  value: _smsNotifications,
-                  onChanged: (value) => setState(() => _smsNotifications = value),
-                ),
+                // _buildSwitchTile(
+                //   title: "SMS Notifications",
+                //   subtitle: "Receive notifications via SMS",
+                //   value: _smsNotifications,
+                //   onChanged: (value) => setState(() => _smsNotifications = value),
+                // ),
                 _buildSwitchTile(
                   title: "Push Notifications",
                   subtitle: "Receive push notifications",
@@ -385,113 +399,113 @@ class _AdminWebSettingsPageState extends State<AdminWebSettingsPage> {
             const SizedBox(height: 24),
 
             // Security & Access Section
-            _buildSettingsSection(
-              title: "Security & Access",
-              icon: Icons.security,
-              children: [
-                _buildSwitchTile(
-                  title: "Auto-assign Tasks",
-                  subtitle: "Automatically assign tasks to available technicians",
-                  value: _autoAssignTasks,
-                  onChanged: (value) => setState(() => _autoAssignTasks = value),
-                ),
-                _buildSwitchTile(
-                  title: "Allow Guest Access",
-                  subtitle: "Allow limited access to guests",
-                  value: _allowGuestAccess,
-                  onChanged: (value) => setState(() => _allowGuestAccess = value),
-                ),
-                _buildSwitchTile(
-                  title: "Require Two-Factor Authentication",
-                  subtitle: "Require 2FA for all users",
-                  value: _requireTwoFactor,
-                  onChanged: (value) => setState(() => _requireTwoFactor = value),
-                ),
-                _buildSwitchTile(
-                  title: "Enable Audit Log",
-                  subtitle: "Keep detailed logs of all system activities",
-                  value: _enableAuditLog,
-                  onChanged: (value) => setState(() => _enableAuditLog = value),
-                ),
-              ],
-            ),
+            // _buildSettingsSection(
+            //   title: "Security & Access",
+            //   icon: Icons.security,
+            //   children: [
+            //     _buildSwitchTile(
+            //       title: "Auto-assign Tasks",
+            //       subtitle: "Automatically assign tasks to available technicians",
+            //       value: _autoAssignTasks,
+            //       onChanged: (value) => setState(() => _autoAssignTasks = value),
+            //     ),
+            //     _buildSwitchTile(
+            //       title: "Allow Guest Access",
+            //       subtitle: "Allow limited access to guests",
+            //       value: _allowGuestAccess,
+            //       onChanged: (value) => setState(() => _allowGuestAccess = value),
+            //     ),
+            //     _buildSwitchTile(
+            //       title: "Require Two-Factor Authentication",
+            //       subtitle: "Require 2FA for all users",
+            //       value: _requireTwoFactor,
+            //       onChanged: (value) => setState(() => _requireTwoFactor = value),
+            //     ),
+            //     _buildSwitchTile(
+            //       title: "Enable Audit Log",
+            //       subtitle: "Keep detailed logs of all system activities",
+            //       value: _enableAuditLog,
+            //       onChanged: (value) => setState(() => _enableAuditLog = value),
+            //     ),
+            //   ],
+            // ),
 
-            const SizedBox(height: 24),
+            // const SizedBox(height: 24),
 
-            // System Maintenance Section
-            _buildSettingsSection(
-              title: "System Maintenance",
-              icon: Icons.build,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Database backup initiated'),
-                              backgroundColor: Colors.blue,
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.backup),
-                        label: const Text("Backup Database"),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Cache cleared successfully'),
-                              backgroundColor: Colors.orange,
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.clear_all),
-                        label: const Text("Clear Cache"),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('System Diagnostics'),
-                        content: const Text('System diagnostics completed successfully.'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('Close'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.health_and_safety),
-                  label: const Text("Run System Diagnostics"),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,  // add more left/right spacing
-                      vertical: 16,    // keep good top/bottom spacing
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            // // System Maintenance Section
+            // _buildSettingsSection(
+            //   title: "System Maintenance",
+            //   icon: Icons.build,
+            //   children: [
+            //     Row(
+            //       children: [
+            //         Expanded(
+            //           child: OutlinedButton.icon(
+            //             onPressed: () {
+            //               ScaffoldMessenger.of(context).showSnackBar(
+            //                 const SnackBar(
+            //                   content: Text('Database backup initiated'),
+            //                   backgroundColor: Colors.blue,
+            //                 ),
+            //               );
+            //             },
+            //             icon: const Icon(Icons.backup),
+            //             label: const Text("Backup Database"),
+            //             style: OutlinedButton.styleFrom(
+            //               padding: const EdgeInsets.symmetric(vertical: 16),
+            //             ),
+            //           ),
+            //         ),
+            //         const SizedBox(width: 16),
+            //         Expanded(
+            //           child: OutlinedButton.icon(
+            //             onPressed: () {
+            //               ScaffoldMessenger.of(context).showSnackBar(
+            //                 const SnackBar(
+            //                   content: Text('Cache cleared successfully'),
+            //                   backgroundColor: Colors.orange,
+            //                 ),
+            //               );
+            //             },
+            //             icon: const Icon(Icons.clear_all),
+            //             label: const Text("Clear Cache"),
+            //             style: OutlinedButton.styleFrom(
+            //               padding: const EdgeInsets.symmetric(vertical: 16),
+            //             ),
+            //           ),
+            //         ),
+            //       ],
+            //     ),
+            //     OutlinedButton.icon(
+            //       onPressed: () {
+            //         showDialog(
+            //           context: context,
+            //           builder: (context) => AlertDialog(
+            //             title: const Text('System Diagnostics'),
+            //             content: const Text('System diagnostics completed successfully.'),
+            //             actions: [
+            //               TextButton(
+            //                 onPressed: () => Navigator.of(context).pop(),
+            //                 child: const Text('Close'),
+            //               ),
+            //             ],
+            //           ),
+            //         );
+            //       },
+            //       icon: const Icon(Icons.health_and_safety),
+            //       label: const Text("Run System Diagnostics"),
+            //       style: OutlinedButton.styleFrom(
+            //         padding: const EdgeInsets.symmetric(
+            //           horizontal: 24,  // add more left/right spacing
+            //           vertical: 16,    // keep good top/bottom spacing
+            //         ),
+            //         shape: RoundedRectangleBorder(
+            //           borderRadius: BorderRadius.circular(30),
+            //         ),
+            //       ),
+            //     ),
+            //   ],
+            // ),
 
             const SizedBox(height: 40), // Extra padding at bottom
           ],

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
-// import '../popupwidgets/createinventory_popup.dart';
+//import '../pages/createwebinventoryitems_page.dart';
 
 class InventoryManagementItemsPage extends StatefulWidget {
   const InventoryManagementItemsPage({super.key});
@@ -295,40 +295,33 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
                     // Breadcrumb navigation
                     Row(
                       children: [
-                        Text(
-                          "Main",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
+                        TextButton(
+                          onPressed: () => context.go('/dashboard'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
+                          child: const Text('Dashboard'),
                         ),
-                        Icon(
-                          Icons.arrow_forward_ios,
-                          size: 12,
-                          color: Colors.grey[600],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          "Inventory Management",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
+                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        TextButton(
+                          onPressed: () => context.go('/inventory/items'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
+                          child: const Text('Inventory Management'),
                         ),
-                        Icon(
-                          Icons.arrow_forward_ios,
-                          size: 12,
-                          color: Colors.grey[600],
-                        ),
-                        const SizedBox(width: 4),
-                        const Text(
-                          "Inventory Items",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
+                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        TextButton(
+                          onPressed: null,
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
+                          child: const Text('Items'),
                         ),
+                        
                       ],
                     ),
                   ],
@@ -336,21 +329,7 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
                 // Create New button
                 ElevatedButton.icon(
                   onPressed: () {
-                    // showCreateInventoryDialog(context); // You'll need to implement this
-                    // For now, just show a simple dialog
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Create New Item'),
-                        content: const Text('Create inventory item dialog will go here'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('Close'),
-                          ),
-                        ],
-                      ),
-                    );
+                    context.goNamed('inventory_item_create');
                   },
                   icon: const Icon(Icons.add, size: 22),
                   label: const Text(

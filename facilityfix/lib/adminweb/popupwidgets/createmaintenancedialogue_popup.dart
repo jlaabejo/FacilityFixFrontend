@@ -3,9 +3,6 @@ import 'package:go_router/go_router.dart';
 
 enum MaintenanceChoice { internal, external }
 
-/// Call this from anywhere to run the full 2-step flow:
-/// 1) "Create maintenance task?" (Yes/No)
-/// 2) pick Internal vs External
 Future<void> showCreateMaintenanceTaskDialog(
   BuildContext context, {
   VoidCallback? onInternal,         // optional override

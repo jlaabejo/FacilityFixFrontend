@@ -1,6 +1,7 @@
 
 import 'package:facilityfix/adminweb/pages/adminwebcalendar_page.dart';
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:go_router/go_router.dart';
 import 'adminweb/pages/login_page.dart';
 import 'adminweb/pages/adminwebdash_page.dart';
@@ -16,6 +17,7 @@ import 'adminweb/pages/internalmaintenance_viewform.dart';
 import 'adminweb/pages/externalmaintenance_form.dart';
 import 'adminweb/pages/externalmaintenance_viewform.dart';
 import 'adminweb/pages/admininventoryitems_page.dart';
+import 'adminweb/pages/createwebinventoryitems_page.dart';
 import 'adminweb/pages/webinventoryitems_viewdetails.dart';
 import 'adminweb/pages/admininventoryrequest_page.dart';
 import 'adminweb/pages/adminwebanalytics_page.dart';
@@ -24,12 +26,65 @@ import 'adminweb/pages/createwebannouncement_page.dart';
 import 'adminweb/pages/adminsettings_page.dart';
 import 'adminweb/pages/adminwebprofile_page.dart';
 
-void main() {
+
+
+void main() async{
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize window manager
+  await windowManager.ensureInitialized();
+
+  WindowOptions windowOptions = const WindowOptions(
+    size: Size(1600, 828),   // set initial size
+    center: true,            // center window
+    title: "FacilityFix Admin",
+  );
+
+  windowManager.waitUntilReadyToShow(windowOptions, () async {
+    await windowManager.show();
+    await windowManager.focus();
+    await windowManager.setResizable(false); // disable resizing
+    await windowManager.setMaximizable(false); // disable maximize button
+  });
+  
   runApp(MyApp());
 }
 
-class MyApp extends StatelessWidget {
-  MyApp({super.key});
+class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class NoTransitionsBuilder extends PageTransitionsBuilder {
+  const NoTransitionsBuilder();
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return child; // no animation
+  }
+}
+
+class _MyAppState extends State<MyApp> {
+  ThemeMode _themeMode = ThemeMode.light; // default
+
+  void _updateTheme(String selectedTheme) {
+    setState(() {
+      if (selectedTheme == 'Light') {
+        _themeMode = ThemeMode.light;
+      } else if (selectedTheme == 'Dark') {
+        _themeMode = ThemeMode.dark;
+      } else {
+        _themeMode = ThemeMode.system; // Auto
+      }
+    });
+  }
 
   // GoRouter configuration
   final GoRouter _router = GoRouter(
@@ -110,9 +165,13 @@ class MyApp extends StatelessWidget {
       GoRoute(
         path: '/settings',
         name: 'settings',
-        builder: (context, state) => const AdminWebSettingsPage(),
+        builder: (context, state) => AdminWebSettingsPage(
+          onThemeChanged: (theme) {
+            final statefulApp = context.findAncestorStateOfType<_MyAppState>();
+            statefulApp?._updateTheme(theme);
+          },
+        ),
       ),
-      
       // Logout route (can redirect back to login)
       GoRoute(
         path: '/logout',
@@ -124,9 +183,18 @@ class MyApp extends StatelessWidget {
         builder: (context, state) => const InternalMaintenanceFormPage(),
       ),
       GoRoute(
-        path: '/workmaintenance/internalviewtask',
+        path: '/work/maintenance/:id/internal',
         name: 'maintenance_internal',
-        builder: (context, state) => const InternalTaskViewPage(),
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          final task = state.extra as Map<String, dynamic>?;
+          final isEdit = state.uri.queryParameters['edit'] == '1';
+          return InternalTaskViewPage(
+            taskId: id,
+            initialTask: task,
+            startInEditMode: isEdit,
+          );
+        },
       ),
       GoRoute(
         path: '/adminweb/pages/externalmaintenance_form',
@@ -134,9 +202,17 @@ class MyApp extends StatelessWidget {
         builder: (context, state) => const ExternalMaintenanceFormPage(),
       ),
       GoRoute(
-        path: '/adminweb/pages/externalviewtask',
-        name: 'maintenance_external',
-        builder: (context, state) => const ExternalViewTaskPage(),
+        path: '/work/maintenance/:id/external',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          final task = state.extra as Map<String, dynamic>?;
+          final isEdit = state.uri.queryParameters['edit'] == '1';
+          return ExternalViewTaskPage(
+            taskId: id,
+            initialTask: task,
+            startInEditMode: isEdit,
+          );
+        },
       ),
       GoRoute(
         path: '/adminweb/pages/adminrepair_js_page',
@@ -147,6 +223,11 @@ class MyApp extends StatelessWidget {
         path: '/adminweb/pages/adminrepair_wop_page',
         name: 'work_repair_workorderpermit',
         builder: (context, state) => const RepairWorkOrderPermitPage(),
+      ),
+      GoRoute(
+        path: '/inventory/item/create',
+        name: 'inventory_item_create',
+        builder: (context, state) => const InventoryItemCreatePage(),
       ),
       GoRoute(
         path: '/inventory/item/:itemId',
@@ -166,6 +247,7 @@ class MyApp extends StatelessWidget {
         name: 'profile',
         builder: (context, state) => const AdminWebProfilePage(),
       ),
+      
     ],
     
     // Optional: Handle navigation errors
@@ -184,7 +266,39 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         fontFamily: 'Inter',
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1976D2)),
+        //  turn off default zoom/fade transitions everywhere
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: NoTransitionsBuilder(),
+            TargetPlatform.iOS: NoTransitionsBuilder(),
+            TargetPlatform.macOS: NoTransitionsBuilder(),
+            TargetPlatform.windows: NoTransitionsBuilder(),
+            TargetPlatform.linux: NoTransitionsBuilder(),
+            TargetPlatform.fuchsia: NoTransitionsBuilder(),
+          },
+        ),
       ),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        fontFamily: 'Inter',
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF1976D2),
+          brightness: Brightness.dark,
+        ),
+        //  also for dark theme
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: NoTransitionsBuilder(),
+            TargetPlatform.iOS: NoTransitionsBuilder(),
+            TargetPlatform.macOS: NoTransitionsBuilder(),
+            TargetPlatform.windows: NoTransitionsBuilder(),
+            TargetPlatform.linux: NoTransitionsBuilder(),
+            TargetPlatform.fuchsia: NoTransitionsBuilder(),
+          },
+        ),
+      ),
+      themeMode: _themeMode,
       routerConfig: _router,
     );
   }

@@ -126,7 +126,7 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                       : const SizedBox.shrink(),
                 ),
                 const SizedBox(width: 8),
-                Text(_getMonthName(i)), // <-- reuse your function
+                Text(_getMonthName(i)), // reuse function
               ],
             ),
           ),
@@ -140,7 +140,7 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
         ),
         child: Row(
         children: [
-          const Text('Month',  // <-- stays "Month" always
+          const Text('Month',  //stays "Month" always
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
           const SizedBox(width: 8),
           Icon(Icons.keyboard_arrow_down, color: Colors.grey[600], size: 18),
@@ -720,7 +720,7 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
     }
   }
 
-  // Reusable round icon button (like your screenshot)
+  // Reusable round icon button
   Widget _circleIconButton(IconData icon, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
@@ -786,7 +786,7 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header: edit & more on the LEFT, close on the RIGHT (no title here)
+                    // Header: edit & more on the LEFT, close on the RIGHT 
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -826,7 +826,7 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
 
                     const SizedBox(height: 8),
 
-                    // Title (only here, not in header)
+                    // Title 
                     Text(
                       task['title'] ?? '',
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87),
@@ -934,7 +934,7 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
 
             // ----- Calendar container -----
             Container(
-              height: 700, // fixed like before
+              height: 700, // fixed 
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
@@ -980,7 +980,7 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                         ),
 
                         // keep your simple months dropdown button here
-                        _monthDropdown(), // <- the PopupMenu “Month” button you added
+                        _monthDropdown(), 
                       ],
                     ),
                   ),

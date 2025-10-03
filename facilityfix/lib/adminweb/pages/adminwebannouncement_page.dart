@@ -11,7 +11,7 @@ class AdminWebAnnouncementPage extends StatefulWidget {
 }
 
 class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
-  // Route mapping helper function - same as inventory page
+  // Route mapping helper function 
   String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
       'dashboard': '/dashboard',
@@ -29,7 +29,7 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
     return pathMap[routeKey];
   }
 
-  // Logout functionality - same as inventory page
+  // Logout functionality
   void _handleLogout(BuildContext context) {
     showDialog(
       context: context,
@@ -323,27 +323,24 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                     // Breadcrumb navigation
                     Row(
                       children: [
-                        Text(
-                          "Dashboard",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
+                        TextButton(
+                          onPressed: () => context.go('/dashboard'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
+                          child: const Text('Dashboard'),
                         ),
-                        Icon(
-                          Icons.arrow_forward_ios,
-                          size: 12,
-                          color: Colors.grey[600],
-                        ),
-                        const SizedBox(width: 4),
-                        const Text(
-                          "Announcement",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
+                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        TextButton(
+                          onPressed: null,
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
+                          child: const Text('Announcement'),
                         ),
+                        
                       ],
                     ),
                   ],
