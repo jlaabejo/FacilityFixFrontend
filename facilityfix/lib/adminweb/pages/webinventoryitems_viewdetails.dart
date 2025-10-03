@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
+import '../popupwidgets/inventoryrestock_popup.dart';
 
 class InventoryItemDetailsPage extends StatefulWidget {
   final String itemId; // Pass item ID through route parameters
@@ -24,8 +25,8 @@ class _InventoryItemDetailsPageState extends State<InventoryItemDetailsPage> {
       'work_maintenance': '/work/maintenance',
       'work_repair': '/work/repair',
       'calendar': '/calendar',
-      'inventory_view': '/inventory/view',
-      'inventory_add': '/inventory/add',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
       'analytics': '/analytics',
       'announcement': '/announcement',
       'settings': '/settings',
@@ -112,45 +113,34 @@ class _InventoryItemDetailsPageState extends State<InventoryItemDetailsPage> {
                     // Breadcrumb navigation
                     Row(
                       children: [
-                        // Main (breadcrumb)
                         TextButton(
-                          onPressed: () => context.go('/dashboard'), 
+                          onPressed: () => context.go('/dashboard'),
                           style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero, // removes default padding
-                            minimumSize: Size(0, 0),  // shrinks hit area
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
-                          child: Text(
-                            "Main",
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey, 
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
+                          child: const Text('Dashboard'),
                         ),
-                        Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey[600]),
-
-                        // Inventory Management (breadcrumb)
+                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
                         TextButton(
-                          onPressed: () => context.go('/inventory/items'), 
+                          onPressed: () => context.go('/inventory/items'),
                           style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: Size(0, 0),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
-                          child: Text(
-                            "Inventory Management",
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey,
-                              fontWeight: FontWeight.w500,
-                            ),
+                          child: const Text('Inventory Management'),
+                        ),
+                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        TextButton(
+                          onPressed: null,
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
+                          child: const Text('Items'),
                         ),
                       ],
                     ),
-
                   ],
                 ),
                 // Action buttons (Edit & Export)
@@ -254,7 +244,7 @@ class _InventoryItemDetailsPageState extends State<InventoryItemDetailsPage> {
                         ),
                       ],
                     ),
-                    // chips: auto-size using Wrap (prevents stretching)
+                    // chips: auto-size using Wrap 
                     Wrap(
                       spacing: 12,
                       runSpacing: 8,
@@ -398,10 +388,31 @@ class _InventoryItemDetailsPageState extends State<InventoryItemDetailsPage> {
                 Row(
                   children: [
                     ElevatedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Update stock functionality will go here')),
+                      onPressed: () async {
+                        // Show the restock dialog
+                        final result = await RestockDialog.show(
+                          context,
+                          {
+                            'id': _itemData['itemCode'],
+                            'name': _itemData['itemName'],
+                            'unit': _itemData['unit'],
+                            'currentStock': _itemData['quantityInStock'],
+                          },
                         );
+                        
+                        // Handle the result if user completed restocking
+                        if (result != null && result['success'] == true) {
+                          // Update the local state with new quantity
+                          setState(() {
+                            _itemData['quantityInStock'] += result['quantity'] as int;
+                          });
+                          
+                          // TODO: 
+                          // await InventoryService.updateStock(
+                          //   itemId: result['itemId'],
+                          //   newQuantity: _itemData['quantityInStock'],
+                          // );
+                        }
                       },
                       icon: const Icon(Icons.add, size: 18),
                       label: const Text(
@@ -466,7 +477,7 @@ class _InventoryItemDetailsPageState extends State<InventoryItemDetailsPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[300]!),   // <— add this
+        border: Border.all(color: Colors.grey[300]!),   
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.03),

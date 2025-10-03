@@ -106,7 +106,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
               children: [
                 const SizedBox(height: 16),
                 
-                // Logo section with company branding (retained original design)
+                // Logo section with company branding
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
@@ -221,7 +221,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
           Expanded(
             child: Column(
               children: [
-                // Top header section with search bar and user actions (retained original profile design)
+                // Top header section with search bar and user actions
                 Container(
                   height: 60,
                   color: Colors.white,
@@ -247,7 +247,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                           ),
                         ),
                       ),
-                      // Header action buttons (retained original design)
+                      // Header action buttons
                       Row(
                         children: [
                           
@@ -297,15 +297,16 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
     
     return MouseRegion(
       onEnter: (_) {
-        //_logHighlight('Hover ON -> $routeKey');
+        _logHighlight('Hover ON -> $routeKey');
         setState(() => _hovered[routeKey] = true);
       },
       onExit: (_) {
-        //_logHighlight('Hover OFF -> $routeKey');
+        _logHighlight('Hover OFF -> $routeKey');
         setState(() => _hovered[routeKey] = false);
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+      // Animation
+      child: Container(
+        // duration: const Duration(milliseconds: 150),
         margin: const EdgeInsets.symmetric(vertical: 2),
         decoration: BoxDecoration(
           color: isSelected 
@@ -398,8 +399,9 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Parent dropdown header
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
+          // Animation 
+          Container(
+            // duration: const Duration(milliseconds: 150),
             margin: const EdgeInsets.symmetric(vertical: 2),
             decoration: BoxDecoration(
               color: hasSelectedChild 
@@ -457,18 +459,19 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         ),
                       ),
                       // Animated expand/collapse arrow
-                      AnimatedRotation(
-                        turns: isExpanded ? 0.5 : 0,
-                        duration: const Duration(milliseconds: 200),
-                        child: Icon(
-                          Icons.expand_more,
-                          size: 20,
-                          color: hasSelectedChild 
-                              ? Colors.blue.shade600
-                              : isHovered 
-                                  ? const Color(0xFF475569)
-                                  : const Color(0xFF64748B),
-                        ),
+                      Icon(
+                        isExpanded ? Icons.expand_less : Icons.expand_more,
+                        // turns: isExpanded ? 0.5 : 0,
+                        // duration: const Duration(milliseconds: 200),
+                        // child: Icon(
+                        //   Icons.expand_more,
+                        size: 20,
+                        color: hasSelectedChild 
+                            ? Colors.blue.shade600
+                            : isHovered 
+                                ? const Color(0xFF475569)
+                                : const Color(0xFF64748B),
+                        // ),
                       ),
                     ],
                   ),
@@ -478,19 +481,28 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
           ),
           
           // Expandable children container
-          AnimatedSize(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            child: isExpanded
-                ? Padding(
-                    padding: const EdgeInsets.only(left: 48, top: 4),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: children,
-                    ),
-                  )
-                : const SizedBox.shrink(),
-          ),
+          isExpanded
+              ? Padding(
+                  padding: const EdgeInsets.only(left: 48, top: 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: children,
+                  ),
+                )
+              : const SizedBox.shrink(),
+          // AnimatedSize(
+          //   duration: const Duration(milliseconds: 300),
+          //   curve: Curves.easeInOut,
+          //   child: isExpanded
+          //       ? Padding(
+          //           padding: const EdgeInsets.only(left: 48, top: 4),
+          //           child: Column(
+          //             crossAxisAlignment: CrossAxisAlignment.start,
+          //             children: children,
+          //           ),
+          //         )
+          //       : const SizedBox.shrink(),
+          // ),
         ],
       ),
     );
@@ -511,8 +523,9 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
         _logHighlight('Hover OFF -> sub:$routeKey');
         setState(() => _hovered[routeKey] = false);
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+      // Animation commented out - using regular Container instead
+      child: Container(
+        // duration: const Duration(milliseconds: 150),
         margin: const EdgeInsets.symmetric(vertical: 1),
         decoration: BoxDecoration(
           color: isSelected 

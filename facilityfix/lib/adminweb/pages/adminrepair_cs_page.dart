@@ -233,7 +233,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     100, // BUILDING & UNIT
     80, // PRIORITY
     90, // DEPARTMENT
-    80, // STATUS
+    90, // STATUS
     38, // ACTION
   ];
 
@@ -307,53 +307,42 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
         // Breadcrumb navigation
         Row(
           children: [
-            Text(
-              "Main",
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
+            TextButton(
+              onPressed: () => context.go('/dashboard'),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
+              child: const Text('Dashboard'),
             ),
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 12,
-              color: Colors.grey[600],
-            ),
-            const SizedBox(width: 4),
-            Text(
-              "Work Orders",
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
+            const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+            TextButton(
+              onPressed: () => context.go('/work/maintenance'),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
+              child: const Text('Work Orders'),
             ),
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 12,
-              color: Colors.grey[600],
-            ),
-            const SizedBox(width: 4),
-            Text(
-              "Repair Tasks",
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
+            const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+            TextButton(
+              onPressed: () => context.go('/work/repair'),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
+              child: const Text('Repair Tasks'),
             ),
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 12,
-              color: Colors.grey[600],
-            ),
-            const SizedBox(width: 4),
-            const Text(
-              "Concern Slip",
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.black87,
-                fontWeight: FontWeight.w500,
+            const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+            TextButton(
+              onPressed: null,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
+              child: const Text('Concern Slips'),
             ),
+            
           ],
         ),
       ],
@@ -551,7 +540,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
 
                         // Navigate based on selection
                         if (newValue == 'Concern Slip') {
-                          context.go('/work/repair'); // your existing page
+                          context.go('/work/repair'); 
                         } else if (newValue == 'Job Service') {
                           context.go('/adminweb/pages/adminrepair_js_page');
                         } else if (newValue == 'Work Order Permit') {
@@ -577,6 +566,11 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
               ],
             ),
           ),
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: Colors.grey[400],
+          ),
 
           // Data Table
           Expanded(
@@ -587,6 +581,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                   columnSpacing: 50,
                   headingRowHeight: 56,
                   dataRowHeight: 64,
+                  headingRowColor: MaterialStateProperty.all(Colors.grey[50]),
                   headingTextStyle: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -640,6 +635,11 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                 ),
               ),
             ),
+          ),
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: Colors.grey[400],
           ),
 
           // Pagination Section

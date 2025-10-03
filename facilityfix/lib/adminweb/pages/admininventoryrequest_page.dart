@@ -10,7 +10,7 @@ class InventoryRequestPage extends StatefulWidget {
 }
 
 class _InventoryRequestPageState extends State<InventoryRequestPage> {
-  // Route mapping helper function - same as items page
+  // Route mapping helper function
   String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
       'dashboard': '/dashboard',
@@ -28,7 +28,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     return pathMap[routeKey];
   }
 
-  // Logout functionality - same as items page
+  // Logout functionality
   void _handleLogout(BuildContext context) {
     showDialog(
       context: context,
@@ -90,7 +90,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     },
   ];
 
-  // Column widths for table - adjusted for request table structure
+  // Column widths for table 
   final List<double> _colW = <double>[
     150, // REQUEST ID
     200, // ITEM NAME
@@ -101,7 +101,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     48,  // ACTION
   ];
 
-  // Fixed width cell helper - same as items page
+  // Fixed width cell helper
   Widget _fixedCell(int i, Widget child, {Alignment align = Alignment.centerLeft}) {
     return SizedBox(
       width: _colW[i],
@@ -109,7 +109,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     );
   }
 
-  // Text with ellipsis helper - same as items page
+  // Text with ellipsis helper
   Text _ellipsis(String s, {TextStyle? style}) => Text(
     s,
     maxLines: 1,
@@ -118,7 +118,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     style: style,
   );
 
-  // Action dropdown menu methods - modified for request actions
+  // Action dropdown menu methods 
   void _showActionMenu(BuildContext context, Map<String, dynamic> item, Offset position) {
     final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     
@@ -224,7 +224,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     });
   }
 
-  // Handle action selection - modified for request actions
+  // Handle action selection 
   void _handleActionSelection(String action, Map<String, dynamic> item) {
     switch (action) {
       case 'view':
@@ -320,7 +320,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
   @override
   Widget build(BuildContext context) {
     return FacilityFixLayout(
-      currentRoute: 'inventory_request', // Updated route
+      currentRoute: 'inventory_request', 
       onNavigate: (routeKey) {
         final routePath = _getRoutePath(routeKey);
         if (routePath != null) {
@@ -334,7 +334,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Section with breadcrumbs - updated for request page
+            // Header Section with breadcrumbs 
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -350,43 +350,36 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // Breadcrumb navigation - updated for request page
+                    // Breadcrumb navigation 
                     Row(
                       children: [
-                        Text(
-                          "Main",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
+                        TextButton(
+                          onPressed: () => context.go('/dashboard'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
+                          child: const Text('Dashboard'),
                         ),
-                        Icon(
-                          Icons.arrow_forward_ios,
-                          size: 12,
-                          color: Colors.grey[600],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          "Inventory Management",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
+                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        TextButton(
+                          onPressed: () => context.go('/inventory/items'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
+                          child: const Text('Inventory Management'),
                         ),
-                        Icon(
-                          Icons.arrow_forward_ios,
-                          size: 12,
-                          color: Colors.grey[600],
-                        ),
-                        const SizedBox(width: 4),
-                        const Text(
-                          "Inventory Request",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
+                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        TextButton(
+                          onPressed: null,
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
+                          child: const Text('Request'),
                         ),
+                        
                       ],
                     ),
                   ],
@@ -395,7 +388,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
             ),
             const SizedBox(height: 32),
 
-            // Main Content Container - same structure as items page
+            // Main Content Container 
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -410,7 +403,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
               ),
               child: Column(
                 children: [
-                  // Table header with search and filter - updated title
+                  // Table header with search and filter 
                   Padding(
                     padding: const EdgeInsets.all(20.0),
                     child: Row(
@@ -424,7 +417,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                             color: Colors.black87,
                           ),
                         ),
-                        // Search and Filter section - same as items page
+                        // Search and Filter section 
                         Row(
                           children: [
                             // Search field
@@ -495,7 +488,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                     color: Colors.grey[400],
                   ),
 
-                  // Data Table - updated columns and data for requests
+                  // Data Table 
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
@@ -561,7 +554,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                     color: Colors.grey[400],
                   ),
 
-                  // Pagination section - updated entries count
+                  // Pagination section 
                   Padding(
                     padding: const EdgeInsets.all(20.0),
                     child: Row(
@@ -641,7 +634,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     );
   }
 
-  // Status chip widget - modified for request status
+  // Status chip widget 
   Widget _buildStatusChip(String status) {
     Color bgColor;
     Color textColor;

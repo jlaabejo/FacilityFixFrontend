@@ -315,7 +315,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
     Color color,
     IconData icon, {
     bool isIncrease = true,
-    String? routeKey, // 👈 new parameter
+    String? routeKey, 
   }) {
     return InkWell(
       onTap: () {
@@ -328,8 +328,8 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
       },
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        height: 140, // Increased height for better spacing
-        padding: const EdgeInsets.all(18), // Increased padding
+        height: 140, 
+        padding: const EdgeInsets.all(18), 
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -353,7 +353,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   child: Text(
                     title,
                     style: TextStyle(
-                      fontSize: 11, // Slightly increased font size
+                      fontSize: 11, 
                       fontWeight: FontWeight.w500,
                       color: Colors.grey[600],
                       height: 1.2,
@@ -363,7 +363,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.all(8), // Increased icon padding
+                  padding: const EdgeInsets.all(8), 
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6),
@@ -371,7 +371,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   child: Icon(
                     icon,
                     color: color,
-                    size: 18, // Increased icon size
+                    size: 18,
                   ),
                 ),
               ],
@@ -382,7 +382,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
             Text(
               value,
               style: const TextStyle(
-                fontSize: 32, // Increased main value font size
+                fontSize: 32, 
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
               ),
@@ -397,13 +397,13 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   Icon(
                     isIncrease ? Icons.trending_up : Icons.trending_down,
                     color: isIncrease ? Colors.green : Colors.red,
-                    size: 14, // Increased icon size
+                    size: 14, 
                   ),
                   const SizedBox(width: 4),
                   Text(
                     percentage,
                     style: TextStyle(
-                      fontSize: 11, // Increased font size
+                      fontSize: 11, 
                       color: isIncrease ? Colors.green : Colors.red,
                       fontWeight: FontWeight.w500,
                     ),
@@ -415,9 +415,9 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   child: Text(
                     subtitle,
                     style: TextStyle(
-                      fontSize: 11, // Increased font size
+                      fontSize: 11, 
                       color: Colors.grey[600],
-                      height: 1.3, // Better line height
+                      height: 1.3, 
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -527,7 +527,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
             ),
             const SizedBox(height: 16),
             
-            // Data Table with improved layout
+            // Data Table
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: ConstrainedBox(
@@ -590,7 +590,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                           ),
                         ),
 
-                        // PRIORITY (chip-like container inside fixed cell)
+                        // PRIORITY 
                         DataCell(
                           _fixedCell(
                             1,
@@ -623,7 +623,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                           ),
                         ),
 
-                        // STATUS (chip-like container inside fixed cell)
+                        // STATUS 
                         DataCell(
                           _fixedCell(
                             3,

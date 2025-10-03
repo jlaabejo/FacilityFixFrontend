@@ -454,6 +454,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
+                  isDense: true,
                   value: selectedDateRange,
                   items: ['This Week', 'This Month', 'Last Month', 'Last 3 Months']
                       .map((String value) {
@@ -482,6 +483,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
+                   isDense: true,
                   value: selectedStatus,
                   items: ['All', 'Open', 'In Progress', 'Resolved', 'Closed']
                       .map((String value) {

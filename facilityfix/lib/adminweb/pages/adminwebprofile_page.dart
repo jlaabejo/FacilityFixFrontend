@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
+import '../popupwidgets/webforgotpassword_popup.dart';
 
 class AdminWebProfilePage extends StatefulWidget {
   const AdminWebProfilePage({super.key});
@@ -61,16 +62,11 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
     'email': 'emirhanboruch55@gmail.com',
     'phone': '+09 363 398 46',
     'bio': 'Team Manager',
-    'role': 'System Administrator',
+    'role': 'Administrator',
     'location': 'Leeds, United Kingdom',
     'adminLevel': 'Super Administrator',
     'accountStatus': 'Active',
     'profileType': 'Solo Administrator',
-    'systemAccess': [
-      'User and Role Management',
-      'Calendar',
-      'Work Orders'
-    ]
   };
 
   // Text controllers for form fields
@@ -110,9 +106,37 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
     }
   }
 
-  // Save profile changes to backend
+  // Save profile changes with validation
   void _saveProfileChanges() {
-    // TODO: Implement backend API call to save changes
+    setState(() {
+      _validationErrors['firstName'] =
+          _firstNameController.text.trim().isEmpty ? 'First name is required' : null;
+
+      _validationErrors['lastName'] =
+          _lastNameController.text.trim().isEmpty ? 'Last name is required' : null;
+
+      _validationErrors['email'] =
+          !_emailController.text.contains('@') ? 'Invalid email address' : null;
+
+      _validationErrors['phone'] =
+          _phoneController.text.trim().isEmpty ? 'Phone number is required' : null;
+
+      _validationErrors['bio'] =
+          _bioController.text.trim().isEmpty ? 'Bio is required' : null;
+    });
+
+    // Stop if any errors exist
+    if (_validationErrors.values.any((error) => error != null)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fix the errors before saving'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // No errors → save
     setState(() {
       _userData['firstName'] = _firstNameController.text;
       _userData['lastName'] = _lastNameController.text;
@@ -120,7 +144,7 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
       _userData['phone'] = _phoneController.text;
       _userData['bio'] = _bioController.text;
     });
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Profile updated successfully'),
@@ -131,72 +155,24 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
 
   // Handle change password
   void _handleChangePassword() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        final TextEditingController currentPasswordController = TextEditingController();
-        final TextEditingController newPasswordController = TextEditingController();
-        final TextEditingController confirmPasswordController = TextEditingController();
-        
-        return AlertDialog(
-          title: const Text('Change Password'),
-          content: SizedBox(
-            width: 300,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: currentPasswordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Current Password',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: newPasswordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'New Password',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: confirmPasswordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Confirm New Password',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                // TODO: Implement password change API call
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Password changed successfully'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              },
-              child: const Text('Change Password'),
-            ),
-          ],
-        );
-      },
-    );
+    ForgotPasswordDialog.show(context);
   }
+
+  // Track validation errors for each field
+  Map<String, String?> _validationErrors = {
+    'firstName': null,
+    'lastName': null,
+    'email': null,
+    'phone': null,
+    'bio': null,
+  };
+
+  bool isFirstNameValid = true;
+  bool isLastNameValid = true;
+  bool isEmailValid = true;
+  bool isPhoneValid = true;
+  bool isBioValid = true;
+
 
   @override
   void dispose() {
@@ -211,7 +187,7 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
   @override
   Widget build(BuildContext context) {
     return FacilityFixLayout(
-      currentRoute: 'profile', // You might need to add this route to your layout
+      currentRoute: 'profile', 
       onNavigate: (routeKey) {
         final routePath = _getRoutePath(routeKey);
         if (routePath != null) {
@@ -245,27 +221,24 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
                     // Breadcrumb navigation
                     Row(
                       children: [
-                        Text(
-                          "Dashboard",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
+                        TextButton(
+                          onPressed: () => context.go('/dashboard'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: EdgeInsets.zero,
                           ),
+                          child: const Text('Dashboard'),
                         ),
-                        Icon(
-                          Icons.arrow_forward_ios,
-                          size: 12,
-                          color: Colors.grey[600],
-                        ),
-                        const SizedBox(width: 4),
-                        const Text(
-                          "Administrator Profile",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
+                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        TextButton(
+                          onPressed: null,
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
+                          child: const Text('Profile'),
                         ),
+                        
                       ],
                     ),
                   ],
@@ -338,7 +311,7 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                "${_userData['role']} • ${_userData['location']}",
+                                "${_userData['role']}",
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: Colors.grey[600],
@@ -350,18 +323,18 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
                         
                         // Status Badge
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
                             color: Colors.green[50],
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.green[200]!),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.green[300]!),
                           ),
                           child: Text(
                             _userData['accountStatus'],
                             style: TextStyle(
-                              color: Colors.green[700],
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
+                              color: Colors.green[800],
+                              fontSize: 14, // bigger font
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -374,7 +347,7 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Personal Information Section
+                        // Left Column
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -388,54 +361,47 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
                                 ),
                               ),
                               const SizedBox(height: 24),
-                              
+
                               // First Name Field
                               _buildInfoField(
-                                "First Name",
-                                _userData['firstName'],
-                                _firstNameController,
+                                label: "First Name",
+                                value: _userData["firstName"] ?? "",
+                                controller: _firstNameController,
+                                isValid: isFirstNameValid,
+                                setValid: (v) => isFirstNameValid = v,
                               ),
-                              
+
                               // Last Name Field
                               _buildInfoField(
-                                "Last Name",
-                                _userData['lastName'],
-                                _lastNameController,
+                                label: "Last Name",
+                                value: _userData["lastName"] ?? "",
+                                controller: _lastNameController,
+                                isValid: isLastNameValid,
+                                setValid: (v) => isLastNameValid = v,
                               ),
-                              
-                              // Email Field
-                              _buildInfoField(
-                                "Email address",
-                                _userData['email'],
-                                _emailController,
-                              ),
-                              
+
                               // Phone Field
                               _buildInfoField(
-                                "Phone",
-                                _userData['phone'],
-                                _phoneController,
-                              ),
-                              
-                              // Bio Field
-                              _buildInfoField(
-                                "Bio",
-                                _userData['bio'],
-                                _bioController,
+                                label: "Phone",
+                                value: _userData["phone"] ?? "",
+                                controller: _phoneController,
+                                isValid: isPhoneValid,
+                                setValid: (v) => isPhoneValid = v,
+                                isPhone: true,
                               ),
                             ],
                           ),
                         ),
-                        
+
                         const SizedBox(width: 60),
-                        
-                        // Admin Details Section
+
+                        // Right Column
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                "Admin Details",
+                                "",
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w600,
@@ -443,68 +409,30 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
                                 ),
                               ),
                               const SizedBox(height: 24),
-                              
-                              // Admin Level
-                              _buildReadOnlyField(
-                                "Admin Level",
-                                _userData['adminLevel'],
+
+                              // Email Field
+                              _buildInfoField(
+                                label: "Email",
+                                value: _userData["email"] ?? "",
+                                controller: _emailController,
+                                isValid: isEmailValid,
+                                setValid: (v) => isEmailValid = v,
+                                isEmail: true,
+                              ),
+
+                              // Bio Field
+                              _buildInfoField(
+                                label: "Bio",
+                                value: _userData["bio"] ?? "",
+                                controller: _bioController,
+                                isValid: isBioValid,
+                                setValid: (v) => isBioValid = v,
                               ),
                               
-                              // Account Status
-                              _buildReadOnlyField(
-                                "Account Status",
-                                _userData['accountStatus'],
-                              ),
-                              
-                              // Profile Type
-                              _buildReadOnlyField(
-                                "Profile Type",
-                                _userData['profileType'],
-                              ),
                             ],
                           ),
                         ),
                       ],
-                    ),
-                    
-                    const SizedBox(height: 40),
-                    
-                    // System Access Section
-                    const Text(
-                      "System Access",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // Access List
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: _userData['systemAccess'].map<Widget>((access) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8.0),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.check_circle,
-                                color: Colors.green[600],
-                                size: 16,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                access,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[700],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
                     ),
                     
                     const SizedBox(height: 40),
@@ -515,33 +443,39 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
                         // Change Password Button
                         OutlinedButton.icon(
                           onPressed: _handleChangePassword,
-                          icon: const Icon(Icons.lock_outline, size: 18),
-                          label: const Text("Change Password"),
+                          icon: const Icon(Icons.lock_outline, size: 20),
+                          label: const Text(
+                            "Change Password",
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                          ),
                           style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                             side: BorderSide(color: Colors.grey[300]!),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                           ),
                         ),
-                        
-                        const SizedBox(width: 16),
-                        
+
+                        const SizedBox(width: 20),
+
                         // Edit Profile Button
                         ElevatedButton.icon(
                           onPressed: _handleEditProfile,
                           icon: Icon(
                             _isEditMode ? Icons.save : Icons.edit,
-                            size: 18,
+                            size: 20,
                           ),
-                          label: Text(_isEditMode ? "Save Profile" : "Edit Profile"),
+                          label: Text(
+                            _isEditMode ? "Save Profile" : "Edit Profile",
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF1976D2),
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                           ),
                         ),
@@ -558,7 +492,15 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
   }
 
   // Helper method to build editable info fields
-  Widget _buildInfoField(String label, String value, TextEditingController controller) {
+  Widget _buildInfoField({
+    required String label,
+    required String value,
+    required TextEditingController controller,
+    required bool isValid,
+    required Function(bool) setValid,
+    bool isEmail = false,
+    bool isPhone = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 20.0),
       child: Column(
@@ -576,24 +518,54 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
           _isEditMode
               ? TextField(
                   controller: controller,
+                  keyboardType: isEmail
+                      ? TextInputType.emailAddress
+                      : isPhone
+                          ? TextInputType.phone
+                          : TextInputType.text,
                   decoration: InputDecoration(
+                    hintText: "Enter $label",
+                    prefixIcon: Icon(
+                      isEmail
+                          ? Icons.email_outlined
+                          : isPhone
+                              ? Icons.phone
+                              : Icons.text_fields,
+                      color: isValid ? Colors.grey[500] : Colors.red,
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
+                      borderSide: BorderSide(
+                          color: isValid ? Colors.grey[300]! : Colors.red),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
+                      borderSide: BorderSide(
+                          color: isValid ? Colors.grey[300]! : Colors.red),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFF1976D2)),
+                      borderSide: BorderSide(
+                          color: isValid ? const Color(0xFF1976D2) : Colors.red,
+                          width: 2),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
-                    ),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   ),
+                  onChanged: (val) {
+                    // live validation
+                    if (val.trim().isEmpty) {
+                      setValid(false);
+                    } else {
+                      if (isEmail) {
+                        setValid(RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                            .hasMatch(val));
+                      } else {
+                        setValid(true);
+                      }
+                    }
+                    setState(() {});
+                  },
                 )
               : Text(
                   value,
@@ -602,10 +574,19 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
                     color: Colors.black87,
                   ),
                 ),
+          if (!isValid)
+            Padding(
+              padding: const EdgeInsets.only(top: 6, left: 4),
+              child: Text(
+                "Please enter a valid $label",
+                style: TextStyle(fontSize: 12, color: Colors.red[600]),
+              ),
+            ),
         ],
       ),
     );
   }
+
 
   // Helper method to build read-only fields
   Widget _buildReadOnlyField(String label, String value) {

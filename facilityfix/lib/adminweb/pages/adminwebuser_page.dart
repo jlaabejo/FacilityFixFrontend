@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
+import '../popupwidgets/webusers_viewdetails_popup.dart';
 
 class AdminUserPage extends StatefulWidget {
   const AdminUserPage({super.key});
@@ -312,9 +313,7 @@ final Map<String, Map<String, Color>> roleStyles = {
   void _handleActionSelection(String action, Map<String, dynamic> user) {
     switch (action) {
       case 'view':
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Viewing user: ${user['name']}")),
-        );
+        UserProfileDialog.show(context, user);
         break;
 
       case 'approve':
@@ -328,7 +327,7 @@ final Map<String, Map<String, Color>> roleStyles = {
 
       case 'reject':
         setState(() {
-          user['status'] = 'Rejected'; // or Inactive, depending on your flow
+          user['status'] = 'Rejected'; 
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("${user['name']} rejected")),

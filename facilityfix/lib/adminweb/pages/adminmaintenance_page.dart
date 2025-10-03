@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../popupwidgets/createmaintenancedialogue_popup.dart';
+import '../popupwidgets/maintenance_firesafety_popup.dart';
+import '../popupwidgets/maintenance_earthquake_popup.dart';
+import '../popupwidgets/maintenance_typhoonflood_popup.dart';
 
 class AdminMaintenancePage extends StatefulWidget {
   const AdminMaintenancePage({super.key});
@@ -64,14 +67,16 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
       'status': 'In Progress',
       'date': '05-21-2025',
       'recurrence': '3 Months',
+      'maintenanceType': 'External',
     },
     {
-      'id': 'PM-GEN-LIGHT-001',
+      'id': 'PM-GEN-LIGHT-002',
       'location': 'UNIT 210',
       'task': 'Light Inspection',
       'status': 'New',
       'date': '05-30-2025',
       'recurrence': '1 Month',
+      'maintenanceType': 'Internal', 
     },
   ];
 
@@ -79,7 +84,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
   final List<double> _colW = <double>[
     160, // ID
     180, // LOCATION
-    240, // TASK TITLE
+    250, // TASK TITLE
     140, // STATUS
     120, // DATE
     100, // RECURRENCE
@@ -93,13 +98,188 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     );
   }
 
-Text _ellipsis(String s, {TextStyle? style}) => Text(
-  s,
-  maxLines: 1,
-  overflow: TextOverflow.ellipsis,
-  softWrap: false,
-  style: style,
-);
+  Text _ellipsis(String s, {TextStyle? style}) => Text(
+    s,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    softWrap: false,
+    style: style,
+  );
+
+  // Action dropdown menu methods 
+  void _showActionMenu(BuildContext context, Map<String, dynamic> maintenance, Offset position) {
+    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    
+    showMenu(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(position.dx, position.dy, 0, 0),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem(
+          value: 'view',
+          child: Row(
+            children: [
+              Icon(
+                Icons.visibility_outlined,
+                color: Colors.green[600],
+                size: 18,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'View',
+                style: TextStyle(
+                  color: Colors.green[600],
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'edit',
+          child: Row(
+            children: [
+              Icon(
+                Icons.edit_outlined,
+                color: Colors.blue[600],
+                size: 18,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Edit',
+                style: TextStyle(
+                  color: Colors.blue[600],
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(
+                Icons.delete_outline,
+                color: Colors.red[600],
+                size: 18,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Delete',
+                style: TextStyle(
+                  color: Colors.red[600],
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      elevation: 8,
+    ).then((value) {
+      if (value != null) {
+        _handleActionSelection(value, maintenance);
+      }
+    });
+  }
+
+  // Handle action selection 
+  void _handleActionSelection(String action, Map<String, dynamic> maintenance) {
+    switch (action) {
+      case 'view':
+        _viewMaintenance(maintenance);
+        break;
+      case 'edit':
+        _editMaintenance(maintenance);
+        break;
+      case 'delete':
+        _deleteMaintenance(maintenance);
+        break;
+    }
+  }
+
+  // View method 
+  void _viewMaintenance(Map<String, dynamic> maintenance) {
+    final id = (maintenance['id'] ?? '').toString(); 
+    final rawType = (maintenance['maintenanceType'] ?? maintenance['type'] ?? '')
+        .toString()
+        .toLowerCase()
+        .trim();
+
+    if (rawType.startsWith('internal')) {
+      context.push('/work/maintenance/$id/internal', extra: maintenance);
+    } else if (rawType.startsWith('external')) {
+      context.push('/work/maintenance/$id/external', extra: maintenance);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unknown maintenance type.')),
+      );
+    }
+  }
+
+  // Edit method
+  void _editMaintenance(Map<String, dynamic> maintenance) {
+    final id = (maintenance['id'] ?? '').toString();
+    final rawType = (maintenance['maintenanceType'] ?? maintenance['type'] ?? '')
+        .toString()
+        .toLowerCase()
+        .trim();
+
+    if (rawType.startsWith('internal')) {
+      context.push('/work/maintenance/$id/internal?edit=1', extra: maintenance);
+    } else if (rawType.startsWith('external')) {
+      context.push('/work/maintenance/$id/external?edit=1', extra: maintenance);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unknown maintenance type.')),
+      );
+    }
+  }
+
+  // Delete maintenance method
+  void _deleteMaintenance(Map<String, dynamic> maintenance) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Maintenance'),
+          content: Text('Are you sure you want to delete maintenance ${maintenance['id']}?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // TODO: Replace with actual backend API call
+                setState(() {
+                  _tasks.removeWhere((n) => n['id'] == maintenance['id']);
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Maintenance ${maintenance['id']} deleted'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red,
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -134,42 +314,36 @@ Text _ellipsis(String s, {TextStyle? style}) => Text(
                       ),
                     ),
                     const SizedBox(height: 8),
+                    //breadcrumbs
                     Row(
                       children: [
-                        Text(
-                          "Main",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
+                        TextButton(
+                          onPressed: () => context.go('/dashboard'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
+                          child: const Text('Dashboard'),
                         ),
-                        Icon(
-                          Icons.arrow_forward_ios,
-                          size: 12,
-                          color: Colors.grey[600],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          "Work Orders",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
+                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        TextButton(
+                          onPressed: () => context.go('/work/maintenance'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
+                          child: const Text('Work Orders'),
                         ),
-                        Icon(
-                          Icons.arrow_forward_ios,
-                          size: 12,
-                          color: Colors.grey[600],
-                        ),
-                        const SizedBox(width: 4),
-                        const Text(
-                          "Maintenance Tasks",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
+                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        TextButton(
+                          onPressed: null,
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
+                          child: const Text('Maintenance Tasks'),
                         ),
+                        
                       ],
                     ),
                   ],
@@ -206,6 +380,9 @@ Text _ellipsis(String s, {TextStyle? style}) => Text(
                   "3/5 Passed",
                   "Next: July 2025",
                   Colors.white,
+                  onTap: () {
+                    FireSafetyDialog.show(context, {"description": "Fire safety inspection"});
+                  },
                 ),
                 const SizedBox(width: 16),
                 _buildSummaryCard(
@@ -213,13 +390,25 @@ Text _ellipsis(String s, {TextStyle? style}) => Text(
                   "1/2 Passed",
                   "Next: Sept 2025",
                   Colors.white,
+                  onTap: () {
+                    EarthquakeDialog.show(context, {
+                      'description': 'Earthquake safety inspection tasks',
+                      'priority': 'High',
+                    });
+                  },
                 ),
                 const SizedBox(width: 16),
                 _buildSummaryCard(
-                  "ELECTRICAL",
+                  "TYPHOON/FLOOD",
                   "2/3 Passed",
                   "Next: Jan 2026",
                   Colors.white,
+                  onTap: () {
+                    TyphoonFloodDialog.show(context, {
+                      'description': 'Typhoon and flood safety inspection tasks for this facility',
+                      'priority': 'High',
+                    });
+                  },
                 ),
                 const SizedBox(width: 16),
                 _buildSummaryCard(
@@ -323,6 +512,11 @@ Text _ellipsis(String s, {TextStyle? style}) => Text(
                       ],
                     ),
                   ),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: Colors.grey[400],
+                  ),
 
                   // Table content
                   SingleChildScrollView(
@@ -331,6 +525,7 @@ Text _ellipsis(String s, {TextStyle? style}) => Text(
                             columnSpacing: 16,
                             headingRowHeight: 56,
                             dataRowHeight: 64,
+                            headingRowColor: MaterialStateProperty.all(Colors.grey[50]),
                             headingTextStyle: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -362,16 +557,28 @@ Text _ellipsis(String s, {TextStyle? style}) => Text(
                                   DataCell(_fixedCell(3, _buildStatusChip(task['status']))),
                                   DataCell(_fixedCell(4, _ellipsis(task['date']))),
                                   DataCell(_fixedCell(5, _ellipsis(task['recurrence']))),
-                                  DataCell(_fixedCell(6, Icon(
-                                    Icons.more_vert,
-                                    color: Colors.grey[400],
-                                    size: 20,
-                                  ), align: Alignment.center)),
+                                  DataCell(_fixedCell(6, 
+                                    Builder(builder: (context) {
+                                      return IconButton(
+                                        onPressed: () {
+                                          final rbx = context.findRenderObject() as RenderBox;
+                                          final position = rbx.localToGlobal(Offset.zero);
+                                          _showActionMenu(context, task, position);
+                                        },
+                                        icon: Icon(Icons.more_vert, color: Colors.grey[400], size: 20),
+                                      );
+                                    }),
+                                    align: Alignment.center,
+                                  )),
                                 ],
                               );
                             }).toList(),
                           ),
-                        
+                      ),
+                      Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: Colors.grey[400],
                       ),
                     
                   // Pagination
@@ -455,49 +662,60 @@ Text _ellipsis(String s, {TextStyle? style}) => Text(
   }
 
   // Widget for summary cards
-  Widget _buildSummaryCard(String title, String value, String subtitle, Color backgroundColor) {
+  Widget _buildSummaryCard(
+    String title,
+    String value,
+    String subtitle,
+    Color backgroundColor, {
+    VoidCallback? onTap,
+  }) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey[200]!),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[600],
-                letterSpacing: 0.5,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey[200]!),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[600],
+                  letterSpacing: 0.5,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
+              const SizedBox(height: 12),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey[600],
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey[600],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+
 
   // Widget for status chips
   Widget _buildStatusChip(String status) {
