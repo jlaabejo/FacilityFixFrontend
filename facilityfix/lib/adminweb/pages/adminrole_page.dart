@@ -633,7 +633,7 @@ class _AdminRolePageState extends State<AdminRolePage> {
                                   ],
                                 ),
                               );
-                            }).toList(),
+                            }),
                           ],
                         ),
                       ),

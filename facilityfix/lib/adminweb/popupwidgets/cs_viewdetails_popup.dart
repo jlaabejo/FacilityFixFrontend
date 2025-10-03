@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../popupwidgets/assignstaff_popup.dart';
 
 class ConcernSlipDetailDialog extends StatelessWidget {
@@ -352,7 +351,7 @@ class ConcernSlipDetailDialog extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
-        '${priority} Priority',
+        '$priority Priority',
         style: TextStyle(
           color: textColor,
           fontSize: 12,

@@ -15,7 +15,7 @@ class AnnouncementDetails extends StatefulWidget {
 }
 
 class _AnnouncementDetailsState extends State<AnnouncementDetails> {
-  int _selectedIndex = 2;
+  final int _selectedIndex = 2;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),

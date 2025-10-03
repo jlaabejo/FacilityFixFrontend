@@ -42,7 +42,7 @@ class _ExternalMaintenanceFormPageState extends State<ExternalMaintenanceFormPag
   DateTime? _serviceDateActual;
   DateTime? _loggedDate;
   String? _selectedAssessmentReceived;
-  String? _selectedLoggedBy = 'Auto-filled';
+  final String _selectedLoggedBy = 'Auto-filled';
   DateTime? _assignedStaffDate;
   String? _selectedAdminNotifications;
 

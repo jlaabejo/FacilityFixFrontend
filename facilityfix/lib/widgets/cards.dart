@@ -1054,14 +1054,14 @@ class RepairCard extends StatelessWidget {
                   const SizedBox(height: 2),
  
                   // Date
-                  if (reqDate != null && reqDate!.trim().isNotEmpty)
+                  if (reqDate.trim().isNotEmpty)
                   Row(
                     children: [
                       const Icon(Icons.calendar_today_outlined, size: 14, color: sub2Color),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          formatDateRequested(reqDate!.trim()),
+                          formatDateRequested(reqDate.trim()),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -1105,7 +1105,6 @@ class _AssigneeLine extends StatelessWidget {
   final bool dense;
 
   const _AssigneeLine({
-    super.key,
     required this.name,
     this.department,
     this.photoUrl,
@@ -1234,7 +1233,7 @@ class _AssigneeData {
 
 class _MoreChip extends StatelessWidget {
   final int count;
-  const _MoreChip({super.key, required this.count});
+  const _MoreChip({required this.count});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1259,7 +1258,7 @@ class _MoreChip extends StatelessWidget {
 /// Clips any tag widget on the right if space is tight (keeps single line).
 class _EllipsizedTag extends StatelessWidget {
   final Widget child;
-  const _EllipsizedTag({super.key, required this.child});
+  const _EllipsizedTag({required this.child});
   @override
   Widget build(BuildContext context) {
     return ClipRect(

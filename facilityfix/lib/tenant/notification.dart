@@ -15,7 +15,7 @@ class NotificationPage extends StatefulWidget {
 }
 
 class _NotificationPageState extends State<NotificationPage> {
-  int _selectedIndex = 3;
+  final int _selectedIndex = 3;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),

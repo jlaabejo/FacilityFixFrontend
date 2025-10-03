@@ -17,7 +17,7 @@ class CalendarPage extends StatefulWidget {
 }
 
 class _CalendarPageState extends State<CalendarPage> {
-  int _selectedIndex = 3;
+  final int _selectedIndex = 3;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),

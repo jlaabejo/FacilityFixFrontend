@@ -179,7 +179,7 @@ class FileAttachmentPicker extends StatefulWidget {
 }
 
 class _FileAttachmentPickerState extends State<FileAttachmentPicker> {
-  List<PlatformFile> _selectedFiles = [];
+  final List<PlatformFile> _selectedFiles = [];
 
   // ---- Styles & helpers ----
   static const _titleStyle = TextStyle(
@@ -749,7 +749,7 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
 
     // We hide Flutter's built-in error text and render our own below.
     // Non-null validator (' ') triggers the error border visually.
-    String? _requiredValidator(Object? val, {bool isMulti = false}) {
+    String? requiredValidator(Object? val, {bool isMulti = false}) {
       if (!widget.isRequired) return null;
       if (isMulti) {
         final list = widget.selectedValues ?? const [];
@@ -788,7 +788,7 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
                 setState(() => _showOtherInput = _isOthers(val));
                 widget.onChanged?.call(val);
               },
-              validator: (val) => _requiredValidator(val),
+              validator: (val) => requiredValidator(val),
               decoration: _decoration(
                 hintText: hint,
                 prefixIcon: widget.prefixIcon,
@@ -813,7 +813,7 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
               ).copyWith(
                 errorStyle: const TextStyle(fontSize: 0, height: 0),
               ),
-              validator: (_) => _requiredValidator(null, isMulti: true),
+              validator: (_) => requiredValidator(null, isMulti: true),
               onTap: () async {
                 final seed = List<T>.from(widget.selectedValues ?? const []);
                 final res = await _openMultiDialog(seed);
@@ -1245,8 +1245,8 @@ class NotificationChecklist extends StatelessWidget {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           side: const BorderSide(color: _stroke, width: 1.2),
-                          fillColor: MaterialStateProperty.resolveWith((states) {
-                            if (states.contains(MaterialState.selected)) return _brand;
+                          fillColor: WidgetStateProperty.resolveWith((states) {
+                            if (states.contains(WidgetState.selected)) return _brand;
                             return Colors.white;
                           }),
                           checkColor: Colors.white,

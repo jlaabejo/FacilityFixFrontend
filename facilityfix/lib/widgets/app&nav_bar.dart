@@ -8,13 +8,13 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool showHistory;
 
   const CustomAppBar({
-    Key? key,
+    super.key,
     this.title,
     this.actions,
     this.leading,
     this.showMore = false,
     this.showHistory = false,
-  }) : super(key: key);
+  });
 
   void _showBottomSheet(BuildContext context) {
     showModalBottomSheet(
@@ -194,11 +194,11 @@ class NavBar extends StatefulWidget {
   final ValueChanged<int> onTap;
 
   const NavBar({
-    Key? key,
+    super.key,
     required this.items,
     required this.currentIndex,
     required this.onTap,
-  }) : super(key: key);
+  });
 
     @override
     State<NavBar> createState() => _NavBarState();

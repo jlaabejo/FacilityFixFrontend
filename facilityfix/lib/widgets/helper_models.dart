@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class EmptyState extends StatelessWidget {
-  const EmptyState();
+  const EmptyState({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -69,7 +69,7 @@ class Announcement {
 }
 
 class UnreadDot extends StatelessWidget {
-  const UnreadDot();
+  const UnreadDot({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +85,7 @@ class UnreadDot extends StatelessWidget {
 }
 
 class SegmentChip extends StatelessWidget {
-  const SegmentChip({
+  const SegmentChip({super.key, 
     required this.label,
     required this.selected,
     required this.onSelected,
@@ -137,7 +137,7 @@ class SegmentChip extends StatelessWidget {
 // Avatar
 class Avatar extends StatelessWidget {
   final String? avatarUrl;
-  const Avatar({this.avatarUrl});
+  const Avatar({super.key, this.avatarUrl});
 
   @override
   Widget build(BuildContext context) {
@@ -165,7 +165,7 @@ class Pill extends StatelessWidget {
   final String label;
   final double iconSize;
 
-  const Pill({required this.icon, required this.label, this.iconSize = 16});
+  const Pill({super.key, required this.icon, required this.label, this.iconSize = 16});
 
   @override
   Widget build(BuildContext context) {
@@ -203,7 +203,7 @@ class IconPill extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
 
-  const IconPill({required this.icon, this.onTap});
+  const IconPill({super.key, required this.icon, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -433,7 +433,7 @@ class ListItem extends ListEntry {
 /// Compact banner shown at the top of details if request is On Hold.
 class OnHoldBanner extends StatelessWidget {
   final HoldResult hold;
-  const OnHoldBanner({required this.hold});
+  const OnHoldBanner({super.key, required this.hold});
 
   @override
   Widget build(BuildContext context) {

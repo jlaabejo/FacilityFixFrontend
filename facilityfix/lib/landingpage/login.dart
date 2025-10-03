@@ -8,7 +8,7 @@ import 'package:facilityfix/admin/home.dart' as Admin;
 
 class LogIn extends StatefulWidget {
   final String role; // 'tenant' | 'staff' | 'admin'
-  const LogIn({Key? key, required this.role}) : super(key: key);
+  const LogIn({super.key, required this.role});
 
   @override
   State<LogIn> createState() => _LogInState();

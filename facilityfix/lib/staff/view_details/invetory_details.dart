@@ -20,7 +20,7 @@ class InventoryDetails extends StatefulWidget {
 }
 
 class _InventoryDetailsState extends State<InventoryDetails> {
-  int _selectedIndex = 4;
+  final int _selectedIndex = 4;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -97,7 +97,7 @@ class _InventoryDetailsState extends State<InventoryDetails> {
       }
     }
 
-    String _formatDate(DateTime d) {
+    String formatDate(DateTime d) {
       const months = [
         'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec',
       ];
@@ -259,7 +259,7 @@ class _InventoryDetailsState extends State<InventoryDetails> {
                           return null;
                         },
                         controller: TextEditingController(
-                          text: neededDate == null ? '' : _formatDate(neededDate!),
+                          text: neededDate == null ? '' : formatDate(neededDate!),
                         ),
                       ),
                     ),

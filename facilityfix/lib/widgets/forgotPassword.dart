@@ -14,7 +14,6 @@ void _showTopBanner(
   _activeTopBanner = null;
 
   final overlay = Overlay.of(context);
-  if (overlay == null) return;
 
   final entry = OverlayEntry(
     builder: (ctx) => _TopStickyBanner(
@@ -40,11 +39,10 @@ class _TopStickyBanner extends StatefulWidget {
   final Duration duration;
 
   const _TopStickyBanner({
-    Key? key,
     required this.message,
     required this.onClose,
     required this.duration,
-  }) : super(key: key);
+  });
 
   @override
   State<_TopStickyBanner> createState() => _TopStickyBannerState();

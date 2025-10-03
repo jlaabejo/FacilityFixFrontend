@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:facilityfix/landingpage/choose.dart';
 class SignUp extends StatefulWidget {
   final String role;
-  const SignUp({Key? key, required this.role}) : super(key: key);
+  const SignUp({super.key, required this.role});
 
   @override
   State<SignUp> createState() => _SignUpState();

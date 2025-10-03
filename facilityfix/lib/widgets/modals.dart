@@ -1,8 +1,6 @@
 import 'package:facilityfix/widgets/buttons.dart' as custom_buttons;
-import 'package:facilityfix/widgets/forms.dart';
 import 'package:flutter/material.dart';
 
-import 'profile.dart';
 
 class CustomPopup extends StatelessWidget {
   final String title;
@@ -104,14 +102,6 @@ class CustomPopup extends StatelessWidget {
                         onPressed: onPrimaryPressed,
                       )
                     : ElevatedButton(
-                        child: Text(
-                          primaryText,
-                          style: const TextStyle(
-                            color: Color(0xFFFFFFFF),
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.1,
-                          ),
-                        ),
                         style: ElevatedButton.styleFrom(
                           minimumSize: const Size.fromHeight(48),
                           backgroundColor: const Color(0xFF005CE7),
@@ -120,6 +110,14 @@ class CustomPopup extends StatelessWidget {
                           ),
                         ),
                         onPressed: onPrimaryPressed,
+                        child: Text(
+                          primaryText,
+                          style: const TextStyle(
+                            color: Color(0xFFFFFFFF),
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.1,
+                          ),
+                        ),
                       ),
 
                 const SizedBox(height: 12),
@@ -147,14 +145,6 @@ class CustomPopup extends StatelessWidget {
                           onPressed: onSecondaryPressed,
                         )
                       : OutlinedButton(
-                          child: Text(
-                            secondaryText!,
-                            style: const TextStyle(
-                              color: Color(0xFF005CE7),
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.1,
-                            ),
-                          ),
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size.fromHeight(48),
                             side: const BorderSide(color: Color(0xFF005CE7)),
@@ -163,6 +153,14 @@ class CustomPopup extends StatelessWidget {
                             ),
                           ),
                           onPressed: onSecondaryPressed,
+                          child: Text(
+                            secondaryText!,
+                            style: const TextStyle(
+                              color: Color(0xFF005CE7),
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.1,
+                            ),
+                          ),
                         ),
 
               ],

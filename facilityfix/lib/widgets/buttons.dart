@@ -131,7 +131,7 @@ class SearchAndFilterBar extends StatelessWidget {
     final borderRadius = BorderRadius.circular(12);
 
     // Reusable button builder
-    Widget _filterButton({
+    Widget filterButton({
       required IconData icon,
       required VoidCallback onTap,
     }) {
@@ -241,7 +241,7 @@ class SearchAndFilterBar extends StatelessWidget {
 
         // Classification Filter (optional)
         if (hasClassification) ...[
-          _filterButton(
+          filterButton(
             icon: Icons.tune,
             onTap: () async {
               final picked = await _showOptionPickerSheet(
@@ -257,7 +257,7 @@ class SearchAndFilterBar extends StatelessWidget {
         ],
 
         // Status Filter 
-        _filterButton(
+        filterButton(
           icon: Icons.filter_list,
           onTap: () async {
             final picked = await _showOptionPickerSheet(

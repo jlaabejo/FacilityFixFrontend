@@ -20,14 +20,14 @@ class FacilityFixLayout extends StatefulWidget {
 
 class _FacilityFixLayoutState extends State<FacilityFixLayout> {
   // Dropdown expansion state management
-  Map<String, bool> _expanded = {
+  final Map<String, bool> _expanded = {
     'user': false,
     'work': false,
     'inventory': false,
   };
 
   // Track hover states for navigation items
-  Map<String, bool> _hovered = {};
+  final Map<String, bool> _hovered = {};
 
   // Debug logging toggle for highlight component
   final bool _enableHighlightLogs = true;

@@ -16,7 +16,7 @@ class ChatPage extends StatefulWidget {
 }
 
 class _ChatPageState extends State<ChatPage> {
-  int _selectedIndex = 1;
+  final int _selectedIndex = 1;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),

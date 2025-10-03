@@ -23,7 +23,7 @@ class InventoryDetails extends StatefulWidget {
 }
 
 class _InventoryDetailsState extends State<InventoryDetails> {
-  int _selectedIndex = 4;
+  final int _selectedIndex = 4;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),

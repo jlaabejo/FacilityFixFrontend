@@ -21,7 +21,7 @@ class MaintenanceForm extends StatefulWidget {
 
 class _MaintenanceFormState extends State<MaintenanceForm> {
   // ---- Nav ----
-  int _selectedIndex = 1;
+  final int _selectedIndex = 1;
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
@@ -182,7 +182,9 @@ class _MaintenanceFormState extends State<MaintenanceForm> {
     dueDateController.dispose();
     remarksController.dispose();
     otherPriorityController.dispose();
-    for (final c in checklistControllers) c.dispose();
+    for (final c in checklistControllers) {
+      c.dispose();
+    }
     super.dispose();
   }
 

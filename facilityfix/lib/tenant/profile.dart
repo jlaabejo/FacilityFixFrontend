@@ -20,7 +20,7 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  int _selectedIndex = 3;
+  final int _selectedIndex = 3;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),

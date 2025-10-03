@@ -21,7 +21,7 @@ class InventoryForm extends StatefulWidget {
 
 class _InventoryFormState extends State<InventoryForm> {
   // highlight the Inventory tab (index 4) in the bottom nav
-  int _selectedIndex = 4;
+  final int _selectedIndex = 4;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),

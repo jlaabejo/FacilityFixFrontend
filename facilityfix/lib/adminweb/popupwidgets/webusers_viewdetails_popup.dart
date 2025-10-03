@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../popupwidgets/webforgotpassword_popup.dart';
 
 class UserProfileDialog extends StatefulWidget {
@@ -722,7 +721,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
       
     } catch (e) {
       print('Error updating user profile: $e');
-      throw e;
+      rethrow;
     }
   }
 }

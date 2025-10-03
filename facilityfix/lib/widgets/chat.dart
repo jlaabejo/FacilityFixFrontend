@@ -143,11 +143,11 @@ class ChatScreen extends StatelessWidget {
                 const SizedBox(width: 8),
 
                 // Send button
-                Container(
+                SizedBox(
                   width: 48,
                   height: 48,
                   child: IconButton(
-                    icon: const Icon(Icons.send, color: const Color(0xFF213ED7), size: 24),
+                    icon: const Icon(Icons.send, color: Color(0xFF213ED7), size: 24),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                     onPressed: () {

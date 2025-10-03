@@ -323,7 +323,10 @@ class _HomeState extends State<HomePage> {
 
 /// Simple “section header + View all” row to match tenant side
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, this.actionLabel});
+  const _SectionHeader({
+    required this.title,
+    this.actionLabel,
+  });
   final String title;
   final String? actionLabel;
 

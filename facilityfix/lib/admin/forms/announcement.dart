@@ -21,7 +21,7 @@ class AnnouncementForm extends StatefulWidget {
 class _AnnouncementFormState extends State<AnnouncementForm> {
   // ---------------- Form & Nav ----------------
   final _formKey = GlobalKey<FormState>();
-  int _selectedIndex = 2;
+  final int _selectedIndex = 2;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),

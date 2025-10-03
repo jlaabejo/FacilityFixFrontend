@@ -460,7 +460,7 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
                       columnSpacing: 30,
                       headingRowHeight: 56,
                       dataRowHeight: 64,
-                      headingRowColor: MaterialStateProperty.all(Colors.grey[50]),
+                      headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
                       headingTextStyle: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,

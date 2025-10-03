@@ -21,7 +21,7 @@ class ReminderPage extends StatefulWidget {
 }
 
 class _ReminderPageState extends State<ReminderPage> {
-  int _selectedIndex = 1;
+  final int _selectedIndex = 1;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),

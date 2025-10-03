@@ -25,7 +25,7 @@ class RequestForm extends StatefulWidget {
 }
 
 class _RequestFormState extends State<RequestForm> {
-  int _selectedIndex = 1;
+  final int _selectedIndex = 1;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -582,7 +582,7 @@ class _RequestFormState extends State<RequestForm> {
               MultiContractorInputField(
                 isRequired: true,
                 onChanged: (contractorList) {
-                  setState(() => _hasContractors = (contractorList?.isNotEmpty ?? false));
+                  setState(() => _hasContractors = (contractorList.isNotEmpty ?? false));
                 },
               ),
               if (_errWO('contractors') != null)

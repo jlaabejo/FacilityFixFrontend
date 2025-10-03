@@ -28,7 +28,7 @@ class WorkOrderDetails extends StatefulWidget {
 }
 
 class _WorkOrderDetailsState extends State<WorkOrderDetails> {
-  int _selectedIndex = 1;
+  final int _selectedIndex = 1;
 
   late String _detailsLabel;
 

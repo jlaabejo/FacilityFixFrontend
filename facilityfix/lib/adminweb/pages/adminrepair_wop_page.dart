@@ -588,7 +588,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                   columnSpacing: 16,
                   headingRowHeight: 56,
                   dataRowHeight: 64,
-                  headingRowColor: MaterialStateProperty.all(Colors.grey[50]),
+                  headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
                   headingTextStyle: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,

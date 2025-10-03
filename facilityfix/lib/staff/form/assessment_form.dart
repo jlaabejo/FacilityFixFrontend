@@ -21,7 +21,7 @@ class AssessmentForm extends StatefulWidget {
 
 class _AssessmentFormState extends State<AssessmentForm> {
   // Highlight Work tab for staff
-  int _selectedIndex = 1;
+  final int _selectedIndex = 1;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),

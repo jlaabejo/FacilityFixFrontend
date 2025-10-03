@@ -1560,7 +1560,7 @@ class KeyValueRow extends StatelessWidget {
 /// Section Title
 class _SectionTitle extends StatelessWidget {
   final String text;
-  const _SectionTitle(this.text, {super.key});
+  const _SectionTitle(this.text);
 
   @override
   Widget build(BuildContext context) {
@@ -1586,13 +1586,12 @@ class _SectionCard extends StatelessWidget {
   final bool hideIfEmpty;
 
   const _SectionCard({
-    super.key,
     this.title,
     this.content,
     this.child,
-    this.padding = const EdgeInsets.all(12),
+    this.padding = const EdgeInsets.all(16),
     this.margin,
-    this.hideIfEmpty = true,
+    this.hideIfEmpty = false,
   });
 
   @override
