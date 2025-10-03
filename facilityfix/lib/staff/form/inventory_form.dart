@@ -6,7 +6,7 @@ import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/widgets/buttons.dart'; // FilledButton
-import 'package:facilityfix/widgets/forms.dart';   // InputField + DropdownField
+import 'package:facilityfix/widgets/forms.dart' hide DropdownField;   // InputField + DropdownField
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/modals.dart'; // CustomPopup
 

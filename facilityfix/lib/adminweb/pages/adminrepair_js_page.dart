@@ -20,10 +20,10 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       'work_maintenance': '/work/maintenance',
       'work_repair': '/work/repair',
       'calendar': '/calendar',
-      'inventory_view': '/inventory/view',
-      'inventory_add': '/inventory/add',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
       'analytics': '/analytics',
-      'notice': '/notice',
+      'announcement': '/announcement',
       'settings': '/settings',
     };
     return pathMap[routeKey];
@@ -74,7 +74,6 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       'assessment': 'Inspected faucet valve. Leak due to worn-out cartridge.',
       'recommendation': 'Replace faucet cartridge.'
     },
-    // You can add more sample data here
   ];
 
   // Dropdown values for filtering
@@ -237,7 +236,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   final List<double> _colW = <double>[
     140, // SERVICE ID
     140, // CONCERN ID
-    130, // BUILDING & UNIT
+    140, // BUILDING & UNIT
     130, // SCHEDULE
     110, // STATUS
     100, // PRIORITY
@@ -313,53 +312,42 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
         // Breadcrumb navigation
         Row(
           children: [
-            Text(
-              "Main",
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
+            TextButton(
+              onPressed: () => context.go('/dashboard'),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
+              child: const Text('Dashboard'),
             ),
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 12,
-              color: Colors.grey[600],
-            ),
-            const SizedBox(width: 4),
-            Text(
-              "Work Orders",
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
+            const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+            TextButton(
+              onPressed: () => context.go('/work/maintenance'),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
+              child: const Text('Work Orders'),
             ),
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 12,
-              color: Colors.grey[600],
-            ),
-            const SizedBox(width: 4),
-            Text(
-              "Repair Tasks",
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
+            const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+            TextButton(
+              onPressed: () => context.go('/work/repair'),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
+              child: const Text('Repair Tasks'),
             ),
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 12,
-              color: Colors.grey[600],
-            ),
-            const SizedBox(width: 4),
-            const Text(
-              "Job Service",
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.black87,
-                fontWeight: FontWeight.w500,
+            const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+            TextButton(
+              onPressed: null,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
+              child: const Text('Job Service'),
             ),
+            
           ],
         ),
       ],
@@ -559,7 +547,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                         if (newValue == 'Concern Slip') {
                           context.go('/work/repair'); 
                         } else if (newValue == 'Job Service') {
-                          context.go('/adminweb/pages/adminrepair_js_page');// your existing page
+                          context.go('/adminweb/pages/adminrepair_js_page');
                         } else if (newValue == 'Work Order Permit') {
                           context.go('/adminweb/pages/adminrepair_wop_page');
                         }
@@ -583,6 +571,11 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
               ],
             ),
           ),
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: Colors.grey[400],
+          ),
 
           // Data Table
           Expanded(
@@ -593,6 +586,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                   columnSpacing: 50,
                   headingRowHeight: 56,
                   dataRowHeight: 64,
+                  headingRowColor: MaterialStateProperty.all(Colors.grey[50]),
                   headingTextStyle: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -644,6 +638,11 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                 ),
               ),
             ),
+          ),
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: Colors.grey[400],
           ),
 
           // Pagination Section

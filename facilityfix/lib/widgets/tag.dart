@@ -142,89 +142,91 @@ class KeyValueRow extends StatelessWidget {
 }
 
 // Status Tag
-  class StatusTag extends StatelessWidget {
-    final String? status;
-    final double fontSize;
-    final EdgeInsets padding;
-    final double borderRadius;
-    final FontWeight fontWeight;
-    final double width;
+class StatusTag extends StatelessWidget {
+  final String status;
+  final double fontSize;
+  final EdgeInsets padding;
+  final double borderRadius;
+  final FontWeight fontWeight;
+  final double width;
 
-    /// Optional overrides. If provided, these take precedence over the map.
-    final Color? fgColor;
-    final Color? bgColor;
+  /// Optional overrides. If provided, these take precedence over the map.
+  final Color? fgColor;
+  final Color? bgColor;
 
-    const StatusTag({
-      super.key,
-      this.status,
-      this.fontSize = 13,
-      this.padding = const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      this.borderRadius = 100,
-      this.fontWeight = FontWeight.w500,
-      this.width = 80,
-      this.fgColor,
-      this.bgColor,
-    });
+  const StatusTag({
+    super.key,
+    required this.status,
+    this.fontSize = 13,
+    this.padding = const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    this.borderRadius = 100,
+    this.fontWeight = FontWeight.w500,
+    this.width = 80,
+    this.fgColor,
+    this.bgColor,
+  });
 
-    // Default style (fallback)
-    static const _defaultStyle = _StatusStyle(
-      fg: Color(0xFF667085),
-      bg: Color(0xFFEAECF0),
-    );
+  // Default style (fallback)
+  static const _defaultStyle = _StatusStyle(
+    fg: Color(0xFF667085),
+    bg: Color(0xFFEAECF0),
+  );
 
-    // Map of normalized status -> colors
-    static const Map<String, _StatusStyle> _styles = {
-      'pending':     _StatusStyle(fg: Color(0xFF667085), bg: Color(0xFFF2F4F7)), 
-      'in progress': _StatusStyle(fg: Color(0xFF1570EF), bg: Color(0xFFEFF4FF)), 
-      'on hold':     _StatusStyle(fg: Color(0xFFF79009), bg: Color(0xFFFFFAEB)), 
-      'assigned':    _StatusStyle(fg: Color(0xFF005CE7), bg: Color(0xFFE6F0FF)), 
-      'assessed':    _StatusStyle(fg: Color(0xFF475467), bg: Color(0xFFE5E7EB)), 
-      'scheduled':   _StatusStyle(fg: Color(0xFF7A5AF8), bg: Color(0xFFF4F5FF)), 
-      'done':        _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)),
+  // Map of normalized status -> colors
+  static const Map<String, _StatusStyle> _styles = {
+  'pending':     _StatusStyle(fg: Color(0xFF667085), bg: Color(0xFFF2F4F7)), 
+  'in progress': _StatusStyle(fg: Color(0xFF1570EF), bg: Color(0xFFEFF4FF)), 
+  'on hold':     _StatusStyle(fg: Color(0xFFF79009), bg: Color(0xFFFFFAEB)), 
+  'assigned':    _StatusStyle(fg: Color(0xFF005CE7), bg: Color(0xFFE6F0FF)), 
+  'assessed':    _StatusStyle(fg: Color(0xFF475467), bg: Color(0xFFE5E7EB)), 
+  'scheduled':   _StatusStyle(fg: Color(0xFF7A5AF8), bg: Color(0xFFF4F5FF)), 
+  'done':        _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)),
 
-      // Inventory
-      'approved':    _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)), 
-      'rejected':    _StatusStyle(fg: Color(0xFFD92D20), bg: Color(0xFFFEF3F2)), 
-      'declined':    _StatusStyle(fg: Color(0xFFF79009), bg: Color(0xFFFEF3F2)), 
-    };
+  // Inventory
+  'approved':    _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)), 
+  'rejected':    _StatusStyle(fg: Color(0xFFD92D20), bg: Color(0xFFFEF3F2)), 
+  'declined':    _StatusStyle(fg: Color(0xFFF79009), bg: Color(0xFFFEF3F2)), 
+  };
 
-    static String _normalize(String s) =>
-        s.trim().toLowerCase().replaceAll(RegExp(r'[_\-]+'), ' ').replaceAll(RegExp(r'\s+'), ' ');
+  // Normalize "In-Progress", "in_progress", "in progress" → "in progress"
+  static String _normalize(String s) =>
+      s.trim().toLowerCase().replaceAll(RegExp(r'[_\-]+'), ' ').replaceAll(RegExp(r'\s+'), ' ');
 
-    static _StatusStyle _styleFor(String s) => _styles[_normalize(s)] ?? _defaultStyle;
+  static _StatusStyle _styleFor(String s) => _styles[_normalize(s)] ?? _defaultStyle;
 
-    static StatusStyle colorsFor(String status) {
-      final st = _styleFor(status);
-      return StatusStyle(fg: st.fg, bg: st.bg);
-    }
-
-    @override
-    Widget build(BuildContext context) {
-      final mapped = status != null ? _styleFor(status!) : _defaultStyle;
-      final fg = fgColor ?? mapped.fg;
-      final bg = bgColor ?? mapped.bg;
-
-      return Container(
-        width: width,
-        padding: padding,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(borderRadius),
-        ),
-        child: Text(
-          status ?? '',
-          style: TextStyle(
-            color: fg,
-            fontSize: fontSize,
-            fontWeight: fontWeight,
-            fontFamily: 'Inter',
-            letterSpacing: -0.5,
-          ),
-        ),
-      );
-    }
+  /// Public helper to fetch colors elsewhere (e.g. for borders/icons)
+  static StatusStyle colorsFor(String status) {
+    final st = _styleFor(status);
+    return StatusStyle(fg: st.fg, bg: st.bg);
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final mapped = _styleFor(status);
+    final fg = fgColor ?? mapped.fg;
+    final bg = bgColor ?? mapped.bg;
+
+    return Container(
+      width: width, 
+      padding: padding,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(borderRadius),
+      ),
+      child: Text(
+        status,
+        style: TextStyle(
+          color: fg,
+          fontSize: fontSize,
+          fontWeight: fontWeight,
+          fontFamily: 'Inter',
+          letterSpacing: -0.5,
+        ),
+      ),
+    );
+  }
+}
 
 // Public style to use outside the widget
 class StatusStyle {
@@ -498,13 +500,3 @@ class AnnouncementClassificationTag extends StatelessWidget {
     );
   }
 }
-
-  String formatDate(dynamic dateStr) {
-    if (dateStr == null) return 'N/A';
-    try {
-      final date = DateTime.parse(dateStr.toString());
-      return '${date.month}/${date.day}';
-    } catch (_) {
-      return 'N/A';
-    }
-  }

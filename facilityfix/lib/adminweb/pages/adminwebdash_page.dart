@@ -24,10 +24,10 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
       'work_maintenance': '/work/maintenance',
       'work_repair': '/work/repair',
       'calendar': '/calendar',
-      'inventory_view': '/inventory/view',
-      'inventory_add': '/inventory/add',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
       'analytics': '/analytics',
-      'notice': '/notice',
+      'announcement': '/announcement',
       'settings': '/settings',
     };
     return pathMap[routeKey];
@@ -59,6 +59,31 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
     );
   }
 
+  // Column widths for Repair Task table
+  final List<double> _colW = <double>[
+    180, // TASK
+    120, // PRIORITY
+    150, // NAME / ASSIGNED TO
+    120, // STATUS
+  ];
+
+  // Fixed width cell helper
+  Widget _fixedCell(int i, Widget child, {Alignment align = Alignment.centerLeft}) {
+    return SizedBox(
+      width: _colW[i],
+      child: Align(alignment: align, child: child),
+    );
+  }
+
+  // Text with ellipsis helper
+  Text _ellipsis(String s, {TextStyle? style}) => Text(
+    s,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    softWrap: false,
+    style: style,
+  );
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -79,9 +104,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ============================================
             // TOP ROW: STATISTICS CARDS SECTION
-            // ============================================
             LayoutBuilder(
               builder: (context, constraints) {
                 if (constraints.maxWidth < 800) {
@@ -99,6 +122,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                               Colors.blue,
                               Icons.work_outline,
                               isIncrease: true,
+                              routeKey: 'work_maintenance',
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -111,6 +135,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                               Colors.green,
                               Icons.schedule,
                               isIncrease: false,
+                              routeKey: 'work_maintenance',
                             ),
                           ),
                         ],
@@ -127,6 +152,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                               Colors.blue,
                               Icons.build_outlined,
                               isIncrease: true,
+                              routeKey: 'work_repair',
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -158,6 +184,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                           Colors.blue,
                           Icons.work_outline,
                           isIncrease: true,
+                          routeKey: 'work_maintenance',
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -170,6 +197,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                           Colors.green,
                           Icons.schedule,
                           isIncrease: false,
+                          routeKey: 'work_maintenance',
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -182,6 +210,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                           Colors.blue,
                           Icons.build_outlined,
                           isIncrease: true,
+                          routeKey: 'work_repair',
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -203,9 +232,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
             ),
             const SizedBox(height: 24),
 
-            // ============================================
             // MIDDLE ROW: REPAIR TASKS TABLE + CALENDAR
-            // ============================================
             LayoutBuilder(
               builder: (context, constraints) {
                 if (constraints.maxWidth < 1000) {
@@ -288,106 +315,118 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
     Color color,
     IconData icon, {
     bool isIncrease = true,
+    String? routeKey, 
   }) {
-    return Container(
-      height: 140, // Increased height for better spacing
-      padding: const EdgeInsets.all(18), // Increased padding
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 0,
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header Row: Title and Icon
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 11, // Slightly increased font size
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey[600],
-                    height: 1.2,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.all(8), // Increased icon padding
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: 18, // Increased icon size
-                ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          
-          // Main Value
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 32, // Increased main value font size
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
+    return InkWell(
+      onTap: () {
+        if (routeKey != null) {
+          final routePath = _getRoutePath(routeKey);
+          if (routePath != null) {
+            context.go(routePath); // navigate on tap
+          }
+        }
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 140, 
+        padding: const EdgeInsets.all(18), 
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              spreadRadius: 0,
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
-          ),
-          const SizedBox(height: 4),
-          
-          // Bottom Row: Percentage and Subtitle
-          Row(
-            children: [
-              // Percentage indicator (if provided)
-              if (percentage.isNotEmpty) ...[
-                Icon(
-                  isIncrease ? Icons.trending_up : Icons.trending_down,
-                  color: isIncrease ? Colors.green : Colors.red,
-                  size: 14, // Increased icon size
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  percentage,
-                  style: TextStyle(
-                    fontSize: 11, // Increased font size
-                    color: isIncrease ? Colors.green : Colors.red,
-                    fontWeight: FontWeight.w500,
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Row: Title and Icon
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 11, 
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey[600],
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(8), 
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: color,
+                    size: 18,
+                  ),
+                ),
               ],
-              // Subtitle text
-              Expanded(
-                child: Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 11, // Increased font size
-                    color: Colors.grey[600],
-                    height: 1.3, // Better line height
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+            ),
+            const Spacer(),
+            
+            // Main Value
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 32, 
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
               ),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(height: 4),
+            
+            // Bottom Row: Percentage and Subtitle
+            Row(
+              children: [
+                // Percentage indicator (if provided)
+                if (percentage.isNotEmpty) ...[
+                  Icon(
+                    isIncrease ? Icons.trending_up : Icons.trending_down,
+                    color: isIncrease ? Colors.green : Colors.red,
+                    size: 14, 
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    percentage,
+                    style: TextStyle(
+                      fontSize: 11, 
+                      color: isIncrease ? Colors.green : Colors.red,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                // Subtitle text
+                Expanded(
+                  child: Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 11, 
+                      color: Colors.grey[600],
+                      height: 1.3, 
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -476,7 +515,9 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   ],
                 ),
                 TextButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    context.go('/work/repair');
+                  },
                   child: const Text(
                     'See All',
                     style: TextStyle(color: Colors.blue),
@@ -486,56 +527,77 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
             ),
             const SizedBox(height: 16),
             
-            // Data Table with improved layout
+            // Data Table
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   minWidth: MediaQuery.of(context).size.width * 0.4,
                 ),
-                child: DataTable(
-                  columnSpacing: 24,
-                  dataRowMinHeight: 48,
-                  dataRowMaxHeight: 48,
+                child: 
+                DataTable(
+                  columnSpacing: 40,
+                  dataRowMinHeight: 65,
+                  dataRowMaxHeight: 65,
                   columns: [
-                    'Task',
-                    'Priority',
-                    'Name',
-                    'Status',
-                  ]
-                      .map((header) => DataColumn(
-                            label: Text(
-                              header,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey[600],
+                    DataColumn(label: _fixedCell(0, Text(
+                      'Task',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[600],
+                        fontSize: 14,
+                      ),
+                    ))),
+                    DataColumn(label: _fixedCell(1, Text(
+                      'Priority',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[600],
+                        fontSize: 14,
+                      ),
+                    ))),
+                    DataColumn(label: _fixedCell(2, Text(
+                      'Name',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[600],
+                        fontSize: 14,
+                      ),
+                    ))),
+                    DataColumn(label: _fixedCell(3, Text(
+                      'Status',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[600],
+                        fontSize: 14,
+                      ),
+                    ))),
+                  ],
+                  rows: tasks.map((task) {
+                    return DataRow(
+                      cells: [
+                        // TASK (fixed width + ellipsis)
+                        DataCell(
+                          _fixedCell(
+                            0,
+                            _ellipsis(
+                              task['task'] as String,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w500,
                                 fontSize: 14,
                               ),
                             ),
-                          ))
-                      .toList(),
-                  rows: tasks.map((task) => DataRow(
-                        cells: [
-                          DataCell(
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 150),
-                              child: Text(
-                                task['task'] as String,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 14,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
                           ),
-                          DataCell(
+                        ),
+
+                        // PRIORITY 
+                        DataCell(
+                          _fixedCell(
+                            1,
                             Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: (task['priorityColor'] as Color)
-                                    .withOpacity(0.1),
+                                color: (task['priorityColor'] as Color).withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
@@ -548,23 +610,27 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                               ),
                             ),
                           ),
-                          DataCell(
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 120),
-                              child: Text(
-                                task['name'] as String,
-                                style: const TextStyle(fontSize: 14),
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                        ),
+
+                        // NAME (fixed width + ellipsis)
+                        DataCell(
+                          _fixedCell(
+                            2,
+                            _ellipsis(
+                              task['name'] as String,
+                              style: const TextStyle(fontSize: 14),
                             ),
                           ),
-                          DataCell(
+                        ),
+
+                        // STATUS 
+                        DataCell(
+                          _fixedCell(
+                            3,
                             Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: (task['statusColor'] as Color)
-                                    .withOpacity(0.1),
+                                color: (task['statusColor'] as Color).withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
@@ -577,8 +643,10 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                               ),
                             ),
                           ),
-                        ],
-                      )).toList(),
+                        ),
+                      ],
+                    );
+                  }).toList(),
                 ),
               ),
             ),
@@ -761,7 +829,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   ],
                 ),
                 TextButton(
-                  onPressed: () {},
+                  onPressed: () {context.go('/calendar');},
                   child: const Text(
                     'Calendar',
                     style: TextStyle(color: Colors.blue),
@@ -842,13 +910,13 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                     ],
                   ),
                 )),
-            const SizedBox(height: 16),
+            const SizedBox(height: 2),
             
             // Add New Schedule Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {},
+                onPressed: () {context.go('/work/maintenance');},
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,

@@ -2,16 +2,12 @@ import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/staff/notification.dart' show NotificationPage;
-import 'package:facilityfix/staff/profile.dart';
+import 'package:facilityfix/staff/profile.dart'; // make sure this exists
 import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/helper_models.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
-
-// ⬇️ Added: services to read the saved profile (snake_case)
-import 'package:facilityfix/services/auth_storage.dart';
-import 'package:facilityfix/services/api_services.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -23,9 +19,8 @@ class HomePage extends StatefulWidget {
 class _HomeState extends State<HomePage> {
   int _selectedIndex = 0;
 
-  // ⬇️ Was static; now dynamic and loaded from saved profile (snake_case only)
-  String _userName = 'User';
-  String _department = '—';
+  static const String _userName = 'Juan';
+  static const String _department = 'Plumbing';
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -34,50 +29,6 @@ class _HomeState extends State<HomePage> {
     NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadHeaderFromProfile();
-  }
-
-  // Title-case only the first name’s first letter
-  String _titleCaseFirstOnly(String input) {
-    final s = input.trim();
-    if (s.isEmpty) return s;
-    final first = s.split(RegExp(r'\s+')).first.toLowerCase();
-    return '${first[0].toUpperCase()}${first.substring(1)}';
-  }
-
-  Future<void> _loadHeaderFromProfile() async {
-    try {
-      // Try local profile first
-      Map<String, dynamic>? profile = await AuthStorage.getProfile();
-
-      // Optional: if nothing local, try /auth/me via APIService
-      if (profile == null) {
-        final api = APIService();
-        profile = await api.getUserProfile();
-      }
-
-      if (profile == null) return;
-
-      // snake_case only
-      final firstRaw = (profile['first_name'] ?? '').toString().trim();
-      final deptRaw  = (profile['staff_department'] ?? '').toString().trim();
-
-      final first = firstRaw.isNotEmpty ? _titleCaseFirstOnly(firstRaw) : 'User';
-      final dept  = deptRaw.isNotEmpty ? deptRaw : '—';
-
-      if (!mounted) return;
-      setState(() {
-        _userName = first;
-        _department = dept;
-      });
-    } catch (_) {
-      // leave defaults if something goes wrong
-    }
-  }
 
   void _onTabTapped(int index) {
     final destinations = [
@@ -97,9 +48,7 @@ class _HomeState extends State<HomePage> {
   }
 
   Future<void> _refresh() async {
-    // Refresh header from profile (keeps UI design the same)
-    await _loadHeaderFromProfile();
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await Future<void>.delayed(const Duration(milliseconds: 500));
   }
 
   @override
@@ -142,7 +91,8 @@ class _HomeState extends State<HomePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Greeting (UI unchanged)
+                
+                // Greeting
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -231,12 +181,13 @@ class _HomeState extends State<HomePage> {
                       unit: 'A 1001',
                       priority: 'High',
 
+                      // Avatar
                       hasCompletionAssessment: true,
                       completionAssigneeName: 'Juan Dela Cruz',
                       completionAssigneeDepartment: 'Plumbing',
                       completionAssigneePhotoUrl: 'assets/images/avatar.png',
                       onTap: () {},
-                      onChatTap: () {},
+                      onChatTap: () {}, 
                     ),
                     const SizedBox(height: 12),
                     RepairCard(
@@ -249,11 +200,13 @@ class _HomeState extends State<HomePage> {
                       unit: 'A 1001',
                       priority: 'High',
 
+                      // Avatar
                       hasCompletionAssessment: true,
                       completionAssigneeName: 'Juan Dela Cruz',
                       completionAssigneeDepartment: 'Plumbing',
+                      // completionAssigneePhotoUrl: 'assets/images/avatar.png',
                       onTap: () {},
-                      onChatTap: () {},
+                      onChatTap: () {}, 
                     ),
                   ],
                 ),
@@ -282,13 +235,14 @@ class _HomeState extends State<HomePage> {
                       unit: 'Tower A - 5th Floor',
                       priority: 'High',
 
+                      // Avatar
                       hasInitialAssessment: true,
                       initialAssigneeName: 'Juan Dela Cruz',
                       initialAssigneeDepartment: 'Plumbing',
                       initialAssigneePhotoUrl: 'assets/images/avatar.png',
 
                       onTap: () {},
-                      onChatTap: () {},
+                      onChatTap: () {}, 
                     ),
                     const SizedBox(height: 12),
                     MaintenanceCard(
@@ -300,13 +254,14 @@ class _HomeState extends State<HomePage> {
                       unit: 'Tower A - 5th Floor',
                       priority: 'High',
 
+                      // Avatar
                       hasInitialAssessment: true,
                       initialAssigneeName: 'Juan Dela Cruz',
                       initialAssigneeDepartment: 'Plumbing',
                       initialAssigneePhotoUrl: 'assets/images/avatar.png',
 
                       onTap: () {},
-                      onChatTap: () {},
+                      onChatTap: () {}, 
                     ),
                   ],
                 ),
@@ -345,3 +300,4 @@ class _HomeState extends State<HomePage> {
     );
   }
 }
+

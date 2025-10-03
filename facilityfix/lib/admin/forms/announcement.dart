@@ -4,7 +4,7 @@ import 'package:facilityfix/admin/home.dart';
 import 'package:facilityfix/admin/inventory.dart';
 import 'package:facilityfix/admin/workorder.dart';
 import 'package:facilityfix/widgets/buttons.dart'; // FilledButton
-import 'package:facilityfix/widgets/forms.dart'; // use BOTH: InputField + DropdownField
+import 'package:facilityfix/widgets/forms.dart' hide DropdownField; // use BOTH: InputField + DropdownField
 import 'package:flutter/material.dart' hide FilledButton; // hide Flutter FilledButton
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/modals.dart'; // CustomPopup
