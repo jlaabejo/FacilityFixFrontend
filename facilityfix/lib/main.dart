@@ -86,80 +86,80 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-  // GoRouter configuration
-  final GoRouter _router = GoRouter(
-    initialLocation: '/', // Start at login page
-    routes: [
-      // Login route
-      GoRoute(
-        path: '/',
-        name: 'login',
-        builder: (context, state) => const LoginPage(),
-      ),
+//   // GoRouter configuration
+//   final GoRouter _router = GoRouter(
+//     initialLocation: '/', // Start at login page
+//     routes: [
+//       // Login route
+//       GoRoute(
+//         path: '/',
+//         name: 'login',
+//         builder: (context, state) => const LoginPage(),
+//       ),
       
-      // Dashboard route - using your existing AdminWebDashPage
-      GoRoute(
-        path: '/dashboard',
-        name: 'dashboard',
-        builder: (context, state) => const AdminWebDashPage(),
-      ),
+//       // Dashboard route - using your existing AdminWebDashPage
+//       GoRoute(
+//         path: '/dashboard',
+//         name: 'dashboard',
+//         builder: (context, state) => const AdminWebDashPage(),
+//       ),
       
-      // User Management routes
-      GoRoute(
-        path: '/user/users',
-        name: 'user_users',
-        builder: (context, state) => const AdminUserPage(),
-      ),
-      GoRoute(
-        path: '/user/roles',
-        name: 'user_roles',
-        builder: (context, state) => const AdminRolePage(),
-      ),
+//       // User Management routes
+//       GoRoute(
+//         path: '/user/users',
+//         name: 'user_users',
+//         builder: (context, state) => const AdminUserPage(),
+//       ),
+//       GoRoute(
+//         path: '/user/roles',
+//         name: 'user_roles',
+//         builder: (context, state) => const AdminRolePage(),
+//       ),
       
-      // Work Order routes
-      GoRoute(
-        path: '/work/maintenance',
-        name: 'work_maintenance',
-        builder: (context, state) => const AdminMaintenancePage(),
-      ),
-      GoRoute(
-        path: '/work/repair',
-        name: 'work_repair_concernslip',
-        builder: (context, state) => const AdminRepairPage(),
-      ),
+//       // Work Order routes
+//       GoRoute(
+//         path: '/work/maintenance',
+//         name: 'work_maintenance',
+//         builder: (context, state) => const AdminMaintenancePage(),
+//       ),
+//       GoRoute(
+//         path: '/work/repair',
+//         name: 'work_repair_concernslip',
+//         builder: (context, state) => const AdminRepairPage(),
+//       ),
       
-      // Calendar route
-      GoRoute(
-        path: '/calendar',
-        name: 'calendar',
-        builder: (context, state) => const AdminWebCalendarPage(),
-      ),
+//       // Calendar route
+//       GoRoute(
+//         path: '/calendar',
+//         name: 'calendar',
+//         builder: (context, state) => const AdminWebCalendarPage(),
+//       ),
       
-      // Inventory Management routes
-      GoRoute(
-        path: '/inventory/items',
-        name: 'inventory_items',
-        builder: (context, state) => const InventoryManagementItemsPage(),
-      ),
-      GoRoute(
-        path: '/inventory/request',
-        name: 'inventory_request',
-        builder: (context, state) => const InventoryRequestPage(),
-      ),
+//       // Inventory Management routes
+//       GoRoute(
+//         path: '/inventory/items',
+//         name: 'inventory_items',
+//         builder: (context, state) => const InventoryManagementItemsPage(),
+//       ),
+//       GoRoute(
+//         path: '/inventory/request',
+//         name: 'inventory_request',
+//         builder: (context, state) => const InventoryRequestPage(),
+//       ),
       
-      // Analytics route
-      GoRoute(
-        path: '/analytics',
-        name: 'analytics',
-        builder: (context, state) => const AdminWebAnalyticsPage(),
-      ),
+//       // Analytics route
+//       GoRoute(
+//         path: '/analytics',
+//         name: 'analytics',
+//         builder: (context, state) => const AdminWebAnalyticsPage(),
+//       ),
       
-      // Announcement route
-      GoRoute(
-        path: '/announcement',
-        name: 'announcement',
-        builder: (context, state) => const AdminWebAnnouncementPage(),
-      ),
+//       // Announcement route
+//       GoRoute(
+//         path: '/announcement',
+//         name: 'announcement',
+//         builder: (context, state) => const AdminWebAnnouncementPage(),
+//       ),
       
       // Settings route
       GoRoute(
@@ -250,18 +250,126 @@ class _MyAppState extends State<MyApp> {
       
     ],
     
-    // Optional: Handle navigation errors
-    errorBuilder: (context, state) => const Scaffold(
-      body: Center(
-        child: Text('Page not found!'),
-      ),
-    ),
-  );
+//     // Optional: Handle navigation errors
+//     errorBuilder: (context, state) => const Scaffold(
+//       body: Center(
+//         child: Text('Page not found!'),
+//       ),
+//     ),
+//   );
 
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'FacilityFix Admin',
+//   @override
+//   Widget build(BuildContext context) {
+//     return MaterialApp.router(
+//       title: 'FacilityFix Admin',
+//       debugShowCheckedModeBanner: false,
+//       theme: ThemeData(
+//         useMaterial3: true,
+//         fontFamily: 'Inter',
+//       ),
+//       routerConfig: _router,
+//     );
+//   }
+// }
+
+// // Temporary placeholder page for routes that don't have pages yet
+// class PlaceholderPage extends StatelessWidget {
+//   final String title;
+  
+//   const PlaceholderPage({
+//     super.key,
+//     required this.title,
+//   });
+
+//   @override
+//   Widget build(BuildContext context) {
+//     // Get current route to pass to layout
+//     final String currentRoute = GoRouterState.of(context).name ?? '';
+    
+//     return FacilityFixLayout(
+//       currentRoute: _getRouteKey(currentRoute),
+//       onNavigate: (routeKey) {
+//         // Convert routeKey to actual route path
+//         final routePath = _getRoutePath(routeKey);
+//         if (routePath != null) {
+//           context.go(routePath);
+//         }
+//       },
+//       body: Scaffold(
+//         body: Center(
+//           child: Column(
+//             mainAxisAlignment: MainAxisAlignment.center,
+//             children: [
+//               Icon(
+//                 Icons.construction,
+//                 size: 64,
+//                 color: Colors.grey[400],
+//               ),
+//               const SizedBox(height: 16),
+//               Text(
+//                 title,
+//                 style: const TextStyle(
+//                   fontSize: 24,
+//                   fontWeight: FontWeight.bold,
+//                 ),
+//               ),
+//               const SizedBox(height: 8),
+//               Text(
+//                 'This page is under construction',
+//                 style: TextStyle(
+//                   fontSize: 16,
+//                   color: Colors.grey[600],
+//                 ),
+//               ),
+//             ],
+//           ),
+//         ),
+//       ),
+//       home: HomePage(),
+//     );
+//   }
+  
+//   // Helper function to convert route name to routeKey used in layout
+//   String _getRouteKey(String routeName) {
+//     final Map<String, String> routeMap = {
+//       'dashboard': 'dashboard',
+//       'user_users': 'user_users',
+//       'user_roles': 'user_roles',
+//       'work_maintenance': '/work/maintenance',
+//       'work_repair': '/work/repair',
+//       'calendar': 'calendar',
+//       'inventory_items': 'inventory_items',
+//       'inventory_request': 'inventory_request',
+//       'analytics': 'analytics',
+//       'announcement': 'announcement',
+//       'settings': 'settings',
+//       'logout': 'logout',
+//     };
+//     return routeMap[routeName] ?? 'dashboard';
+//   }
+  
+//   // Helper function to convert routeKey to actual route path
+//   String? _getRoutePath(String routeKey) {
+//     final Map<String, String> pathMap = {
+//       'dashboard': '/dashboard',
+//       'user_users': '/user/users',
+//       'user_roles': '/user/roles',
+//       'work_maintenance': '/work/maintenance',
+//       'work_repair': '/work/repair',
+//       'calendar': '/calendar',
+//       'inventory_items': '/inventory/items',
+//       'inventory_request': '/inventory/request',
+//       'analytics': '/analytics',
+//       'announcement': '/announcement',
+//       'settings': '/settings',
+//       'logout': '/logout',
+//     };
+//     return pathMap[routeKey];
+//   }
+// }
+
+
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -359,61 +467,3 @@ class PlaceholderPage extends StatelessWidget {
       ),
     );
   }
-  
-  // Helper function to convert route name to routeKey used in layout
-  String _getRouteKey(String routeName) {
-    final Map<String, String> routeMap = {
-      'dashboard': 'dashboard',
-      'user_users': 'user_users',
-      'user_roles': 'user_roles',
-      'work_maintenance': '/work/maintenance',
-      'work_repair': '/work/repair',
-      'calendar': 'calendar',
-      'inventory_items': 'inventory_items',
-      'inventory_request': 'inventory_request',
-      'analytics': 'analytics',
-      'announcement': 'announcement',
-      'settings': 'settings',
-      'logout': 'logout',
-    };
-    return routeMap[routeName] ?? 'dashboard';
-  }
-  
-  // Helper function to convert routeKey to actual route path
-  String? _getRoutePath(String routeKey) {
-    final Map<String, String> pathMap = {
-      'dashboard': '/dashboard',
-      'user_users': '/user/users',
-      'user_roles': '/user/roles',
-      'work_maintenance': '/work/maintenance',
-      'work_repair': '/work/repair',
-      'calendar': '/calendar',
-      'inventory_items': '/inventory/items',
-      'inventory_request': '/inventory/request',
-      'analytics': '/analytics',
-      'announcement': '/announcement',
-      'settings': '/settings',
-      'logout': '/logout',
-    };
-    return pathMap[routeKey];
-  }
-}
-
-// =======
-//     return MaterialApp(
-//       debugShowCheckedModeBanner: false,
-//       theme: ThemeData(
-//         primaryColor: const Color(0xFF005CE8),
-//         hintColor: const Color(0xFFF4F5FF),
-//         iconButtonTheme: IconButtonThemeData(
-//           style: ButtonStyle(
-//             backgroundColor: MaterialStateProperty.all<Color>(const Color(0xFFF4F5FF)),
-//             foregroundColor: MaterialStateProperty.all<Color>(const Color(0xFF005CE8)),
-// >>>>>>> raf-branch
-//           ),
-//         ),
-//         fontFamily: 'Inter',
-//       ),
-// <<<<<<< main
-//     );
-//   }
