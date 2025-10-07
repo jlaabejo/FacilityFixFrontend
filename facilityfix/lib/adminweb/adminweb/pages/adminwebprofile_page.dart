@@ -56,7 +56,7 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
   }
 
   // Sample user data - Replace with actual backend data
-  final Map<String, dynamic> _userData = {
+  Map<String, dynamic> _userData = {
     'firstName': 'Emirhan',
     'lastName': 'Boruch',
     'email': 'emirhanboruch55@gmail.com',
@@ -159,7 +159,7 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
   }
 
   // Track validation errors for each field
-  final Map<String, String?> _validationErrors = {
+  Map<String, String?> _validationErrors = {
     'firstName': null,
     'lastName': null,
     'email': null,

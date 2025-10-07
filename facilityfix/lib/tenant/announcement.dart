@@ -2,13 +2,49 @@ import 'dart:async';
 import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/notification.dart';
 import 'package:facilityfix/tenant/profile.dart';
-import 'package:facilityfix/tenant/view_details.dart';
 import 'package:facilityfix/tenant/workorder.dart';
 import 'package:facilityfix/widgets/buttons.dart';
-import 'package:facilityfix/widgets/cards.dart'; // AnnouncementCard
+import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/helper_models.dart';
 import 'package:flutter/material.dart';
+
+import '../staff/view_details/announcement_details.dart';
+
+/// Simple data model for the list (avoids mixing widgets & data).
+class AnnouncementItem {
+  final String id;
+  final String title;
+  final String announcementType; // e.g. "utility interruption"
+  final DateTime createdAt;
+  final bool isRead;
+
+  const AnnouncementItem({
+    required this.id,
+    required this.title,
+    required this.announcementType,
+    required this.createdAt,
+    required this.isRead,
+  });
+
+  AnnouncementItem copyWith({
+    String? id,
+    String? title,
+    String? announcementType,
+    String? classification,
+    String? details,
+    DateTime? createdAt,
+    bool? isRead,
+  }) {
+    return AnnouncementItem(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      announcementType: announcementType ?? this.announcementType,
+      createdAt: createdAt ?? this.createdAt,
+      isRead: isRead ?? this.isRead,
+    );
+  }
+}
 
 class AnnouncementPage extends StatefulWidget {
   const AnnouncementPage({super.key});
@@ -27,6 +63,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
     NavItem(icon: Icons.person),
   ];
 
+
   void _onTabTapped(int index) {
     final destinations = [
       const HomePage(),
@@ -39,9 +76,9 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
         context,
         MaterialPageRoute(builder: (_) => destinations[index]),
       );
-      setState(() => _selectedIndex = index);
     }
   }
+
 
   // ===== Search, classification & read-status filters =====
   final TextEditingController _searchController = TextEditingController();
@@ -56,7 +93,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
     'General Maintenance',
   ];
 
-  // Status filter: string shown in UI + enum used in logic (kept in sync)
+  // Status filter
   String _selectedStatus = 'All';
   final List<String> _statuses = const ['All', 'Unread', 'Read', 'Recent'];
   AnnStatusFilter _statusFilter = AnnStatusFilter.all;
@@ -75,33 +112,33 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
   }
 
   // ===== Demo data (replace with backend) =====
-  final List<Announcement> _all = [
-    Announcement(
+  final List<AnnouncementItem> _all = [
+    AnnouncementItem(
+      id: 'ANN-2025-0011',
       title: 'Utility Interruption',
-      classification: 'utility interruption',
-      details: 'Temporary shutdown in pipelines for maintenance cleaning.',
-      postedAt: DateTime.now().subtract(const Duration(hours: 3)),
-      isRead: false,
+      announcementType: 'utility interruption',
+      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
+      isRead: false, 
     ),
-    Announcement(
+    AnnouncementItem(
+      id: 'ANN-2025-0012',
       title: 'Power Outage',
-      classification: 'power outage',
-      details: 'Scheduled power interruption due to transformer maintenance.',
-      postedAt: DateTime.now().subtract(const Duration(hours: 27)),
+      announcementType: 'power outage',
+      createdAt: DateTime.now().subtract(const Duration(hours: 27)),
       isRead: true,
     ),
-    Announcement(
+    AnnouncementItem(
+      id: 'ANN-2025-0013',
       title: 'General Maintenance',
-      classification: 'general maintenance',
-      details: 'Common area repainting and minor repairs this weekend.',
-      postedAt: DateTime.now().subtract(const Duration(days: 3)),
+      announcementType: 'general maintenance',
+      createdAt: DateTime.now().subtract(const Duration(days: 3)),
       isRead: false,
     ),
-    Announcement(
+    AnnouncementItem(
+      id: 'ANN-2025-0014',
       title: 'Pest Control',
-      classification: 'pest control',
-      details: 'Building-wide pest control on Saturday, secure food items.',
-      postedAt: DateTime.now().subtract(const Duration(days: 11)),
+      announcementType: 'pest control',
+      createdAt: DateTime.now().subtract(const Duration(days: 11)),
       isRead: true,
     ),
   ];
@@ -142,7 +179,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
     return haystack.toLowerCase().contains(q);
   }
 
-  bool _matchesStatus(Announcement a) {
+  bool _matchesStatus(AnnouncementItem a) {
     switch (_statusFilter) {
       case AnnStatusFilter.all:
         return true;
@@ -151,18 +188,18 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
       case AnnStatusFilter.read:
         return a.isRead;
       case AnnStatusFilter.recent:
-        return _isRecent(a.postedAt);
+        return _isRecent(a.createdAt);
     }
   }
 
-  List<Announcement> get _filteredAnnouncements {
+  List<AnnouncementItem> get _filteredAnnouncements {
     return _all.where((a) {
-      final classMatch = _matchesClassification(a.classification);
-      final searchMatch = _matchesSearch("${a.title} ${a.details} ${a.classification}");
+      final classMatch = _matchesClassification(a.announcementType);
+      final searchMatch = _matchesSearch("${a.title} ${a.announcementType}");
       final statusMatch = _matchesStatus(a);
       return classMatch && searchMatch && statusMatch;
     }).toList()
-      ..sort((a, b) => b.postedAt.compareTo(a.postedAt));
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   Future<void> _refresh() async {
@@ -223,7 +260,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                   onClassificationChanged: (v) =>
                       setState(() => _selectedClassification = v),
 
-                  // Status (required by SearchAndFilterBar) — keeps chips in sync
+                  // Status (required by SearchAndFilterBar)
                   selectedStatus: _selectedStatus,
                   statuses: _statuses,
                   onStatusChanged: (v) => setState(() {
@@ -241,7 +278,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                 ),
                 const SizedBox(height: 12),
 
-                // List
+                // ======================== LIST ================================
                 Expanded(
                   child: items.isEmpty
                       ? const EmptyState()
@@ -251,43 +288,33 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                           separatorBuilder: (_, __) => const SizedBox(height: 12),
                           itemBuilder: (_, i) {
                             final a = items[i];
-                            final y = a.postedAt.year;
-                            final m = a.postedAt.month.toString().padLeft(2, '0');
-                            final d = a.postedAt.day.toString().padLeft(2, '0');
-                            final dateStr = '$y-$m-$d';
 
-                            // unread dot overlay + reduced opacity for read
                             return Opacity(
                               opacity: a.isRead ? 0.85 : 1,
                               child: Stack(
                                 children: [
                                   AnnouncementCard(
+                                    id: a.id,
                                     title: a.title,
-                                    datePosted: dateStr,
-                                    details: a.details,
-                                    classification: a.classification,
+                                    announcementType: a.announcementType,
+                                    createdAt: a.createdAt, // DateTime ✅
+                                    isRead: a.isRead,
                                     onTap: () {
                                       // mark as read on view
-                                      final idx = _all.indexOf(a);
+                                      final idx = _all.indexWhere((x) => x.id == a.id);
                                       if (idx != -1 && !_all[idx].isRead) {
-                                        setState(() => _all[idx] = _all[idx].copyWith(isRead: true));
+                                        setState(() => _all[idx] =
+                                            _all[idx].copyWith(isRead: true));
                                       }
+
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (_) => const ViewDetailsPage(
-                                            selectedTabLabel: 'announcement detail',
-                                          ),
+                                          builder: (_) => const AnnouncementDetailsPage(),
                                         ),
                                       );
                                     },
                                   ),
-                                  if (!a.isRead)
-                                    const Positioned(
-                                      top: 10,
-                                      right: 10,
-                                      child: UnreadDot(),
-                                    ),
                                 ],
                               ),
                             );

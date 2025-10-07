@@ -2,12 +2,18 @@ import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/staff/notification.dart' show NotificationPage;
-import 'package:facilityfix/staff/profile.dart'; // make sure this exists
+import 'package:facilityfix/staff/profile.dart';
 import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/helper_models.dart';
+import 'package:facilityfix/widgets/modals.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
+
+// ⬇️ Added: services to read the saved profile (snake_case)
+import 'package:facilityfix/services/auth_storage.dart';
+import 'package:facilityfix/services/api_services.dart';
+import 'package:intl/intl.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -19,8 +25,9 @@ class HomePage extends StatefulWidget {
 class _HomeState extends State<HomePage> {
   int _selectedIndex = 0;
 
-  static const String _userName = 'Juan';
-  static const String _department = 'Plumbing';
+  // ⬇️ Was static; now dynamic and loaded from saved profile (snake_case only)
+  String _userName = 'User';
+  String _department = '—';
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -29,6 +36,50 @@ class _HomeState extends State<HomePage> {
     NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHeaderFromProfile();
+  }
+
+  // Title-case only the first name’s first letter
+  String _titleCaseFirstOnly(String input) {
+    final s = input.trim();
+    if (s.isEmpty) return s;
+    final first = s.split(RegExp(r'\s+')).first.toLowerCase();
+    return '${first[0].toUpperCase()}${first.substring(1)}';
+  }
+
+  Future<void> _loadHeaderFromProfile() async {
+    try {
+      Map<String, dynamic>? profile = await AuthStorage.getProfile();
+      if (profile == null) {
+        final api = APIService();
+        profile = await api.getUserProfile();
+      }
+      if (profile == null) return;
+
+      // Prefer full_name if first_name is empty
+      final firstRaw = (profile['first_name'] ?? '').toString().trim();
+      final fullRaw = (profile['full_name'] ?? '').toString().trim();
+      final deptRaw  = (profile['staff_department'] ?? '').toString().trim();
+
+      final displayName = firstRaw.isNotEmpty
+          ? _titleCaseFirstOnly(firstRaw)
+          : (fullRaw.isNotEmpty ? fullRaw.split(' ').first : 'User');
+
+      final dept = deptRaw.isNotEmpty ? deptRaw : '—';
+
+      if (!mounted) return;
+      setState(() {
+        _userName = displayName;
+        _department = dept;
+      });
+    } catch (e) {
+      print('Error loading header: $e');
+    }
+  }
 
   void _onTabTapped(int index) {
     final destinations = [
@@ -48,7 +99,9 @@ class _HomeState extends State<HomePage> {
   }
 
   Future<void> _refresh() async {
-    await Future<void>.delayed(const Duration(milliseconds: 500));
+    // Refresh header from profile (keeps UI design the same)
+    await _loadHeaderFromProfile();
+    await Future<void>.delayed(const Duration(milliseconds: 300));
   }
 
   @override
@@ -91,8 +144,7 @@ class _HomeState extends State<HomePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                
-                // Greeting
+                // Greeting (UI unchanged)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -173,40 +225,28 @@ class _HomeState extends State<HomePage> {
                   children: [
                     RepairCard(
                       title: 'Leaking faucet',
-                      requestId: 'CS-2025-031',
-                      reqDate: 'Aug 23',
-                      statusTag: 'Done',
+                      id: 'CS-2025-005',
+                      createdAt: DateFormat('MMMM d, yyyy').parse('August 22, 2025'),
+                      statusTag: 'Assigned',
                       departmentTag: 'Plumbing',
-                      requestType: 'Concern Slip',
-                      unit: 'A 1001',
-                      priority: 'High',
-
-                      // Avatar
-                      hasCompletionAssessment: true,
-                      completionAssigneeName: 'Juan Dela Cruz',
-                      completionAssigneeDepartment: 'Plumbing',
-                      completionAssigneePhotoUrl: 'assets/images/avatar.png',
+                      requestTypeTag: 'Concern Slip',
+                      unitId: 'A 1001',
+                      priorityTag: null,
                       onTap: () {},
-                      onChatTap: () {}, 
+                      onChatTap: () {},
                     ),
                     const SizedBox(height: 12),
                     RepairCard(
                       title: 'Leaking faucet',
-                      requestId: 'JS-2025-031',
-                      reqDate: 'Aug 23',
-                      statusTag: 'Done',
+                      id: 'CS-2025-006',
+                      createdAt: DateFormat('MMMM d, yyyy').parse('August 22, 2025'),
+                      statusTag: 'Pending',
                       departmentTag: 'Plumbing',
-                      requestType: 'Job Service',
-                      unit: 'A 1001',
-                      priority: 'High',
-
-                      // Avatar
-                      hasCompletionAssessment: true,
-                      completionAssigneeName: 'Juan Dela Cruz',
-                      completionAssigneeDepartment: 'Plumbing',
-                      // completionAssigneePhotoUrl: 'assets/images/avatar.png',
+                      requestTypeTag: 'Concern Slip',
+                      unitId: 'A 1001',
+                      priorityTag: null,
                       onTap: () {},
-                      onChatTap: () {}, 
+                      onChatTap: () {},
                     ),
                   ],
                 ),
@@ -228,40 +268,34 @@ class _HomeState extends State<HomePage> {
                   children: [
                     MaintenanceCard(
                       title: 'Quarterly Pipe Inspection',
-                      requestId: 'MT-P-2025-011',
-                      date: 'Aug 28',
-                      status: 'In Progress',
-                      department: 'Plumbing',
-                      unit: 'Tower A - 5th Floor',
+                      id: 'MT-P-2025-011',
+                      createdAt: DateTime(DateTime.now().year, 8, 28),
+                      statusTag: 'In Progress',
+                      departmentTag: 'Plumbing',
+                      location: 'Tower A - 5th Floor',
                       priority: 'High',
-
-                      // Avatar
-                      hasInitialAssessment: true,
-                      initialAssigneeName: 'Juan Dela Cruz',
-                      initialAssigneeDepartment: 'Plumbing',
-                      initialAssigneePhotoUrl: 'assets/images/avatar.png',
-
+                      requestTypeTag: 'Maintenance', // keep named param before callbacks (order doesn't matter, but clearer)
+                      assignedStaff: 'Juan Dela Cruz',
+                      staffDepartment: 'Plumbing',
+                      staffPhotoUrl: 'assets/images/avatar.png',
                       onTap: () {},
-                      onChatTap: () {}, 
+                      onChatTap: () {},
                     ),
                     const SizedBox(height: 12),
                     MaintenanceCard(
                       title: 'Quarterly Pipe Inspection',
-                      requestId: 'MT-P-2025-011',
-                      date: 'Aug 28',
-                      status: 'Done',
-                      department: 'Plumbing',
-                      unit: 'Tower A - 5th Floor',
+                      id: 'MT-P-2025-011',
+                      createdAt: DateTime(DateTime.now().year, 8, 28),
+                      statusTag: 'In Progress',
+                      departmentTag: 'Plumbing',
+                      location: 'Tower A - 5th Floor',
                       priority: 'High',
-
-                      // Avatar
-                      hasInitialAssessment: true,
-                      initialAssigneeName: 'Juan Dela Cruz',
-                      initialAssigneeDepartment: 'Plumbing',
-                      initialAssigneePhotoUrl: 'assets/images/avatar.png',
-
+                      requestTypeTag: 'Maintenance', // keep named param before callbacks (order doesn't matter, but clearer)
+                      assignedStaff: 'Juan Dela Cruz',
+                      staffDepartment: 'Plumbing',
+                      staffPhotoUrl: 'assets/images/avatar.png',
                       onTap: () {},
-                      onChatTap: () {}, 
+                      onChatTap: () {},
                     ),
                   ],
                 ),
@@ -281,10 +315,11 @@ class _HomeState extends State<HomePage> {
                 const SizedBox(height: 12),
                 AnnouncementCard(
                   title: 'Utility Interruption',
-                  datePosted: '3 hours ago',
-                  details: 'Temporary shutdown in pipelines for maintenance cleaning.',
-                  classification: 'utility interruption',
+                  createdAt: DateTime.now().subtract(const Duration(days: 3)),
+                  announcementType: 'utility interruption',
                   onTap: () {},
+                  id: '',
+                  isRead: true,
                 ),
                 const SizedBox(height: 24),
               ],
@@ -300,4 +335,3 @@ class _HomeState extends State<HomePage> {
     );
   }
 }
-

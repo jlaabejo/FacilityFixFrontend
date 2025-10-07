@@ -1,28 +1,26 @@
 import 'dart:async';
+import 'package:facilityfix/models/cards.dart';
 import 'package:facilityfix/staff/announcement.dart';
-import 'package:facilityfix/staff/calendar.dart';
+import 'package:facilityfix/staff/calendar.dart' hide WorkOrder;
 import 'package:facilityfix/staff/chat.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/staff/notification.dart';
-import 'package:facilityfix/staff/view_details/workorder.dart' show WorkOrderDetails;
+import 'package:facilityfix/staff/view_details/workorder.dart'
+    show WorkOrderDetails, WorkOrderDetailsPage;
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart';
-import 'package:facilityfix/widgets/cards.dart'; // RepairCard, MaintenanceCard, SearchAndFilterBar, StatusTabSelector, EmptyState
-import 'package:facilityfix/widgets/helper_models.dart'; // WorkOrder, UiDateParser, TabItem
+import 'package:facilityfix/widgets/cards.dart';
+import 'package:facilityfix/widgets/helper_models.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
-/// Staff-only Work Order page
-/// - Locks data to the staff's department (e.g., "Plumbing")
-/// - Provides search and status filter (no department/classification filter)
-/// - Two tabs: Repair Task / Maintenance Task
 class WorkOrderPage extends StatefulWidget {
-  /// Staff department. This page will ONLY show items from this department.
   final String staffDepartment;
 
   const WorkOrderPage({
     super.key,
-    this.staffDepartment = 'Plumbing', // e.g., "Plumbing"
+    this.staffDepartment = 'Plumbing',
   });
 
   @override
@@ -32,9 +30,9 @@ class WorkOrderPage extends StatefulWidget {
 class _WorkOrderPageState extends State<WorkOrderPage> {
   String _selectedTabLabel = 'Repair Task';
   String _selectedStatus = 'All';
+  String _selectedPriority = 'All';
   final TextEditingController _searchController = TextEditingController();
 
-  /// Map requestId → details tab (for routing classification only).
   final Map<String, String> _taskTypeById = const {
     'CS-2025-001': 'repair detail',
     'CS-2025-002': 'repair detail',
@@ -45,115 +43,70 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     'MT-P-2025-012': 'maintenance detail',
   };
 
-  // Sample Data (replace with API)
+  static const List<String> _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+  String shortDate(DateTime d) => '${_months[d.month - 1]} ${d.day}';
+  String _norm(String? s) => (s ?? '').toLowerCase().trim();
+
   final List<WorkOrder> _all = [
-    // Concern Slip (assigned)
     WorkOrder(
       title: 'Leaking faucet',
-      requestId: 'CS-2025-001',
-      date: 'Aug 25',
-      status: 'Assigned',
-      department: 'Plumbing',
-      requestType: 'Concern Slip',
-      unit: 'A 1001',
-      priority: null,
-      assignedTo: 'Juan Dela Cruz',
-      assignedDepartment: 'Plumbing',
-      assignedPhotoUrl: 'assets/images/avatar.png',
+      id: 'CS-2025-001',
+      createdAt: DateFormat('MMMM d, yyyy').parse('August 25, 2025'),
+      statusTag: 'Assigned',
+      departmentTag: 'Plumbing',
+      requestTypeTag: 'Concern Slip',
+      unitId: 'A 1001',
+      priorityTag: 'High',
+      assignedStaff: 'Juan Dela Cruz',
+      staffDepartment: 'Plumbing',
+      staffPhotoUrl: 'assets/images/avatar.png',
     ),
-    // Concern Slip (done)
     WorkOrder(
       title: 'Leaking faucet',
-      requestId: 'CS-2025-002',
-      date: 'Aug 22',
-      status: 'Done',
-      department: 'Plumbing',
-      requestType: 'Concern Slip',
-      unit: 'A 1001',
-      priority: 'High',
-      hasInitialAssessment: true,
-      initialAssigneeName: 'Juan Dela Cruz',
-      initialAssigneeDepartment: 'Plumbing',
-      initialAssigneePhotoUrl: 'assets/images/avatar.png',
+      id: 'CS-2025-002',
+      createdAt: DateFormat('MMMM d, yyyy').parse('August 22, 2025'),
+      statusTag: 'Done',
+      departmentTag: 'Plumbing',
+      requestTypeTag: 'Concern Slip',
+      unitId: 'A 1001',
+      priorityTag: 'High',
+      assignedStaff: 'Juan Dela Cruz',
+      staffDepartment: 'Plumbing',
+      staffPhotoUrl: 'assets/images/avatar.png',
     ),
-
-    // Job Service (assigned)
     WorkOrder(
       title: 'Leaking faucet',
-      requestId: 'JS-2025-031',
-      date: 'Aug 21',
-      status: 'Assigned',
-      department: 'Plumbing',
-      requestType: 'Job Service',
-      unit: 'A 1001',
-      priority: 'High',
-      assignedTo: 'Juan Dela Cruz',
-      assignedDepartment: 'Plumbing',
-      assignedPhotoUrl: 'assets/images/avatar.png',
+      id: 'JS-2025-031',
+      createdAt: DateFormat('MMMM d, yyyy').parse('August 21, 2025'),
+      statusTag: 'Assigned',
+      departmentTag: 'Plumbing',
+      requestTypeTag: 'Job Service',
+      unitId: 'A 1001',
+      priorityTag: 'High',
+      assignedStaff: 'Juan Dela Cruz',
+      staffDepartment: 'Plumbing',
+      staffPhotoUrl: 'assets/images/avatar.png',
     ),
-    // Job Service (done)
-    WorkOrder(
-      title: 'Leaking faucet',
-      requestId: 'JS-2025-032',
-      date: 'Aug 22',
-      status: 'Done',
-      department: 'Plumbing',
-      requestType: 'Job Service',
-      unit: 'A 1001',
-      priority: 'High',
-      hasCompletionAssessment: true,
-      completionAssigneeName: 'Juan Dela Cruz',
-      completionAssigneeDepartment: 'Plumbing',
-      completionAssigneePhotoUrl: 'assets/images/avatar.png',
-    ),
-    // Job Service (on hold)
-    WorkOrder(
-      title: 'Leaking faucet',
-      requestId: 'JS-2025-033',
-      date: 'Aug 23',
-      status: 'On Hold',
-      department: 'Plumbing',
-      requestType: 'Job Service',
-      unit: 'A 1001',
-      priority: 'High',
-      hasInitialAssessment: true,
-      initialAssigneeName: 'Juan Dela Cruz',
-      initialAssigneeDepartment: 'Plumbing',
-    ),
-
-    // Maintenance Task (scheduled)
     WorkOrder(
       title: 'Quarterly Pipe Inspection',
-      requestId: 'MT-P-2025-011',
-      date: 'Aug 30',
-      status: 'Scheduled',
-      department: 'Plumbing',
-      unit: 'Tower A - 5th Floor',
-      priority: 'High',
-      hasInitialAssessment: true,
-      initialAssigneeName: 'Juan Dela Cruz',
-      initialAssigneeDepartment: 'Plumbing',
-      initialAssigneePhotoUrl: 'assets/images/avatar.png',
-    ),
-    // Maintenance Task (done)
-    WorkOrder(
-      title: 'Quarterly Pipe Inspection',
-      requestId: 'MT-P-2025-012',
-      date: 'Aug 28',
-      status: 'Done',
-      department: 'Plumbing',
-      unit: 'Tower A - 5th Floor',
-      priority: 'High',
-      hasInitialAssessment: true,
-      initialAssigneeName: 'Juan Dela Cruz',
-      initialAssigneeDepartment: 'Plumbing',
-      // initialAssigneePhotoUrl: 'assets/images/avatar.png',
+      id: 'MT-P-2025-011',
+      createdAt: DateFormat('MMMM d, yyyy').parse('August 30, 2025'),
+      statusTag: 'Scheduled',
+      departmentTag: 'Plumbing',
+      requestTypeTag: 'Work Order',
+      unitId: 'Tower A - 5th Floor',
+      priorityTag: 'Medium',
+      assignedStaff: 'Juan Dela Cruz',
+      staffDepartment: 'Plumbing',
+      staffPhotoUrl: 'assets/images/avatar.png',
     ),
   ];
 
-  // Optional status override (e.g., if something moves On Hold → In Progress)
   final Map<String, String> _statusOverrideById = {};
-  String _statusOf(WorkOrder w) => _statusOverrideById[w.requestId] ?? w.status;
+  String _statusOf(WorkOrder w) => _statusOverrideById[w.id] ?? w.statusTag;
 
   Future<void> _refresh() async {
     await Future<void>.delayed(const Duration(milliseconds: 600));
@@ -180,76 +133,75 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     if (index != 1) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => destinations[index]),
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => destinations[index],
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+        ),
       );
     }
   }
 
-  // Helpers: classification & filters
-
-  /// True if a work order is a maintenance item based on the routing map.
   bool _isMaintenanceTask(WorkOrder w) =>
-      (_taskTypeById[w.requestId]?.toLowerCase() ?? 'repair detail') ==
+      (_taskTypeById[w.id]?.toLowerCase() ?? 'repair detail') ==
       'maintenance detail';
-
-  /// True if a work order is a repair item.
   bool _isRepairTask(WorkOrder w) => !_isMaintenanceTask(w);
 
-  /// Tab predicate
   bool _tabMatches(WorkOrder w) {
-    final tab = _selectedTabLabel.toLowerCase();
+    final tab = _norm(_selectedTabLabel);
     if (tab == 'repair task') return _isRepairTask(w);
-    return _isMaintenanceTask(w); // 'Maintenance Task'
+    return _isMaintenanceTask(w);
   }
 
-  /// Enforce staff department only. (If staffDepartment == 'All', show all.)
   bool _departmentAllowed(WorkOrder w) {
-    final dep = (w.department ?? '').toLowerCase().trim();
-    final staff = widget.staffDepartment.toLowerCase().trim();
+    final dep = _norm(w.departmentTag);
+    final staff = _norm(widget.staffDepartment);
     if (staff == 'all' || staff.isEmpty) return true;
     return dep == staff;
   }
 
-  /// Allow item if it matches the currently selected status.
   bool _statusAllowed(WorkOrder w) {
-    final sel = _selectedStatus.toLowerCase().trim();
+    final sel = _norm(_selectedStatus);
     if (sel == 'all' || sel.isEmpty) return true;
-    return _statusOf(w).toLowerCase().trim() == sel;
+    return _norm(_statusOf(w)) == sel;
   }
 
-  /// Text search over several fields.
+  bool _priorityAllowed(WorkOrder w) {
+    final sel = _norm(_selectedPriority);
+    if (sel == 'all' || sel.isEmpty) return true;
+    return _norm(w.priorityTag ?? '') == sel;
+  }
+
   bool _searchMatches(WorkOrder w) {
-    final q = _searchController.text.trim().toLowerCase();
+    final q = _norm(_searchController.text);
     if (q.isEmpty) return true;
-    return [
+    final dateText = shortDate(w.createdAt);
+    return <String>[
       w.title,
-      w.requestId,
-      w.department ?? '',
-      w.unit ?? '',
-      w.status,
-    ].any((s) => s.toLowerCase().contains(q));
+      w.id,
+      w.departmentTag ?? '',
+      w.unitId ?? '',
+      w.statusTag,
+      w.requestTypeTag,
+      dateText,
+      w.priorityTag ?? '',
+    ].any((s) => _norm(s).contains(q));
   }
 
-  /// Items after applying staff department → status → tab → search.
-  List<WorkOrder> get _filtered {
-    return _all
-        .where(_departmentAllowed)
-        .where(_statusAllowed)
-        .where(_tabMatches)
-        .where(_searchMatches)
-        .toList();
-  }
+  List<WorkOrder> get _filtered => _all
+      .where(_departmentAllowed)
+      .where(_tabMatches)
+      .where(_statusAllowed)
+      .where(_priorityAllowed)
+      .where(_searchMatches)
+      .toList();
 
-  /// Sort by date (latest first).
   List<WorkOrder> get _filteredSorted {
     final list = List<WorkOrder>.from(_filtered);
-    list.sort(
-      (a, b) => UiDateParser.parse(b.date).compareTo(UiDateParser.parse(a.date)),
-    );
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return list;
   }
 
-  /// Tabs with counts (within staff department + search scope; status-agnostic).
   List<TabItem> get _tabs {
     final visible = _all.where(_departmentAllowed).where(_searchMatches).toList();
     final repairCount = visible.where(_isRepairTask).length;
@@ -261,82 +213,61 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     ];
   }
 
-  /// Status filter options available to staff. Always includes 'All'.
-  List<String> get _statusOptions {
-    final set = <String>{};
-    for (final w in _all) {
-      final status = (w.status).trim();
-      if (status.isNotEmpty) set.add(status);
-    }
-    final list = set.toList()..sort();
-    return ['All', ...list];
-  }
+  /// ✅ Fixed filters for both tabs
+  final List<String> _statusOptions = [
+    'All', 'Pending', 'Assigned', 'Scheduled', 'On Hold'
+  ];
 
-  /// Maps a WorkOrder to the exact detail label that WorkOrderDetails expects.
-  /// All returned strings are lowercase to match WorkOrderDetails init logic.
+  final List<String> _priorityOptions = [
+    'All', 'High', 'Medium', 'Low'
+  ];
+
   String _routeLabelFor(WorkOrder w) {
-    final status = (w.status).toLowerCase().trim();
-    final type = (w.requestType ?? '').toLowerCase().trim();
-
-    // Maintenance items (based on _taskTypeById)
+    final status = _norm(_statusOf(w));
+    final type = _norm(w.requestTypeTag);
     if (_isMaintenanceTask(w)) {
       if (status == 'scheduled') return 'maintenance task scheduled';
-      // treat done/assessed/closed as assessed view
       if (status == 'done' || status == 'assessed' || status == 'closed') {
         return 'maintenance task assessed';
       }
-      // fallback
       return 'maintenance task scheduled';
     }
-
-    // Repairs (tenant-originated)
     if (type == 'concern slip') {
       if (status == 'assigned') return 'concern slip assigned';
       if (status == 'assessed' || status == 'done' || status == 'closed') {
         return 'concern slip assessed';
       }
-      // pending or others → default to assigned view
       return 'concern slip assigned';
     }
-
     if (type == 'job service') {
       if (status == 'done' || status == 'assessed' || status == 'closed') {
         return 'job service assessed';
       }
-      // assigned / in progress / on hold → assigned view
       return 'job service assigned';
     }
-
-    // Unknown type → safest fallback
     return 'concern slip assigned';
   }
 
-  // Cards (Maintenance & Repair)
   Widget buildCard(WorkOrder w) {
-    final forcedDept = widget.staffDepartment; // optional: show staff dept on card
-
     if (_isMaintenanceTask(w)) {
       return MaintenanceCard(
         title: w.title,
-        requestId: w.requestId,
-        unit: w.unit ?? '-',
-        date: w.date,
-        status: _statusOf(w),
-        priority: w.priority ?? 'Medium',
-        department: forcedDept,
-
-        // Assignee (initial) so avatar shows
-        hasInitialAssessment: w.hasInitialAssessment,
-        initialAssigneeName: w.initialAssigneeName,
-        initialAssigneeDepartment: w.initialAssigneeDepartment,
-        initialAssigneePhotoUrl: w.initialAssigneePhotoUrl,
-
+        id: w.id,
+        createdAt: w.createdAt,
+        statusTag: w.statusTag,
+        departmentTag: w.departmentTag,
+        priority: w.priorityTag,
+        location: w.unitId ?? '',
+        requestTypeTag: w.requestTypeTag,
+        assignedStaff: w.assignedStaff,
+        staffDepartment: w.staffDepartment,
+        staffPhotoUrl: w.staffPhotoUrl,
         onTap: () {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => WorkOrderDetails(
-                selectedTabLabel: _routeLabelFor(w), workOrder: null, 
+              builder: (_) => WorkOrderDetailsPage(
+                selectedTabLabel: _routeLabelFor(w),
               ),
             ),
           );
@@ -352,37 +283,21 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
 
     return RepairCard(
       title: w.title,
-      requestId: w.requestId,
-      reqDate: w.date,
-      statusTag: _statusOf(w),
-      unit: w.unit,
-      priority: w.priority,
-      departmentTag: forcedDept,
-      requestType: w.requestType ?? '',
-
-      // Initial assignee (avatar)
-      hasInitialAssessment: w.hasInitialAssessment,
-      initialAssigneeName: w.initialAssigneeName,
-      initialAssigneeDepartment: w.initialAssigneeDepartment,
-      initialAssigneePhotoUrl: w.initialAssigneePhotoUrl,
-
-      // Completion assignee (avatar)
-      hasCompletionAssessment: w.hasCompletionAssessment,
-      completionAssigneeName: w.completionAssigneeName,
-      completionAssigneeDepartment: w.completionAssigneeDepartment,
-      completionAssigneePhotoUrl: w.completionAssigneePhotoUrl,
-
-      // Current assignment
-      assignedTo: w.assignedTo,
-      assignedDepartment: w.assignedDepartment,
-      assignedPhotoUrl: w.assignedPhotoUrl,
-
+      id: w.id,
+      createdAt: w.createdAt,
+      statusTag: w.statusTag,
+      departmentTag: w.departmentTag,
+      priorityTag: w.priorityTag,
+      unitId: w.unitId ?? '',
+      requestTypeTag: w.requestTypeTag,
+      assignedStaff: w.assignedStaff,
+      staffDepartment: w.staffDepartment,
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => WorkOrderDetails(
-              selectedTabLabel: _routeLabelFor(w), workOrder: null, 
+            builder: (_) => WorkOrderDetailsPage(
+              selectedTabLabel: _routeLabelFor(w),
             ),
           ),
         );
@@ -411,7 +326,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   @override
   Widget build(BuildContext context) {
     final items = _filteredSorted;
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
@@ -436,23 +350,25 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Search + Status filter only 
                 SearchAndFilterBar(
                   searchController: _searchController,
-                  // (Do NOT pass classification props → classification button hidden)
                   selectedStatus: _selectedStatus,
                   statuses: _statusOptions,
+                  selectedClassification: _selectedPriority,
+                  classifications: _priorityOptions,
                   onStatusChanged: (status) {
                     setState(() {
-                      final v = status.trim();
-                      _selectedStatus = v.isEmpty ? 'All' : v;
+                      _selectedStatus = status.trim().isEmpty ? 'All' : status;
                     });
                   },
-                  onSearchChanged: (_) => setState(() {}), // instant search
+                  onClassificationChanged: (prio) {
+                    setState(() {
+                      _selectedPriority = prio.trim().isEmpty ? 'All' : prio;
+                    });
+                  },
+                  onSearchChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 16),
-
-                // Tabs
                 StatusTabSelector(
                   tabs: _tabs,
                   selectedLabel: _selectedTabLabel,
@@ -460,8 +376,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                       setState(() => _selectedTabLabel = label),
                 ),
                 const SizedBox(height: 20),
-
-                // Header with count
                 Row(
                   children: [
                     const Text(
@@ -491,8 +405,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                   ],
                 ),
                 const SizedBox(height: 12),
-
-                // List
                 Expanded(
                   child: items.isEmpty
                       ? const EmptyState()

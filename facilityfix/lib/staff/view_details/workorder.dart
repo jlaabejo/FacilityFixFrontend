@@ -1,39 +1,50 @@
+import 'package:flutter/material.dart';
+
+import 'package:facilityfix/models/work_orders.dart'; // <-- unified WorkOrderDetails class only
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/form/assessment_form.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
-import 'package:facilityfix/staff/workorder.dart'; // WorkOrderPage
+import 'package:facilityfix/staff/workorder.dart'; // WorkOrderPage (list)
+
 import 'package:facilityfix/widgets/app&nav_bar.dart';
-import 'package:facilityfix/widgets/helper_models.dart'; // WorkOrder, formatDateTime
-import 'package:facilityfix/widgets/view_details.dart'; // RepairDetailsScreen, MaintenanceDetailsScreen
+import 'package:facilityfix/widgets/modals.dart';
 import 'package:facilityfix/widgets/buttons.dart' as custom_buttons;
-import 'package:flutter/material.dart';
 
+// Your detail widgets should be exported by this file:
+import 'package:facilityfix/widgets/view_details.dart';
+// Expecting these classes there:
+// - ConcernSlipDetails
+// - JobServiceDetails
+// - MaintenanceDetails
+// - WorkOrderPermitDetails
 
-class WorkOrderDetails extends StatefulWidget {
+class WorkOrderDetailsPage extends StatefulWidget {
   final String selectedTabLabel;
-  final bool startInAssessment; // (no longer used, kept for constructor compatibility)
-  final WorkOrder? workOrder; // store the passed item
+  final bool startInAssessment; // kept for compatibility
+  final WorkOrderDetails? workOrder; // unified data model instance
 
-  const WorkOrderDetails({
+  const WorkOrderDetailsPage({
     super.key,
     required this.selectedTabLabel,
     this.startInAssessment = false,
-    required this.workOrder,
+    this.workOrder,
   });
 
   @override
-  State<WorkOrderDetails> createState() => _WorkOrderDetailsState();
+  State<WorkOrderDetailsPage> createState() => _WorkOrderDetailsState();
 }
 
-class _WorkOrderDetailsState extends State<WorkOrderDetails> {
+class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
   final int _selectedIndex = 1;
-
   late String _detailsLabel;
 
-  // Hold metadata
+  // Hold metadata for the sticky bar
   HoldResult? holdMeta;
+
+  // ---- SAMPLE DATA lives INSIDE this page ----
+  late final List<WorkOrderDetails> _samples;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -46,9 +57,13 @@ class _WorkOrderDetailsState extends State<WorkOrderDetails> {
   @override
   void initState() {
     super.initState();
+
     _detailsLabel = widget.selectedTabLabel.toLowerCase().trim();
 
-    // Remap generic labels using actual data
+    // Build samples now (used only when widget.workOrder == null)
+    _samples = _makeSamples();
+
+    // Remap generic labels using actual data (unified model)
     if (widget.workOrder != null &&
         (_detailsLabel == 'repair detail' || _detailsLabel == 'maintenance detail')) {
       _detailsLabel = _autoLabelFromWorkOrder(widget.workOrder!);
@@ -57,6 +72,136 @@ class _WorkOrderDetailsState extends State<WorkOrderDetails> {
 
     debugPrint('DETAILS label="${widget.selectedTabLabel}" '
         'stored="$_detailsLabel" hasWorkOrder=${widget.workOrder != null}');
+  }
+
+  // ---------------- SAMPLE DATA (only used when no workOrder is passed) ----------------
+  List<WorkOrderDetails> _makeSamples() {
+    final now = DateTime.now();
+    return [
+      // Concern Slip
+      WorkOrderDetails(
+        id: 'CS-2025-001',
+        createdAt: now.subtract(const Duration(days: 10)),
+        updatedAt: now.subtract(const Duration(days: 9)),
+        requestTypeTag: 'Concern Slip',
+        departmentTag: 'Plumbing',
+        priority: 'High',
+        statusTag: 'Assigned',
+        requestedBy: 'Erika De Guzman',
+        unitId: 'A 1001',
+        scheduleAvailability: '2025-08-19T14:30:00',
+        title: 'Leaking Faucet',
+        description: 'Clogged drainage in the bathroom. Water backs up after 2–3 minutes.',
+        attachments: const ['assets/images/upload1.png', 'assets/images/upload2.png'],
+        assignedStaff: 'Juan Dela Cruz',
+        staffDepartment: 'Plumbing',
+        assignedPhotoUrl: 'assets/images/avatar.png',
+      ),
+
+      // Job Service (from slip)
+      WorkOrderDetails(
+        id: 'JS-2025-031',
+        createdAt: now.subtract(const Duration(days: 8)),
+        updatedAt: now.subtract(const Duration(days: 6)),
+        requestTypeTag: 'Job Service',
+        departmentTag: 'Plumbing',
+        priority: 'High',
+        statusTag: 'Assigned',
+        resolutionType: 'job_service',
+        requestedBy: 'Erika De Guzman',
+        concernSlipId: 'CS-2025-001',
+        unitId: 'A 1001',
+        scheduleAvailability: '2025-08-20T09:00:00',
+        additionalNotes: 'Recurring issue, please expedite.',
+        title: 'Fix Faucet & Clear Drain',
+        description: 'Replace worn gasket and clear debris clog.',
+        assignedStaff: 'Juan Dela Cruz',
+        staffDepartment: 'Plumbing',
+        assignedPhotoUrl: 'assets/images/avatar.png',
+        startedAt: now.subtract(const Duration(days: 7, hours: 3)),
+        materialsUsed: const ['PTFE tape', 'Gasket #12'],
+      ),
+
+      // Work Order (Permit)
+      WorkOrderDetails(
+        id: 'WO-2025-015',
+        createdAt: now.subtract(const Duration(days: 12)),
+        updatedAt: now.subtract(const Duration(days: 11)),
+        requestTypeTag: 'Work Order',
+        departmentTag: 'Carpentry',
+        priority: 'Medium',
+        statusTag: 'Approved',
+        resolutionType: 'work_permit',
+        requestedBy: 'Admin Jane',
+        unitId: 'B 703',
+        title: 'Ceiling Repair Permit',
+        description: 'Permit for ceiling panel replacement due to moisture damage.',
+        location: 'Tower B – Unit 703',
+        additionalNotes: 'Coordinate with security for elevator padding.',
+        contractorName: 'XYZ Builders',
+        contractorNumber: '+63 912 345 6789',
+        contractorCompany: 'XYZ Builders Inc.',
+        workScheduleFrom: now.add(const Duration(days: 3, hours: 9)),
+        workScheduleTo: now.add(const Duration(days: 3, hours: 14)),
+        entryEquipments: 'Ladder, cordless drill, safety harness',
+        approvedBy: 'Admin Jane',
+        approvalDate: now.subtract(const Duration(days: 10)),
+        adminNotes: 'Work window strictly observed.',
+        materialsUsed: const ['Ceiling panel 60x60', 'Wood screws'],
+      ),
+
+      // Maintenance
+      WorkOrderDetails(
+        id: 'MT-2025-011',
+        createdAt: now.subtract(const Duration(days: 5)),
+        updatedAt: now.subtract(const Duration(days: 5)),
+        requestTypeTag: 'Maintenance',
+        departmentTag: 'Plumbing',
+        priority: 'High',
+        statusTag: 'Scheduled',
+        requestedBy: 'System – Planned PM',
+        scheduleAvailability: '2025-08-30T09:00:00',
+        title: 'Quarterly Pipe Inspection',
+        description: 'Check main and branch lines for leaks, corrosion, and pressure stability.',
+        location: 'Tower A – 5th Floor',
+        checklist: [
+          'Notify tenants on the affected floor',
+          'Shut off water supply safely',
+          'Inspect risers and branch lines for leaks/corrosion',
+          'Check pressure and flow at endpoints',
+          'Restore supply and monitor for 15 minutes',
+          'Log findings and anomalies',
+        ].join('\n'),
+        assignedStaff: 'Juan Dela Cruz',
+        staffDepartment: 'Plumbing',
+        assignedPhotoUrl: 'assets/images/avatar.png',
+        attachments: const ['assets/images/upload3.png'],
+      ),
+    ];
+  }
+
+  // pick a sample matching the label (used if no workOrder is provided)
+  WorkOrderDetails _sampleForLabel() {
+    switch (_detailsLabel) {
+      case 'concern slip assigned':
+      case 'concern slip assessed':
+        return _samples.firstWhere((e) => e.requestTypeTag == 'Concern Slip',
+            orElse: () => _samples.first);
+      case 'job service assigned':
+      case 'job service assessed':
+        return _samples.firstWhere((e) => e.requestTypeTag == 'Job Service',
+            orElse: () => _samples.first);
+      case 'work order assigned':
+      case 'work order assessed':
+        return _samples.firstWhere((e) => e.requestTypeTag == 'Work Order',
+            orElse: () => _samples.first);
+      case 'maintenance task scheduled':
+      case 'maintenance task assessed':
+        return _samples.firstWhere((e) => e.requestTypeTag == 'Maintenance',
+            orElse: () => _samples.first);
+      default:
+        return _samples.first;
+    }
   }
 
   void _onTabTapped(int index) {
@@ -85,8 +230,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetails> {
     if (!mounted || res == null) return;
     setState(() => holdMeta = res);
 
-    final until =
-        res.resumeAt != null ? ' — until ${formatDateTime(res.resumeAt!)}' : '';
+    final until = res.resumeAt != null ? ' — until ${formatDateTime(res.resumeAt!)}' : '';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Set to On Hold: ${res.reason}$until'),
@@ -95,91 +239,191 @@ class _WorkOrderDetailsState extends State<WorkOrderDetails> {
     );
   }
 
-  // ---------- Helpers to build dynamic from WorkOrder ----------
-  Widget _buildRepairDetailsFrom(WorkOrder w, {required bool assessed}) {
-    final requester = '—';
-    final rt = (w.requestType ?? '').isNotEmpty
-        ? w.requestType!
-        : (w.requestId.toUpperCase().startsWith('JS') ? 'Job Service' : 'Concern Slip');
+  // ---------- Builders: map unified model -> concrete details widgets ----------
 
-    return RepairDetailsScreen(
+  Widget _buildConcernSlip(WorkOrderDetails w, {required bool assessed}) {
+    return ConcernSlipDetails(
       // Basic
-      title: w.title,
-      requestId: w.requestId,
-      reqDate: w.date,
-      requestType: rt,
-      statusTag: w.status,
+      id: w.id,
+      createdAt: w.createdAt,
+      updatedAt: w.updatedAt,
+      departmentTag: w.departmentTag,
+      requestTypeTag: 'Concern Slip',
       priority: w.priority,
+      statusTag: w.statusTag,
+      resolutionType: w.resolutionType,
 
       // Requester
-      requestedBy: requester,
-      unit: w.unit ?? '—',
+      requestedBy: w.requestedBy ?? '—',
+      unitId: w.unitId ?? '—',
+      scheduleAvailability: w.scheduleAvailability,
 
-      // Assigned (current)
-      assignedTo: w.assignedTo,
-      assignedDepartment: w.assignedDepartment,
-      assignedSchedule: null,
-
-      // Initial Assessment
-      initialAssigneeName: w.hasInitialAssessment == true ? w.initialAssigneeName : null,
-      initialAssigneeDepartment: w.hasInitialAssessment == true ? w.initialAssigneeDepartment : null,
-
-      // Completion Assessment
-      completionAssigneeName: w.hasCompletionAssessment == true ? w.completionAssigneeName : null,
-      completionAssigneeDepartment: w.hasCompletionAssessment == true ? w.completionAssigneeDepartment : null,
-
-      // CTA
-      actionLabel: null,
-      onAction: null,
-    );
-  }
-
-  Widget _buildMaintenanceDetailsFrom(WorkOrder w, {required bool assessed}) {
-    return MaintenanceDetailsScreen(
+      // Request Details
       title: w.title,
-      requestId: w.requestId,
-      reqDate: w.date,
-      requestType: 'Preventive Maintenance',
-      statusTag: w.status,
-      location: w.unit,
-      description: assessed
-          ? 'Scheduled maintenance underway; findings documented below.'
-          : 'Scheduled maintenance task.',
-      assignedTo: w.assignedTo ?? w.initialAssigneeName,
-      assignedDepartment: w.assignedDepartment ?? w.initialAssigneeDepartment,
-      assignedSchedule: null,
-      completionAssigneeName: w.hasCompletionAssessment == true ? w.completionAssigneeName : null,
-      completionAssigneeDepartment: w.hasCompletionAssessment == true ? w.completionAssigneeDepartment : null,
-      attachments: const [],
-      adminNote: null,
+      description: (w.description ?? '').isNotEmpty ? w.description! : '—',
+      attachments: w.attachments,
+
+      // Staff / Assessment
+      assignedStaff: w.assignedStaff,
+      staffDepartment: w.staffDepartment,
+      staffPhotoUrl: w.assignedPhotoUrl,
+      assessedAt: w.assessedAt,
+      assessment: w.assessment,
+      staffAttachments: w.staffAttachments,
     );
   }
 
-  String _autoLabelFromWorkOrder(WorkOrder w) {
-    final id = w.requestId.toUpperCase();
-    final rt = (w.requestType ?? '').toLowerCase().trim();
-    final s  = (w.status).toLowerCase().trim();
+  Widget _buildJobService(WorkOrderDetails w, {required bool assessed}) {
+    return JobServiceDetails(
+      // Basic
+      id: w.id,
+      concernSlipId: w.concernSlipId ?? '—',
+      createdAt: w.createdAt,
+      updatedAt: w.updatedAt,
+      requestTypeTag: 'Job Service',
+      priority: w.priority,
+      statusTag: w.statusTag,
+      resolutionType: w.resolutionType,
 
-    if (rt.contains('maintenance') || id.startsWith('MT')) {
+      // Tenant / Requester
+      requestedBy: w.requestedBy ?? '—',
+      unitId: w.unitId ?? '—',
+      scheduleAvailability: w.scheduleAvailability,
+      additionalNotes: w.additionalNotes,
+
+      // Staff
+      assignedStaff: w.assignedStaff,
+      staffDepartment: w.staffDepartment,
+      staffPhotoUrl: w.assignedPhotoUrl,
+
+      // Documentation
+      startedAt: w.startedAt,
+      completedAt: w.completedAt,
+      completionAt: w.completedAt, // keep mapping if your widget shows both
+      assessedAt: w.assessedAt,
+      assessment: w.assessment,
+      staffAttachments: w.staffAttachments,
+
+      // Tracking
+      materialsUsed: w.materialsUsed,
+    );
+  }
+
+  Widget _buildMaintenance(WorkOrderDetails w, {required bool assessed}) {
+    return MaintenanceDetails(
+      // Basic
+      id: w.id,
+      createdAt: w.createdAt,
+      updatedAt: w.updatedAt,
+      departmentTag: w.departmentTag,
+      requestTypeTag: 'Maintenance',
+      priority: w.priority,
+      statusTag: w.statusTag,
+      resolutionType: w.resolutionType,
+
+      // Tenant / requester
+      requestedBy: w.requestedBy ?? '—',
+      scheduleDate: w.scheduleAvailability, // String? in your widget API
+
+      // Request details
+      title: w.title,
+      startedAt: w.startedAt,
+      completedAt: w.completedAt,
+      location: w.location ?? w.unitId, // prefer location, fallback to unit
+      description: w.description,
+      checklist: (w.checklist ?? '')
+          .split('\n')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList(),
+      attachments: w.attachments,
+      adminNote: w.adminNotes ?? w.additionalNotes,
+
+      // Staff
+      assignedStaff: w.assignedStaff,
+      staffDepartment: w.staffDepartment,
+      staffPhotoUrl: w.assignedPhotoUrl,
+      assessedAt: w.assessedAt,
+      assessment: w.assessment,
+      staffAttachments: w.staffAttachments,
+
+      // Tracking
+      materialsUsed: w.materialsUsed,
+    );
+  }
+
+  Widget _buildWorkOrderPermit(WorkOrderDetails w) {
+    return WorkOrderPermitDetails(
+      // Basic
+      id: w.id,
+      concernSlipId: w.concernSlipId ?? '—',
+      createdAt: w.createdAt,
+      updatedAt: w.updatedAt,
+      requestTypeTag: 'Work Order',
+      priority: w.priority,
+      statusTag: w.statusTag,
+      resolutionType: w.resolutionType,
+
+      // Requester
+      requestedBy: w.requestedBy ?? '—',
+      unitId: w.unitId,
+
+      // Permit specifics
+      contractorName: w.contractorName ?? '—',
+      contractorNumber: w.contractorNumber ?? '—',
+      contractorCompany: w.contractorCompany,
+
+      // Work window
+      workScheduleFrom: w.workScheduleFrom ?? w.createdAt,
+      workScheduleTo: w.workScheduleTo ?? w.createdAt,
+      entryEquipments: w.entryEquipments,
+
+      // Approvals
+      approvedBy: w.approvedBy,
+      approvalDate: w.approvalDate,
+      denialReason: w.denialReason,
+      adminNotes: w.adminNotes,
+    );
+  }
+
+  // ---------- Infer route label from unified model ----------
+  String _autoLabelFromWorkOrder(WorkOrderDetails w) {
+    final id = w.id.toUpperCase();
+    final type = (w.requestTypeTag).toLowerCase().trim();
+    final s = (w.statusTag).toLowerCase().trim();
+
+    bool isMaint() => type.contains('maintenance') || id.startsWith('MT');
+    bool isSlip()  => type.contains('concern')    || id.startsWith('CS');
+    bool isJS()    => type.contains('job service')|| id.startsWith('JS');
+    bool isWO()    => type.contains('work order') || id.startsWith('WO');
+
+    if (isMaint()) {
       return (s == 'scheduled' || s == 'assigned' || s == 'in progress')
           ? 'maintenance task scheduled'
           : 'maintenance task assessed';
     }
-    if (rt == 'concern slip' || id.startsWith('CS')) {
-      return (s == 'assigned' || s == 'on hold')
-          ? 'concern slip assigned'
-          : 'concern slip assessed';
-    }
-    if (rt == 'job service' || id.startsWith('JS')) {
+    if (isJS()) {
       return (s == 'assigned' || s == 'on hold' || s == 'scheduled')
           ? 'job service assigned'
           : 'job service assessed';
     }
+    if (isWO()) {
+      return (s == 'assigned' || s == 'scheduled' || s == 'in progress')
+          ? 'work order assigned'
+          : 'work order assessed';
+    }
+    if (isSlip()) {
+      return (s == 'assigned' || s == 'on hold')
+          ? 'concern slip assigned'
+          : 'concern slip assessed';
+    }
     return 'concern slip assigned';
   }
 
+  // -------------------- main tab content --------------------
   Widget _buildTabContent() {
-    final w = widget.workOrder;
+    // use the passed work order; otherwise pick a suitable sample
+    final w = widget.workOrder ?? _sampleForLabel();
     final children = <Widget>[];
 
     if (holdMeta != null) {
@@ -188,282 +432,52 @@ class _WorkOrderDetailsState extends State<WorkOrderDetails> {
       children.add(const SizedBox(height: 12));
     }
 
-    // No more in-page assessment form—only details:
     switch (_detailsLabel) {
-      // ---------------- Concern Slip (assigned) ----------------
       case 'concern slip assigned':
-        if (w != null) {
-          children.add(_buildRepairDetailsFrom(w, assessed: false));
-        } else {
-          // SAMPLE CASE
-          children.add(
-            RepairDetailsScreen(
-              // Basic Information
-              title: "Leaking Faucet",
-              requestId: "CS-2025-001",
-              reqDate: "August 2, 2025",
-              requestType: "Concern Slip",
-              statusTag: 'Assigned',
-              priority: 'High',
-
-              // Requestor Details
-              requestedBy: 'Erika De Guzman',
-              unit: "A 1001",
-              scheduleAvailability: "August 19, 2025 2:30 PM",
-
-              // Request Details (description is required)
-              description:
-                  "I’d like to report a clogged drainage issue in the bathroom.",
-              attachments: const [
-                "assets/images/upload1.png",
-                "assets/images/upload2.png",
-              ],
-
-              // Assignment
-              assignedTo: 'Juan Dela Cruz',
-              assignedDepartment: 'Plumbing',
-              assignedSchedule: 'August 20, 2025 9:00 AM',
-
-              actionLabel: null,
-              onAction: null,
-            ),
-          );
-        }
-        break;
-
-      // ---------------- Concern Slip (assessed) ----------------
       case 'concern slip assessed':
-        if (w != null) {
-          children.add(_buildRepairDetailsFrom(w, assessed: true));
-        } else {
-          // SAMPLE CASE
-          children.add(
-            RepairDetailsScreen(
-              // Basic Information
-              title: "Leaking Faucet",
-              requestId: "CS-2025-002",
-              reqDate: "August 2, 2025",
-              requestType: "Concern Slip",
-              statusTag: 'Done',
-              priority: 'High',
-
-              // Requestor Details
-              requestedBy: 'Erika De Guzman',
-              unit: "A 1001",
-              scheduleAvailability: "August 19, 2025 2:30 PM",
-
-              // Request Details
-              description:
-                  "I’d like to report a clogged drainage issue in the bathroom.",
-              attachments: const [
-                "assets/images/upload1.png",
-                "assets/images/upload2.png",
-              ],
-
-              // Assessed By
-              initialAssigneeName: 'Juan Dela Cruz',
-              initialAssigneeDepartment: 'Plumbing',
-              initialDateAssessed: 'August 20, 2025',
-
-              // Assessment and Recommendation
-              initialAssessment:
-                  'Drainage is clogged due to accumulated debris.',
-              initialRecommendation:
-                  'Perform professional cleaning; consider replacing the drainage cover.',
-              initialAssessedAttachments: const ["assets/images/upload2.png"],
-
-              actionLabel: null,
-              onAction: null,
-            ),
-          );
-        }
+        children.add(_buildConcernSlip(w, assessed: _detailsLabel.contains('assessed')));
         break;
 
-      // ---------------- Job Service (assigned) ----------------
       case 'job service assigned':
-        if (w != null) {
-          children.add(_buildRepairDetailsFrom(w, assessed: false));
-        } else {
-          // SAMPLE CASE
-          children.add(
-            RepairDetailsScreen(
-              // Basic Information
-              title: "Leaking Faucet",
-              requestId: "JS-2025-031",
-              reqDate: "August 2, 2025",
-              requestType: "Job Service",
-              statusTag: 'Assigned',
-              priority: 'High',
-
-              // Requestor Details
-              requestedBy: 'Erika De Guzman',
-              unit: "A 1001",
-              scheduleAvailability: "August 19, 2025 2:30 PM",
-
-              // Notes are used if the tenant has additional notes
-              jobServiceNotes: "Please expedite; recurring issue.",
-
-              // Assigned Job Service only
-              assignedTo: 'Juan Dela Cruz',
-              assignedDepartment: 'Plumbing',
-              assignedSchedule: 'August 20, 2025 9:00 AM',
-
-              actionLabel: null,
-              onAction: null,
-            ),
-          );
-        }
-        break;
-
-      // ---------------- Job Service (assessed) ----------------
       case 'job service assessed':
-        if (w != null) {
-          children.add(_buildRepairDetailsFrom(w, assessed: true));
-        } else {
-          // SAMPLE CASE
-          children.add(
-            RepairDetailsScreen(
-              // Basic Information
-              title: "Leaking Faucet",
-              requestId: "JS-2025-032",
-              reqDate: "August 2, 2025",
-              requestType: "Job Service",
-              statusTag: 'Done',
-              priority: 'High',
-
-              // Requestor Details
-              requestedBy: 'Erika De Guzman',
-              unit: "A 1001",
-              scheduleAvailability: "August 19, 2025 2:30 PM",
-
-              // Notes are used if the tenant has additional notes
-              jobServiceNotes: "Please expedite; recurring issue.",
-
-              // Assigned Job Service only
-              completionAssigneeName: 'Juan Dela Cruz',
-              completionAssigneeDepartment: 'Plumbing',
-              completionDateAssessed: 'August 20, 2025 9:00 AM',
-
-              completionAssessment:
-                  'Drainage is clogged due to accumulated debris.',
-              completionRecommendation:
-                  'Perform professional cleaning; consider replacing the drainage cover.',
-              completionAssessedAttachments: const [
-                "assets/images/upload2.png",
-              ],
-
-              actionLabel: null,
-              onAction: null,
-            ),
-          );
-        }
+        children.add(_buildJobService(w, assessed: _detailsLabel.contains('assessed')));
         break;
 
-      // ---------------- Maintenance Task (scheduled) ----------------
+      case 'work order assigned':
+      case 'work order assessed':
+        children.add(_buildWorkOrderPermit(w));
+        break;
+
       case 'maintenance task scheduled':
-        if (w != null) {
-          children.add(_buildMaintenanceDetailsFrom(w, assessed: false));
-        } else {
-          // SAMPLE CASE
-          children.add(
-            MaintenanceDetailsScreen(
-              title: 'Quarterly Pipe Inspection',
-              requestId: 'MT-P-2025-011',
-              reqDate: 'Aug 30, 2025',
-              requestType: 'Preventive Maintenance',
-              statusTag: 'Scheduled',
-
-              // Task Information
-              location: 'Tower A - 5th Floor',
-              description:
-                  'Quarterly check of main and branch lines for leaks, corrosion, and pressure stability.',
-
-              // Assigned To
-              assignedTo: 'Juan Dela Cruz',
-              assignedDepartment: 'Plumbing',
-              assignedSchedule: 'Aug 30, 2025 9:00 AM',
-
-              // Checklist
-              checklist: const [
-                'Notify tenants on the affected floor',
-                'Shut off water supply safely',
-                'Inspect risers and branch lines for leaks/corrosion',
-                'Check pressure and flow at endpoints',
-                'Restore supply and monitor for 15 minutes',
-                'Log findings and anomalies',
-              ],
-
-              // Media + note
-              attachments: const ['assets/images/upload3.png'],
-              adminNote:
-                  'Priority: High. Coordinate with security for access; water shutdown window must be posted 24h before.',
-            ),
-          );
-        }
-        break;
-
-      // ---------------- Maintenance Task (assessed) ----------------
       case 'maintenance task assessed':
-        if (w != null) {
-          children.add(_buildMaintenanceDetailsFrom(w, assessed: true));
-        } else {
-          // SAMPLE CASE
-          children.add(
-            MaintenanceDetailsScreen(
-              title: 'Light Inspection',
-              requestId: 'MT-P-2025-011',
-              reqDate: 'Aug 30, 2025',
-              requestType: 'Work Order',
-              statusTag: 'In Progress',
-
-              // Task Information
-              location: 'Tower A - 5th Floor',
-              description:
-                  'Scheduled maintenance underway; initial findings documented below.',
-
-              // Assessment
-              completionAssigneeName: 'Juan Dela Cruz',
-              completionAssigneeDepartment: 'Plumbing',
-              completionDateAssessed: 'Sep 1, 2025 10:30 AM',
-              completionAssessment:
-                  'Minor seepage detected at the riser valve near unit A-5-07. No major corrosion. '
-                  'Pressure drop of ~5% during peak flow; within acceptable range.',
-              completionRecommendation:
-                  'Replace two worn gaskets, re-wrap threads with PTFE, tighten joints to spec, and monitor for 48 hours.',
-
-              // Photos of the assessed area
-              completionAssessedAttachments: const ['assets/images/upload2.png'],
-
-              // Original task references (optional)
-              attachments: const ['assets/images/upload3.png'],
-              adminNote:
-                  'If shutdown is needed, post a 2-hour advisory with security and concierge.',
-            ),
-          );
-        }
+        children.add(_buildMaintenance(w, assessed: _detailsLabel.contains('assessed')));
         break;
 
-      // ---------------- Generic labels (map using data) -------------
+      // generic -> infer from data
       case 'repair detail':
       case 'maintenance detail':
-        if (w != null) {
-          final mapped = _autoLabelFromWorkOrder(w);
-          if (mapped.contains('maintenance')) {
-            children.add(_buildMaintenanceDetailsFrom(w, assessed: mapped.contains('assessed')));
-          } else {
-            children.add(_buildRepairDetailsFrom(w, assessed: mapped.contains('assessed')));
-          }
+        final mapped = _autoLabelFromWorkOrder(w);
+        if (mapped.contains('maintenance')) {
+          children.add(_buildMaintenance(w, assessed: mapped.contains('assessed')));
+        } else if (mapped.contains('work order')) {
+          children.add(_buildWorkOrderPermit(w));
+        } else if (mapped.contains('job service')) {
+          children.add(_buildJobService(w, assessed: mapped.contains('assessed')));
         } else {
-          children.add(const Center(child: Text('No requests found.')));
+          children.add(_buildConcernSlip(w, assessed: mapped.contains('assessed')));
         }
         break;
 
       default:
-        // Fallback: if we have data show dynamic repair; else show nothing.
-        if (w != null) {
-          children.add(_buildRepairDetailsFrom(w, assessed: false));
+        final mapped = _autoLabelFromWorkOrder(w);
+        if (mapped.contains('maintenance')) {
+          children.add(_buildMaintenance(w, assessed: mapped.contains('assessed')));
+        } else if (mapped.contains('work order')) {
+          children.add(_buildWorkOrderPermit(w));
+        } else if (mapped.contains('job service')) {
+          children.add(_buildJobService(w, assessed: mapped.contains('assessed')));
         } else {
-          children.add(const Center(child: Text('No requests found.')));
+          children.add(_buildConcernSlip(w, assessed: mapped.contains('assessed')));
         }
         break;
     }
@@ -486,7 +500,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetails> {
           padding: EdgeInsets.only(right: 8),
           child: BackButton(),
         ),
-        // keep these if your CustomAppBar supports them
         showMore: true,
         showHistory: true,
       ),
@@ -499,7 +512,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetails> {
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Hide sticky bar if already in an assessed details view
           if (_detailsLabel != 'assessed repair detail' &&
               _detailsLabel != 'assessed maintenance detail')
             SafeArea(
@@ -513,7 +525,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetails> {
                 ),
                 child: Row(
                   children: [
-                    // On Hold / Resume
                     Expanded(
                       child: custom_buttons.OutlinedPillButton(
                         icon: holdMeta != null
@@ -536,21 +547,18 @@ class _WorkOrderDetailsState extends State<WorkOrderDetails> {
                       ),
                     ),
                     const SizedBox(width: 12),
-
-                    // Create Assessment -> navigate to AssessmentForm
                     Expanded(
                       child: custom_buttons.FilledButton(
                         label: 'Create Assessment',
                         withOuterBorder: false,
-                        backgroundColor: const Color(0xFF005CE7), // primary blue
+                        backgroundColor: const Color(0xFF005CE7),
                         onPressed: () {
-                          // Push to standalone AssessmentForm
                           Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (_) => AssessmentForm(
-                                // Pass any context you like (title/id/type)
-                                requestType: w?.title ?? w?.requestId ?? 'Work Order',
+                                // Use unified fields
+                                requestType: w?.requestTypeTag ?? 'Work Order',
                               ),
                             ),
                           );

@@ -73,7 +73,7 @@ class _ReminderPageState extends State<ReminderPage> {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (_) => const ViewDetailsPage(requestType: 'job service permit details'),
+                builder: (_) => const ViewDetailsPage(requestTypeTag: 'job service permit details'),
               ),
             );
           },
@@ -109,7 +109,7 @@ class _ReminderPageState extends State<ReminderPage> {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (_) => const ViewDetailsPage(requestType: 'work order permit details'),
+                builder: (_) => const ViewDetailsPage(requestTypeTag: 'work order permit details'),
               ),
             );
           },

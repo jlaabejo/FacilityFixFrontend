@@ -1,20 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
-import '../popupwidgets/createmaintenancedialogue_popup.dart';
-import '../popupwidgets/maintenance_firesafety_popup.dart';
-import '../popupwidgets/maintenance_earthquake_popup.dart';
-import '../popupwidgets/maintenance_typhoonflood_popup.dart';
+import '../popupwidgets/announcement_viewdetails_popup.dart';
 
-class AdminMaintenancePage extends StatefulWidget {
-  const AdminMaintenancePage({super.key});
+class AdminWebAnnouncementPage extends StatefulWidget {
+  const AdminWebAnnouncementPage({super.key});
 
   @override
-  State<AdminMaintenancePage> createState() => _AdminMaintenancePageState();
+  State<AdminWebAnnouncementPage> createState() => _AdminWebAnnouncementPageState();
 }
 
-class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
-  // Helper function to convert routeKey to actual route path
+class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
+  // Route mapping helper function 
   String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
       'dashboard': '/dashboard',
@@ -32,7 +29,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     return pathMap[routeKey];
   }
 
-  // Handle logout functionality
+  // Logout functionality
   void _handleLogout(BuildContext context) {
     showDialog(
       context: context,
@@ -48,7 +45,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                context.go('/'); // Go back to login page
+                context.go('/');
               },
               child: const Text('Logout'),
             ),
@@ -58,39 +55,46 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     );
   }
 
-  // Sample data for the table
-  final List<Map<String, dynamic>> _tasks = [
+  // Replace with actual backend data
+  final List<Map<String, dynamic>> _announcementItems = [
     {
-      'id': 'PM-GEN-LIGHT-001',
-      'location': 'Bldg A - Basement',
-      'task': 'Elevator Maintenance',
-      'status': 'In Progress',
-      'date': '05-21-2025',
-      'recurrence': '3 Months',
-      'maintenanceType': 'External',
+      'id': 'N-2025-0001',
+      'Title': 'Scheduled Water Interruption',
+      'type': 'Utility Interruption',
+      'location': 'Tower A, Floors 1-5',
+      'dateAdded': '2025-05-08',
+      'priority': 'High', // For backend use
+      'description': 'Water interruption scheduled for maintenance', // For backend use
+      'status': 'Active', // For backend use
     },
     {
-      'id': 'PM-GEN-LIGHT-002',
-      'location': 'UNIT 210',
-      'task': 'Light Inspection',
-      'status': 'New',
-      'date': '05-30-2025',
-      'recurrence': '1 Month',
-      'maintenanceType': 'Internal', 
+      'id': 'N-2025-0002',
+      'Title': 'Pest Control',
+      'type': 'Maintenance',
+      'location': 'Building B, Lobby',
+      'dateAdded': '2025-05-26',
+      'priority': 'Medium', // For backend use
+      'description': 'Regular pest control maintenance', // For backend use
+      'status': 'Active', // For backend use
     },
   ];
 
+  // Search and filter controllers for backend integration
+  final TextEditingController _searchController = TextEditingController();
+  String _selectedFilter = 'All';
+  final List<String> _filterOptions = ['All', 'Utility Interruption', 'Maintenance', 'Emergency', 'Announcement'];
 
+  // Column widths for table 
   final List<double> _colW = <double>[
-    160, // ID
-    180, // LOCATION
-    250, // TASK TITLE
-    140, // STATUS
-    120, // DATE
-    100, // RECURRENCE
-    48, // ACTION
+    140, // ID
+    270, // TITLE
+    180, // TYPE
+    200, // LOCATION
+    110, // DATE ADDED
+    48,  // ACTION
   ];
 
+  // Fixed width cell helper 
   Widget _fixedCell(int i, Widget child, {Alignment align = Alignment.centerLeft}) {
     return SizedBox(
       width: _colW[i],
@@ -98,6 +102,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     );
   }
 
+  // Text with ellipsis helper 
   Text _ellipsis(String s, {TextStyle? style}) => Text(
     s,
     maxLines: 1,
@@ -107,7 +112,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
   );
 
   // Action dropdown menu methods 
-  void _showActionMenu(BuildContext context, Map<String, dynamic> maintenance, Offset position) {
+  void _showActionMenu(BuildContext context, Map<String, dynamic> announcement, Offset position) {
     final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     
     showMenu(
@@ -184,72 +189,50 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
       elevation: 8,
     ).then((value) {
       if (value != null) {
-        _handleActionSelection(value, maintenance);
+        _handleActionSelection(value, announcement);
       }
     });
   }
 
   // Handle action selection 
-  void _handleActionSelection(String action, Map<String, dynamic> maintenance) {
+  void _handleActionSelection(String action, Map<String, dynamic> announcement) {
     switch (action) {
       case 'view':
-        _viewMaintenance(maintenance);
+        _viewaAnnouncement(announcement);
         break;
       case 'edit':
-        _editMaintenance(maintenance);
+        _editAnnouncement(announcement);
         break;
       case 'delete':
-        _deleteMaintenance(maintenance);
+        _deleteAnnouncement(announcement);
         break;
     }
   }
 
-  // View method 
-  void _viewMaintenance(Map<String, dynamic> maintenance) {
-    final id = (maintenance['id'] ?? '').toString(); 
-    final rawType = (maintenance['maintenanceType'] ?? maintenance['type'] ?? '')
-        .toString()
-        .toLowerCase()
-        .trim();
-
-    if (rawType.startsWith('internal')) {
-      context.push('/work/maintenance/$id/internal', extra: maintenance);
-    } else if (rawType.startsWith('external')) {
-      context.push('/work/maintenance/$id/external', extra: maintenance);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unknown maintenance type.')),
-      );
-    }
+  // View announcement method 
+  void _viewaAnnouncement(Map<String, dynamic> announcement) {
+    AnnouncementDetailDialog.show(context, announcement);
   }
 
-  // Edit method
-  void _editMaintenance(Map<String, dynamic> maintenance) {
-    final id = (maintenance['id'] ?? '').toString();
-    final rawType = (maintenance['maintenanceType'] ?? maintenance['type'] ?? '')
-        .toString()
-        .toLowerCase()
-        .trim();
-
-    if (rawType.startsWith('internal')) {
-      context.push('/work/maintenance/$id/internal?edit=1', extra: maintenance);
-    } else if (rawType.startsWith('external')) {
-      context.push('/work/maintenance/$id/external?edit=1', extra: maintenance);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unknown maintenance type.')),
-      );
-    }
+  // Edit announcement method 
+  void _editAnnouncement(Map<String, dynamic> announcement) {
+    // TODO: Implement edit functionality with backend API call
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Edit announcement: ${announcement['id']}'),
+        backgroundColor: Colors.blue,
+      ),
+    );
   }
 
-  // Delete maintenance method
-  void _deleteMaintenance(Map<String, dynamic> maintenance) {
+  // Delete announcement method
+  void _deleteAnnouncement(Map<String, dynamic> announcement) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Delete Maintenance'),
-          content: Text('Are you sure you want to delete maintenance ${maintenance['id']}?'),
+          title: const Text('Delete Announcement'),
+          content: Text('Are you sure you want to delete announcement ${announcement['id']}?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -260,11 +243,11 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                 Navigator.of(context).pop();
                 // TODO: Replace with actual backend API call
                 setState(() {
-                  _tasks.removeWhere((n) => n['id'] == maintenance['id']);
+                  _announcementItems.removeWhere((n) => n['id'] == announcement['id']);
                 });
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Maintenance ${maintenance['id']} deleted'),
+                    content: Text('Announcement ${announcement['id']} deleted'),
                     backgroundColor: Colors.red,
                   ),
                 );
@@ -280,11 +263,33 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     );
   }
 
+  // Search functionality 
+  void _onSearchChanged(String value) {
+    // TODO: Implement search functionality with backend API
+    // For now, just update the controller
+    setState(() {
+      // Filter logic will go here
+    });
+  }
+
+  // Filter functionality
+  void _onFilterChanged(String filter) {
+    setState(() {
+      _selectedFilter = filter;
+      // TODO: Implement filter functionality with backend API
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return FacilityFixLayout(
-      currentRoute: 'work_maintenance',
+      currentRoute: 'announcement',
       onNavigate: (routeKey) {
         final routePath = _getRoutePath(routeKey);
         if (routePath != null) {
@@ -298,15 +303,16 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header section with title and Create New button
+            // Header Section with breadcrumbs and Create New button
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                // Breadcrumb and title section
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "Work Orders",
+                      "Announcement",
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
@@ -314,7 +320,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    //breadcrumbs
+                    // Breadcrumb navigation
                     Row(
                       children: [
                         TextButton(
@@ -327,101 +333,59 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                         ),
                         const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
                         TextButton(
-                          onPressed: () => context.go('/work/maintenance'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.black,
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                          ),
-                          child: const Text('Work Orders'),
-                        ),
-                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
-                        TextButton(
                           onPressed: null,
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.black,
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
-                          child: const Text('Maintenance Tasks'),
+                          child: const Text('Announcement'),
                         ),
                         
                       ],
                     ),
                   ],
                 ),
+                // Create New button
                 ElevatedButton.icon(
-                  onPressed: () => showCreateMaintenanceTaskDialog(context),
-                  icon: const Icon(Icons.add, size: 22), 
+                  onPressed: () {
+                    context.go('/adminweb/pages/createannouncement');
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Create New Announcement'),
+                        content: const Text('Create announcement dialog will go here'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Close'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.add, size: 22),
                   label: const Text(
                     "Create New",
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      fontSize: 16, 
+                      fontSize: 16,
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1976D2),
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18), 
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30), 
+                      borderRadius: BorderRadius.circular(30),
                     ),
-                    elevation: 2, // slight shadow for emphasis
+                    elevation: 2,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 32),
 
-            // Summary cards
-            Row(
-              children: [
-                _buildSummaryCard(
-                  "FIRE SAFETY",
-                  "3/5 Passed",
-                  "Next: July 2025",
-                  Colors.white,
-                  onTap: () {
-                    FireSafetyDialog.show(context, {"description": "Fire safety inspection"});
-                  },
-                ),
-                const SizedBox(width: 16),
-                _buildSummaryCard(
-                  "EARTHQUAKE",
-                  "1/2 Passed",
-                  "Next: Sept 2025",
-                  Colors.white,
-                  onTap: () {
-                    EarthquakeDialog.show(context, {
-                      'description': 'Earthquake safety inspection tasks',
-                      'priority': 'High',
-                    });
-                  },
-                ),
-                const SizedBox(width: 16),
-                _buildSummaryCard(
-                  "TYPHOON/FLOOD",
-                  "2/3 Passed",
-                  "Next: Jan 2026",
-                  Colors.white,
-                  onTap: () {
-                    TyphoonFloodDialog.show(context, {
-                      'description': 'Typhoon and flood safety inspection tasks for this facility',
-                      'priority': 'High',
-                    });
-                  },
-                ),
-                const SizedBox(width: 16),
-                _buildSummaryCard(
-                  "PENDING ITEMS",
-                  "8",
-                  "Total Pending",
-                  Colors.white,
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-
-            // Table section
+            // Main Content Container
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -443,15 +407,17 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          "Maintenance Tasks",
+                          "Announcement",
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
                             color: Colors.black87,
                           ),
                         ),
+                        // Search and Filter section
                         Row(
                           children: [
+                            // Search field
                             Container(
                               width: 240,
                               height: 40,
@@ -460,6 +426,8 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: TextField(
+                                controller: _searchController,
+                                onChanged: _onSearchChanged,
                                 decoration: InputDecoration(
                                   suffixIcon: Icon(
                                     Icons.search,
@@ -480,31 +448,42 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                               ),
                             ),
                             const SizedBox(width: 12),
-                            Container(
-                              height: 40,
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.tune,
-                                    color: Colors.grey[600],
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    "Filter",
-                                    style: TextStyle(
-                                      color: Colors.grey[700],
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
+                            // Filter button
+                            PopupMenuButton<String>(
+                              initialValue: _selectedFilter,
+                              onSelected: _onFilterChanged,
+                              itemBuilder: (context) => _filterOptions.map((filter) {
+                                return PopupMenuItem(
+                                  value: filter,
+                                  child: Text(filter),
+                                );
+                              }).toList(),
+                              child: Container(
+                                height: 40,
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey[300]!),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.tune,
+                                      color: Colors.grey[600],
+                                      size: 18,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      "Filter",
+                                      style: TextStyle(
+                                        color: Colors.grey[700],
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],
@@ -518,86 +497,85 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                     color: Colors.grey[400],
                   ),
 
-                  // Table content
+                  // Data Table
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
-                        child: DataTable(
-                            columnSpacing: 16,
-                            headingRowHeight: 56,
-                            dataRowHeight: 64,
-                            headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
-                            headingTextStyle: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey[600],
-                              letterSpacing: 0.5,
-                            ),
-                            dataTextStyle: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.black87,
-                            ),
-                            columns: [
-                              DataColumn(label: _fixedCell(0, const Text("ID"))),
-                              DataColumn(label: _fixedCell(1, const Text("LOCATION"))),
-                              DataColumn(label: _fixedCell(2, const Text("TASK TITLE"))),
-                              DataColumn(label: _fixedCell(3, const Text("STATUS"))),
-                              DataColumn(label: _fixedCell(4, const Text("DATE"))),
-                              DataColumn(label: _fixedCell(5, const Text("RECURRENCE"))),
-                              DataColumn(label: _fixedCell(6, const Text(""))),
-                            ],
-                            rows: _tasks.map((task) {
-                              return DataRow(
-                                cells: [
-                                  DataCell(_fixedCell(0, _ellipsis(
-                                    task['id'],
-                                    style: TextStyle(color: Colors.grey[700], fontSize: 13),
-                                  ))),
-                                  DataCell(_fixedCell(1, _ellipsis(task['location']))),
-                                  DataCell(_fixedCell(2, _ellipsis(task['task']))),
-                                  DataCell(_fixedCell(3, _buildStatusChip(task['status']))),
-                                  DataCell(_fixedCell(4, _ellipsis(task['date']))),
-                                  DataCell(_fixedCell(5, _ellipsis(task['recurrence']))),
-                                  DataCell(_fixedCell(6, 
-                                    Builder(builder: (context) {
-                                      return IconButton(
-                                        onPressed: () {
-                                          final rbx = context.findRenderObject() as RenderBox;
-                                          final position = rbx.localToGlobal(Offset.zero);
-                                          _showActionMenu(context, task, position);
-                                        },
-                                        icon: Icon(Icons.more_vert, color: Colors.grey[400], size: 20),
-                                      );
-                                    }),
-                                    align: Alignment.center,
-                                  )),
-                                ],
-                              );
-                            }).toList(),
-                          ),
+                    child: DataTable(
+                      columnSpacing: 30,
+                      headingRowHeight: 56,
+                      dataRowHeight: 64,
+                      headingRowColor: MaterialStateProperty.all(Colors.grey[50]),
+                      headingTextStyle: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[600],
+                        letterSpacing: 0.5,
                       ),
-                      Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: Colors.grey[400],
+                      dataTextStyle: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.black87,
                       ),
-                    
-                  // Pagination
+                      columns: [
+                        DataColumn(label: _fixedCell(0, const Text("ID"))),
+                        DataColumn(label: _fixedCell(1, const Text("ANNOUNCEMENT TITLE"))),
+                        DataColumn(label: _fixedCell(2, const Text("TYPE"))),
+                        DataColumn(label: _fixedCell(3, const Text("LOCATION"))),
+                        DataColumn(label: _fixedCell(4, const Text("DATE ADDED"))),
+                        DataColumn(label: _fixedCell(5, const Text(""))),
+                      ],
+                      rows: _announcementItems.map((announcement) {
+                        return DataRow(
+                          cells: [
+                            DataCell(_fixedCell(0, _ellipsis(
+                              announcement['id'],
+                              style: TextStyle(color: Colors.grey[700], fontSize: 13),
+                            ))),
+                            DataCell(_fixedCell(1, _ellipsis(announcement['Title']))),
+                            DataCell(_fixedCell(2, _buildTypeChip(announcement['type']))),
+                            DataCell(_fixedCell(3, _ellipsis(announcement['location']))),
+                            DataCell(_fixedCell(4, _ellipsis(announcement['dateAdded']))),
+                            DataCell(_fixedCell(5,
+                              Builder(builder: (context) {
+                                return IconButton(
+                                  onPressed: () {
+                                    final rbx = context.findRenderObject() as RenderBox;
+                                    final position = rbx.localToGlobal(Offset.zero);
+                                    _showActionMenu(context, announcement, position);
+                                  },
+                                  icon: Icon(Icons.more_vert, color: Colors.grey[400], size: 20),
+                                );
+                              }),
+                              align: Alignment.center,
+                            )),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: Colors.grey[400],
+                  ),
+
+                  // Pagination section
                   Padding(
                     padding: const EdgeInsets.all(20.0),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "Showing 1 to 2 of 2 entries",
+                          "Showing 1 to ${_announcementItems.length} of ${_announcementItems.length} entries",
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 14,
                           ),
                         ),
+                        // Pagination controls
                         Row(
                           children: [
                             IconButton(
-                              onPressed: null,
+                              onPressed: null, // TODO: Implement previous page
                               icon: Icon(
                                 Icons.chevron_left,
                                 color: Colors.grey[400],
@@ -641,7 +619,9 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                               ),
                             ),
                             IconButton(
-                              onPressed: () {},
+                              onPressed: () {
+                                // TODO: Implement next page
+                              },
                               icon: Icon(
                                 Icons.chevron_right,
                                 color: Colors.grey[600],
@@ -661,79 +641,33 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     );
   }
 
-  // Widget for summary cards
-  Widget _buildSummaryCard(
-    String title,
-    String value,
-    String subtitle,
-    Color backgroundColor, {
-    VoidCallback? onTap,
-  }) {
-    return Expanded(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey[200]!),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[600],
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-
-  // Widget for status chips
-  Widget _buildStatusChip(String status) {
+  // Type chip widget - styled for announcement types
+  Widget _buildTypeChip(String type) {
     Color bgColor;
     Color textColor;
-    switch (status) {
-      case 'In Progress':
+    
+    switch (type) {
+      case 'Utility Interruption':
         bgColor = const Color(0xFFFFEBEE);
         textColor = const Color(0xFFD32F2F);
         break;
-      case 'New':
+      case 'Maintenance':
         bgColor = const Color(0xFFE3F2FD);
         textColor = const Color(0xFF1976D2);
+        break;
+      case 'Emergency':
+        bgColor = const Color(0xFFFFF3E0);
+        textColor = const Color(0xFFE65100);
+        break;
+      case 'Announcement':
+        bgColor = const Color(0xFFE8F5E8);
+        textColor = const Color(0xFF2E7D32);
         break;
       default:
         bgColor = Colors.grey[100]!;
         textColor = Colors.grey[700]!;
     }
+    
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -741,7 +675,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
-        status,
+        type,
         style: TextStyle(
           color: textColor,
           fontSize: 12,

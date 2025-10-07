@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:facilityfix/models/cards.dart';
 import 'package:facilityfix/tenant/announcement.dart';
 import 'package:facilityfix/tenant/chat.dart';
 import 'package:facilityfix/tenant/home.dart';
@@ -12,6 +13,7 @@ import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/helper_models.dart';
 import 'package:facilityfix/widgets/modals.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class WorkOrderPage extends StatefulWidget {
   const WorkOrderPage({super.key});
@@ -21,111 +23,102 @@ class WorkOrderPage extends StatefulWidget {
 }
 
 class _WorkOrderPageState extends State<WorkOrderPage> {
-  // Tabs (by request type)
+  // ─────────────── Tabs (by request type) ───────────────
   String _selectedTabLabel = "All";
 
-  // Filters (Classification removed)
+  // ─────────────── Filters ───────────────
   String _selectedStatus = 'All';
+  String _selectedDepartment = 'All'; // mapped as "classification"
   final TextEditingController _searchController = TextEditingController();
 
-  // Sample data (replace with backend)
+  // ─────────────── Sample data (replace with backend) ───────────────
   final List<WorkOrder> _all = [
-    // Concern Slip ----------------------------
-    // Concern Slip (Default)
     WorkOrder(
       title: 'Leaking faucet',
-      requestId: 'CS-2025-005',
-      date: 'Aug 22',
-      status: 'Pending',
-      department: 'Plumbing',
-      requestType: 'Concern Slip',
-      unit: 'A 1001',
-      priority: null,
+      id: 'CS-2025-005',
+      createdAt: DateFormat('MMMM d, yyyy').parse('August 22, 2025'),
+      statusTag: 'Pending',
+      departmentTag: 'Plumbing',
+      requestTypeTag: 'Concern Slip',
+      unitId: 'A 1001',
+      staffPhotoUrl: null,
+      priorityTag: null,
     ),
-    // Concern Slip (assigned)
     WorkOrder(
       title: 'Leaking faucet',
-      requestId: 'CS-2025-005',
-      date: 'Aug 22',
-      status: 'Assigned',
-      department: 'Plumbing',
-      requestType: 'Concern Slip',
-      unit: 'A 1001',
-      priority: null,
-      assignedTo: 'Juan Dela Cruz',
-      assignedDepartment: 'Plumbing',
-      assignedPhotoUrl: 'assets/images/avatar.png',
+      id: 'CS-2025-005',
+      createdAt: DateFormat('MMMM d, yyyy').parse('August 22, 2025'),
+      statusTag: 'Assigned',
+      departmentTag: 'Plumbing',
+      requestTypeTag: 'Concern Slip',
+      assignedStaff: 'Juan Tamad',
+      staffDepartment: 'Plumbing',
+      staffPhotoUrl: null,
+      unitId: 'A 1001',
+      priorityTag: null,
     ),
-    // Concern Slip (assessed)
     WorkOrder(
       title: 'Leaking faucet',
-      requestId: 'CS-2025-030',
-      date: 'Aug 23',
-      status: 'Done',
-      department: 'Plumbing',
-      requestType: 'Concern Slip',
-      unit: 'A 1001',
-      priority: 'High',
-      assignedTo: 'Juan Dela Cruz',
-      assignedDepartment: 'Plumbing',
-      assignedPhotoUrl: 'assets/images/avatar.png',
+      id: 'CS-2025-030',
+      createdAt: DateFormat('MMMM d, yyyy').parse('August 23, 2025'),
+      statusTag: 'Done',
+      departmentTag: 'Plumbing',
+      requestTypeTag: 'Concern Slip',
+      assignedStaff: 'Juan Tamad',
+      staffDepartment: 'Plumbing',
+      staffPhotoUrl: null,
+      unitId: 'A 1001',
+      priorityTag: 'High',
     ),
-    // Work Order Permit --------------------------------
-    // Work Order Permit (Approved)
     WorkOrder(
       title: 'Leaking faucet',
-      requestId: 'WO-2025-014',
-      date: 'Aug 20',
-      status: 'Approved',
-      department: 'Plumbing',
-      requestType: 'Work Order',
-      unit: 'A 1001',
-      priority: 'High',
+      id: 'WO-2025-014',
+      createdAt: DateFormat('MMMM d, yyyy').parse('August 20, 2025'),
+      statusTag: 'Approved',
+      departmentTag: 'Plumbing',
+      requestTypeTag: 'Work Order',
+      unitId: 'A 1001',
+      staffPhotoUrl: null,
+      priorityTag: 'High',
     ),
-    // Job Service --------------------------------
-    // Job Service (Assigned)
     WorkOrder(
       title: 'Leaking faucet',
-      requestId: 'CS-2025-021',
-      date: 'Aug 22',
-      status: 'Assigned',
-      department: 'Plumbing',
-      requestType: 'Job Service',
-      unit: 'A 1001',
-      priority: 'High',
-      hasInitialAssessment: true,
-      assignedTo: 'Juan Dela Cruz',
-      assignedDepartment: 'Plumbing',
-      assignedPhotoUrl: 'assets/images/avatar.png',
+      id: 'JS-2025-021',
+      createdAt: DateFormat('MMMM d, yyyy').parse('August 22, 2025'),
+      statusTag: 'Assigned',
+      departmentTag: 'Plumbing',
+      requestTypeTag: 'Job Service',
+      assignedStaff: 'Juan Tamad',
+      staffDepartment: 'Plumbing',
+      staffPhotoUrl: null,
+      unitId: 'A 1001',
+      priorityTag: 'High',
     ),
-    // Job Service (Done / assessed)
     WorkOrder(
       title: 'Leaking faucet',
-      requestId: 'JS-2025-031',
-      date: 'Aug 23',
-      status: 'Done',
-      department: 'Plumbing',
-      requestType: 'Job Service',
-      unit: 'A 1001',
-      priority: 'High',
-      hasCompletionAssessment: true,
-      completionAssigneeName: 'Juan Dela Cruz',
-      completionAssigneeDepartment: 'Plumbing',
-      completionAssigneePhotoUrl: 'assets/images/avatar.png',
+      id: 'JS-2025-031',
+      createdAt: DateFormat('MMMM d, yyyy').parse('August 23, 2025'),
+      statusTag: 'Done',
+      departmentTag: 'Plumbing',
+      requestTypeTag: 'Job Service',
+      assignedStaff: 'Juan Tamad',
+      staffDepartment: 'Plumbing',
+      staffPhotoUrl: null,
+      unitId: 'A 1001',
+      priorityTag: 'High',
     ),
-    // Job Service (On Hold)
     WorkOrder(
       title: 'Leaking faucet',
-      requestId: 'JS-2025-032',
-      date: 'Aug 23',
-      status: 'On Hold',
-      department: 'Plumbing',
-      requestType: 'Job Service',
-      unit: 'A 1001',
-      priority: 'High',
-      hasInitialAssessment: true,
-      initialAssigneeName: 'Juan Dela Cruz',
-      initialAssigneeDepartment: 'Plumbing',
+      id: 'JS-2025-032',
+      createdAt: DateFormat('MMMM d, yyyy').parse('August 23, 2025'),
+      statusTag: 'On Hold',
+      departmentTag: 'Plumbing',
+      requestTypeTag: 'Job Service',
+      assignedStaff: 'Juan Tamad',
+      staffDepartment: 'Plumbing',
+      staffPhotoUrl: null,
+      unitId: 'A 1001',
+      priorityTag: 'High',
     ),
   ];
 
@@ -194,7 +187,8 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const RequestForm(requestType: 'Concern Slip'),
+                            builder: (_) =>
+                                const RequestForm(requestType: 'Concern Slip'),
                           ),
                         );
                       },
@@ -207,7 +201,8 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const RequestForm(requestType: 'Job Service'),
+                            builder: (_) =>
+                                const RequestForm(requestType: 'Job Service'),
                           ),
                         );
                       },
@@ -220,7 +215,8 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const RequestForm(requestType: 'Work Order'),
+                            builder: (_) =>
+                                const RequestForm(requestType: 'Work Order'),
                           ),
                         );
                       },
@@ -237,11 +233,16 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     );
   }
 
-  // ===== Filtering logic (classification removed) ============================
+  // ===== Filtering logic =====================================================
+  static const List<String> _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+  String shortDate(DateTime d) => '${_months[d.month - 1]} ${d.day}';
+  String _norm(String? s) => (s ?? '').toLowerCase().trim();
 
   bool _tabMatchesByRequestType(WorkOrder w) {
-    final type = (w.requestType ?? '').toLowerCase().trim();
-    switch (_selectedTabLabel.toLowerCase()) {
+    final type = _norm(w.requestTypeTag);
+    switch (_norm(_selectedTabLabel)) {
       case 'all':
         return true;
       case 'concern slip':
@@ -257,54 +258,82 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
 
   bool _statusMatches(WorkOrder w) {
     if (_selectedStatus == 'All') return true;
-    return (w.status).toLowerCase().trim() == _selectedStatus.toLowerCase().trim();
-    // You can also normalize status further if needed.
+    return _norm(w.statusTag) == _norm(_selectedStatus);
+  }
+
+  bool _departmentMatches(WorkOrder w) {
+    if (_selectedDepartment == 'All') return true;
+    return _norm(w.departmentTag) == _norm(_selectedDepartment);
   }
 
   bool _searchMatches(WorkOrder w) {
-    final q = _searchController.text.trim().toLowerCase();
+    final q = _norm(_searchController.text);
     if (q.isEmpty) return true;
-    return [
+
+    final dateText = shortDate(w.createdAt);
+    return <String>[
       w.title,
-      w.requestId,
-      w.department ?? '',
-      w.unit ?? '',
-      w.status,
-      w.requestType ?? '',
-    ].any((s) => s.toLowerCase().contains(q));
+      w.id,
+      w.departmentTag ?? '',
+      w.unitId ?? '',
+      w.statusTag,
+      w.requestTypeTag,
+      dateText,
+    ].any((s) => _norm(s).contains(q));
   }
 
   List<WorkOrder> get _filtered => _all
       .where(_tabMatchesByRequestType)
       .where(_statusMatches)
+      .where(_departmentMatches)
       .where(_searchMatches)
       .toList();
 
-  // Sort filtered items by latest date first
   List<WorkOrder> get _filteredSorted {
     final list = List<WorkOrder>.from(_filtered);
-    list.sort((a, b) => UiDateParser.parse(b.date).compareTo(UiDateParser.parse(a.date)));
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return list;
   }
 
-  // Dynamic dropdown options (classification removed)
   List<String> get _statusOptions {
-    final base = _all.where(_tabMatchesByRequestType).where(_searchMatches);
+    final base =
+        _all.where(_tabMatchesByRequestType).where(_departmentMatches).where(_searchMatches);
     final set = <String>{};
     for (final w in base) {
-      final s = (w.status).trim();
+      final s = w.statusTag.trim();
       if (s.isNotEmpty) set.add(s);
     }
     final list = set.toList()..sort();
     return ['All', ...list];
   }
 
-  // Dynamic tab counts (no classification dependency)
+  // ✅ Fixed Department filter logic
+  List<String> get _deptOptions {
+    // predefined departments
+    final predefined = {'Maintenance', 'Carpentry', 'Plumbing', 'Electrical', 'Masonry'};
+
+    final base = _all
+        .where(_tabMatchesByRequestType)
+        .where(_statusMatches)
+        .where(_searchMatches);
+
+    final set = <String>{};
+    for (final w in base) {
+      final d = (w.departmentTag ?? '').trim();
+      if (d.isNotEmpty) set.add(d);
+    }
+
+    // merge both sets
+    final list = {...predefined, ...set}.toList()..sort();
+    return ['All', ...list];
+  }
+
   List<TabItem> get _tabs {
-    final visible = _all.where(_statusMatches).where(_searchMatches).toList();
+    final visible =
+        _all.where(_statusMatches).where(_departmentMatches).where(_searchMatches).toList();
 
     int countFor(String type) =>
-        visible.where((w) => (w.requestType ?? '').toLowerCase() == type).length;
+        visible.where((w) => _norm(w.requestTypeTag) == _norm(type)).length;
 
     return [
       TabItem(label: 'All', count: visible.length),
@@ -314,10 +343,9 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     ];
   }
 
-  // ===== Routing helper ======================================================
   String _routeLabelFor(WorkOrder w) {
-    final type = (w.requestType ?? '').toLowerCase().trim();
-    final status = (w.status).toLowerCase().trim();
+    final type = _norm(w.requestTypeTag);
+    final status = _norm(w.statusTag);
 
     switch (type) {
       case 'concern slip':
@@ -337,35 +365,26 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     }
   }
 
-  // ===== Card builder ========================================================
-  Widget buildCard(WorkOrder w) {
+  Widget buildCard(WorkOrder r) {
     return RepairCard(
-      title: w.title,
-      requestId: w.requestId,
-      reqDate: w.date,
-      statusTag: w.status,
-      unit: w.unit,
-      priority: w.priority,
-      departmentTag: w.department,
-      hasInitialAssessment: w.hasInitialAssessment,
-      initialAssigneeName: w.initialAssigneeName,
-      initialAssigneeDepartment: w.initialAssigneeDepartment,
-      hasCompletionAssessment: w.hasCompletionAssessment,
-      completionAssigneeName: w.completionAssigneeName,
-      completionAssigneeDepartment: w.completionAssigneeDepartment,
-      assignedTo: w.assignedTo,
-      assignedDepartment: w.assignedDepartment,
-      // If your RepairCard expects `avatarUrl`, pass assignedPhotoUrl here:
-      avatarUrl: w.assignedPhotoUrl,
-      requestType: w.requestType,
+      title: r.title,
+      id: r.id,
+      createdAt: r.createdAt,
+      statusTag: r.statusTag,
+      departmentTag: r.departmentTag,
+      priorityTag: r.priorityTag,
+      unitId: r.unitId ?? '',
+      requestTypeTag: r.requestTypeTag,
+      assignedStaff: r.assignedStaff,
+      staffDepartment: r.staffDepartment,
       onTap: () {
-        final routeLabel = _routeLabelFor(w);
+        final routeLabel = _routeLabelFor(r);
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => ViewDetailsPage(
               selectedTabLabel: routeLabel,
-              requestType: w.requestType,
+              requestTypeTag: r.requestTypeTag,
             ),
           ),
         );
@@ -379,7 +398,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     );
   }
 
-  // ===== Lifecycle ===========================================================
   @override
   void initState() {
     super.initState();
@@ -392,35 +410,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     super.dispose();
   }
 
-  // ===== Helpers =============================================================
-  Widget _buildSearchField() {
-    return SizedBox(
-      height: 44,
-      child: TextField(
-        controller: _searchController,
-        onChanged: (_) => setState(() {}), // live search
-        decoration: InputDecoration(
-          hintText: 'Search by title, ID, status, unit…',
-          prefixIcon: const Icon(Icons.search),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          enabledBorder: const OutlineInputBorder(
-            borderSide: BorderSide(color: Color(0xFFE5E7EB)),
-            borderRadius: BorderRadius.all(Radius.circular(12)),
-          ),
-          focusedBorder: const OutlineInputBorder(
-            borderSide: BorderSide(color: Color(0xFF005CE7)),
-            borderRadius: BorderRadius.all(Radius.circular(12)),
-          ),
-          isDense: true,
-        ),
-      ),
-    );
-  }
-
-  // ===== UI ==================================================================
   @override
   Widget build(BuildContext context) {
     final items = _filteredSorted;
@@ -451,31 +440,28 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ===== Search + Status (classification removed) =====
-                    Row(
-                      children: [
-                        Expanded(child: _buildSearchField()),
-                        const SizedBox(width: 12),
-                        DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _selectedStatus,
-                            items: _statusOptions
-                                .map((s) => DropdownMenuItem(
-                                      value: s,
-                                      child: Text(s),
-                                    ))
-                                .toList(),
-                            onChanged: (v) {
-                              if (v == null) return;
-                              setState(() => _selectedStatus = v.trim().isEmpty ? 'All' : v);
-                            },
-                          ),
-                        ),
-                      ],
+                    SearchAndFilterBar(
+                      searchController: _searchController,
+                      selectedStatus: _selectedStatus,
+                      statuses: _statusOptions,
+                      selectedClassification: _selectedDepartment,
+                      classifications: _deptOptions,
+                      onStatusChanged: (status) {
+                        setState(() {
+                          _selectedStatus = status.trim().isEmpty ? 'All' : status;
+                        });
+                      },
+                      onClassificationChanged: (dept) {
+                        setState(() {
+                          _selectedDepartment = dept.trim().isEmpty ? 'All' : dept;
+                        });
+                      },
+                      onSearchChanged: (_) {
+                        setState(() {});
+                      },
                     ),
                     const SizedBox(height: 16),
 
-                    // Tabs: All / Concern Slip / Job Service / Work Order
                     StatusTabSelector(
                       tabs: _tabs,
                       selectedLabel: _selectedTabLabel,
@@ -483,7 +469,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Header
                     Row(
                       children: [
                         Text(
@@ -513,7 +498,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                     ),
                     const SizedBox(height: 12),
 
-                    // List
                     Expanded(
                       child: items.isEmpty
                           ? const EmptyState()
@@ -527,8 +511,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                   ],
                 ),
               ),
-
-              // Add button
               Positioned(
                 bottom: 24,
                 right: 24,

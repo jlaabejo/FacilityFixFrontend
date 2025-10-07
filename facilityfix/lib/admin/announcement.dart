@@ -5,14 +5,46 @@ import 'package:facilityfix/admin/inventory.dart';
 import 'package:facilityfix/admin/notification.dart';
 import 'package:facilityfix/admin/view_details/announcement_details.dart';
 import 'package:facilityfix/admin/workorder.dart';
-import 'package:facilityfix/widgets/buttons.dart'; // AddButton lives here
-import 'package:facilityfix/widgets/cards.dart'; // AnnouncementCard, EmptyState
-import 'package:facilityfix/widgets/app&nav_bar.dart'; // CustomAppBar, NavBar, NavItem
-import 'package:facilityfix/widgets/helper_models.dart'; // Announcement model
+import 'package:facilityfix/widgets/buttons.dart';
+import 'package:facilityfix/widgets/cards.dart';
+import 'package:facilityfix/widgets/app&nav_bar.dart';
+import 'package:facilityfix/widgets/helper_models.dart';
 import 'package:flutter/material.dart';
 
-// Create form
-import 'package:facilityfix/admin/forms/announcement.dart'; // AnnouncementForm
+/// Simple data model for the list (avoids mixing widgets & data).
+class AnnouncementItem {
+  final String id;
+  final String title;
+  final String announcementType; // e.g. "utility interruption"
+  final DateTime createdAt;
+  final bool isRead;
+
+  const AnnouncementItem({
+    required this.id,
+    required this.title,
+    required this.announcementType,
+    required this.createdAt,
+    required this.isRead,
+  });
+
+  AnnouncementItem copyWith({
+    String? id,
+    String? title,
+    String? announcementType,
+    String? classification,
+    String? details,
+    DateTime? createdAt,
+    bool? isRead,
+  }) {
+    return AnnouncementItem(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      announcementType: announcementType ?? this.announcementType,
+      createdAt: createdAt ?? this.createdAt,
+      isRead: isRead ?? this.isRead,
+    );
+  }
+}
 
 class AnnouncementPage extends StatefulWidget {
   const AnnouncementPage({super.key});
@@ -24,7 +56,6 @@ class AnnouncementPage extends StatefulWidget {
 class _AnnouncementPageState extends State<AnnouncementPage> {
   int _selectedIndex = 2;
 
-  // ---------------- Bottom Nav ----------------
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
@@ -63,7 +94,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
     'General Maintenance',
   ];
 
-  // Status filter: string shown in UI + enum used in logic (kept in sync)
+  // Status filter
   String _selectedStatus = 'All';
   final List<String> _statuses = const ['All', 'Unread', 'Read', 'Recent'];
   AnnStatusFilter _statusFilter = AnnStatusFilter.all;
@@ -82,33 +113,33 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
   }
 
   // ===== Demo data (replace with backend) =====
-  final List<Announcement> _all = [
-    Announcement(
+  final List<AnnouncementItem> _all = [
+    AnnouncementItem(
+      id: 'ANN-2025-0011',
       title: 'Utility Interruption',
-      classification: 'utility interruption',
-      details: 'Temporary shutdown in pipelines for maintenance cleaning.',
-      postedAt: DateTime.now().subtract(const Duration(hours: 3)),
-      isRead: false,
+      announcementType: 'utility interruption',
+      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
+      isRead: false, 
     ),
-    Announcement(
+    AnnouncementItem(
+      id: 'ANN-2025-0012',
       title: 'Power Outage',
-      classification: 'power outage',
-      details: 'Scheduled power interruption due to transformer maintenance.',
-      postedAt: DateTime.now().subtract(const Duration(hours: 27)),
+      announcementType: 'power outage',
+      createdAt: DateTime.now().subtract(const Duration(hours: 27)),
       isRead: true,
     ),
-    Announcement(
+    AnnouncementItem(
+      id: 'ANN-2025-0013',
       title: 'General Maintenance',
-      classification: 'general maintenance',
-      details: 'Common area repainting and minor repairs this weekend.',
-      postedAt: DateTime.now().subtract(const Duration(days: 3)),
+      announcementType: 'general maintenance',
+      createdAt: DateTime.now().subtract(const Duration(days: 3)),
       isRead: false,
     ),
-    Announcement(
+    AnnouncementItem(
+      id: 'ANN-2025-0014',
       title: 'Pest Control',
-      classification: 'pest control',
-      details: 'Building-wide pest control on Saturday, secure food items.',
-      postedAt: DateTime.now().subtract(const Duration(days: 11)),
+      announcementType: 'pest control',
+      createdAt: DateTime.now().subtract(const Duration(days: 11)),
       isRead: true,
     ),
   ];
@@ -149,7 +180,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
     return haystack.toLowerCase().contains(q);
   }
 
-  bool _matchesStatus(Announcement a) {
+  bool _matchesStatus(AnnouncementItem a) {
     switch (_statusFilter) {
       case AnnStatusFilter.all:
         return true;
@@ -158,18 +189,18 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
       case AnnStatusFilter.read:
         return a.isRead;
       case AnnStatusFilter.recent:
-        return _isRecent(a.postedAt);
+        return _isRecent(a.createdAt);
     }
   }
 
-  List<Announcement> get _filteredAnnouncements {
+  List<AnnouncementItem> get _filteredAnnouncements {
     return _all.where((a) {
-      final classMatch = _matchesClassification(a.classification);
-      final searchMatch = _matchesSearch("${a.title} ${a.details} ${a.classification}");
+      final classMatch = _matchesClassification(a.announcementType);
+      final searchMatch = _matchesSearch("${a.title} ${a.announcementType}");
       final statusMatch = _matchesStatus(a);
       return classMatch && searchMatch && statusMatch;
     }).toList()
-      ..sort((a, b) => b.postedAt.compareTo(a.postedAt));
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   Future<void> _refresh() async {
@@ -212,20 +243,6 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
           ),
         ],
       ),
-
-      // ↓↓↓ Add button bottom-right
-      floatingActionButton: AddButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const AnnouncementForm(requestType: ''),
-            ),
-          );
-        },
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _refresh,
@@ -237,11 +254,14 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                 // ========== TOP BAR: Search + Classification + Status ==========
                 SearchAndFilterBar(
                   searchController: _searchController,
+
+                  // Classification (turns on the tune icon & bottom sheet)
                   selectedClassification: _selectedClassification,
                   classifications: _classifications,
                   onClassificationChanged: (v) =>
                       setState(() => _selectedClassification = v),
 
+                  // Status (required by SearchAndFilterBar)
                   selectedStatus: _selectedStatus,
                   statuses: _statuses,
                   onStatusChanged: (v) => setState(() {
@@ -249,23 +269,17 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                     _statusFilter = _toFilter(v);
                   }),
 
+                  // Optional: react to search typing/submit
                   onSearchChanged: (_) => setState(() {}),
                 ),
-
                 const SizedBox(height: 16),
-
-                // ===== Header only (Add button moved to bottom-right) =====
                 Text(
                   headerTitle(),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
-
                 const SizedBox(height: 12),
 
-                // ===== List =====
+                // ======================== LIST ================================
                 Expanded(
                   child: items.isEmpty
                       ? const EmptyState()
@@ -275,40 +289,33 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                           separatorBuilder: (_, __) => const SizedBox(height: 12),
                           itemBuilder: (_, i) {
                             final a = items[i];
-                            final y = a.postedAt.year;
-                            final m = a.postedAt.month.toString().padLeft(2, '0');
-                            final d = a.postedAt.day.toString().padLeft(2, '0');
-                            final dateStr = '$y-$m-$d';
 
                             return Opacity(
                               opacity: a.isRead ? 0.85 : 1,
                               child: Stack(
                                 children: [
                                   AnnouncementCard(
+                                    id: a.id,
                                     title: a.title,
-                                    datePosted: dateStr,
-                                    details: a.details,
-                                    classification: a.classification,
+                                    announcementType: a.announcementType,
+                                    createdAt: a.createdAt, // DateTime ✅
+                                    isRead: a.isRead,
                                     onTap: () {
-                                      final idx = _all.indexOf(a);
+                                      // mark as read on view
+                                      final idx = _all.indexWhere((x) => x.id == a.id);
                                       if (idx != -1 && !_all[idx].isRead) {
-                                        setState(() => _all[idx] = _all[idx].copyWith(isRead: true));
+                                        setState(() => _all[idx] =
+                                            _all[idx].copyWith(isRead: true));
                                       }
+
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (_) => const AnnouncementDetails(
-                                          ),
+                                          builder: (_) => const AnnouncementDetailsPage(),
                                         ),
                                       );
                                     },
                                   ),
-                                  if (!a.isRead)
-                                    const Positioned(
-                                      top: 10,
-                                      right: 10,
-                                      child: UnreadDot(),
-                                    ),
                                 ],
                               ),
                             );

@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
-import '../popupwidgets/js_viewdetails_popup.dart';
+import '../popupwidgets/wop_viewdetails_popup.dart';
 
-class RepairJobServicePage extends StatefulWidget {
-  const RepairJobServicePage({super.key});
+class RepairWorkOrderPermitPage extends StatefulWidget {
+  const RepairWorkOrderPermitPage({super.key});
 
   @override
-  State<RepairJobServicePage> createState() => _RepairJobServicePageState();
+  State<RepairWorkOrderPermitPage> createState() => _RepairWorkOrderPermitPageState();
 }
 
-class _RepairJobServicePageState extends State<RepairJobServicePage> {
+class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   // Helper function to convert routeKey to actual route path
   String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
@@ -55,18 +55,18 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     );
   }
 
-  // Sample data for repair tasks (job service)
+  // Sample data for repair tasks (work order permit)
   final List<Map<String, dynamic>> _repairTasks = [
     {
       'serviceId': 'JS-2025-00045',
       'id': 'CS-2025-00321',
+      'title': 'Leaking Aircon',
       'buildingUnit': 'Bldg A - 1010',
       'schedule': '2025-05-21',
-      'priority': 'Medium',
+      'priority': 'Pending Review',
       'status': 'In Progress',
 
       //aditional taskdata
-      'title': 'Leaking Faucet in Kitchen',
       'dateRequested': '2025-07-19',
       'requestedBy': 'Erika De Guzman',
       'department': 'Plumbing',
@@ -79,7 +79,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   // Dropdown values for filtering
   String _selectedRole = 'All Roles';
   String _selectedStatus = 'All Status';
-  String _selectedConcernType = 'Job Service';
+  String _selectedConcernType = 'Work Order Permit';
 
   // Action dropdown menu methods
   void _showActionMenu(BuildContext context, Map<String, dynamic> task, Offset position) {
@@ -181,7 +181,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
 
   // View task method
   void _viewTask(Map<String, dynamic> task) {
-    JobServiceConcernSlipDialog.show(context, task);
+    WorkOrderConcernSlipDialog.show(context, task);
   }
 
   // Edit task method
@@ -236,11 +236,12 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   final List<double> _colW = <double>[
     140, // SERVICE ID
     140, // CONCERN ID
-    140, // BUILDING & UNIT
-    130, // SCHEDULE
-    110, // STATUS
-    100, // PRIORITY
-    38, // ACTION
+    150, // TITLE
+    150, // BUILDING & UNIT
+    120, // SCHEDULE
+    100, // STATUS
+    140, // PRIORITY
+    48, // ACTION
   ];
 
   Widget _fixedCell(int i, Widget child, {Alignment align = Alignment.centerLeft}) {
@@ -260,6 +261,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     softWrap: false,
     style: style,
   );
+
 
   @override
   Widget build(BuildContext context) {
@@ -287,7 +289,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
             _buildFilterSection(),
             const SizedBox(height: 32),
 
-            // Table Section - Repair Tasks (Job Service)
+            // Table Section - Repair Tasks (Work Order Permit)
             _buildTableSection(),
           ],
         ),
@@ -345,7 +347,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
-              child: const Text('Job Service'),
+              child: const Text('Work Order Permit'),
             ),
             
           ],
@@ -553,8 +555,8 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                         }
                       },
                       items: <String>[
-                        'Job Service',
                         'Concern Slip',
+                        'Job Service',
                         'Work Order Permit'
                       ].map<DropdownMenuItem<String>>((String value) {
                         return DropdownMenuItem<String>(
@@ -583,10 +585,10 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
               scrollDirection: Axis.horizontal,
               child: SingleChildScrollView(
                 child: DataTable(
-                  columnSpacing: 50,
+                  columnSpacing: 16,
                   headingRowHeight: 56,
                   dataRowHeight: 64,
-                  headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
+                  headingRowColor: MaterialStateProperty.all(Colors.grey[50]),
                   headingTextStyle: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -600,26 +602,28 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                   columns: [
                     DataColumn(label: _fixedCell(0, const Text("SERVICE ID"))),
                     DataColumn(label: _fixedCell(1, const Text("CONCERN ID"))),
-                    DataColumn(label: _fixedCell(2, const Text("BUILDING & UNIT"))),
-                    DataColumn(label: _fixedCell(3, const Text("SCHEDULE"))),
-                    DataColumn(label: _fixedCell(4, const Text("STATUS"))),
-                    DataColumn(label: _fixedCell(5, const Text("PRIORITY"))),
-                    DataColumn(label: _fixedCell(6, const Text(""))),
+                    DataColumn(label: _fixedCell(2, const Text("TITLE"))),
+                    DataColumn(label: _fixedCell(3, const Text("BUILDING & UNIT"))),
+                    DataColumn(label: _fixedCell(4, const Text("SCHEDULE"))),
+                    DataColumn(label: _fixedCell(5, const Text("STATUS"))),
+                    DataColumn(label: _fixedCell(6, const Text("PRIORITY"))),
+                    DataColumn(label: _fixedCell(7, const Text(""))),
                   ],
                   rows: _repairTasks.map((task) {
                     return DataRow(
                       cells: [
                         DataCell(_fixedCell(0, _ellipsis(task['serviceId'], style: TextStyle(color: Colors.grey[700], fontSize: 13)))),
                         DataCell(_fixedCell(1, _ellipsis(task['id'],        style: TextStyle(color: Colors.grey[700], fontSize: 13)))),
-                        DataCell(_fixedCell(2, _ellipsis(task['buildingUnit']))),
-                        DataCell(_fixedCell(3, _ellipsis(task['schedule']))),
+                        DataCell(_fixedCell(2, _ellipsis(task['title']))),
+                        DataCell(_fixedCell(3, _ellipsis(task['buildingUnit']))),
+                        DataCell(_fixedCell(4, _ellipsis(task['schedule']))),
 
                         // Chips get a fixed box too (and aligned left)
-                        DataCell(_fixedCell(4, _buildStatusChip(task['status']))),
-                        DataCell(_fixedCell(5, _buildPriorityChip(task['priority']))),
+                        DataCell(_fixedCell(5, _buildStatusChip(task['status']))),
+                        DataCell(_fixedCell(6, _buildPriorityChip(task['priority']))),
 
                         // Action menu cell (narrow, centered)
-                        DataCell(_fixedCell(6,
+                        DataCell(_fixedCell(7,
                           Builder(builder: (context) {
                             return IconButton(
                               onPressed: () {
@@ -738,8 +742,12 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
         bgColor = const Color(0xFFE8F5E8);
         textColor = const Color(0xFF2E7D32);
         break;
-      default:
+      case 'Pending Review':
         bgColor = Colors.grey[100]!;
+        textColor = Colors.black;
+        break;
+      default:
+        bgColor = Colors.grey[400]!;
         textColor = Colors.grey[700]!;
     }
     return Container(

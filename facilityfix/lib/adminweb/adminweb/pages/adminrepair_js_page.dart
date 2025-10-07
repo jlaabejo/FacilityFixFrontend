@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
-import '../popupwidgets/cs_viewdetails_popup.dart';
+import '../popupwidgets/js_viewdetails_popup.dart';
 
-class AdminRepairPage extends StatefulWidget {
-  const AdminRepairPage({super.key});
+class RepairJobServicePage extends StatefulWidget {
+  const RepairJobServicePage({super.key});
 
   @override
-  State<AdminRepairPage> createState() => _AdminRepairPageState();
+  State<RepairJobServicePage> createState() => _RepairJobServicePageState();
 }
 
-class _AdminRepairPageState extends State<AdminRepairPage> {
+class _RepairJobServicePageState extends State<RepairJobServicePage> {
   // Helper function to convert routeKey to actual route path
   String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
@@ -55,24 +55,31 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     );
   }
 
-  // Sample data for repair tasks (concern slips)
+  // Sample data for repair tasks (job service)
   final List<Map<String, dynamic>> _repairTasks = [
     {
+      'serviceId': 'JS-2025-00045',
       'id': 'CS-2025-00321',
-      'title': 'Leaking Faucet In Kitchen',
-      'dateRequested': '2025-07-19',
-      'buildingUnit': 'Bldg A - Unit 302',
+      'buildingUnit': 'Bldg A - 1010',
+      'schedule': '2025-05-21',
       'priority': 'Medium',
+      'status': 'In Progress',
+
+      //aditional taskdata
+      'title': 'Leaking Faucet in Kitchen',
+      'dateRequested': '2025-07-19',
+      'requestedBy': 'Erika De Guzman',
       'department': 'Plumbing',
-      'status': 'Pending',
+      //'description': 'The kitchen faucet has been continuously leaking...',
+      'assessment': 'Inspected faucet valve. Leak due to worn-out cartridge.',
+      'recommendation': 'Replace faucet cartridge.'
     },
-    // You can add more sample data here
   ];
 
   // Dropdown values for filtering
   String _selectedRole = 'All Roles';
   String _selectedStatus = 'All Status';
-  String _selectedConcernType = 'Concern Slip';
+  String _selectedConcernType = 'Job Service';
 
   // Action dropdown menu methods
   void _showActionMenu(BuildContext context, Map<String, dynamic> task, Offset position) {
@@ -174,7 +181,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
 
   // View task method
   void _viewTask(Map<String, dynamic> task) {
-    ConcernSlipDetailDialog.show(context, task);
+    JobServiceConcernSlipDialog.show(context, task);
   }
 
   // Edit task method
@@ -227,13 +234,12 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   }
 
   final List<double> _colW = <double>[
-    100, // CONCERN ID
-    140, // TITLE
-    110, // DATE REQUESTED
-    100, // BUILDING & UNIT
-    80, // PRIORITY
-    90, // DEPARTMENT
-    90, // STATUS
+    140, // SERVICE ID
+    140, // CONCERN ID
+    140, // BUILDING & UNIT
+    130, // SCHEDULE
+    110, // STATUS
+    100, // PRIORITY
     38, // ACTION
   ];
 
@@ -254,7 +260,6 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     softWrap: false,
     style: style,
   );
-
 
   @override
   Widget build(BuildContext context) {
@@ -282,7 +287,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
             _buildFilterSection(),
             const SizedBox(height: 32),
 
-            // Table Section - Repair Tasks (Concern Slip)
+            // Table Section - Repair Tasks (Job Service)
             _buildTableSection(),
           ],
         ),
@@ -340,7 +345,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
-              child: const Text('Concern Slips'),
+              child: const Text('Job Service'),
             ),
             
           ],
@@ -548,8 +553,8 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                         }
                       },
                       items: <String>[
-                        'Concern Slip',
                         'Job Service',
+                        'Concern Slip',
                         'Work Order Permit'
                       ].map<DropdownMenuItem<String>>((String value) {
                         return DropdownMenuItem<String>(
@@ -581,7 +586,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                   columnSpacing: 50,
                   headingRowHeight: 56,
                   dataRowHeight: 64,
-                  headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
+                  headingRowColor: MaterialStateProperty.all(Colors.grey[50]),
                   headingTextStyle: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -593,30 +598,28 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                     color: Colors.black87,
                   ),
                   columns: [
-                    DataColumn(label: _fixedCell(0, const Text("CONCERN ID"))),
-                    DataColumn(label: _fixedCell(1, const Text("CONCERN TITLE"))),
-                    DataColumn(label: _fixedCell(2, const Text("DATE REQUESTED"))),
-                    DataColumn(label: _fixedCell(3, const Text("BUILDING & UNIT"))),
-                    DataColumn(label: _fixedCell(4, const Text("PRIORITY"))),
-                    DataColumn(label: _fixedCell(5, const Text("DEPARTMENT"))),
-                    DataColumn(label: _fixedCell(6, const Text("STATUS"))),
-                    DataColumn(label: _fixedCell(7, const Text(""))),
+                    DataColumn(label: _fixedCell(0, const Text("SERVICE ID"))),
+                    DataColumn(label: _fixedCell(1, const Text("CONCERN ID"))),
+                    DataColumn(label: _fixedCell(2, const Text("BUILDING & UNIT"))),
+                    DataColumn(label: _fixedCell(3, const Text("SCHEDULE"))),
+                    DataColumn(label: _fixedCell(4, const Text("STATUS"))),
+                    DataColumn(label: _fixedCell(5, const Text("PRIORITY"))),
+                    DataColumn(label: _fixedCell(6, const Text(""))),
                   ],
                   rows: _repairTasks.map((task) {
                     return DataRow(
                       cells: [
-                        DataCell(_fixedCell(0, _ellipsis(task['id'],        style: TextStyle(color: Colors.grey[700], fontSize: 13)))),
-                        DataCell(_fixedCell(1, _ellipsis(task['title']))),
-                        DataCell(_fixedCell(2, _ellipsis(task['dateRequested']))),
-                        DataCell(_fixedCell(3, _ellipsis(task['buildingUnit']))),
-                        
+                        DataCell(_fixedCell(0, _ellipsis(task['serviceId'], style: TextStyle(color: Colors.grey[700], fontSize: 13)))),
+                        DataCell(_fixedCell(1, _ellipsis(task['id'],        style: TextStyle(color: Colors.grey[700], fontSize: 13)))),
+                        DataCell(_fixedCell(2, _ellipsis(task['buildingUnit']))),
+                        DataCell(_fixedCell(3, _ellipsis(task['schedule']))),
+
                         // Chips get a fixed box too (and aligned left)
-                        DataCell(_fixedCell(4, _buildPriorityChip(task['priority']))),
-                        DataCell(_fixedCell(5, _buildDepartmentChip(task['department']))),
-                        DataCell(_fixedCell(6, _buildStatusChip(task['status']))),
+                        DataCell(_fixedCell(4, _buildStatusChip(task['status']))),
+                        DataCell(_fixedCell(5, _buildPriorityChip(task['priority']))),
 
                         // Action menu cell (narrow, centered)
-                        DataCell(_fixedCell(7,
+                        DataCell(_fixedCell(6,
                           Builder(builder: (context) {
                             return IconButton(
                               onPressed: () {
@@ -756,33 +759,14 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     );
   }
 
-  // Department Chip Widget
-  Widget _buildDepartmentChip(String department) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE8F5E8),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        department,
-        style: const TextStyle(
-          color: Color(0xFF2E7D32),
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
   // Status Chip Widget
   Widget _buildStatusChip(String status) {
     Color bgColor;
     Color textColor;
     switch (status) {
       case 'In Progress':
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFFF8F00);
+        bgColor = const Color.fromARGB(49, 82, 131, 205);
+        textColor = const Color.fromARGB(255, 0, 93, 232);
         break;
       case 'Pending':
         bgColor = const Color(0xFFFFEBEE);

@@ -6,15 +6,16 @@ import 'package:facilityfix/widgets/view_details.dart'; // RepairDetailsScreen, 
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart' as fx;
+import 'package:intl/intl.dart' show DateFormat;
 
 class ViewDetailsPage extends StatefulWidget {
   final String? selectedTabLabel;
-  final String? requestType;
+  final String? requestTypeTag;
 
   const ViewDetailsPage({
     super.key,
     this.selectedTabLabel,
-    this.requestType,
+    this.requestTypeTag,
   });
 
   @override
@@ -53,211 +54,295 @@ class _ViewDetailsPageState extends State<ViewDetailsPage> {
         .replaceAll(RegExp(r'[_\-]+'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ');
 
-    final raw = (widget.selectedTabLabel?.trim().isNotEmpty ?? false)
-        ? widget.selectedTabLabel!
-        : (widget.requestType ?? '');
+    final raw =
+        (widget.selectedTabLabel?.trim().isNotEmpty ?? false)
+            ? widget.selectedTabLabel!
+            : (widget.requestTypeTag ?? '');
     final label = normalize(raw);
 
     switch (label) {
-      // ---------------- Concern Slip  ----------------
+      // ---------------- Concern Slip ----------------
       // Default Concern Slip
       case 'concern slip':
         _selectedIndex = 1;
         return _DetailsPayload(
-          child: RepairDetailsScreen(
-            // Basic Information (ALL required fields provided)
+          child: ConcernSlipDetails(
+            // Basic Information
             title: "Leaking Faucet",
-            requestId: "CS-2025-00123",
-            reqDate: "August 2, 2025",
-            requestType: "Concern Slip",
+            id: "CS-2025-00123",
+            createdAt: DateFormat('MMMM d, yyyy').parse('August 2, 2025'),
+            requestTypeTag: "Concern Slip",
             statusTag: 'Pending',
-
-            // Requester
-            requestedBy: 'Erika De Guzman',
-            unit: "A 1001",
-            scheduleAvailability: "August 19, 2025 2:30 PM",
-
-            // Request Details (description is required)
-            description: "I’d like to report a clogged drainage issue in the bathroom.",
-            attachments: const ["assets/images/upload1.png","assets/images/upload2.png"],
-
-            // Optional CTA
-            actionLabel: null,
-            onAction: null,
-          ),
-        );
-
-      // ---------------- Concern Slip (assigned) ----------------
-      case 'concern slip assigned':
-        _selectedIndex = 1;
-        return _DetailsPayload(
-          child: RepairDetailsScreen(
-            // Basic Information
-            title: "Leaking Faucet",
-            requestId: "CS-2025-00123",
-            reqDate: "August 2, 2025",
-            requestType: "Concern Slip",
-            statusTag: 'Assigned',
             priority: 'High',
 
             // Requestor Details
             requestedBy: 'Erika De Guzman',
-            unit: "A 1001",
-            scheduleAvailability: "August 19, 2025 2:30 PM",
-
-            // Request Details (description is required)
-            description: "I’d like to report a clogged drainage issue in the bathroom.",
-            attachments: const ["assets/images/upload1.png","assets/images/upload2.png"],
-
-            // Assignment
-            assignedTo: 'Juan Dela Cruz',
-            assignedDepartment: 'Plumbing',
-            assignedSchedule: 'August 20, 2025 9:00 AM',
-
-            actionLabel: null,
-            onAction: null,
-          ),
-        );
-
-      // ---------------- Concern Slip (assessed) ----------------
-      case 'concern slip assessed':
-        _selectedIndex = 1;
-        return _DetailsPayload(
-          child: RepairDetailsScreen(
-            // Basic Information
-            title: "Leaking Faucet",
-            requestId: "CS-2025-00123",
-            reqDate: "August 2, 2025",
-            requestType: "Concern Slip",
-            statusTag: 'Done',
-            priority: 'High',
-
-            // Requestor Details
-            requestedBy: 'Erika De Guzman',
-            unit: "A 1001",
+            unitId: "A 1001",
             scheduleAvailability: "August 19, 2025 2:30 PM",
 
             // Request Details
-            description: "I’d like to report a clogged drainage issue in the bathroom.",
-            attachments: const ["assets/images/upload1.png","assets/images/upload2.png"],
+            description:
+                "I’d like to report a clogged drainage issue in the bathroom.",
+            attachments: const [
+              "assets/images/upload1.png",
+              "assets/images/upload2.png",
+            ],
+          ),
+        );
 
-            // Assessed By
-            initialAssigneeName: 'Juan Dela Cruz',
-            initialAssigneeDepartment: 'Plumbing',
-            initialDateAssessed: 'August 20, 2025',
+      // Concern Slip (Assigned)
+      case 'concern slip assigned':
+        _selectedIndex = 1;
+        return _DetailsPayload(
+          child: ConcernSlipDetails(
+            title: "Leaking Faucet",
+            id: "CS-2025-00123",
+            createdAt: DateFormat('MMMM d, yyyy').parse('August 2, 2025'),
+            requestTypeTag: "Concern Slip",
+            statusTag: 'Assigned',
+            priority: 'High',
+            requestedBy: 'Erika De Guzman',
+            unitId: "A 1001",
+            scheduleAvailability: "August 19, 2025 2:30 PM",
+            description:
+                "I’d like to report a clogged drainage issue in the bathroom.",
+            attachments: const [
+              "assets/images/upload1.png",
+              "assets/images/upload2.png",
+            ],
+            assignedStaff: 'Juan Dela Cruz',
+            staffDepartment: 'Plumbing',
+          ),
+        );
 
-            // Assessment and Recommendation
-            initialAssessment: 'Drainage is clogged due to accumulated debris.',
-            initialRecommendation: 'Perform professional cleaning; consider replacing the drainage cover.',
-            initialAssessedAttachments: const ["assets/images/upload2.png"],
-
-            actionLabel: null,
-            onAction: null,
+      // Concern Slip (Assessed)
+      case 'concern slip assessed':
+        _selectedIndex = 1;
+        return _DetailsPayload(
+          child: ConcernSlipDetails(
+            title: "Leaking Faucet",
+            id: "CS-2025-00123",
+            createdAt: DateFormat('MMMM d, yyyy').parse('August 2, 2025'),
+            requestTypeTag: "Concern Slip",
+            statusTag: 'Assigned',
+            priority: 'High',
+            requestedBy: 'Erika De Guzman',
+            unitId: "A 1001",
+            scheduleAvailability: "August 19, 2025 2:30 PM",
+            description:
+                "I’d like to report a clogged drainage issue in the bathroom.",
+            attachments: const [
+              "assets/images/upload1.png",
+              "assets/images/upload2.png",
+            ],
+            assignedStaff: 'Juan Dela Cruz',
+            staffDepartment: 'Plumbing',
+            assessedAt: DateFormat('MMMM d, yyyy').parse('August 2, 2025'),
+            assessment: 'Drainage is clogged due to accumulated debris.',
+            staffAttachments: const ["assets/images/upload2.png"],
           ),
         );
 
       // ---------------- Job Service ----------------
-      // Job Service (assigned)
+      case 'job service':
+        _selectedIndex = 1;
+        return _DetailsPayload(
+          child: JobServiceDetails(
+            id: "JS-2025-031",
+            concernSlipId: "CS-2025-00123",
+            createdAt: DateFormat('MMMM d, yyyy').parse('August 2, 2025'),
+            requestTypeTag: "Job Service",
+            statusTag: 'Pending',
+            priority: 'High',
+            requestedBy: 'Erika De Guzman',
+            unitId: "A 1001",
+            scheduleAvailability: "August 19, 2025 2:30 PM",
+            additionalNotes: "Please expedite; recurring issue.",
+          ),
+        );
+
       case 'job service assigned':
         _selectedIndex = 1;
         return _DetailsPayload(
-          child: RepairDetailsScreen(
-            // Basic Information
-            title: "Leaking Faucet",
-            requestId: "CS-2025-00123",
-            reqDate: "August 2, 2025",
-            requestType: "Concern Slip",
+          child: JobServiceDetails(
+            id: "JS-2025-031",
+            concernSlipId: "CS-2025-00123",
+            createdAt: DateFormat('MMMM d, yyyy').parse('August 2, 2025'),
+            requestTypeTag: "Job Service",
             statusTag: 'Assigned',
             priority: 'High',
-
-            // Requestor Details
             requestedBy: 'Erika De Guzman',
-            unit: "A 1001",
+            unitId: "A 1001",
             scheduleAvailability: "August 19, 2025 2:30 PM",
-
-            // Notes are used if the tenant has additional notes
-            jobServiceNotes: "Please expedite; recurring issue.",
-
-            // Assigned Job Service only
-            assignedTo: 'Juan Dela Cruz',
-            assignedDepartment: 'Plumbing',
-            assignedSchedule: 'August 20, 2025 9:00 AM',
-
-            actionLabel: null,
-            onAction: null,
+            additionalNotes: "Please expedite; recurring issue.",
+            assignedStaff: 'Juan Dela Cruz',
+            staffDepartment: 'Plumbing',
+            startedAt: DateTime(2025, 8, 20, 9, 0),
+            completedAt: null,
+            completionAt: null,
+            assessedAt: null,
+            assessment: null,
+            staffAttachments: null,
+            materialsUsed: const ['Plunger', 'Drain snake'],
           ),
         );
 
-      // Job Service (assessed)
+      case 'job service on hold':
+        _selectedIndex = 1;
+        return _DetailsPayload(
+          child: JobServiceDetails(
+            id: "JS-2025-031",
+            concernSlipId: "CS-2025-00123",
+            createdAt: DateFormat('MMMM d, yyyy').parse('August 2, 2025'),
+            requestTypeTag: "Job Service",
+            statusTag: 'On Hold',
+            priority: 'High',
+            requestedBy: 'Erika De Guzman',
+            unitId: "A 1001",
+            scheduleAvailability: "August 19, 2025 2:30 PM",
+            additionalNotes: "Please expedite; recurring issue.",
+            assignedStaff: 'Juan Dela Cruz',
+            staffDepartment: 'Plumbing',
+            startedAt: DateTime(2025, 8, 20, 9, 0),
+            assessedAt: DateFormat('MMMM d, yyyy').parse('August 2, 2025'),
+            assessment: 'Drainage is clogged due to accumulated debris.',
+            staffAttachments: const ["assets/images/upload2.png"],
+            materialsUsed: const ['Plunger', 'Drain snake'],
+          ),
+        );
+
       case 'job service assessed':
         _selectedIndex = 1;
         return _DetailsPayload(
-          child: RepairDetailsScreen(
-            // Basic Information
-            title: "Leaking Faucet",
-            requestId: "CS-2025-00123",
-            reqDate: "August 2, 2025",
-            requestType: "Concern Slip",
+          child: JobServiceDetails(
+            id: "JS-2025-031",
+            concernSlipId: "CS-2025-00123",
+            createdAt: DateFormat('MMMM d, yyyy').parse('August 2, 2025'),
+            requestTypeTag: "Job Service",
             statusTag: 'Done',
             priority: 'High',
-
-            // Requestor Details
             requestedBy: 'Erika De Guzman',
-            unit: "A 1001",
+            unitId: "A 1001",
             scheduleAvailability: "August 19, 2025 2:30 PM",
-
-            // Notes are used if the tenant has additional notes
-            jobServiceNotes: "Please expedite; recurring issue.",
-
-            // Assigned Job Service only
-            completionAssigneeName: 'Juan Dela Cruz',
-            completionAssigneeDepartment: 'Plumbing',
-            completionDateAssessed: 'August 20, 2025 9:00 AM',
-
-            completionAssessment: 'Drainage is clogged due to accumulated debris.',
-            completionRecommendation: 'Perform professional cleaning; consider replacing the drainage cover.',
-            completionAssessedAttachments: const ["assets/images/upload2.png"],
-
-            actionLabel: null,
-            onAction: null,
+            additionalNotes: "Please expedite; recurring issue.",
+            assignedStaff: 'Juan Dela Cruz',
+            staffDepartment: 'Plumbing',
+            startedAt: DateTime(2025, 8, 20, 9, 0),
+            completedAt: DateTime(2025, 8, 20, 10, 15),
+            completionAt: DateTime(2025, 8, 20, 10, 15),
+            assessedAt: DateFormat('MMMM d, yyyy').parse('August 2, 2025'),
+            assessment: 'Drainage is clogged due to accumulated debris.',
+            staffAttachments: const ["assets/images/upload2.png"],
+            materialsUsed: const ['Plunger', 'Drain snake'],
           ),
         );
 
-      // ---------------- Work Order Permit ----------------
-      // Work Order Permit (Approved)
+      // ---------------- Work Order ----------------
       case 'work order':
         _selectedIndex = 1;
         return _DetailsPayload(
-          child: RepairDetailsScreen(
-            // Basic Information
-            title: "Leaking Faucet",
-            requestId: "CS-2025-00123",
-            reqDate: "August 2, 2025",
-            requestType: "Concern Slip",
-            statusTag: 'Approved',
+          child: WorkOrderPermitDetails(
+            id: "WO-2025-014",
+            concernSlipId: "CS-2025-00123",
+            createdAt: DateFormat('MMMM d, yyyy').parse('August 2, 2025'),
+            requestTypeTag: "Work Order",
+            statusTag: 'Pending',
             priority: 'High',
-
-            // Requestor Details
             requestedBy: 'Erika De Guzman',
-            unit: "A 1001",
-            scheduleAvailability: "August 19, 2025 2:30 PM",
-
-            // Permit-related data (all optional in your widget)
-            reqType: 'Plumbing',
-            permitId: 'WO-P-77821',
-            workScheduleFrom: 'August 31, 2025 | 2 pm',
-            workScheduleTo: 'August 31, 2025 | 4 pm',
-
-            // Contractors (optional)
+            unitId: "A 1001",
             contractorName: 'CoolAir Services PH',
             contractorCompany: 'CoolAir Services PH',
             contractorNumber: '+63 917 555 1234',
+            workScheduleFrom: DateFormat(
+              'MMMM d, yyyy h a',
+            ).parse('August 31, 2025 2 PM'),
+            workScheduleTo: DateFormat(
+              'MMMM d, yyyy h a',
+            ).parse('August 31, 2025 6 PM'),
+            entryEquipments: 'Cooler',
+            adminNotes:
+                "AC unit is not cooling effectively; inspection requested.",
+          ),
+        );
 
-            // Additional Notes
-            workOrderNotes: "AC unit is not cooling effectively; inspection requested.",
+      case 'work order approved':
+        _selectedIndex = 1;
+        return _DetailsPayload(
+          child: WorkOrderPermitDetails(
+            id: "WO-2025-014",
+            concernSlipId: "CS-2025-00123",
+            createdAt: DateFormat('MMMM d, yyyy').parse('August 2, 2025'),
+            requestTypeTag: "Work Order",
+            statusTag: 'Reject',
+            priority: 'High',
+            requestedBy: 'Erika De Guzman',
+            unitId: "A 1001",
+            contractorName: 'CoolAir Services PH',
+            contractorCompany: 'CoolAir Services PH',
+            contractorNumber: '+63 917 555 1234',
+            workScheduleFrom: DateFormat(
+              'MMMM d, yyyy h a',
+            ).parse('August 31, 2025 2 PM'),
+            workScheduleTo: DateFormat(
+              'MMMM d, yyyy h a',
+            ).parse('August 31, 2025 6 PM'),
+            entryEquipments: 'Cooler',
+            adminNotes:
+                "AC unit is not cooling effectively; inspection requested.",
+            approvedBy: 'Marco De Guzman',
+            approvalDate: DateFormat('MMMM d, yyyy').parse('August 2, 2025'),
+            denialReason: "May bagyo",
+          ),
+        );
 
-            actionLabel: null,
-            onAction: null,
+      // ---------------- Maintenance ----------------
+      case 'maintenance detail':
+        _selectedIndex = 1;
+        return _DetailsPayload(
+          child: MaintenanceDetails(
+            title: 'Quarterly Pipe Inspection',
+            id: 'MT-P-2025-011',
+            createdAt: DateFormat('MMMM d, yyyy').parse('August 30, 2025'),
+            requestTypeTag: 'Maintenance Task',
+            statusTag: 'Scheduled',
+            location: 'Tower A - 5th Floor',
+            description:
+                'Routine quarterly inspection of the main water lines on 5F.',
+            checklist: const [
+              'Shut off main valve',
+              'Inspect joints',
+              'Check for leaks',
+            ],
+            attachments: const ['assets/images/upload1.png'],
+            assignedStaff: 'Juan Dela Cruz',
+            staffDepartment: 'Plumbing',
+            scheduleDate: 'August 30, 2025 10:00 AM',
+            requestedBy: 'Admin',
+          ),
+        );
+
+      case 'maintenance assessed':
+        _selectedIndex = 1;
+        return _DetailsPayload(
+          child: MaintenanceDetails(
+            title: 'Quarterly Pipe Inspection',
+            id: 'MT-P-2025-011',
+            createdAt: DateFormat('MMMM d, yyyy').parse('August 30, 2025'),
+            requestTypeTag: 'Maintenance Task',
+            statusTag: 'Done',
+            location: 'Tower A - 5th Floor',
+            description:
+                'Routine quarterly inspection of the main water lines on 5F.',
+            checklist: const [
+              'Shut off main valve',
+              'Inspect joints',
+              'Check for leaks',
+            ],
+            attachments: const ['assets/images/upload1.png'],
+            assignedStaff: 'Juan Dela Cruz',
+            staffDepartment: 'Plumbing',
+            updatedAt: null,
+            requestedBy: '', scheduleDate: '',
           ),
         );
 
@@ -265,14 +350,16 @@ class _ViewDetailsPageState extends State<ViewDetailsPage> {
       case 'announcement detail':
         _selectedIndex = 2;
         return _DetailsPayload(
-          child: AnnouncementDetailScreen(
+          child: AnnouncementDetails(
             // Basic Information
+            id: 'ANN-2025-0011',
             title: 'Water Interruption Notice',
-            datePosted: 'August 6, 2025',
-            classification: 'Utility Interruption',
+            createdAt: 'August 6, 2025',
+            announcementType: 'Utility Interruption',
 
             // AAnnouncement Details
-            description: 'Water supply will be interrupted due to mainline repair.',
+            description:
+                'Water supply will be interrupted due to mainline repair.',
             locationAffected: 'Building A & B',
 
             // Schedule Information
@@ -285,6 +372,7 @@ class _ViewDetailsPageState extends State<ViewDetailsPage> {
           ),
         );
 
+      // ---------------- Default ----------------
       default:
         _selectedIndex = 1;
         return const _DetailsPayload(
@@ -303,10 +391,7 @@ class _ViewDetailsPageState extends State<ViewDetailsPage> {
         title: 'View Details',
         leading: const Row(
           children: [
-            Padding(
-              padding: EdgeInsets.only(right: 8),
-              child: BackButton(),
-            ),
+            Padding(padding: EdgeInsets.only(right: 8), child: BackButton()),
           ],
         ),
         showMore: true,
@@ -316,7 +401,12 @@ class _ViewDetailsPageState extends State<ViewDetailsPage> {
         child: Stack(
           children: [
             SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(24, 24, 24, payload.hasCta ? 120 : 24),
+              padding: EdgeInsets.fromLTRB(
+                24,
+                24,
+                24,
+                payload.hasCta ? 120 : 24,
+              ),
               child: payload.child,
             ),
             if (payload.hasCta)

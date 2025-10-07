@@ -1,14 +1,15 @@
-import 'package:facilityfix/admin/chat.dart';
+
+import 'package:facilityfix/models/cards.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/staff/notification.dart';
-import 'package:facilityfix/staff/view_details/workorder.dart'; // WorkOrderDetails
-import 'package:facilityfix/staff/workorder.dart'; // WorkOrderPage
+import 'package:facilityfix/staff/view_details/workorder.dart';
+import 'package:facilityfix/staff/workorder.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
-import 'package:facilityfix/widgets/calendar.dart'; // CalendarPane
-import 'package:facilityfix/widgets/helper_models.dart'; // WorkOrder, UiDateParser
+import 'package:intl/intl.dart';
+import 'package:easy_date_timeline/easy_date_timeline.dart';
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({super.key});
@@ -18,7 +19,13 @@ class CalendarPage extends StatefulWidget {
 }
 
 class _CalendarPageState extends State<CalendarPage> {
+  static const Color kPrimary = Color(0xFF005CE7);
+  static const Color kPrimaryDark = Color(0xFF003E9C);
+  static const Color kMutedText = Color(0xFF667085);
+
   int _selectedIndex = 3;
+  DateTime _selectedDate = DateTime.now();
+  final EasyDatePickerController _controller = EasyDatePickerController();
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -26,6 +33,19 @@ class _CalendarPageState extends State<CalendarPage> {
     NavItem(icon: Icons.announcement_rounded),
     NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),
+  ];
+
+  // Sample data
+  final List<WorkOrder> _all = [
+    WorkOrder(
+      title: 'Leaking faucet',
+      id: 'CS-2025-005',
+      createdAt: DateFormat('MMMM d, yyyy').parse('August 22, 2025'),
+      statusTag: 'Pending',
+      departmentTag: 'Plumbing',
+      requestTypeTag: 'Concern Slip',
+      unitId: 'A 1001',
+    ),
   ];
 
   void _onTabTapped(int index) {
@@ -45,163 +65,39 @@ class _CalendarPageState extends State<CalendarPage> {
     }
   }
 
-  // ====== Demo data with MT (maintenance) and CS/JS (repairs) ======
-  final List<WorkOrder> _all = [
-    // Concern Slip (assigned)
-    WorkOrder(
-      title: 'Leaking faucet',
-      requestId: 'CS-2025-001',
-      date: 'Aug 25',
-      status: 'Assigned',
-      department: 'Plumbing',
-      requestType: 'Concern Slip',
-      unit: 'A 1001',
-      priority: null,
-      assignedTo: 'Juan Dela Cruz',
-      assignedDepartment: 'Plumbing',
-      assignedPhotoUrl: 'assets/images/avatar.png',
-    ),
-    // Concern Slip (done)
-    WorkOrder(
-      title: 'Leaking faucet',
-      requestId: 'CS-2025-002',
-      date: 'Aug 22',
-      status: 'Done',
-      department: 'Plumbing',
-      requestType: 'Concern Slip',
-      unit: 'A 1001',
-      priority: 'High',
-      hasInitialAssessment: true,
-      initialAssigneeName: 'Juan Dela Cruz',
-      initialAssigneeDepartment: 'Plumbing',
-      initialAssigneePhotoUrl: 'assets/images/avatar.png',
-    ),
-    // Job Service (assigned)
-    WorkOrder(
-      title: 'Leaking faucet',
-      requestId: 'JS-2025-031',
-      date: 'Aug 21',
-      status: 'Assigned',
-      department: 'Plumbing',
-      requestType: 'Job Service',
-      unit: 'A 1001',
-      priority: 'High',
-      assignedTo: 'Juan Dela Cruz',
-      assignedDepartment: 'Plumbing',
-      assignedPhotoUrl: 'assets/images/avatar.png',
-    ),
-    // Job Service (done)
-    WorkOrder(
-      title: 'Leaking faucet',
-      requestId: 'JS-2025-032',
-      date: 'Aug 22',
-      status: 'Done',
-      department: 'Plumbing',
-      requestType: 'Job Service',
-      unit: 'A 1001',
-      priority: 'High',
-      hasCompletionAssessment: true,
-      completionAssigneeName: 'Juan Dela Cruz',
-      completionAssigneeDepartment: 'Plumbing',
-      completionAssigneePhotoUrl: 'assets/images/avatar.png',
-    ),
-    // Job Service (on hold)
-    WorkOrder(
-      title: 'Leaking faucet',
-      requestId: 'JS-2025-033',
-      date: 'Aug 23',
-      status: 'On Hold',
-      department: 'Plumbing',
-      requestType: 'Job Service',
-      unit: 'A 1001',
-      priority: 'High',
-      hasInitialAssessment: true,
-      initialAssigneeName: 'Juan Dela Cruz',
-      initialAssigneeDepartment: 'Plumbing',
-    ),
-    // Maintenance Task (scheduled)
-    WorkOrder(
-      title: 'Quarterly Pipe Inspection',
-      requestId: 'MT-P-2025-011',
-      date: 'Aug 30',
-      status: 'Scheduled',
-      department: 'Plumbing',
-      unit: 'Tower A - 5th Floor',
-      priority: 'High',
-      hasInitialAssessment: true,
-      initialAssigneeName: 'Juan Dela Cruz',
-      initialAssigneeDepartment: 'Plumbing',
-      initialAssigneePhotoUrl: 'assets/images/avatar.png',
-    ),
-    // Maintenance Task (done)
-    WorkOrder(
-      title: 'Quarterly Pipe Inspection',
-      requestId: 'MT-P-2025-012',
-      date: 'Aug 28',
-      status: 'Done',
-      department: 'Plumbing',
-      unit: 'Tower A - 5th Floor',
-      priority: 'High',
-      hasInitialAssessment: true,
-      initialAssigneeName: 'Juan Dela Cruz',
-      initialAssigneeDepartment: 'Plumbing',
-    ),
-  ];
-
-  late DateTime _currentMonth;
-
-  @override
-  void initState() {
-    super.initState();
-    final now = DateTime.now();
-    _currentMonth = DateTime(now.year, now.month);
+  // Helper to get tasks per day
+  List<WorkOrder> _tasksFor(DateTime day) {
+    final normalized = DateTime(day.year, day.month, day.day);
+    return _all.where((w) {
+      final dt = w.createdAt;
+      return DateTime(dt.year, dt.month, dt.day) == normalized;
+    }).toList();
   }
 
-  Map<DateTime, List<WorkOrder>> _groupByDayForMonth(
-    List<WorkOrder> list,
-    DateTime month,
-  ) {
-    final first = DateTime(month.year, month.month, 1);
-    final last = DateTime(month.year, month.month + 1, 0);
-
-    final map = <DateTime, List<WorkOrder>>{};
-    for (final w in list) {
-      final dt = UiDateParser.parse(w.date);
-      if (dt.isBefore(first) || dt.isAfter(last)) continue;
-
-      final key = DateTime(dt.year, dt.month, dt.day);
-      map.putIfAbsent(key, () => <WorkOrder>[]).add(w);
-    }
-    return map;
-  }
-
-  // === Label mapping used by WorkOrderDetails (kept same as your logic) ===
-  String _routeLabelFor(WorkOrder w) {
-    final id = (w.requestId).toUpperCase();
-    final rt = (w.requestType ?? '').toLowerCase().trim();
-    final s  = (w.status).toLowerCase().trim();
-
-    if (rt == 'concern slip' || id.startsWith('CS')) {
-      return (s == 'assigned' || s == 'on hold')
-          ? 'concern slip assigned'
-          : 'concern slip assessed';
-    }
-    if (rt == 'job service' || id.startsWith('JS')) {
-      return (s == 'assigned' || s == 'on hold' || s == 'scheduled')
-          ? 'job service assigned'
-          : 'job service assessed';
-    }
-    if (rt.contains('maintenance') || id.startsWith('MT')) {
-      return (s == 'scheduled' || s == 'assigned' || s == 'in progress')
-          ? 'maintenance task scheduled'
-          : 'maintenance task assessed';
-    }
-    return s == 'done' ? 'concern slip assessed' : 'concern slip assigned';
-  }
+  Widget _buildItem(WorkOrder w) => Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.grey.shade200),
+        ),
+        child: ListTile(
+          leading: Icon(Icons.home_repair_service, color: kPrimary),
+          title: Text(w.title),
+          subtitle: Text('${w.requestTypeTag} • Unit ${w.unitId}'),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  WorkOrderDetailsPage(selectedTabLabel: 'concern slip assigned'),
+            ),
+          ),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
-    final tasksByDate = _groupByDayForMonth(_all, _currentMonth);
+    final today = DateTime.now();
+    final tasks = _tasksFor(_selectedDate);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -222,37 +118,164 @@ class _CalendarPageState extends State<CalendarPage> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Expanded(
-                child: CalendarPane(
-                  month: _currentMonth,
-                  tasksByDate: tasksByDate,
-                  initialSelected: DateTime.now(),
-                  onMonthChanged: (m) => setState(() => _currentMonth = m),
-                  onDaySelected: (d) => debugPrint('Selected day: $d'),
-
-                  // === Your required callbacks applied to the task cards ===
-                  onTaskTap: (w) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => WorkOrderDetails(
-                          selectedTabLabel: _routeLabelFor(w),
-                          workOrder: null,
-                        ),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                // === Date timeline with header ===
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: EasyTheme(
+                    data: EasyTheme.of(context).copyWith(
+                      dayBorder: WidgetStatePropertyAll(
+                        BorderSide(color: Colors.grey.shade100),
                       ),
-                    );
-                  },
-                  onTaskChatTap: (w) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const ChatPage()),
-                    );
-                  },
+                    ),
+                    child: EasyDateTimeLinePicker.itemBuilder(
+                      controller: _controller,
+                      firstDate: DateTime(2025, 1, 1),
+                      lastDate: DateTime(2030, 12, 31),
+                      focusedDate: _selectedDate,
+                      itemExtent: 64.0,
+                      headerOptions: HeaderOptions(
+                        // ✅ Jump-to-today icon moved to the RIGHT side
+                        headerBuilder: (context, date, onTap) {
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              InkWell(
+                                onTap: onTap,
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 6),
+                                  child: Text(
+                                    DateFormat.yMMMM().format(date),
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () =>
+                                    _controller.jumpToDate(DateTime.now()),
+                                icon:
+                                    const Icon(Icons.today, color: kPrimary),
+                                tooltip: 'Jump to Today',
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                      monthYearPickerOptions: MonthYearPickerOptions(
+                        initialCalendarMode: EasyDatePickerMode.month,
+                        cancelText: 'Cancel',
+                        confirmText: 'Confirm',
+                      ),
+                      itemBuilder: (context, date, isSelected, isDisabled,
+                          isToday, onTap) {
+                        final isSameDay = date.year == today.year &&
+                            date.month == today.month &&
+                            date.day == today.day;
+                        final dayLabel =
+                            DateFormat.E().format(date).toUpperCase();
+
+                        final BoxDecoration decoration;
+                        if (isSameDay) {
+                          decoration = BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: const [kPrimary, kPrimaryDark],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          );
+                        } else if (isSelected) {
+                          decoration = BoxDecoration(
+                            color: kPrimary.withOpacity(.12),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: kPrimary.withOpacity(.35)),
+                          );
+                        } else {
+                          decoration = BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: Colors.grey.shade200),
+                          );
+                        }
+
+                        final textColor = isSameDay
+                            ? Colors.white
+                            : (isSelected ? kPrimary : Colors.black87);
+
+                        return InkResponse(
+                          onTap: onTap,
+                          highlightColor: Colors.transparent,
+                          splashColor: kPrimary.withOpacity(.10),
+                          child: Container(
+                            width: 64,
+                            margin: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 8),
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 8),
+                            decoration: decoration,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  dayLabel,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: textColor,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${date.day}',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: textColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                      onDateChange: (date) =>
+                          setState(() => _selectedDate = date),
+                    ),
+                  ),
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 8),
+
+                // === Tasks list ===
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: tasks.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No tasks for this day.',
+                              style: TextStyle(color: kMutedText),
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: tasks.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (_, i) => _buildItem(tasks[i]),
+                          ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -264,4 +287,3 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 }
-

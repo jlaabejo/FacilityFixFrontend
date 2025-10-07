@@ -1,187 +1,120 @@
-import 'package:facilityfix/widgets/buttons.dart' as custom_buttons;
+import 'package:facilityfix/utils/ui_format.dart';
 import 'package:facilityfix/widgets/buttons.dart' as fx;
 import 'package:flutter/material.dart';
-import 'package:facilityfix/widgets/tag.dart'; // StatusTag, PriorityTag, RequestTypeTag, DepartmentTag
-import 'package:intl/intl.dart';
+import 'package:facilityfix/widgets/tag.dart'; // StatusTag, PriorityTag, requestTypeTagTag, DepartmentTag
 
-// REPAIR DETAILS
-class RepairDetailsScreen extends StatelessWidget {
+// CONCERN SLIP DETAILS
+class ConcernSlipDetails extends StatelessWidget {
   //  Basic Information
-  final String? title;
-  final String requestId;
-  final String reqDate; // will display as: Aug 12, 2025
-  final String requestType; // Concern Slip | Job Service | Work Order / Work Order Permit
-  final String statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+  final String id;
+  final DateTime createdAt;
+  final DateTime? updatedAt;
+  final String?
+  departmentTag; // electrical, plumbing, hvac, carpentry, masonry, maintenance
+  final String requestTypeTag; // Concern Slip
   final String? priority; // High | Medium | Low
+  final String
+  statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+  final String? resolutionType; // job_service, work_permit, rejected
 
   //  Tenant / Requester
   final String requestedBy;
-  final String unit;
-  final String? scheduleAvailability; // will display as: Aug 12, 1:30 PM (if time exists)
+  final String unitId;
+  final String? scheduleAvailability; // e.g. "Aug 12, 1:30 PM"
 
-  //  Request Details
-  final String? description;
-  final List<String>? attachments;
+  // Request Details
+  final String title;
+  final String description;
+  final List<String>? attachments; // request attachments (list)
 
-  final String? jobServiceNotes; // For Job Service; falls back to description if null/empty
+  // Staff
+  final String? assignedStaff; // staff user_id / name
+  final String? staffPhotoUrl;
+  final String? staffDepartment;
+  final DateTime? assessedAt; // assessment timestamp
+  final String? assessment; // staff assessment text
+  final List<String>? staffAttachments; // staff-side attachments (list)
 
-  // Initial Assessment
-  final String? initialAssigneeName;
-  final String? initialAssigneeDepartment;
-  final String? initialDateAssessed;
-  final String? initialAssessment;
-  final String? initialRecommendation;
-  final List<String>? initialAssessedAttachments;
-
-  // Completion Assessment
-  final String? completionAssigneeName;
-  final String? completionAssigneeDepartment;
-  final String? completionDateAssessed;
-  final String? completionAssessment;
-  final String? completionRecommendation;
-  final List<String>? completionAssessedAttachments;
-
-  //  Assigned To
-  final String? assignedTo;
-  final String? assignedDepartment;
-  final String? assignedSchedule;
-
-  //  Work Order Permit Validation
-  final String? permitId;
-  final String? reqType;
-  final String? workScheduleFrom;
-  final String? workScheduleTo;
-
-  //  Contractor Profile
-  final String? contractorName;
-  final String? contractorCompany;
-  final String? contractorNumber;
-
-  // WO additional Notes
-  final String? workOrderNotes;
-
-  // CTA
-  final String? actionLabel;
-  final VoidCallback? onAction;
-
-  const RepairDetailsScreen({
+  const ConcernSlipDetails({
     super.key,
-    // Basic
-    this.title,
-    required this.requestId,
-    required this.reqDate,
-    required this.requestType,
-    required this.statusTag,
+    //  Basic Information
+    required this.id,
+    required this.createdAt,
+    this.updatedAt,
+    this.departmentTag,
+    required this.requestTypeTag,
     this.priority,
+    required this.statusTag,
+    this.resolutionType,
 
-    // Tenant
+    //  Tenant / Requester
     required this.requestedBy,
-    required this.unit,
+    required this.unitId,
     this.scheduleAvailability,
 
-    // Request
-    this.description,
+    // Request Details
+    required this.title,
+    required this.description,
     this.attachments,
 
-    // Additional notes on Job Service
-    this.jobServiceNotes,
-
-    // Initial Assessment
-    this.initialAssigneeName,
-    this.initialAssigneeDepartment,
-    this.initialDateAssessed,
-    this.initialAssessment,
-    this.initialRecommendation,
-    this.initialAssessedAttachments,
-
-    // Completion Assessment
-    this.completionAssigneeName,
-    this.completionAssigneeDepartment,
-    this.completionDateAssessed,
-    this.completionAssessment,
-    this.completionRecommendation,
-    this.completionAssessedAttachments,
-
-    // Assigned
-    this.assignedTo,
-    this.assignedDepartment,
-    this.assignedSchedule,
-
-    // Permit
-    this.permitId,
-    this.reqType,
-    this.workScheduleFrom,
-    this.workScheduleTo,
-
-    // Contractor
-    this.contractorName,
-    this.contractorCompany,
-    this.contractorNumber,
-
-    // WO additional Notes
-    this.workOrderNotes,
-
-    // CTA
-    this.actionLabel,
-    this.onAction,
+    // Staff
+    this.assignedStaff,
+    this.staffDepartment,
+    this.staffPhotoUrl,
+    this.assessedAt,
+    this.assessment,
+    this.staffAttachments,
   });
 
-  static String _n(String s) => s
-      .trim()
-      .toLowerCase()
-      .replaceAll(RegExp(r'[_\-]+'), ' ')
-      .replaceAll(RegExp(r'\s+'), ' ');
+  // Map resolution -> what we show as "Request Type"
+  String _effectiverequestTypeTag() {
+    final res = resolutionType?.trim().toLowerCase();
+    switch (res) {
+      case 'job_service':
+        return 'Job Service';
+      case 'work_permit':
+        return 'Work Order';
+      case 'rejected':
+        // keep it as Concern Slip; reflect rejection via statusTag
+        return 'Concern Slip';
+      default:
+        return requestTypeTag;
+    }
+  }
 
-  bool get _isJobService => _n(requestType).startsWith('job service'); // tolerant
-  bool get _isPermit =>
-      _n(requestType) == 'work order permit' || _n(requestType) == 'work order';
-
-  bool get _hasAnyPermitData =>
-      (reqType?.trim().isNotEmpty ?? false) ||
-      (permitId?.trim().isNotEmpty ?? false) ||
-      (workScheduleFrom?.trim().isNotEmpty ?? false) ||
-      (workScheduleTo?.trim().isNotEmpty ?? false);
+  // Local helpers for formatting via UiDateUtils
+  String _fmtDate(DateTime d) => UiDateUtils.fullDate(d);
+  String? _fmtScheduleAvail(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    final dt = DateTime.tryParse(raw) ?? UiDateUtils.parse(raw);
+    return UiDateUtils.humanDateTime(dt);
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Which body to show in the main Request Details card
-    final bool showJobNotes =
-        _isJobService && (jobServiceNotes?.trim().isNotEmpty ?? false);
-    final String? detailsBody =
-        (showJobNotes ? jobServiceNotes : description)?.trim();
-    final bool showDetailsCard = detailsBody?.isNotEmpty ?? false;
+    final s = uiScale(context); // 0.85..1.0 on phones
 
-    // Work Order extra notes
-    final bool showWoNotes = workOrderNotes?.trim().isNotEmpty ?? false;
+    final String detailsBody = description.trim();
+    final bool showDetailsCard = detailsBody.isNotEmpty;
 
-    // Initial assessment presence
-    final bool hasInitialAssessment =
-        (initialAssigneeName?.trim().isNotEmpty ?? false) ||
-        (initialAssigneeDepartment?.trim().isNotEmpty ?? false) ||
-        (initialDateAssessed?.trim().isNotEmpty ?? false) ||
-        (initialAssessment?.trim().isNotEmpty ?? false) ||
-        (initialRecommendation?.trim().isNotEmpty ?? false) ||
-        ((initialAssessedAttachments ?? const []).isNotEmpty);
+    final bool hasStaffBits =
+        (assignedStaff?.trim().isNotEmpty ?? false) ||
+        (staffDepartment?.trim().isNotEmpty ?? false) ||
+        (assessedAt != null) ||
+        (assessment?.trim().isNotEmpty ?? false) ||
+        ((staffAttachments ?? const []).isNotEmpty);
 
-    // Completion assessment presence
-    final bool hasCompletionAssessment =
-        (completionAssigneeName?.trim().isNotEmpty ?? false) ||
-        (completionAssigneeDepartment?.trim().isNotEmpty ?? false) ||
-        (completionDateAssessed?.trim().isNotEmpty ?? false) ||
-        (completionAssessment?.trim().isNotEmpty ?? false) ||
-        (completionRecommendation?.trim().isNotEmpty ?? false) ||
-        ((completionAssessedAttachments ?? const []).isNotEmpty);
-
-    final bool hasAssessmentBits = hasInitialAssessment || hasCompletionAssessment;
-
+    final String displayType = _effectiverequestTypeTag();
     final String headerTitle =
-        (title?.trim().isNotEmpty ?? false) ? title!.trim() : requestType;
+        title.trim().isNotEmpty ? title.trim() : displayType;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 20 * s),
       decoration: ShapeDecoration(
         color: const Color(0xFFFEFEFE),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10 * s),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -194,65 +127,104 @@ class RepairDetailsScreen extends StatelessWidget {
                   headerTitle,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Inter',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF101828),
-                    letterSpacing: -0.25,
+                    fontSize: 18 * s,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF101828),
+                    letterSpacing: -0.2 * s,
+                    height: 1.2,
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: 8 * s),
               if (statusTag.isNotEmpty) StatusTag(status: statusTag),
             ],
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: 4 * s),
           Text(
-            requestId,
-            style: const TextStyle(
+            id,
+            style: TextStyle(
               fontFamily: 'Inter',
-              fontSize: 14,
-              color: Color(0xFF475467),
+              fontSize: 12 * s,
+              color: const Color(0xFF475467),
               fontWeight: FontWeight.w500,
+              height: 1.2,
             ),
           ),
 
-          const SizedBox(height: 12),
+          SizedBox(height: 12 * s),
 
-          // ===== Basic info =====
-          KeyValueRow.text(
-            label: 'Date Requested',
-            valueText: formatDateRequested(reqDate), // "Aug 12, 2025"
-          ),
-          const SizedBox(height: 8),
-          KeyValueRow(
-            label: 'Request Type',
-            value: RequestTypeTag(requestType, width: 140),
-          ),
-          if ((priority ?? '').isNotEmpty) ...[
-            const SizedBox(height: 8),
-            KeyValueRow(
-              label: 'Priority',
-              value: PriorityTag(priority: priority!, width: 100),
+          // ===== Basic Information (grouped) =====
+          _Section(
+            title: 'Basic Information',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                KeyValueRow.text(
+                  label: 'Date Requested',
+                  valueText: _fmtDate(createdAt),
+                ),
+                if (updatedAt != null) ...[
+                  SizedBox(height: 6 * s),
+                  KeyValueRow.text(
+                    label: 'Last Updated',
+                    valueText: _fmtDate(updatedAt!),
+                  ),
+                ],
+                SizedBox(height: 6 * s),
+                KeyValueRow(
+                  label: 'Request Type',
+                  value: RequestTypeTag(
+                    displayType, // <- uses _effectiverequestTypeTag()
+                    width: 140 * s, // optional: keep layout tidy
+                    displayCasing: DisplayCasing.title,
+                  ),
+                  labelWidth: 120 * s,
+                ),
+                if ((priority ?? '').isNotEmpty) ...[
+                  SizedBox(height: 6 * s),
+                  KeyValueRow(
+                    label: 'Priority',
+                    value: PriorityTag(priority: priority!, width: 100 * s),
+                    labelWidth: 120 * s,
+                  ),
+                ],
+                if ((departmentTag ?? '').isNotEmpty) ...[
+                  SizedBox(height: 6 * s),
+                  KeyValueRow(
+                    label: 'Department',
+                    value: DepartmentTag(departmentTag!.trim()),
+                    labelWidth: 120 * s,
+                  ),
+                ],
+              ],
             ),
-          ],
+          ),
 
           // ----- Divider -----
-          const SizedBox(height: 16),
+          SizedBox(height: 14 * s),
           ffDivider(),
-          const SizedBox(height: 14),
+          SizedBox(height: 12 * s),
 
           // ===== Requester Details =====
           const _SectionTitle('Requester Details'),
-          const SizedBox(height: 8),
+          SizedBox(height: 8 * s),
           KeyValueRow.text(label: 'Requested By', valueText: requestedBy),
-          const SizedBox(height: 8),
-          KeyValueRow.text(label: 'Unit', valueText: unit),
+          SizedBox(height: 4 * s),
+          KeyValueRow.text(label: 'Unit ID', valueText: unitId),
+          if (_fmtScheduleAvail(scheduleAvailability) != null) ...[
+            SizedBox(height: 10 * s),
+            KeyValueRow.text(
+              label: 'Schedule Availability',
+              valueText: _fmtScheduleAvail(scheduleAvailability!)!,
+              labelWidth: 160 * s,
+            ),
+          ],
 
-          const SizedBox(height: 14),
+          SizedBox(height: 14 * s),
           ffDivider(),
-          const SizedBox(height: 14),
+          SizedBox(height: 12 * s),
 
           // ===== Request Details =====
           _Section(
@@ -260,256 +232,101 @@ class RepairDetailsScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if ((scheduleAvailability?.trim().isNotEmpty ?? false)) ...[
-                  KeyValueRow.text(
-                    label: 'Schedule Availability',
-                    valueText: formatSchedule(scheduleAvailability!.trim()),
-                    labelWidth: 160,
-                  ),
-                  const SizedBox(height: 8),
-                ],
-
                 if (showDetailsCard)
-                  _SectionCard(
-                    title: showJobNotes ? 'Notes' : 'Description',
-                    content: detailsBody!,
-                  ),
+                  _SectionCard(title: 'Description', content: detailsBody),
 
                 if ((attachments?.isNotEmpty ?? false)) ...[
-                  const SizedBox(height: 10),
+                  SizedBox(height: 12 * s),
                   const _SectionTitle('Attachments'),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8 * s),
                   Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: attachments!.map((u) => _thumb(u, h: 80, w: 140)).toList(),
+                    spacing: 8 * s,
+                    runSpacing: 8 * s,
+                    children:
+                        attachments!
+                            .map((u) => _thumb(u, h: 80 * s, w: 140 * s))
+                            .toList(),
                   ),
                 ],
               ],
             ),
           ),
 
-          // ===== Assigned To =====
-          if ((assignedTo ?? '').isNotEmpty) ...[
-            const SizedBox(height: 14),
+          // ===== Staff & Assessment =====
+          if (hasStaffBits) ...[
+            SizedBox(height: 14 * s),
             ffDivider(),
-            const SizedBox(height: 14),
+            SizedBox(height: 12 * s),
+
             _Section(
-              title: "Assigned To",
+              title: 'Staff Assessment',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _AvatarNameBlock(
-                    name: assignedTo!,
-                    department: assignedDepartment, // chip below the name
-                  ),
-                  if ((assignedSchedule ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 12),
+                  // Assigned Staff subsection (only if we have any staff info)
+                  if ((assignedStaff?.trim().isNotEmpty ?? false) ||
+                      (staffDepartment?.trim().isNotEmpty ?? false) ||
+                      (staffPhotoUrl?.trim().isNotEmpty ?? false)) ...[
+                    _Section(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if ((assignedStaff?.trim().isNotEmpty ?? false)) ...[
+                            _AvatarNameBlock(
+                              name: assignedStaff!.trim(),
+                              departmentTag:
+                                  (staffDepartment?.trim().isNotEmpty ?? false)
+                                      ? staffDepartment!.trim()
+                                      : null,
+                              photoUrl:
+                                  (staffPhotoUrl?.trim().isNotEmpty ?? false)
+                                      ? staffPhotoUrl!.trim()
+                                      : null,
+                            ),
+                            SizedBox(height: 10 * s),
+                          ] else if ((staffDepartment?.trim().isNotEmpty ??
+                              false)) ...[
+                            DepartmentTag(staffDepartment!.trim()),
+                            SizedBox(height: 10 * s),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // Date Assessed (shown once)
+                  if (assessedAt != null) ...[
                     KeyValueRow.text(
-                      label: 'Schedule',
-                      valueText: formatSchedule(assignedSchedule!),
+                      label: 'Date Assessed',
+                      valueText: _fmtDate(assessedAt!),
+                    ),
+                    SizedBox(height: 8 * s),
+                  ],
+
+                  // Assessment text
+                  if ((assessment?.trim().isNotEmpty ?? false)) ...[
+                    _SectionCard(
+                      title: 'Assessment',
+                      content: assessment!.trim(),
+                    ),
+                    SizedBox(height: 8 * s),
+                  ],
+
+                  // Staff attachments
+                  if ((staffAttachments?.isNotEmpty ?? false)) ...[
+                    const _SectionTitle('Attachments'),
+                    SizedBox(height: 8 * s),
+                    Wrap(
+                      spacing: 8 * s,
+                      runSpacing: 8 * s,
+                      children:
+                          staffAttachments!
+                              .map((u) => _thumb(u, h: 80 * s, w: 140 * s))
+                              .toList(),
                     ),
                   ],
                 ],
               ),
-            ),
-          ],
-
-          // ===== Assessment =====
-          if (hasAssessmentBits) ...[
-            const SizedBox(height: 14),
-            ffDivider(),
-            const SizedBox(height: 14),
-
-            _Section(
-              title: 'Assessment and Recommendation',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ---------------- Initial Assessment ----------------
-                  if (hasInitialAssessment) ...[
-                    if ((initialAssigneeName?.trim().isNotEmpty ?? false)) ...[
-                      _AvatarNameBlock(
-                        name: initialAssigneeName!.trim(),
-                        department: initialAssigneeDepartment?.trim(),
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-
-                    if ((initialDateAssessed?.trim().isNotEmpty ?? false)) ...[
-                      KeyValueRow.text(
-                        label: 'Date Assessed',
-                        valueText: formatDateRequested(initialDateAssessed!.trim()),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-
-                    if ((initialAssessment?.trim().isNotEmpty ?? false)) ...[
-                      _SectionCard(
-                        title: "Assessment",
-                        content: initialAssessment!.trim(),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-
-                    if ((initialRecommendation?.trim().isNotEmpty ?? false)) ...[
-                      _SectionCard(
-                        title: "Recommendation",
-                        content: initialRecommendation!.trim(),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-
-                    if ((initialAssessedAttachments?.isNotEmpty ?? false)) ...[
-                      const _SectionTitle('Attachments'),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: initialAssessedAttachments!
-                            .map((u) => _thumb(u, h: 80, w: 140))
-                            .toList(),
-                      ),
-                    ],
-                  ],
-
-                  // ---------------- Completion Assessment ----------------
-                  if (hasCompletionAssessment) ...[
-                    if ((completionAssigneeName?.trim().isNotEmpty ?? false)) ...[
-                      _AvatarNameBlock(
-                        name: completionAssigneeName!.trim(),
-                        department: completionAssigneeDepartment?.trim(),
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-
-                    if ((completionDateAssessed?.trim().isNotEmpty ?? false)) ...[
-                      KeyValueRow.text(
-                        label: 'Date Assessed',
-                        valueText: formatDateRequested(completionDateAssessed!.trim()),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-
-                    if ((completionAssessment?.trim().isNotEmpty ?? false)) ...[
-                      _SectionCard(
-                        title: "Assessment",
-                        content: completionAssessment!.trim(),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-
-                    if ((completionRecommendation?.trim().isNotEmpty ?? false)) ...[
-                      _SectionCard(
-                        title: "Recommendation",
-                        content: completionRecommendation!.trim(),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-
-                    if ((completionAssessedAttachments?.isNotEmpty ?? false)) ...[
-                      const _SectionTitle('Attachments'),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: completionAssessedAttachments!
-                            .map((u) => _thumb(u, h: 80, w: 140))
-                            .toList(),
-                      ),
-                    ],
-                  ],
-                ],
-              ),
-            ),
-          ],
-
-          // ===== Permit Details =====
-          if (_isPermit || _hasAnyPermitData) ...[
-            const SizedBox(height: 14),
-            ffDivider(),
-            const SizedBox(height: 14),
-            _Section(
-              title: "Permit Details",
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if ((reqType ?? '').isNotEmpty)
-                    KeyValueRow.text(label: 'Request Type', valueText: reqType!),
-                  if ((permitId ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    KeyValueRow.text(label: 'Permit ID', valueText: permitId!),
-                  ],
-                  if ((workScheduleFrom ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    const _SectionTitle('Work Schedule'),
-                    const SizedBox(height: 8),
-                    KeyValueRow.text(
-                      label: 'From',
-                      valueText: formatDateRequested(workScheduleFrom!),
-                    ),
-                  ],
-                  if ((workScheduleTo ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    KeyValueRow.text(
-                      label: 'To',
-                      valueText: formatDateRequested(workScheduleTo!),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-
-          // ===== Additional Notes (WO) =====
-          if (showWoNotes) ...[
-            const SizedBox(height: 8),
-            _Section(
-              title: "Notes",
-              child: _SectionCard(content: workOrderNotes!.trim()),
-            ),
-          ],
-
-          // ===== Contractor Profile =====
-          if ((contractorName?.isNotEmpty ?? false) ||
-              (contractorCompany?.isNotEmpty ?? false) ||
-              (contractorNumber?.isNotEmpty ?? false)) ...[
-            const SizedBox(height: 14),
-            ffDivider(),
-            const SizedBox(height: 14),
-            _Section(
-              title: "Contractor Profile",
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if ((contractorName ?? '').isNotEmpty)
-                    KeyValueRow.text(label: 'Name', valueText: contractorName!),
-                  if ((contractorCompany ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    KeyValueRow.text(label: 'Company', valueText: contractorCompany!),
-                  ],
-                  if ((contractorNumber ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    KeyValueRow.text(label: 'Phone', valueText: contractorNumber!),
-                  ],
-                ],
-              ),
-            ),
-          ],
-
-          // ===== CTA =====
-          if (onAction != null) ...[
-            const SizedBox(height: 16),
-            custom_buttons.FilledButton(
-              label: actionLabel ?? 'Next',
-              onPressed: onAction!,
-              backgroundColor: const Color(0xFF1F2937),
-              textColor: Colors.white,
-              height: 48,
-              borderRadius: 10,
-              withOuterBorder: false,
-              width: double.infinity,
-              isLoading: false,
             ),
           ],
         ],
@@ -518,169 +335,942 @@ class RepairDetailsScreen extends StatelessWidget {
   }
 }
 
-/// Avatar + Name with DepartmentTag below (left aligned)
-class _AvatarNameBlock extends StatelessWidget {
-  final String name;
-  final String? department;
-  const _AvatarNameBlock({required this.name, this.department});
+// JOB SERVICE DETAILS -----------------------------------
+class JobServiceDetails extends StatelessWidget {
+  //  Basic Information
+  final String id;
+  final String concernSlipId; // link to concern slip
+  final DateTime createdAt;
+  final DateTime? updatedAt;
+  final String requestTypeTag; // e.g. "Job Service"
+  final String? resolutionType; // job_service, work_permit, rejected
+  final String? priority; // High | Medium | Low
+  final String
+  statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+
+  //  Tenant / Requester
+  final String requestedBy;
+  final String unitId;
+  final String? scheduleAvailability; // e.g. "Aug 12, 1:30 PM"
+  final String? additionalNotes;
+
+  // Staff
+  final String? assignedStaff; // staff user_id / display name
+  final String? staffDepartment;
+  final String? staffPhotoUrl;
+
+  // Documentation
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+  final DateTime? completionAt;
+
+  final DateTime? assessedAt;
+  final String? assessment;
+  final List<String>? staffAttachments;
+
+  // Tracking
+  final List<String>? materialsUsed;
+
+  const JobServiceDetails({
+    super.key,
+
+    // Basic Information
+    required this.id,
+    required this.concernSlipId,
+    required this.createdAt,
+    this.updatedAt,
+    required this.requestTypeTag,
+    this.priority,
+    required this.statusTag,
+    this.resolutionType,
+
+    // Tenant / Requester
+    required this.requestedBy,
+    required this.unitId,
+    this.scheduleAvailability,
+    this.additionalNotes,
+
+    // Staff
+    this.assignedStaff,
+    this.staffDepartment,
+    this.staffPhotoUrl,
+
+    // Documentation
+    this.startedAt,
+    this.completedAt,
+    this.completionAt,
+    this.assessedAt,
+    this.assessment,
+    this.staffAttachments,
+
+    // Tracking
+    this.materialsUsed,
+  });
+
+  // Map resolution type to what we DISPLAY as "Request Type".
+  String _effectiverequestTypeTag() {
+    final r = resolutionType?.trim().toLowerCase().replaceAll(
+      RegExp(r'[\s\-]+'),
+      '_',
+    );
+    switch (r) {
+      case 'job_service':
+        return 'Job Service';
+      case 'work_permit':
+        return 'Work Order';
+      case 'rejected':
+        return requestTypeTag; // keep original
+      default:
+        return requestTypeTag; // fallback
+    }
+  }
+
+  // Force the status chip to show "Rejected" when resolutionType == rejected.
+  String get _displayStatus =>
+      (resolutionType?.trim().toLowerCase() == 'rejected')
+          ? 'Rejected'
+          : statusTag;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // Avatar
-        Container(
-          width: 44,
-          height: 44,
-          decoration: const ShapeDecoration(
-            color: Color(0xFFD9D9D9),
-            shape: OvalBorder(
-              side: BorderSide(width: 1.68, color: Colors.white),
-            ),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            _initials(name),
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
+    final s = uiScale(context); // 0.85..1.0 on phones
 
-        // Name + DepartmentTag (below)
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final bool hasStaffBits =
+        (assignedStaff?.trim().isNotEmpty ?? false) ||
+        (staffDepartment?.trim().isNotEmpty ?? false) ||
+        (assessedAt != null);
+
+    final bool hasAnyDocs =
+        (startedAt != null) ||
+        (completedAt != null) ||
+        (completionAt != null) ||
+        (assessment?.trim().isNotEmpty ?? false) ||
+        ((staffAttachments ?? const []).isNotEmpty);
+
+    final bool hasTracking = (materialsUsed?.isNotEmpty ?? false);
+
+    final displayType = _effectiverequestTypeTag();
+    final headerTitle = displayType.isNotEmpty ? displayType : 'Job Service';
+
+    // Format helpers using UiDateUtils
+    String _fmtDate(DateTime d) => UiDateUtils.fullDate(d);
+    String _fmtDateTime(DateTime d) => UiDateUtils.humanDateTime(d);
+    String? _fmtSchedAvail(String? raw) {
+      if (raw == null || raw.trim().isEmpty) return null;
+      final dt = DateTime.tryParse(raw) ?? UiDateUtils.parse(raw);
+      return UiDateUtils.humanDateTime(dt);
+    }
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 20 * s),
+      decoration: ShapeDecoration(
+        color: const Color(0xFFFEFEFE),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10 * s),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ===== Header =====
+          Row(
             children: [
-              Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  color: Color(0xFF101828),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  height: 1.43,
-                  letterSpacing: 0.10,
+              Expanded(
+                child: Text(
+                  headerTitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 18 * s,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF101828),
+                    letterSpacing: -0.2 * s,
+                    height: 1.2,
+                  ),
                 ),
               ),
-              if ((department ?? '').isNotEmpty) ...[
-                const SizedBox(height: 4),
-                DepartmentTag(department!),
-              ],
+              SizedBox(width: 8 * s),
+              if (_displayStatus.isNotEmpty) StatusTag(status: _displayStatus),
             ],
           ),
-        ),
-      ],
+          SizedBox(height: 4 * s),
+
+          // IDs row (Job Service ID + linked Concern Slip ID)
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  id,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12 * s,
+                    color: const Color(0xFF475467),
+                    fontWeight: FontWeight.w500,
+                    height: 1.2,
+                  ),
+                ),
+              ),
+              SizedBox(width: 8 * s),
+              Text(
+                'From Slip: $concernSlipId',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 11.5 * s,
+                  color: const Color(0xFF667085),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+
+          SizedBox(height: 12 * s),
+
+          // ===== Basic Information (grouped) =====
+          _Section(
+            title: 'Basic Information',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                KeyValueRow.text(
+                  label: 'Date Created',
+                  valueText: _fmtDate(createdAt),
+                ),
+                if (updatedAt != null) ...[
+                  SizedBox(height: 6 * s),
+                  KeyValueRow.text(
+                    label: 'Last Updated',
+                    valueText: _fmtDate(updatedAt!),
+                  ),
+                ],
+                SizedBox(height: 6 * s),
+                KeyValueRow(
+                  label: 'Request Type',
+                  value: RequestTypeTag(
+                    displayType, // <- uses _effectiverequestTypeTag()
+                    width: 140 * s, // optional: keep layout tidy
+                    displayCasing: DisplayCasing.title,
+                  ),
+                  labelWidth: 120 * s,
+                ),
+                if ((priority ?? '').isNotEmpty) ...[
+                  SizedBox(height: 6 * s),
+                  KeyValueRow(
+                    label: 'Priority',
+                    value: PriorityTag(priority: priority!, width: 100 * s),
+                    labelWidth: 120 * s,
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // ----- Divider -----
+          SizedBox(height: 14 * s),
+          ffDivider(),
+          SizedBox(height: 12 * s),
+
+          // ===== Requester Details =====
+          const _SectionTitle('Requester Details'),
+          SizedBox(height: 8 * s),
+          KeyValueRow.text(label: 'Requested By', valueText: requestedBy),
+          SizedBox(height: 4 * s),
+          KeyValueRow.text(label: 'Unit ID', valueText: unitId),
+
+          // ----- Divider -----
+          SizedBox(height: 14 * s),
+          ffDivider(),
+          SizedBox(height: 12 * s),
+
+          // ===== Additional Notes Section =====
+          if ((additionalNotes?.trim().isNotEmpty ?? false) ||
+              (scheduleAvailability?.trim().isNotEmpty ?? false) ||
+              (assessment?.trim().isNotEmpty ?? false)) ...[
+            _Section(
+              title: 'Additional Notes',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Additional Notes Text
+                  if ((additionalNotes?.trim().isNotEmpty ?? false)) ...[
+                    Text(
+                      additionalNotes!.trim(),
+                      style: TextStyle(fontSize: 14 * s),
+                    ),
+                    SizedBox(height: 8 * s),
+                  ],
+
+                  // Optional Schedule Availability
+                  if ((scheduleAvailability?.trim().isNotEmpty ?? false)) ...[
+                    KeyValueRow.text(
+                      label: 'Schedule Availability',
+                      valueText: _fmtSchedAvail(scheduleAvailability!.trim())!,
+                      labelWidth: 160 * s,
+                    ),
+                    SizedBox(height: 8 * s),
+                  ],
+
+                  // Optional Assessment
+                  if ((assessment?.trim().isNotEmpty ?? false)) ...[
+                    KeyValueRow.text(
+                      label: 'Assessment',
+                      valueText: assessment!.trim(),
+                      labelWidth: 160 * s,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            SizedBox(height: 14 * s),
+          ],
+
+
+          // ----- Divider -----
+          SizedBox(height: 14 * s),
+          ffDivider(),
+          SizedBox(height: 12 * s),
+
+          // ===== Staff =====
+          if (hasStaffBits) ...[
+            _Section(
+              title: 'Assigned Staff',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if ((assignedStaff?.trim().isNotEmpty ?? false)) ...[
+                    _AvatarNameBlock(
+                      name: assignedStaff!.trim(),
+                      departmentTag:
+                          (staffDepartment?.trim().isNotEmpty ?? false)
+                              ? staffDepartment!.trim()
+                              : null,
+                      photoUrl:
+                          (staffPhotoUrl?.trim().isNotEmpty ?? false)
+                              ? staffPhotoUrl!.trim()
+                              : null,
+                    ),
+                    SizedBox(height: 10 * s),
+                  ] else if ((staffDepartment?.trim().isNotEmpty ?? false)) ...[
+                    DepartmentTag(staffDepartment!.trim()),
+                    SizedBox(height: 10 * s),
+                  ],
+
+                  if (assessedAt != null)
+                    KeyValueRow.text(
+                      label: 'Date Assessed',
+                      valueText: _fmtDate(assessedAt!),
+                    ),
+                ],
+              ),
+            ),
+            SizedBox(height: 14 * s),
+          ],
+
+          // ===== Documentation =====
+          if (hasAnyDocs) ...[
+            _Section(
+              title: 'Task Information',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (startedAt != null)
+                    KeyValueRow.text(
+                      label: 'Started',
+                      valueText: _fmtDateTime(startedAt!),
+                    ),
+                  if (completedAt != null) ...[
+                    SizedBox(height: 6 * s),
+                    KeyValueRow.text(
+                      label: 'Completed',
+                      valueText: _fmtDateTime(completedAt!),
+                    ),
+                  ],
+                  if (completionAt != null) ...[
+                    SizedBox(height: 6 * s),
+                    KeyValueRow.text(
+                      label: 'Completion Date',
+                      valueText: _fmtDateTime(completionAt!),
+                    ),
+                  ],
+                  if ((assessment?.trim().isNotEmpty ?? false)) ...[
+                    SizedBox(height: 10 * s),
+                    _SectionCard(
+                      title: 'Assessment',
+                      content: assessment!.trim(),
+                    ),
+                  ],
+                  if ((staffAttachments?.isNotEmpty ?? false)) ...[
+                    SizedBox(height: 12 * s),
+                    const _SectionTitle('Attachments'),
+                    SizedBox(height: 8 * s),
+                    Wrap(
+                      spacing: 8 * s,
+                      runSpacing: 8 * s,
+                      children:
+                          staffAttachments!
+                              .map((u) => _thumb(u, h: 80 * s, w: 140 * s))
+                              .toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // ----- Divider -----
+            SizedBox(height: 14 * s),
+          ],
+
+          // ===== Tracking =====
+          if (hasTracking) ...[
+            _Section(
+              title: 'Materials Used',
+              child: Wrap(
+                spacing: 8 * s,
+                runSpacing: 8 * s,
+                children:
+                    materialsUsed!
+                        .where((m) => m.trim().isNotEmpty)
+                        .map((m) => _materialChip(m.trim(), s))
+                        .toList(),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
-  static String _initials(String fullName) {
-    final parts =
-        fullName.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
-    if (parts.isEmpty) return '';
-    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+  // Small chip for a material item
+  Widget _materialChip(String text, double s) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 6 * s),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F4F7),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontFamily: 'Inter',
+          fontWeight: FontWeight.w600,
+          fontSize: 11.5 * s,
+          color: const Color(0xFF344054),
+          height: 1.0,
+        ),
+      ),
+    );
   }
 }
 
-// MAINTENANCE DETAILS
-class MaintenanceDetailsScreen extends StatefulWidget {
-  //
-  final String? title;
-  final String requestId;
-  final String reqDate; // Displays as: Aug 12, 2025
-  final String requestType; // Concern Slip | Job Service | Work Order / Work Order Permit
-  final String statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+// WORK ORDER PERMIT ---------------------------
 
-  // ── Assigned To ────────────────────────────────────────────────────────────
-  final String? assignedTo;
-  final String? assignedDepartment;
-  final String? assignedSchedule; // formatted via formatSchedule if date-like
+class WorkOrderPermitDetails extends StatelessWidget {
+  //  Basic Information
+  final String? id;
+  final String concernSlipId; // required (links to concern slip)
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final String requestTypeTag; // e.g. "Work Order Permit"
+  final String? priority; // High | Medium | Low
+  final String
+  statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+  final String? resolutionType; // job_service, work_permit, rejected
 
-  // ── Optional content blocks ────────────────────────────────────────────────
+  //  Tenant / Requester
+  final String requestedBy; // tenant user_id/display
+  final String? unitId;
+
+  // Permit Specific Details
+  final String contractorName; // required
+  final String contractorNumber; // required
+  final String? contractorCompany;
+
+  // Work Specifics Details
+  final DateTime workScheduleFrom; // required (date + time)
+  final DateTime workScheduleTo; // required (date + time)
+  final String? entryEquipments; // tools/equipment needed at entry
+
+  // Approval Tracking
+  final String? approvedBy; // admin user_id/display
+  final DateTime? approvalDate;
+  final String? denialReason;
+  final String? adminNotes; // (moved from additionalNotes)
+
+  const WorkOrderPermitDetails({
+    super.key,
+
+    // Basic Information
+    this.id,
+    required this.concernSlipId,
+    this.createdAt,
+    this.updatedAt,
+    required this.requestTypeTag,
+    this.priority,
+    required this.statusTag,
+    this.resolutionType,
+
+    // Tenant / Requester
+    required this.requestedBy,
+    this.unitId,
+
+    // Permit Specific Details
+    required this.contractorName,
+    required this.contractorNumber,
+    this.contractorCompany,
+
+    // Work Specifics Details
+    required this.workScheduleFrom,
+    required this.workScheduleTo,
+    this.entryEquipments,
+
+    // Approval Tracking
+    this.approvedBy,
+    this.approvalDate,
+    this.denialReason,
+    this.adminNotes,
+  });
+
+  // ---- Behavior derived from resolutionType ---------------------------------
+
+  // What to display as "Request Type"
+  // - job_service  -> "Job Service"
+  // - work_permit  -> "Work Order"
+  // - rejected/other -> keep original requestTypeTag
+  String _effectiverequestTypeTag() {
+    final r = resolutionType?.trim().toLowerCase().replaceAll(
+      RegExp(r'[\s\-]+'),
+      '_',
+    );
+    switch (r) {
+      case 'job_service':
+        return 'Job Service';
+      case 'work_permit':
+        return 'Work Order';
+      case 'rejected':
+        return requestTypeTag; // keep original label
+      default:
+        return requestTypeTag; // fallback
+    }
+  }
+
+  // Force status chip to "Rejected" when resolutionType == rejected
+  String get _displayStatus =>
+      (resolutionType?.trim().toLowerCase() == 'rejected')
+          ? 'Rejected'
+          : statusTag;
+
+  // ---- Formatting helpers ----------------------------------------------------
+
+  /// "Aug 23, 2025 · 8:30 PM"
+  static String _formatWorkSchedule(DateTime dt) =>
+      UiDateUtils.humanDateTime(dt);
+
+  // Human-friendly window duration like "2h", "2h 30m", or "1d 3h"
+  static String _formatWindowDuration(DateTime from, DateTime to) {
+    final diff = to.difference(from);
+    if (diff.isNegative) return '—';
+
+    final days = diff.inDays;
+    final hours = diff.inHours % 24;
+    final mins = diff.inMinutes % 60;
+
+    final parts = <String>[];
+    if (days > 0) parts.add('${days}d');
+    if (hours > 0) parts.add('${hours}h');
+    if (mins > 0 || parts.isEmpty)
+      parts.add('${mins}m'); // show at least minutes
+
+    return parts.join(' ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = uiScale(context); // 0.85..1.0 on phones
+    final displayType = _effectiverequestTypeTag();
+    final headerTitle =
+        displayType.isNotEmpty ? displayType : 'Work Order Permit';
+
+    final hasApprovalBits =
+        (approvedBy?.trim().isNotEmpty ?? false) ||
+        (approvalDate != null) ||
+        (denialReason?.trim().isNotEmpty ?? false) ||
+        (adminNotes?.trim().isNotEmpty ?? false);
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 20 * s),
+      decoration: ShapeDecoration(
+        color: const Color(0xFFFEFEFE),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10 * s),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ===== Header =====
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  headerTitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 18 * s,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF101828),
+                    letterSpacing: -0.2 * s,
+                    height: 1.2,
+                  ),
+                ),
+              ),
+              SizedBox(width: 8 * s),
+              if (_displayStatus.isNotEmpty) StatusTag(status: _displayStatus),
+            ],
+          ),
+          SizedBox(height: 4 * s),
+
+          // IDs row (permit ID + linked Concern Slip ID)
+          Row(
+            children: [
+              if ((id ?? '').isNotEmpty)
+                Expanded(
+                  child: Text(
+                    id!,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12 * s,
+                      color: const Color(0xFF475467),
+                      fontWeight: FontWeight.w500,
+                      height: 1.2,
+                    ),
+                  ),
+                )
+              else
+                const Spacer(),
+              SizedBox(width: 8 * s),
+              Text(
+                'From Slip: $concernSlipId',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 11.5 * s,
+                  color: const Color(0xFF667085),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+
+          SizedBox(height: 12 * s),
+
+          // ===== Basic Information =====
+          _Section(
+            title: 'Basic Information',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (createdAt != null)
+                  KeyValueRow.text(
+                    label: 'Date Created',
+                    valueText: UiDateUtils.fullDate(createdAt!),
+                  ),
+                if (updatedAt != null) ...[
+                  SizedBox(height: 6 * s),
+                  KeyValueRow.text(
+                    label: 'Last Updated',
+                    valueText: UiDateUtils.fullDate(updatedAt!),
+                  ),
+                ],
+                SizedBox(height: 6 * s),
+                KeyValueRow(
+                  label: 'Request Type',
+                  value: RequestTypeTag(
+                    displayType, // <- uses _effectiverequestTypeTag()
+                    width: 140 * s, // optional: keep layout tidy
+                    displayCasing: DisplayCasing.title,
+                  ),
+                  labelWidth: 120 * s,
+                ),
+                if ((priority ?? '').isNotEmpty) ...[
+                  SizedBox(height: 6 * s),
+                  KeyValueRow(
+                    label: 'Priority',
+                    value: PriorityTag(priority: priority!, width: 100 * s),
+                    labelWidth: 120 * s,
+                  ),
+                ],
+                // NOTE: no Resolution row — reflected in displayType/_displayStatus
+              ],
+            ),
+          ),
+
+          // ----- Divider -----
+          SizedBox(height: 14 * s),
+          ffDivider(),
+          SizedBox(height: 12 * s),
+
+          // ===== Requester Details =====
+          const _SectionTitle('Requester Details'),
+          SizedBox(height: 8 * s),
+          KeyValueRow.text(label: 'Requested By', valueText: requestedBy),
+          if ((unitId ?? '').isNotEmpty) ...[
+            SizedBox(height: 4 * s),
+            KeyValueRow.text(label: 'Unit ID', valueText: unitId!),
+          ],
+
+          // ----- Divider -----
+          SizedBox(height: 14 * s),
+          ffDivider(),
+          SizedBox(height: 12 * s),
+
+          // ===== Permit Details =====
+          _Section(
+            title: 'Permit Details',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                KeyValueRow.text(
+                  label: 'Contractor',
+                  valueText: contractorName,
+                ),
+                SizedBox(height: 6 * s),
+                KeyValueRow.text(label: 'Contact', valueText: contractorNumber),
+                if ((contractorCompany ?? '').isNotEmpty) ...[
+                  SizedBox(height: 6 * s),
+                  KeyValueRow.text(
+                    label: 'Company',
+                    valueText: contractorCompany!,
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // ----- Divider -----
+          SizedBox(height: 14 * s),
+
+          // ===== Work Schedule =====
+          _Section(
+            title: 'Work Schedule',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                KeyValueRow.text(
+                  label: 'From',
+                  valueText: _formatWorkSchedule(workScheduleFrom),
+                ),
+                SizedBox(height: 6 * s),
+                KeyValueRow.text(
+                  label: 'To',
+                  valueText: _formatWorkSchedule(workScheduleTo),
+                ),
+                SizedBox(height: 6 * s),
+                KeyValueRow.text(
+                  label: 'Duration',
+                  valueText: _formatWindowDuration(
+                    workScheduleFrom,
+                    workScheduleTo,
+                  ),
+                ),
+                if ((entryEquipments?.trim().isNotEmpty ?? false)) ...[
+                  SizedBox(height: 10 * s),
+                  _SectionCard(
+                    title: 'Entry Equipment',
+                    content: entryEquipments!.trim(),
+                  ),
+                  if ((adminNotes?.trim().isNotEmpty ?? false))
+                    _SectionCard(
+                      title: 'Admin Notes',
+                      content: adminNotes!.trim(),
+                    ),
+                ],
+              ],
+            ),
+          ),
+
+          // ----- Divider -----
+          if (hasApprovalBits) ...[
+            SizedBox(height: 14 * s),
+            ffDivider(),
+            SizedBox(height: 12 * s),
+
+            // ===== Approval Tracking =====
+            _Section(
+              title: 'Approval Tracking',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if ((approvedBy?.trim().isNotEmpty ?? false)) ...[
+                    _AvatarNameBlock(
+                      name: approvedBy!.trim(),
+                      departmentTag: 'Admin',
+                    ),
+                    SizedBox(height: 10 * s),
+                  ],
+                  if (approvalDate != null) ...[
+                    KeyValueRow.text(
+                      label: 'Approval Date',
+                      valueText: UiDateUtils.fullDate(approvalDate!),
+                    ),
+                    SizedBox(height: 6 * s),
+                  ],
+                  if ((denialReason?.trim().isNotEmpty ?? false)) ...[
+                    _SectionCard(
+                      title: 'Denial Reason',
+                      content: denialReason!.trim(),
+                    ),
+                    SizedBox(height: 8 * s),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// MAINTENANCE DETAILS --------------------
+class MaintenanceDetails extends StatefulWidget {
+  //  Basic Information
+  final String id;
+  final DateTime createdAt;
+  final DateTime? updatedAt;
+  final String?
+  departmentTag; // electrical, plumbing, hvac, carpentry, masonry, maintenance
+  final String requestTypeTag; // Concern Slip / Maintenance
+  final String? priority; // High | Medium | Low
+  final String
+  statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+  final String? resolutionType; // job_service, work_permit, rejected
+
+  //  Tenant / Requester
+  final String requestedBy;
+  final String? scheduleDate; // string (ISO or raw)
+
+  // Request Details
+  final String title;
+  final DateTime? startedAt;
+  final DateTime? completedAt;
   final String? location;
   final String? description;
   final List<String>? checklist;
   final List<String>? attachments;
   final String? adminNote;
 
-  // ── Final / assessed info (optional) ───────────────────────────────────────
-  final String? completionAssigneeName;
-  final String? completionAssigneeDepartment;
-  final String? completionDateAssessed; // formatted via formatSchedule
-  final String? completionAssessment; // "Assessment:"
-  final String? completionRecommendation; // "Recommendation:"
-  final List<String>? completionAssessedAttachments; // "AssessedAttachments:"
+  // Staff
+  final String? assignedStaff; // staff user_id / name aasigned to or assed by
+  final String? staffDepartment;
+  final String? staffPhotoUrl;
+  final DateTime? assessedAt; // assessment timestamp
+  final String? assessment; // staff assessment text
+  final List<String>? staffAttachments; // staff-side attachments (list)
 
-  const MaintenanceDetailsScreen({
+  // Tracking
+  final List<String>? materialsUsed;
+
+  const MaintenanceDetails({
     super.key,
-    // required header
-    required this.title,
-    required this.requestId,
-    required this.reqDate,
-    required this.requestType,
+    // Basic
+    required this.id,
+    required this.createdAt,
+    this.updatedAt,
+    this.departmentTag,
+    required this.requestTypeTag,
+    this.priority,
     required this.statusTag,
-
-    // assigned to
-    this.assignedTo,
-    this.assignedDepartment,
-    this.assignedSchedule,
-
-    // optionals
+    this.resolutionType,
+    // Tenant / Requester
+    required this.requestedBy,
+    required this.scheduleDate,
+    // Request Details
+    required this.title,
+    this.startedAt,
+    this.completedAt,
     this.location,
     this.description,
     this.checklist,
     this.attachments,
     this.adminNote,
-
-    // completion/assessed
-    this.completionAssigneeName,
-    this.completionAssigneeDepartment,
-    this.completionDateAssessed,
-    this.completionAssessment,
-    this.completionRecommendation,
-    this.completionAssessedAttachments,
+    // Staff
+    this.assignedStaff,
+    this.staffDepartment,
+    this.staffPhotoUrl,
+    this.assessedAt,
+    this.assessment,
+    this.staffAttachments,
+    // Tracking
+    this.materialsUsed,
   });
 
   @override
-  State<MaintenanceDetailsScreen> createState() => _MaintenanceDetailsScreenState();
+  State<MaintenanceDetails> createState() => _MaintenanceState();
 }
 
-class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
+class _MaintenanceState extends State<MaintenanceDetails> {
   late final List<Map<String, dynamic>> _checklistState;
 
   @override
   void initState() {
     super.initState();
-    _checklistState = (widget.checklist ?? const <String>[])
-        .map((item) => {"text": item, "checked": false})
-        .toList();
+    _checklistState =
+        (widget.checklist ?? const <String>[])
+            .map((item) => {"text": item, "checked": false})
+            .toList();
+  }
+
+  // 48h rule for DateTime? fields
+  String _relativeOrFullDT(DateTime? dt) {
+    if (dt == null) return '—';
+    final hours = DateTime.now().difference(dt).inHours;
+    return hours < 48 ? UiDateUtils.timeAgo(dt) : UiDateUtils.fullDate(dt);
+  }
+
+  // Human formatting for scheduleDate (String?)
+  String _humanSchedule(String? raw) {
+    if (raw == null) return '—';
+    final s = raw.trim();
+    if (s.isEmpty) return '—';
+    final dt = DateTime.tryParse(s) ?? UiDateUtils.parse(s);
+    return UiDateUtils.humanDateTime(dt);
+  }
+
+  // Shared section card builder (matches your Contact Section style)
+  Widget _buildSectionCard({
+    required Widget child,
+    Color backgroundColor = const Color(0xFFF9FAFB),
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: child,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final hasAssigned =
-        (widget.assignedTo ?? '').trim().isNotEmpty ||
-        (widget.assignedDepartment ?? '').trim().isNotEmpty ||
-        (widget.assignedSchedule ?? '').trim().isNotEmpty;
+        (widget.assignedStaff ?? '').trim().isNotEmpty ||
+        (widget.staffDepartment ?? '').trim().isNotEmpty ||
+        (widget.scheduleDate ?? '').trim().isNotEmpty;
 
-    // Final/assessed block
-    final assessedBy = (widget.completionAssigneeName ?? '').trim();
-    final assessedDept = (widget.completionAssigneeDepartment ?? '').trim();
-    final assessedDate = (widget.completionDateAssessed ?? '').trim();
-    final assessedText = (widget.completionAssessment ?? '').trim();
-    final recommendationText = (widget.completionRecommendation ?? '').trim();
-    final assessedAttachments = widget.completionAssessedAttachments ?? const <String>[];
-    final hasAssessmentBlock = assessedBy.isNotEmpty ||
+    final assessedBy = (widget.assignedStaff ?? '').trim();
+    final assessedDept = (widget.staffDepartment ?? '').trim();
+    final assessedAt = widget.assessedAt;
+    final assessedText = (widget.assessment ?? '').trim();
+    final assessedAttachments = widget.staffAttachments ?? const <String>[];
+    final hasAssessmentBlock =
+        assessedBy.isNotEmpty ||
         assessedDept.isNotEmpty ||
-        assessedDate.isNotEmpty ||
+        assessedAt != null ||
         assessedText.isNotEmpty ||
-        recommendationText.isNotEmpty ||
         assessedAttachments.isNotEmpty;
 
     return SingleChildScrollView(
@@ -688,12 +1278,14 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header: Title + Status
+          // Header
           Row(
             children: [
               Expanded(
                 child: Text(
-                  (widget.title ?? '').trim().isEmpty ? 'Maintenance Task' : widget.title!,
+                  widget.title.trim().isEmpty
+                      ? 'Maintenance Task'
+                      : widget.title.trim(),
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
@@ -707,7 +1299,7 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            widget.requestId,
+            widget.id,
             style: const TextStyle(
               color: Color(0xFF475467),
               fontSize: 14,
@@ -715,18 +1307,18 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
             ),
           ),
 
-          // Basic info (aligned rows)
+          // Basic info
           _Section(
             child: Column(
               children: [
                 KeyValueRow.text(
-                  label: 'Request Date',
-                  valueText: formatDateRequested(widget.reqDate),
+                  label: 'Date Created',
+                  valueText: _relativeOrFullDT(widget.createdAt),
                 ),
                 const SizedBox(height: 8),
                 KeyValueRow.text(
                   label: 'Request Type',
-                  valueText: widget.requestType,
+                  valueText: widget.requestTypeTag,
                 ),
                 if ((widget.location ?? '').trim().isNotEmpty) ...[
                   const SizedBox(height: 8),
@@ -735,12 +1327,48 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
                     valueText: widget.location!.trim(),
                   ),
                 ],
+                if ((widget.departmentTag ?? '').trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  KeyValueRow.text(
+                    label: 'Department',
+                    valueText: widget.departmentTag!.trim(),
+                  ),
+                ],
+                if ((widget.priority ?? '').trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  KeyValueRow.text(
+                    label: 'Priority',
+                    valueText: widget.priority!.trim(),
+                  ),
+                ],
+                if (widget.startedAt != null) ...[
+                  const SizedBox(height: 8),
+                  KeyValueRow.text(
+                    label: 'Started',
+                    valueText: _relativeOrFullDT(widget.startedAt),
+                  ),
+                ],
+                if (widget.completedAt != null) ...[
+                  const SizedBox(height: 8),
+                  KeyValueRow.text(
+                    label: 'Completed',
+                    valueText: _relativeOrFullDT(widget.completedAt),
+                  ),
+                ],
+                if ((widget.scheduleDate ?? '').trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  KeyValueRow.text(
+                    label: 'Schedule',
+                    valueText: _humanSchedule(widget.scheduleDate),
+                  ),
+                ],
               ],
             ),
           ),
           const SizedBox(height: 8),
-
-          // Description (optional)
+          ffDivider(),
+          const SizedBox(height: 8),
+          // Description
           if ((widget.description ?? '').trim().isNotEmpty) ...[
             const SizedBox(height: 8),
             _SectionCard(
@@ -749,161 +1377,175 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
             ),
           ],
 
-          // Assigned To (optional)
-          if (hasAssigned)
-            _Section(
-              title: "Assigned To",
-              child: Column(
-                children: [
-                  if ((widget.assignedTo ?? '').trim().isNotEmpty)
-                    KeyValueRow.text(label: 'Name', valueText: widget.assignedTo!.trim()),
-                  if ((widget.assignedDepartment ?? '').trim().isNotEmpty) const SizedBox(height: 8),
-                  if ((widget.assignedDepartment ?? '').trim().isNotEmpty)
-                    KeyValueRow.text(label: 'Department', valueText: widget.assignedDepartment!.trim()),
-                  if ((widget.assignedSchedule ?? '').trim().isNotEmpty) const SizedBox(height: 8),
-                  if ((widget.assignedSchedule ?? '').trim().isNotEmpty)
-                    KeyValueRow.text(
-                      label: 'Schedule',
-                      valueText: formatSchedule(widget.assignedSchedule!.trim()),
-                    ),
-                ],
-              ),
-            ),
+          const SizedBox(height: 10),
 
-          // Checklist (optional + interactive)
+          // Checklist (interactive)
           if ((widget.checklist ?? const <String>[]).isNotEmpty)
             _Section(
               title: "Checklist / Task Steps",
               child: Column(
-                children: _checklistState.map((step) {
-                  final checked = step["checked"] as bool;
-                  return InkWell(
-                    onTap: () => setState(() => step["checked"] = !checked),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Row(
-                        children: [
-                          Icon(
-                            checked ? Icons.check_box : Icons.check_box_outline_blank,
-                            size: 20,
-                            color: const Color(0xFF111827),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              step["text"] as String,
-                              style: TextStyle(
-                                fontSize: 14,
-                                decoration: checked ? TextDecoration.lineThrough : TextDecoration.none,
+                children:
+                    _checklistState.map((step) {
+                      final checked = step["checked"] as bool;
+                      return InkWell(
+                        onTap: () => setState(() => step["checked"] = !checked),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            children: [
+                              Icon(
+                                checked
+                                    ? Icons.check_box
+                                    : Icons.check_box_outline_blank,
+                                size: 20,
+                                color: const Color(0xFF111827),
                               ),
-                            ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  step["text"] as String,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    decoration:
+                                        checked
+                                            ? TextDecoration.lineThrough
+                                            : TextDecoration.none,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
+                        ),
+                      );
+                    }).toList(),
               ),
             ),
 
-          // Final / assessed block (optional)
-          if (hasAssessmentBlock)
-            _Section(
-              title: "Assessment and Recommendation",
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Assessed By (only if any field is present)
-                  if (assessedBy.isNotEmpty || assessedDept.isNotEmpty || assessedDate.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Assessed By',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF101828),
-                              letterSpacing: -0.2,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
+          const SizedBox(height: 10),
 
-                          if (assessedBy.isNotEmpty)
-                            KeyValueRow.text(label: 'Name', valueText: assessedBy),
-
-                          if (assessedDept.isNotEmpty) const SizedBox(height: 8),
-                          if (assessedDept.isNotEmpty)
-                            KeyValueRow.text(label: 'Department', valueText: assessedDept),
-
-                          if (assessedDate.isNotEmpty) const SizedBox(height: 8),
-                          if (assessedDate.isNotEmpty)
-                            KeyValueRow.text(label: 'Date', valueText: formatSchedule(assessedDate)),
-                        ],
-                      ),
-                    ),
-
-                  // Assessment card
-                  if (assessedText.isNotEmpty) const SizedBox(height: 12),
-                  if (assessedText.isNotEmpty)
-                    _SectionCard(title: "Assessment", content: assessedText),
-
-                  // Recommendation card
-                  if (recommendationText.isNotEmpty) const SizedBox(height: 12),
-                  if (recommendationText.isNotEmpty)
-                    _SectionCard(title: "Recommendation", content: recommendationText),
-
-                  // Attachments
-                  if (assessedAttachments.isNotEmpty) const SizedBox(height: 12),
-                  if (assessedAttachments.isNotEmpty)
-                    _Section(
-                      title: "Assessed Attachments",
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: assessedAttachments
-                            .map((u) => _thumb(u, h: 80, w: 140))
-                            .toList(),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
-          // Attachments (optional)
+          // Attachments
           if ((widget.attachments ?? const <String>[]).isNotEmpty)
             _Section(
               title: "Attachments",
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: (widget.attachments ?? const <String>[])
-                    .map((u) => _thumb(u, h: 80, w: 140))
-                    .toList(),
+                children:
+                    (widget.attachments ?? const <String>[])
+                        .map((u) => _thumb(u, h: 80, w: 140))
+                        .toList(),
               ),
             ),
 
-          // Admin Notes (optional)
+          const SizedBox(height: 8),
+          ffDivider(),
+          const SizedBox(height: 8),
+
+          // Staff Details
+          if ((widget.assignedStaff ?? '').trim().isNotEmpty ||
+              (widget.assessment ?? '').trim().isNotEmpty ||
+              widget.assessedAt != null ||
+              (widget.staffAttachments ?? const <String>[]).isNotEmpty)
+            _Section(
+              title: "Staff Details",
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Avatar, Name, Department
+                  if ((widget.assignedStaff?.trim().isNotEmpty ?? false))
+                    _AvatarNameBlock(
+                      name: widget.assignedStaff!.trim(),
+                      departmentTag:
+                          (widget.staffDepartment?.trim().isNotEmpty ?? false)
+                              ? widget.staffDepartment!.trim()
+                              : null,
+                      photoUrl:
+                          (widget.staffPhotoUrl?.trim().isNotEmpty ?? false)
+                              ? widget.staffPhotoUrl!.trim()
+                              : null,
+                    ),
+
+                    // ===== Assessment Section =====
+                    if (widget.assessedAt != null ||
+                        (widget.assessment?.trim().isNotEmpty ?? false)) ...[
+                      const SizedBox(height: 14),
+                      _Section(
+                        title: 'Assessment',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Date Assessed
+                            if (widget.assessedAt != null) ...[
+                              KeyValueRow.text(
+                                label: 'Assessed At',
+                                valueText: _relativeOrFullDT(widget.assessedAt),
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+
+                            // Assessment Notes
+                            if ((widget.assessment ?? '').trim().isNotEmpty) ...[
+                              Text(
+                                widget.assessment!.trim(),
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+
+                  // Attachments
+                  if ((widget.staffAttachments ?? const <String>[])
+                      .isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _Section(
+                      title: "Assessment Attachments",
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children:
+                            (widget.staffAttachments ?? const <String>[])
+                                .map((u) => _thumb(u, h: 80, w: 140))
+                                .toList(),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+          // Materials used (optional)
+          if ((widget.materialsUsed ?? const <String>[]).isNotEmpty)
+            _Section(
+              title: "Materials Used",
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children:
+                    (widget.materialsUsed ?? const <String>[])
+                        .map((m) => Chip(label: Text(m)))
+                        .toList(),
+              ),
+            ),
+
+          // Admin Notes (uses _buildSectionCard with proper alignment)
           if ((widget.adminNote ?? '').trim().isNotEmpty)
             _Section(
               title: "Admin Notes",
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFF5FF),
-                  borderRadius: BorderRadius.circular(8),
-                ),
+              child: _buildSectionCard(
+                backgroundColor: const Color(0xFFEFF5FF),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.warning, color: Color(0xFF005CE7), size: 22),
+                    const Icon(
+                      Icons.info_outline,
+                      color: Color(0xFF005CE7),
+                      size: 22,
+                    ),
                     const SizedBox(width: 10),
-                    const SizedBox(width: 6),
                     Expanded(
                       child: Text(
                         widget.adminNote!.trim(),
@@ -926,71 +1568,173 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
 }
 
 // Announcement Details Screen ------------------------------------------
-class AnnouncementDetailScreen extends StatelessWidget {
-  final String title;
-  final String datePosted;
-  final String classification;
-  final String description;
-  final String locationAffected;
+
+class AnnouncementDetails extends StatelessWidget {
+  // ===== Basic Info =====
+  final String id;
+  final String? isActive; // "true"/"false"
+  final String createdAt; // e.g. "2025-08-02"
+  final String? updatedAt;
+
+  // ===== Schedule =====
   final String scheduleStart;
   final String scheduleEnd;
+
+  // ===== Classification / Audience =====
+  final String? audience;
+  final String announcementType;
+
+  // ===== Location =====
+  final String locationAffected;
+  final String? buildingId;
+
+  // ===== Content =====
+  final String title;
+  final String description;
+  final String? attachment;
+
+  // ===== Contact =====
   final String contactNumber;
   final String contactEmail;
 
-  const AnnouncementDetailScreen({
+  const AnnouncementDetails({
     super.key,
-    required this.title,
-    required this.datePosted,
-    required this.classification,
-    required this.description,
-    required this.locationAffected,
+    required this.id,
+    this.isActive,
+    required this.createdAt,
+    this.updatedAt,
     required this.scheduleStart,
     required this.scheduleEnd,
+    this.audience,
+    required this.announcementType,
+    required this.locationAffected,
+    this.buildingId,
+    required this.title,
+    required this.description,
+    this.attachment,
     required this.contactNumber,
     required this.contactEmail,
   });
 
+  String get _statusLabel {
+    final s = isActive?.trim().toLowerCase();
+    if (s == null) return '';
+    if (s == 'true' || s == 'active' || s == '1' || s == 'yes') return 'Active';
+    if (s == 'false' || s == 'inactive' || s == '0' || s == 'no')
+      return 'Inactive';
+    return '';
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Parse raw date safely
+    final rawDate =
+        (updatedAt != null && updatedAt!.trim().isNotEmpty)
+            ? updatedAt!.trim()
+            : createdAt.trim();
+
+    final parsedDate = DateTime.tryParse(rawDate) ?? UiDateUtils.parse(rawDate);
+
+    // Use timeAgo first, switch to fullDate after 48 hours
+    final diffHours = DateTime.now().difference(parsedDate).inHours;
+    final displayDate =
+        (diffHours < 48)
+            ? UiDateUtils.timeAgo(parsedDate)
+            : UiDateUtils.fullDate(parsedDate);
+
+    final hasAttachment = (attachment?.trim().isNotEmpty ?? false);
+    final hasStatus = _statusLabel.isNotEmpty;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       decoration: ShapeDecoration(
         color: const Color(0xFFFEFEFE),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ===== Header (title + date) =====
-            Text(
-              title,
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                color: Color(0xFF101828),
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.2,
-              ),
+            // ===== Header =====
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF101828),
+                      letterSpacing: -0.2,
+                      height: 1.2,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (hasStatus)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF1F5),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: const Color(0xFFEAECF0)),
+                    ),
+                    child: Text(
+                      _statusLabel,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF344054),
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 4),
-            Text(
-              datePosted,
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                color: Color(0xFF475467),
-                fontSize: 13,
-                fontWeight: FontWeight.w400,
-              ),
+
+            // ID + Date
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    id,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      color: Color(0xFF475467),
+                      fontWeight: FontWeight.w500,
+                      height: 1.2,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  displayDate, // shows “3 hours ago” then “Aug 23, 2025”
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11.5,
+                    color: Color(0xFF667085),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 12),
 
+            // Classification Tag
+            AnnouncementType(announcementType),
             const SizedBox(height: 16),
 
-            // ===== Classification Tag =====
-            AnnouncementClassificationTag(classification),
-            const SizedBox(height: 16),
-
-            // ===== Content Sections =====
+            // Main Sections
             _buildSectionCard(title: 'Description', content: description),
             _buildSectionCard(
               title: 'Location Affected',
@@ -1000,6 +1744,11 @@ class AnnouncementDetailScreen extends StatelessWidget {
               title: 'Schedule',
               content: 'Start: $scheduleStart\nEnd: $scheduleEnd',
             ),
+
+            if (hasAttachment)
+              _buildSectionCard(title: 'Attachment', content: attachment!),
+
+            // Contact Section
             _buildSectionCard(
               title: 'Need Help?',
               content: '📱 $contactNumber\n📧 $contactEmail',
@@ -1011,6 +1760,7 @@ class AnnouncementDetailScreen extends StatelessWidget {
     );
   }
 
+  // Reuse your section card builder exactly
   Widget _buildSectionCard({
     required String title,
     required String content,
@@ -1060,27 +1810,27 @@ class AnnouncementDetailScreen extends StatelessWidget {
 class InventoryDetailsScreen extends StatelessWidget {
   // ----- Item Details -----
   // Basic Information
-  final String itemName;            // Item name or Requested item name
-  final String itemId;              // Item ID (show in header if not empty)
-  final String? dateAdded;          // e.g., 'Automated'
-  final String? classification;     // reused by request item details if you like
-  final String? department;         // e.g., 'Civil/Carpentry' (for item details only)
-  final String? status;             // Inventory Request e.g., Pending or Approved
+  final String itemName; // Item name or Requested item name
+  final String itemId; // Item ID (show in header if not empty)
+  final String? dateAdded; // e.g., 'Automated'
+  final String? classification; // reused by request item details if you like
+  final String? department; // e.g., 'Civil/Carpentry' (for item details only)
+  final String? status; // Inventory Request e.g., Pending or Approved
 
   // divider
 
   // Stock and Supplier Details
   // Stock (Item)
-  final String? stockStatus;        // 'In Stock' | 'Out of Stock' | 'Critical'
-  final String? quantity;           // '150 pcs'
-  final String? reorderLevel;       // '50 pcs'
-  final String? unit;               // 'pcs'
+  final String? stockStatus; // 'In Stock' | 'Out of Stock' | 'Critical'
+  final String? quantity; // '150 pcs'
+  final String? reorderLevel; // '50 pcs'
+  final String? unit; // 'pcs'
 
   // divider
   // Supplier (Information) (optional)
   final String? supplierName;
   final String? supplierNumber;
-  final String? warrantyUntil;      // 'DD / MM / YY'
+  final String? warrantyUntil; // 'DD / MM / YY'
 
   // divider
   // Item details (Request)
@@ -1174,10 +1924,16 @@ class InventoryDetailsScreen extends StatelessWidget {
                 KeyValueRow(label: 'Date Added', value: _kvText(dateAdded!)),
               if (_isNotEmpty(classification)) const SizedBox(height: 8),
               if (_isNotEmpty(classification))
-                KeyValueRow(label: 'Classification', value: _kvText(classification!)),
+                KeyValueRow(
+                  label: 'Classification',
+                  value: _kvText(classification!),
+                ),
               if (_isNotEmpty(department)) const SizedBox(height: 8),
               if (_isNotEmpty(department))
-                KeyValueRow(label: 'Department', value: DepartmentTag(department!)),
+                KeyValueRow(
+                  label: 'Department',
+                  value: DepartmentTag(department!),
+                ),
             ],
           ),
         ),
@@ -1203,7 +1959,10 @@ class InventoryDetailsScreen extends StatelessWidget {
                 KeyValueRow(label: 'Quantity', value: _kvText(quantity!)),
               if (_isNotEmpty(reorderLevel)) const SizedBox(height: 8),
               if (_isNotEmpty(reorderLevel))
-                KeyValueRow(label: 'Reorder Level', value: _kvText(reorderLevel!)),
+                KeyValueRow(
+                  label: 'Reorder Level',
+                  value: _kvText(reorderLevel!),
+                ),
               if (_isNotEmpty(unit)) const SizedBox(height: 8),
               if (_isNotEmpty(unit))
                 KeyValueRow(label: 'Unit', value: _kvText(unit!)),
@@ -1214,7 +1973,11 @@ class InventoryDetailsScreen extends StatelessWidget {
     }
 
     // ===== Supplier =====
-    final bool showSupplier = _any([supplierName, supplierNumber, warrantyUntil]);
+    final bool showSupplier = _any([
+      supplierName,
+      supplierNumber,
+      warrantyUntil,
+    ]);
     if (showSupplier) {
       sections.add(
         _Section(
@@ -1222,13 +1985,22 @@ class InventoryDetailsScreen extends StatelessWidget {
           child: Column(
             children: [
               if (_isNotEmpty(supplierName))
-                KeyValueRow(label: 'Supplier Name', value: _kvText(supplierName!)),
+                KeyValueRow(
+                  label: 'Supplier Name',
+                  value: _kvText(supplierName!),
+                ),
               if (_isNotEmpty(supplierNumber)) const SizedBox(height: 8),
               if (_isNotEmpty(supplierNumber))
-                KeyValueRow(label: 'Supplier Number', value: _kvText(supplierNumber!)),
+                KeyValueRow(
+                  label: 'Supplier Number',
+                  value: _kvText(supplierNumber!),
+                ),
               if (_isNotEmpty(warrantyUntil)) const SizedBox(height: 8),
               if (_isNotEmpty(warrantyUntil))
-                KeyValueRow(label: 'Warranty Until', value: _kvText(warrantyUntil!)),
+                KeyValueRow(
+                  label: 'Warranty Until',
+                  value: _kvText(warrantyUntil!),
+                ),
             ],
           ),
         ),
@@ -1236,7 +2008,13 @@ class InventoryDetailsScreen extends StatelessWidget {
     }
 
     // ===== Request Item Details =====
-    final bool showRequestItem = _any([requestId, requestQuantity, dateNeeded, reqLocation, requestUnit]);
+    final bool showRequestItem = _any([
+      requestId,
+      requestQuantity,
+      dateNeeded,
+      reqLocation,
+      requestUnit,
+    ]);
     if (showRequestItem) {
       sections.add(
         _Section(
@@ -1247,7 +2025,10 @@ class InventoryDetailsScreen extends StatelessWidget {
                 KeyValueRow(label: 'Request ID', value: _kvText(requestId!)),
               if (_isNotEmpty(requestQuantity)) const SizedBox(height: 8),
               if (_isNotEmpty(requestQuantity))
-                KeyValueRow(label: 'Quantity', value: _kvText(requestQuantity!)),
+                KeyValueRow(
+                  label: 'Quantity',
+                  value: _kvText(requestQuantity!),
+                ),
               if (_isNotEmpty(requestUnit)) const SizedBox(height: 8),
               if (_isNotEmpty(requestUnit))
                 KeyValueRow(label: 'Unit', value: _kvText(requestUnit!)),
@@ -1256,7 +2037,10 @@ class InventoryDetailsScreen extends StatelessWidget {
                 KeyValueRow(label: 'Date Needed', value: _kvText(dateNeeded!)),
               if (_isNotEmpty(reqLocation)) const SizedBox(height: 8),
               if (_isNotEmpty(reqLocation))
-                KeyValueRow(label: 'Location / Unit', value: _kvText(reqLocation!)),
+                KeyValueRow(
+                  label: 'Location / Unit',
+                  value: _kvText(reqLocation!),
+                ),
             ],
           ),
         ),
@@ -1275,7 +2059,10 @@ class InventoryDetailsScreen extends StatelessWidget {
                 KeyValueRow(label: 'Staff Name', value: _kvText(staffName!)),
               if (_isNotEmpty(staffDepartment)) const SizedBox(height: 8),
               if (_isNotEmpty(staffDepartment))
-                KeyValueRow(label: 'Department', value: DepartmentTag(staffDepartment!)),
+                KeyValueRow(
+                  label: 'Department',
+                  value: DepartmentTag(staffDepartment!),
+                ),
             ],
           ),
         ),
@@ -1338,326 +2125,21 @@ class InventoryDetailsScreen extends StatelessWidget {
   }
 
   static Widget _kvText(String text) => Text(
-        text,
-        textAlign: TextAlign.right,
-        style: const TextStyle(
-          color: Color(0xFF475467),
-          fontSize: 13,
-          fontFamily: 'Inter',
-          fontWeight: FontWeight.w400,
-          height: 1.85,
-        ),
-      );
-
-  Widget _divider() => const Padding(
-        padding: EdgeInsets.symmetric(vertical: 16),
-        child: Divider(thickness: 1, color: Color(0xFFE4E7EC)),
-      );
-}
-
-// UI HELPERS -------------------------------
-
-// Section shells
-class _Section extends StatelessWidget {
-  final String? title;
-  final Widget child;
-  const _Section({this.title, required this.child});
-  @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (title != null) ...[
-            Text(title!, style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-          ],
-          child,
-        ],
-      );
-}
-
-
-// "Aug 12, 2025"
-String formatDateRequested(String input) {
-  final s = input.trim();
-  if (s.isEmpty) return s;
-
-  DateTime? dt = DateTime.tryParse(s);
-
-  // Try common incoming patterns if ISO parse failed.
-  const patterns = <String>[
-    'MMMM d, yyyy',
-    'MMM d, yyyy',
-    'M/d/yyyy',
-    'M/d/yy',
-    'MM-dd-yyyy',
-    'yyyy-MM-dd',
-    'yyyy-MM-dd HH:mm',
-    'yyyy-MM-dd h:mm a',
-  ];
-  for (final p in patterns) {
-    if (dt != null) break;
-    try {
-      dt = DateFormat(p).parseStrict(s);
-    } catch (_) {}
-  }
-  if (dt == null) return input;
-
-  return DateFormat('MMM d, yyyy').format(dt);
-}
-
-// "Aug 12, 1:30 PM" if time exists; otherwise "Aug 12"
-String formatSchedule(String input) {
-  final s = input.trim();
-  if (s.isEmpty) return s;
-
-  DateTime? dt = DateTime.tryParse(s);
-
-  const patterns = <String>[
-    'MMMM d, yyyy h:mm a',
-    'MMM d, yyyy h:mm a',
-    'M/d/yyyy h:mm a',
-    'MM/dd/yyyy h:mm a',
-    'yyyy-MM-dd HH:mm',
-    'yyyy-MM-dd h:mm a',
-    'MMM d, h:mm a',
-    'MMMM d, h:mm a',
-    'M/d h:mm a',
-  ];
-  for (final p in patterns) {
-    if (dt != null) break;
-    try {
-      dt = DateFormat(p).parseStrict(s);
-    } catch (_) {}
-  }
-
-  // If still not parseable, normalize dash/spacing and return.
-  if (dt == null) {
-    final cleaned = s
-        .replaceAll(RegExp(r'\s*-\s*'), ' – ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-    return cleaned;
-  }
-
-  // Include time if present.
-  final hasTimeInText =
-      RegExp(r'\d{1,2}[:.]\d{2}').hasMatch(s) ||
-      RegExp(r'\b(am|pm)\b', caseSensitive: false).hasMatch(s);
-  final hasTimeInDt = dt.hour != 0 || dt.minute != 0 || dt.second != 0;
-
-  final fmt = (hasTimeInText || hasTimeInDt)
-      ? DateFormat('MMM d, h:mm a')
-      : DateFormat('MMM d');
-  return fmt.format(dt);
-}
-
-// ---- Small UI helpers ----
-Widget ffDivider() => const Divider(height: 1, thickness: 1, color: Color(0xFFEAECF0));
-
-Widget brokenThumb({double h = 80, double w = 140}) => Container(
-      height: h,
-      width: w,
-      color: const Color(0xFFEAECF0),
-      alignment: Alignment.center,
-      child: const Icon(Icons.broken_image, color: Color(0xFF98A2B3)),
-    );
-
-Widget _thumb(String url, {double h = 80, double w = 140}) {
-  final isNetwork = url.startsWith('http');
-  final img = isNetwork
-      ? Image.network(
-          url,
-          height: h,
-          width: w,
-          fit: BoxFit.cover,
-          errorBuilder: (context, _, __) => brokenThumb(h: h, w: w),
-        )
-      : Image.asset(
-          url,
-          height: h,
-          width: w,
-          fit: BoxFit.cover,
-          errorBuilder: (context, _, __) => brokenThumb(h: h, w: w),
-        );
-  return ClipRRect(borderRadius: BorderRadius.circular(4), child: img);
-}
-
-/// One unified row for label/value lines
-class KeyValueRow extends StatelessWidget {
-  final String label;
-  final Widget value;
-  final double labelWidth;
-
-  const KeyValueRow({
-    super.key,
-    required this.label,
-    required this.value,
-    this.labelWidth = 120,
-  });
-
-  /// Convenience: plain text value
-  factory KeyValueRow.text({
-    Key? key,
-    required String label,
-    required String valueText,
-    double labelWidth = 120,
-    TextStyle? valueStyle,
-  }) {
-    return KeyValueRow(
-      key: key,
-      label: label,
-      labelWidth: labelWidth,
-      value: Text(
-        valueText,
-        textAlign: TextAlign.right,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        softWrap: false,
-        style: (valueStyle ??
-            const TextStyle(
-              fontFamily: 'Inter',
-              color: Color(0xFF344054),
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            )),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const labelStyle = TextStyle(
-      fontFamily: 'Inter',
+    text,
+    textAlign: TextAlign.right,
+    style: const TextStyle(
       color: Color(0xFF475467),
       fontSize: 13,
-      fontWeight: FontWeight.w600,
-    );
+      fontFamily: 'Inter',
+      fontWeight: FontWeight.w400,
+      height: 1.85,
+    ),
+  );
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(width: labelWidth, child: Text(label, style: labelStyle)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: DefaultTextStyle(
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                color: Color(0xFF344054),
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-              child: value,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Section Title
-class _SectionTitle extends StatelessWidget {
-  final String text;
-  const _SectionTitle(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontFamily: 'Inter',
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
-        color: Color(0xFF344054),
-      ),
-    );
-  }
-}
-
-/// Generic bordered card
-class _SectionCard extends StatelessWidget {
-  final String? title; // optional heading
-  final String? content; // optional body text
-  final Widget? child; // optional custom body
-  final EdgeInsets padding;
-  final EdgeInsets? margin;
-  final bool hideIfEmpty;
-
-  const _SectionCard({
-    this.title,
-    this.content,
-    this.child,
-    this.padding = const EdgeInsets.all(16),
-    this.margin,
-    this.hideIfEmpty = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final trimmed = (content ?? '').trim();
-    final shouldHide = hideIfEmpty && child == null && trimmed.isEmpty;
-    if (shouldHide) return const SizedBox.shrink();
-
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: double.infinity),
-      child: Container(
-        margin: margin,
-        padding: padding,
-        decoration: ShapeDecoration(
-          color: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            side: const BorderSide(width: 1, color: Color(0xFFEAECF0)),
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if ((title ?? '').trim().isNotEmpty) ...[
-              Text(
-                title!.trim(),
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  color: Color(0xFF101828),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-            if (trimmed.isNotEmpty) ...[
-              Text(
-                trimmed,
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  color: Color(0xFF475467),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                  height: 1.54,
-                  letterSpacing: 0.25,
-                ),
-              ),
-            ],
-            if (child != null) ...[
-              if (trimmed.isNotEmpty) const SizedBox(height: 8),
-              child!,
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// simple initials helper used by avatar
-String _initials(String fullName) {
-  final parts = fullName.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
-  if (parts.isEmpty) return '';
-  if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-  return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+  Widget _divider() => const Padding(
+    padding: EdgeInsets.symmetric(vertical: 16),
+    child: Divider(thickness: 1, color: Color(0xFFE4E7EC)),
+  );
 }
 
 // Details Permit
@@ -1825,6 +2307,435 @@ class DetailsPermit extends StatelessWidget {
   }
 }
 
+// UI HELPERS -------------------------------
+
+/// ------------------------------------------------------------
+/// Responsive scale helper (baseline 375pt width, clamped)
+/// ------------------------------------------------------------
+double uiScale(BuildContext context) =>
+    (MediaQuery.of(context).size.width / 375.0).clamp(0.85, 1.0);
+
+/// ------------------------------------------------------------
+/// Divider: full-bleed friendly with optional indents
+/// ------------------------------------------------------------
+Widget ffDivider({double indent = 0, double endIndent = 0}) => Divider(
+  height: 1,
+  thickness: 1,
+  color: const Color(0xFFEAECF0),
+  indent: indent,
+  endIndent: endIndent,
+);
+
+/// ------------------------------------------------------------
+/// Thumbnails + fallback
+/// ------------------------------------------------------------
+Widget brokenThumb({double h = 80, double w = 140, BorderRadius? radius}) =>
+    Container(
+      height: h,
+      width: w,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F4F7),
+        borderRadius: radius ?? BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      alignment: Alignment.center,
+      child: const Icon(Icons.broken_image, color: Color(0xFF98A2B3)),
+    );
+
+Widget _thumb(
+  String url, {
+  double h = 80,
+  double w = 140,
+  BorderRadius? radius,
+}) {
+  final r = radius ?? BorderRadius.circular(8);
+  final isNetwork = url.startsWith('http');
+  final img =
+      isNetwork
+          ? Image.network(
+            url,
+            height: h,
+            width: w,
+            fit: BoxFit.cover,
+            errorBuilder:
+                (context, _, __) => brokenThumb(h: h, w: w, radius: r),
+          )
+          : Image.asset(
+            url,
+            height: h,
+            width: w,
+            fit: BoxFit.cover,
+            errorBuilder:
+                (context, _, __) => brokenThumb(h: h, w: w, radius: r),
+          );
+  return ClipRRect(borderRadius: r, child: img);
+}
+
+/// ------------------------------------------------------------
+/// Key/Value row (responsive type + tighter mobile spacing)
+/// ------------------------------------------------------------
+class KeyValueRow extends StatelessWidget {
+  final String label;
+  final Widget value;
+  final double labelWidth;
+
+  const KeyValueRow({
+    super.key,
+    required this.label,
+    required this.value,
+    this.labelWidth = 120,
+  });
+
+  /// Convenience: plain text value
+  factory KeyValueRow.text({
+    Key? key,
+    required String label,
+    required String valueText,
+    double labelWidth = 120,
+    TextStyle? valueStyle,
+  }) {
+    return KeyValueRow(
+      key: key,
+      label: label,
+      labelWidth: labelWidth,
+      value: _ValueText(valueText: valueText, valueStyle: valueStyle),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = uiScale(context);
+
+    final labelStyle = TextStyle(
+      fontFamily: 'Inter',
+      color: const Color(0xFF475467),
+      fontSize: 12 * s, // was 13
+      fontWeight: FontWeight.w600,
+      height: 1.25,
+    );
+
+    // Keep your API but scale effective width on smaller phones
+    final effectiveLabelWidth = (labelWidth * s).clamp(96.0, 160.0);
+
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4 * s),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: effectiveLabelWidth,
+            child: Text(label, style: labelStyle),
+          ),
+          SizedBox(width: 10 * s),
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: DefaultTextStyle(
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  color: const Color(0xFF344054),
+                  fontSize: 12.5 * s, // was 14
+                  fontWeight: FontWeight.w500,
+                  height: 1.3,
+                ),
+                child: value,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ValueText extends StatelessWidget {
+  final String valueText;
+  final TextStyle? valueStyle;
+  const _ValueText({required this.valueText, this.valueStyle});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = uiScale(context);
+    return Text(
+      valueText,
+      textAlign: TextAlign.right,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
+      style:
+          (valueStyle ??
+              TextStyle(
+                fontFamily: 'Inter',
+                color: const Color(0xFF344054),
+                fontSize: 12.5 * s, // was 14
+                fontWeight: FontWeight.w500,
+                height: 1.3,
+              )),
+    );
+  }
+}
+
+/// ------------------------------------------------------------
+/// Section Title (already responsive; tightened weights/colors)
+/// ------------------------------------------------------------
+class _SectionTitle extends StatelessWidget {
+  final String text;
+  const _SectionTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    final s = uiScale(context);
+    return Text(
+      text,
+      style: TextStyle(
+        fontFamily: 'Inter',
+        fontWeight: FontWeight.w700, // slightly bolder to anchor sections
+        fontSize: 13.5 * s, // tuned size
+        color: const Color(0xFF101828),
+        letterSpacing: 0.1 * s,
+        height: 1.2,
+      ),
+    );
+  }
+}
+
+/// ------------------------------------------------------------
+/// Section shell (lightweight heading above a child)
+/// ------------------------------------------------------------
+class _Section extends StatelessWidget {
+  final String? title;
+  final Widget child;
+  const _Section({this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = uiScale(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (title != null) ...[
+          Text(
+            title!,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontWeight: FontWeight.w700,
+              fontSize: 13 * s,
+              color: const Color(0xFF111827),
+              height: 1.25,
+            ),
+          ),
+          SizedBox(height: 10 * s),
+        ],
+        child,
+      ],
+    );
+  }
+}
+
+/// ------------------------------------------------------------
+/// Generic bordered card (mobile-friendly)
+/// ------------------------------------------------------------
+class _SectionCard extends StatelessWidget {
+  final String? title; // optional heading
+  final String? content; // optional body text
+  final Widget? child; // optional custom body
+  final EdgeInsets padding;
+  final EdgeInsets? margin;
+  final bool hideIfEmpty;
+
+  const _SectionCard({
+    this.title,
+    this.content,
+    this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.margin,
+    this.hideIfEmpty = false,
+  });
+
+  double _scale(BuildContext context) => uiScale(context);
+
+  EdgeInsets _scaledInsets(EdgeInsets insets, double s) => EdgeInsets.fromLTRB(
+    insets.left * s,
+    insets.top * s,
+    insets.right * s,
+    insets.bottom * s,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final s = _scale(context);
+
+    final trimmed = (content ?? '').trim();
+    final shouldHide = hideIfEmpty && child == null && trimmed.isEmpty;
+    if (shouldHide) return const SizedBox.shrink();
+
+    final pad = _scaledInsets(padding, s);
+    final mar = margin == null ? null : _scaledInsets(margin!, s);
+    final radius = 10.0 * s;
+    final gapTitleBody = 8.0 * s;
+    final gapBodyChild = 8.0 * s;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: double.infinity),
+      child: Container(
+        margin: mar,
+        padding: pad,
+        decoration: ShapeDecoration(
+          color: const Color(0xFFFAFAFB),
+          shape: RoundedRectangleBorder(
+            side: const BorderSide(width: 1, color: Color(0xFFE5E7EB)),
+            borderRadius: BorderRadius.circular(radius),
+          ),
+          shadows: [
+            BoxShadow(
+              color: const Color(0x14000000),
+              blurRadius: 8 * s,
+              offset: Offset(0, 2 * s),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if ((title ?? '').trim().isNotEmpty) ...[
+              Text(
+                title!.trim(),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  color: const Color(0xFF101828),
+                  fontSize: 13.5 * s,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.2 * s,
+                  height: 1.2,
+                ),
+              ),
+              SizedBox(height: gapTitleBody),
+            ],
+            if (trimmed.isNotEmpty) ...[
+              Text(
+                trimmed,
+                softWrap: true,
+                textAlign: TextAlign.start,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  color: const Color(0xFF475467),
+                  fontSize: 12.5 * s,
+                  fontWeight: FontWeight.w400,
+                  height: 1.55,
+                  letterSpacing: 0.1 * s,
+                ),
+              ),
+            ],
+            if (child != null) ...[
+              if (trimmed.isNotEmpty) SizedBox(height: gapBodyChild),
+              child!,
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// ------------------------------------------------------------
+/// Avatar + Name + optional Department tag (compact)
+/// ------------------------------------------------------------
+class _AvatarNameBlock extends StatelessWidget {
+  final String name;
+  final String? departmentTag;
+  final String? photoUrl;
+
+  const _AvatarNameBlock({
+    required this.name,
+    this.departmentTag,
+    this.photoUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final s = uiScale(context);
+    final hasPhoto = (photoUrl ?? '').trim().isNotEmpty;
+
+    return Row(
+      children: [
+        // Avatar (photo or initials)
+        Container(
+          width: 40 * s,
+          height: 40 * s,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(width: 1.2 * s, color: Colors.white),
+            color: hasPhoto ? Colors.transparent : const Color(0xFF9CA3AF),
+            image:
+                hasPhoto
+                    ? DecorationImage(
+                      image: NetworkImage(photoUrl!.trim()),
+                      fit: BoxFit.cover,
+                    )
+                    : null,
+          ),
+          alignment: Alignment.center,
+          child:
+              !hasPhoto
+                  ? Text(
+                    _initials(name),
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15 * s,
+                      height: 1.0,
+                      letterSpacing: 0.2 * s,
+                    ),
+                  )
+                  : null,
+        ),
+
+        SizedBox(width: 8 * s),
+
+        // Name + DepartmentTag
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  color: const Color(0xFF101828),
+                  fontSize: 13 * s,
+                  fontWeight: FontWeight.w600,
+                  height: 1.35,
+                  letterSpacing: 0.1 * s,
+                ),
+              ),
+              if ((departmentTag ?? '').isNotEmpty) ...[
+                SizedBox(height: 4 * s),
+                DepartmentTag(departmentTag!.trim()),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Extract initials from name (e.g. "Juan Tamad" → "JT")
+String _initials(String name) {
+  final parts = name.trim().split(RegExp(r'\s+'));
+  if (parts.isEmpty) return '';
+  if (parts.length == 1) return parts.first[0].toUpperCase();
+  return (parts.first[0] + parts.last[0]).toUpperCase();
+}
+
+/// ------------------------------------------------------------
+/// Rich text body (notes + ordered instructions)
+/// ------------------------------------------------------------
 class _Body extends StatelessWidget {
   const _Body({
     required this.notes,
@@ -1840,44 +2751,50 @@ class _Body extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const headingStyle = TextStyle(
-      color: Color(0xFF1D1D1F),
-      fontSize: 12,
+    final s = uiScale(context);
+
+    final headingStyle = TextStyle(
+      color: const Color(0xFF1D1D1F),
+      fontSize: 12 * s,
       fontFamily: 'Inter',
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w800,
+      height: 1.2,
     );
 
-    const textStyle = TextStyle(
-      color: Color(0xFF1D1D1F),
-      fontSize: 12,
+    final textStyle = TextStyle(
+      color: const Color(0xFF1D1D1F),
+      fontSize: 12 * s,
       fontFamily: 'Inter',
       fontWeight: FontWeight.w500,
-      height: 1.4,
+      height: 1.45,
     );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(notesHeading, style: headingStyle),
-        const SizedBox(height: 6),
+        SizedBox(height: 6 * s),
         Text(notes, style: textStyle),
 
         if (instructions.isNotEmpty) ...[
-          const SizedBox(height: 16),
+          SizedBox(height: 14 * s),
           Text(subHeading, style: headingStyle),
-          const SizedBox(height: 6),
+          SizedBox(height: 6 * s),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: List.generate(instructions.length, (i) {
               return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
+                padding: EdgeInsets.only(bottom: 8 * s),
                 child: RichText(
                   text: TextSpan(
                     style: textStyle,
                     children: [
                       TextSpan(
                         text: '${i + 1}. ',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12 * s,
+                        ),
                       ),
                       TextSpan(text: instructions[i]),
                     ],

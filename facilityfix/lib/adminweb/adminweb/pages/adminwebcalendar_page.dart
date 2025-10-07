@@ -12,7 +12,7 @@ class AdminWebCalendarPage extends StatefulWidget {
 
 class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
   // Current date and calendar navigation
-  final DateTime _currentDate = DateTime.now();
+  DateTime _currentDate = DateTime.now();
   DateTime _selectedMonth = DateTime.now();
   
   // Sample task data - in real app, this would come from your database
@@ -695,7 +695,7 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                       ),
                     ),
                   );
-                }),
+                }).toList(),
               ],
             ),
           ),
@@ -735,7 +735,7 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
 
   // Show the task popover anchored to an on-screen rect
   void _showTaskPopoverAt(Map<String, dynamic> task, Rect anchor) {
-    final overlay = Overlay.of(context);
+    final overlay = Overlay.of(context)!;
     final screen  = MediaQuery.of(context).size;
 
     const double popW = 520;

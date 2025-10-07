@@ -185,7 +185,6 @@ class StatusTag extends StatelessWidget {
   // Inventory
   'approved':    _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)), 
   'rejected':    _StatusStyle(fg: Color(0xFFD92D20), bg: Color(0xFFFEF3F2)), 
-  'declined':    _StatusStyle(fg: Color(0xFFF79009), bg: Color(0xFFFEF3F2)), 
   };
 
   // Normalize "In-Progress", "in_progress", "in progress" → "in progress"
@@ -357,6 +356,7 @@ class RequestTypeTag extends StatelessWidget {
     'concern slip': _TypeStyle(fg: Color(0xFF2563EB), bg: Color(0xFFE0F2FE)),
     'job service': _TypeStyle(fg: Color(0xFF19B36E), bg: Color(0xFFE8F7F1)),
     'work order':  _TypeStyle(fg: Color(0xFFF79009), bg: Color(0xFFFFFAEB)),
+    'maintenance': _TypeStyle(fg: Color(0xFF9333EA), bg: Color(0xFFF3E8FF)),
   };
 
   static String _normalize(String s) => s
@@ -442,11 +442,11 @@ class _TypeStyle {
   const _TypeStyle({required this.fg, required this.bg});
 }
 
-// Announcement Classification Tag ----------------------------------------------
-class AnnouncementClassificationTag extends StatelessWidget {
+// Announcement Type ----------------------------------------------
+class AnnouncementType extends StatelessWidget {
   final String classification;
 
-  const AnnouncementClassificationTag(this.classification, {super.key});
+  const AnnouncementType(this.classification, {super.key});
 
   Color _getBackgroundColor(String classification) {
     switch (classification.toLowerCase()) {

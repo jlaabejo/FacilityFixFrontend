@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
-import '../popupwidgets/announcement_viewdetails_popup.dart';
+//import '../pages/createwebinventoryitems_page.dart';
 
-class AdminWebAnnouncementPage extends StatefulWidget {
-  const AdminWebAnnouncementPage({super.key});
+class InventoryManagementItemsPage extends StatefulWidget {
+  const InventoryManagementItemsPage({super.key});
 
   @override
-  State<AdminWebAnnouncementPage> createState() => _AdminWebAnnouncementPageState();
+  State<InventoryManagementItemsPage> createState() => _InventoryManagementItemsPageState();
 }
 
-class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
-  // Route mapping helper function 
+class _InventoryManagementItemsPageState extends State<InventoryManagementItemsPage> {
+  // Route mapping helper function
   String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
       'dashboard': '/dashboard',
@@ -55,46 +55,42 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
     );
   }
 
-  // Replace with actual backend data
-  final List<Map<String, dynamic>> _announcementItems = [
+  // Sample inventory data
+  final List<Map<String, dynamic>> _inventoryItems = [
     {
-      'id': 'N-2025-0001',
-      'Title': 'Scheduled Water Interruption',
-      'type': 'Utility Interruption',
-      'location': 'Tower A, Floors 1-5',
-      'dateAdded': '2025-05-08',
-      'priority': 'High', // For backend use
-      'description': 'Water interruption scheduled for maintenance', // For backend use
-      'status': 'Active', // For backend use
+      'itemNo': 'MAT-CIV-003',
+      'itemName': 'Galvanized Screw 3mm',
+      'stock': '150',
+      'tag': 'High-Turnover',
+      'status': 'In Stock',
     },
     {
-      'id': 'N-2025-0002',
-      'Title': 'Pest Control',
-      'type': 'Maintenance',
-      'location': 'Building B, Lobby',
-      'dateAdded': '2025-05-26',
-      'priority': 'Medium', // For backend use
-      'description': 'Regular pest control maintenance', // For backend use
-      'status': 'Active', // For backend use
+      'itemNo': 'ELC-WIR-012',
+      'itemName': 'Electrical Wire 12AWG',
+      'stock': '25',
+      'tag': 'Critical',
+      'status': 'Low Stock',
+    },
+    {
+      'itemNo': 'PLB-PIP-006',
+      'itemName': 'PVC Pipe 6 inch',
+      'stock': '0',
+      'tag': 'Essential',
+      'status': 'Out of Stock',
     },
   ];
 
-  // Search and filter controllers for backend integration
-  final TextEditingController _searchController = TextEditingController();
-  String _selectedFilter = 'All';
-  final List<String> _filterOptions = ['All', 'Utility Interruption', 'Maintenance', 'Emergency', 'Announcement'];
-
-  // Column widths for table 
+  // Column widths for table
   final List<double> _colW = <double>[
-    140, // ID
-    270, // TITLE
-    180, // TYPE
-    200, // LOCATION
-    110, // DATE ADDED
+    180, // ITEM NO.
+    340, // ITEM NAME
+    120, // STOCK
+    140, // TAG
+    120, // STATUS
     48,  // ACTION
   ];
 
-  // Fixed width cell helper 
+  // Fixed width cell helper
   Widget _fixedCell(int i, Widget child, {Alignment align = Alignment.centerLeft}) {
     return SizedBox(
       width: _colW[i],
@@ -102,7 +98,7 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
     );
   }
 
-  // Text with ellipsis helper 
+  // Text with ellipsis helper
   Text _ellipsis(String s, {TextStyle? style}) => Text(
     s,
     maxLines: 1,
@@ -111,8 +107,8 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
     style: style,
   );
 
-  // Action dropdown menu methods 
-  void _showActionMenu(BuildContext context, Map<String, dynamic> announcement, Offset position) {
+  // Action dropdown menu methods
+  void _showActionMenu(BuildContext context, Map<String, dynamic> item, Offset position) {
     final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     
     showMenu(
@@ -189,50 +185,50 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
       elevation: 8,
     ).then((value) {
       if (value != null) {
-        _handleActionSelection(value, announcement);
+        _handleActionSelection(value, item);
       }
     });
   }
 
-  // Handle action selection 
-  void _handleActionSelection(String action, Map<String, dynamic> announcement) {
+  // Handle action selection
+  void _handleActionSelection(String action, Map<String, dynamic> item) {
     switch (action) {
       case 'view':
-        _viewaAnnouncement(announcement);
+        _viewItem(item);
         break;
       case 'edit':
-        _editAnnouncement(announcement);
+        _editItem(item);
         break;
       case 'delete':
-        _deleteAnnouncement(announcement);
+        _deleteItem(item);
         break;
     }
   }
 
-  // View announcement method 
-  void _viewaAnnouncement(Map<String, dynamic> announcement) {
-    AnnouncementDetailDialog.show(context, announcement);
+  // View item method
+  void _viewItem(Map<String, dynamic> item) {
+    context.go('/inventory/item/${item['itemNo']}');
   }
 
-  // Edit announcement method 
-  void _editAnnouncement(Map<String, dynamic> announcement) {
-    // TODO: Implement edit functionality with backend API call
+  // Edit item method
+  void _editItem(Map<String, dynamic> item) {
+    // Implement edit functionality
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Edit announcement: ${announcement['id']}'),
+        content: Text('Edit item: ${item['id']}'),
         backgroundColor: Colors.blue,
       ),
     );
   }
 
-  // Delete announcement method
-  void _deleteAnnouncement(Map<String, dynamic> announcement) {
+  // Delete item method
+  void _deleteItem(Map<String, dynamic> item) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Delete Announcement'),
-          content: Text('Are you sure you want to delete announcement ${announcement['id']}?'),
+          title: const Text('Delete Item'),
+          content: Text('Are you sure you want to delete item ${item['id']}?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -241,13 +237,13 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                // TODO: Replace with actual backend API call
+                // Remove item from list
                 setState(() {
-                  _announcementItems.removeWhere((n) => n['id'] == announcement['id']);
+                  _inventoryItems.removeWhere((t) => t['id'] == item['id']);
                 });
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Announcement ${announcement['id']} deleted'),
+                    content: Text('Item ${item['id']} deleted'),
                     backgroundColor: Colors.red,
                   ),
                 );
@@ -263,33 +259,10 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
     );
   }
 
-  // Search functionality 
-  void _onSearchChanged(String value) {
-    // TODO: Implement search functionality with backend API
-    // For now, just update the controller
-    setState(() {
-      // Filter logic will go here
-    });
-  }
-
-  // Filter functionality
-  void _onFilterChanged(String filter) {
-    setState(() {
-      _selectedFilter = filter;
-      // TODO: Implement filter functionality with backend API
-    });
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     return FacilityFixLayout(
-      currentRoute: 'announcement',
+      currentRoute: 'inventory_items',
       onNavigate: (routeKey) {
         final routePath = _getRoutePath(routeKey);
         if (routePath != null) {
@@ -307,12 +280,11 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Breadcrumb and title section
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "Announcement",
+                      "Inventory Management",
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
@@ -333,12 +305,21 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                         ),
                         const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
                         TextButton(
+                          onPressed: () => context.go('/inventory/items'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                          child: const Text('Inventory Management'),
+                        ),
+                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        TextButton(
                           onPressed: null,
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.black,
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
-                          child: const Text('Announcement'),
+                          child: const Text('Items'),
                         ),
                         
                       ],
@@ -348,20 +329,7 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                 // Create New button
                 ElevatedButton.icon(
                   onPressed: () {
-                    context.go('/adminweb/pages/createannouncement');
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Create New Announcement'),
-                        content: const Text('Create announcement dialog will go here'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('Close'),
-                          ),
-                        ],
-                      ),
-                    );
+                    context.goNamed('inventory_item_create');
                   },
                   icon: const Icon(Icons.add, size: 22),
                   label: const Text(
@@ -407,7 +375,7 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          "Announcement",
+                          "Inventory Items",
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
@@ -426,8 +394,6 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: TextField(
-                                controller: _searchController,
-                                onChanged: _onSearchChanged,
                                 decoration: InputDecoration(
                                   suffixIcon: Icon(
                                     Icons.search,
@@ -449,41 +415,31 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                             ),
                             const SizedBox(width: 12),
                             // Filter button
-                            PopupMenuButton<String>(
-                              initialValue: _selectedFilter,
-                              onSelected: _onFilterChanged,
-                              itemBuilder: (context) => _filterOptions.map((filter) {
-                                return PopupMenuItem(
-                                  value: filter,
-                                  child: Text(filter),
-                                );
-                              }).toList(),
-                              child: Container(
-                                height: 40,
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey[300]!),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.tune,
-                                      color: Colors.grey[600],
-                                      size: 18,
+                            Container(
+                              height: 40,
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey[300]!),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.tune,
+                                    color: Colors.grey[600],
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    "Filter",
+                                    style: TextStyle(
+                                      color: Colors.grey[700],
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      "Filter",
-                                      style: TextStyle(
-                                        color: Colors.grey[700],
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -504,7 +460,7 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                       columnSpacing: 30,
                       headingRowHeight: 56,
                       dataRowHeight: 64,
-                      headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
+                      headingRowColor: MaterialStateProperty.all(Colors.grey[50]),
                       headingTextStyle: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -516,37 +472,37 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                         color: Colors.black87,
                       ),
                       columns: [
-                        DataColumn(label: _fixedCell(0, const Text("ID"))),
-                        DataColumn(label: _fixedCell(1, const Text("ANNOUNCEMENT TITLE"))),
-                        DataColumn(label: _fixedCell(2, const Text("TYPE"))),
-                        DataColumn(label: _fixedCell(3, const Text("LOCATION"))),
-                        DataColumn(label: _fixedCell(4, const Text("DATE ADDED"))),
+                        DataColumn(label: _fixedCell(0, const Text("ITEM NO."))),
+                        DataColumn(label: _fixedCell(1, const Text("ITEM NAME"))),
+                        DataColumn(label: _fixedCell(2, const Text("STOCK"))),
+                        DataColumn(label: _fixedCell(3, const Text("TAG"))),
+                        DataColumn(label: _fixedCell(4, const Text("STATUS"))),
                         DataColumn(label: _fixedCell(5, const Text(""))),
                       ],
-                      rows: _announcementItems.map((announcement) {
+                      rows: _inventoryItems.map((item) {
                         return DataRow(
                           cells: [
                             DataCell(_fixedCell(0, _ellipsis(
-                              announcement['id'],
+                              item['itemNo'],
                               style: TextStyle(color: Colors.grey[700], fontSize: 13),
                             ))),
-                            DataCell(_fixedCell(1, _ellipsis(announcement['Title']))),
-                            DataCell(_fixedCell(2, _buildTypeChip(announcement['type']))),
-                            DataCell(_fixedCell(3, _ellipsis(announcement['location']))),
-                            DataCell(_fixedCell(4, _ellipsis(announcement['dateAdded']))),
+                            DataCell(_fixedCell(1, _ellipsis(item['itemName']))),
+                            DataCell(_fixedCell(2, _ellipsis(item['stock']))),
+                            DataCell(_fixedCell(3, _buildTagChip(item['tag']))),
+                            DataCell(_fixedCell(4, _buildStatusChip(item['status']))),
                             DataCell(_fixedCell(5,
-                              Builder(builder: (context) {
-                                return IconButton(
-                                  onPressed: () {
-                                    final rbx = context.findRenderObject() as RenderBox;
-                                    final position = rbx.localToGlobal(Offset.zero);
-                                    _showActionMenu(context, announcement, position);
-                                  },
-                                  icon: Icon(Icons.more_vert, color: Colors.grey[400], size: 20),
-                                );
-                              }),
-                              align: Alignment.center,
-                            )),
+                            Builder(builder: (context) {
+                              return IconButton(
+                                onPressed: () {
+                                  final rbx = context.findRenderObject() as RenderBox;
+                                  final position = rbx.localToGlobal(Offset.zero);
+                                  _showActionMenu(context, item, position);
+                                },
+                                icon: Icon(Icons.more_vert, color: Colors.grey[400], size: 20),
+                              );
+                            }),
+                          align: Alignment.center,
+                        )),
                           ],
                         );
                       }).toList(),
@@ -565,17 +521,16 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "Showing 1 to ${_announcementItems.length} of ${_announcementItems.length} entries",
+                          "Showing 1 to ${_inventoryItems.length} of ${_inventoryItems.length} entries",
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 14,
                           ),
                         ),
-                        // Pagination controls
                         Row(
                           children: [
                             IconButton(
-                              onPressed: null, // TODO: Implement previous page
+                              onPressed: null,
                               icon: Icon(
                                 Icons.chevron_left,
                                 color: Colors.grey[400],
@@ -619,9 +574,7 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                               ),
                             ),
                             IconButton(
-                              onPressed: () {
-                                // TODO: Implement next page
-                              },
+                              onPressed: () {},
                               icon: Icon(
                                 Icons.chevron_right,
                                 color: Colors.grey[600],
@@ -641,27 +594,63 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
     );
   }
 
-  // Type chip widget - styled for announcement types
-  Widget _buildTypeChip(String type) {
+  // Tag chip widget
+  Widget _buildTagChip(String tag) {
     Color bgColor;
     Color textColor;
     
-    switch (type) {
-      case 'Utility Interruption':
+    switch (tag) {
+      case 'High-Turnover':
+        bgColor = const Color(0xFFE8F5E8);
+        textColor = const Color(0xFF2E7D32);
+        break;
+      case 'Critical':
         bgColor = const Color(0xFFFFEBEE);
         textColor = const Color(0xFFD32F2F);
         break;
-      case 'Maintenance':
-        bgColor = const Color(0xFFE3F2FD);
-        textColor = const Color(0xFF1976D2);
-        break;
-      case 'Emergency':
+      case 'Essential':
         bgColor = const Color(0xFFFFF3E0);
         textColor = const Color(0xFFE65100);
         break;
-      case 'Announcement':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
+      default:
+        bgColor = Colors.grey[100]!;
+        textColor = Colors.grey[700]!;
+    }
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        tag,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  // Status chip widget
+  Widget _buildStatusChip(String status) {
+    Color bgColor;
+    Color textColor;
+    
+    switch (status) {
+      case 'In Stock':
+        bgColor = const Color(0xFFE3F2FD);
+        textColor = const Color(0xFF1976D2);
+        break;
+      case 'Low Stock':
+        bgColor = const Color(0xFFFFF3E0);
+        textColor = const Color(0xFFE65100);
+        break;
+      case 'Out of Stock':
+        bgColor = const Color(0xFFFFEBEE);
+        textColor = const Color(0xFFD32F2F);
         break;
       default:
         bgColor = Colors.grey[100]!;
@@ -675,7 +664,7 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
-        type,
+        status,
         style: TextStyle(
           color: textColor,
           fontSize: 12,

@@ -23,7 +23,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
   String? _selectedType;
   String? _selectedLocation;
   bool _pinToDashboard = false;
-  final List<File> _attachedFiles = [];
+  List<File> _attachedFiles = [];
 
   // Dropdown options 
   final List<String> _audienceOptions = ['Tenant', 'Staff', 'All'];
