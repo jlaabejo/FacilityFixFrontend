@@ -26,7 +26,7 @@ class _HomeState extends State<HomePage> {
   String _userName = 'User';
   String _unitLabel = '—';
 
-  List<Map<String, dynamic>> _concernSlips = [];
+  List<Map<String, dynamic>> _allRequests = [];
   int _activeRequestsCount = 0;
   int _doneRequestsCount = 0;
 
@@ -41,41 +41,47 @@ class _HomeState extends State<HomePage> {
   void initState() {
     super.initState();
     _loadUserData();
-    _loadConcernSlips();
+    _loadAllRequests();
   }
 
-  Future<void> _loadConcernSlips() async {
+  Future<void> _loadAllRequests() async {
     try {
       final apiService = APIService();
-      final concernSlips = await apiService.getTenantConcernSlips();
+      final allRequests = await apiService.getAllTenantRequests();
 
-      if (concernSlips != null && mounted) {
+      if (allRequests.isNotEmpty && mounted) {
         setState(() {
-          _concernSlips = concernSlips;
+          _allRequests = allRequests;
 
-          _activeRequestsCount = concernSlips
-              .where(
-                (data) =>
-                    (data['status'] ?? '').toString().toLowerCase() != 'done' &&
-                    (data['status'] ?? '').toString().toLowerCase() !=
-                        'completed' &&
-                    (data['status'] ?? '').toString().toLowerCase() != 'closed',
-              )
-              .length;
+          _activeRequestsCount =
+              allRequests
+                  .where(
+                    (data) =>
+                        (data['status'] ?? '').toString().toLowerCase() !=
+                            'done' &&
+                        (data['status'] ?? '').toString().toLowerCase() !=
+                            'completed' &&
+                        (data['status'] ?? '').toString().toLowerCase() !=
+                            'closed',
+                  )
+                  .length;
 
-          _doneRequestsCount = concernSlips
-              .where(
-                (data) =>
-                    (data['status'] ?? '').toString().toLowerCase() == 'done' ||
-                    (data['status'] ?? '').toString().toLowerCase() ==
-                        'completed' ||
-                    (data['status'] ?? '').toString().toLowerCase() == 'closed',
-              )
-              .length;
+          _doneRequestsCount =
+              allRequests
+                  .where(
+                    (data) =>
+                        (data['status'] ?? '').toString().toLowerCase() ==
+                            'done' ||
+                        (data['status'] ?? '').toString().toLowerCase() ==
+                            'completed' ||
+                        (data['status'] ?? '').toString().toLowerCase() ==
+                            'closed',
+                  )
+                  .length;
         });
       }
     } catch (e) {
-      print('Error loading concern slips: $e');
+      print('Error loading all requests: $e');
     }
   }
 
@@ -183,10 +189,33 @@ class _HomeState extends State<HomePage> {
 
   Future<void> _refresh() async {
     await _loadUserData();
-    await _loadConcernSlips();
+    await _loadAllRequests();
   }
 
-  Widget _buildConcernSlipCard(Map<String, dynamic> concernSlip) {
+  Widget _buildRequestCard(Map<String, dynamic> request) {
+    // Determine the request type and format accordingly
+    final requestType = request['request_type'] ?? 'Concern Slip';
+    final status = request['status'] ?? 'pending';
+    final priority = request['priority'] ?? 'medium';
+
+    // Format the ID based on request type
+    String displayId = request['formatted_id'] ?? request['id'] ?? '';
+    if (displayId.isEmpty) {
+      switch (requestType.toLowerCase()) {
+        case 'concern slip':
+          displayId = 'CS-${request['id'] ?? ''}';
+          break;
+        case 'job service':
+          displayId = 'JS-${request['id'] ?? ''}';
+          break;
+        case 'work order':
+          displayId = 'WO-${request['id'] ?? ''}';
+          break;
+        default:
+          displayId = request['id'] ?? '';
+      }
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -204,15 +233,18 @@ class _HomeState extends State<HomePage> {
       ),
       child: InkWell(
         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ViewDetailsPage(
-                selectedTabLabel: 'concern slip',
-                requestTypeTag: 'Concern Slip',
+          final concernSlipId = request['id'] ?? '';
+          if (concernSlipId.isNotEmpty) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder:
+                    (_) => TenantConcernSlipDetailPage(
+                      concernSlipId: concernSlipId,
+                    ),
               ),
-            ),
-          );
+            );
+          }
         },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -221,7 +253,7 @@ class _HomeState extends State<HomePage> {
               children: [
                 Expanded(
                   child: Text(
-                    concernSlip['title'] ?? 'Untitled',
+                    request['title'] ?? 'Untitled Request',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -235,31 +267,81 @@ class _HomeState extends State<HomePage> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: _getStatusColor(
-                      concernSlip['status'] ?? '',
-                    ).withOpacity(0.1),
+                    color: _getStatusColor(status).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    concernSlip['status'] ?? 'pending',
+                    _formatStatus(status),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
-                      color: _getStatusColor(concernSlip['status'] ?? ''),
+                      color: _getStatusColor(status),
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              'ID: ${concernSlip['id'] ?? ''}',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF667085)),
+            Row(
+              children: [
+                Text(
+                  'ID: $displayId',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF667085),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _getPriorityColor(priority).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    _formatPriority(priority),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      color: _getPriorityColor(priority),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 4),
-            Text(
-              concernSlip['created_at'] ?? '',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF667085)),
+            Row(
+              children: [
+                Text(
+                  _formatDate(request['created_at'] ?? ''),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF667085),
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _getRequestTypeColor(requestType).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    requestType,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      color: _getRequestTypeColor(requestType),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -267,16 +349,95 @@ class _HomeState extends State<HomePage> {
     );
   }
 
+  String _formatStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return 'Pending';
+      case 'assigned':
+        return 'Assigned';
+      case 'in_progress':
+        return 'In Progress';
+      case 'completed':
+      case 'done':
+        return 'Done';
+      case 'approved':
+        return 'Approved';
+      case 'denied':
+        return 'Denied';
+      case 'on_hold':
+        return 'On Hold';
+      default:
+        return status;
+    }
+  }
+
+  String _formatPriority(String priority) {
+    switch (priority.toLowerCase()) {
+      case 'high':
+        return 'High';
+      case 'medium':
+        return 'Medium';
+      case 'low':
+        return 'Low';
+      case 'critical':
+        return 'Critical';
+      default:
+        return priority;
+    }
+  }
+
+  String _formatDate(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      return '${date.day}/${date.month}/${date.year}';
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
         return const Color(0xFFF79009);
       case 'assigned':
-      case 'in progress':
+      case 'in_progress':
         return const Color(0xFF2563EB);
       case 'done':
       case 'completed':
         return const Color(0xFF24D164);
+      case 'approved':
+        return const Color(0xFF24D164);
+      case 'denied':
+        return const Color(0xFFDC2626);
+      case 'on_hold':
+        return const Color(0xFF9CA3AF);
+      default:
+        return const Color(0xFF667085);
+    }
+  }
+
+  Color _getPriorityColor(String priority) {
+    switch (priority.toLowerCase()) {
+      case 'high':
+      case 'critical':
+        return const Color(0xFFDC2626);
+      case 'medium':
+        return const Color(0xFFF59E0B);
+      case 'low':
+        return const Color(0xFF10B981);
+      default:
+        return const Color(0xFF667085);
+    }
+  }
+
+  Color _getRequestTypeColor(String requestType) {
+    switch (requestType.toLowerCase()) {
+      case 'concern slip':
+        return const Color(0xFF7C3AED);
+      case 'job service':
+        return const Color(0xFF0891B2);
+      case 'work order':
+        return const Color(0xFFDC2626);
       default:
         return const Color(0xFF667085);
     }
@@ -287,7 +448,7 @@ class _HomeState extends State<HomePage> {
     final displayName = _userName.isNotEmpty ? _userName : 'User';
     final displayUnit = _unitLabel.isNotEmpty ? _unitLabel : '—';
 
-    final recentConcernSlips = _concernSlips.take(3).toList();
+    final recentRequests = _allRequests.take(3).toList();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -305,95 +466,97 @@ class _HomeState extends State<HomePage> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              child: RefreshIndicator(
-                onRefresh: _refresh,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Greeting
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text.rich(
-                            TextSpan(
-                              text: 'Hello, ',
-                              style: const TextStyle(
-                                color: Color(0xFF1B1D21),
-                                fontSize: 22,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: -0.5,
-                              ),
-                              children: [
-                                TextSpan(
-                                  text: displayName,
-                                  style: const TextStyle(
-                                    color: Color(0xFF101828),
-                                    fontWeight: FontWeight.w800,
-                                  ),
+      body:
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : SafeArea(
+                child: RefreshIndicator(
+                  onRefresh: _refresh,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Greeting
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text.rich(
+                              TextSpan(
+                                text: 'Hello, ',
+                                style: const TextStyle(
+                                  color: Color(0xFF1B1D21),
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: -0.5,
                                 ),
-                              ],
+                                children: [
+                                  TextSpan(
+                                    text: displayName,
+                                    style: const TextStyle(
+                                      color: Color(0xFF101828),
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            displayUnit,
-                            style: const TextStyle(
-                              color: Color(0xFF667085),
-                              fontSize: 13,
-                              height: 1.35,
+                            const SizedBox(height: 2),
+                            Text(
+                              displayUnit,
+                              style: const TextStyle(
+                                color: Color(0xFF667085),
+                                fontSize: 13,
+                                height: 1.35,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      Row(
-                        children: [
-                          Expanded(
-                            child: StatusCard(
-                              title: 'Active Request',
-                              count: '$_activeRequestsCount',
-                              icon: Icons.settings_outlined,
-                              iconColor: const Color(0xFFF79009),
-                              backgroundColor: const Color(0xFFFFFAEB),
-                              borderColor: const Color(0xFFF79009),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: StatusCard(
-                              title: 'Done',
-                              count: '$_doneRequestsCount',
-                              icon: Icons.check_circle_rounded,
-                              iconColor: const Color(0xFF24D164),
-                              backgroundColor: const Color(0xFFF0FDF4),
-                              borderColor: const Color(0xFF24D164),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Recent Requests
-                      SectionHeader(
-                        title: 'Recent Requests',
-                        actionLabel: 'View all',
-                        onActionTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const WorkOrderPage(),
-                          ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 12),
+                        const SizedBox(height: 16),
 
-                      recentConcernSlips.isEmpty
-                          ? Container(
+                        Row(
+                          children: [
+                            Expanded(
+                              child: StatusCard(
+                                title: 'Active Request',
+                                count: '$_activeRequestsCount',
+                                icon: Icons.settings_outlined,
+                                iconColor: const Color(0xFFF79009),
+                                backgroundColor: const Color(0xFFFFFAEB),
+                                borderColor: const Color(0xFFF79009),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: StatusCard(
+                                title: 'Done',
+                                count: '$_doneRequestsCount',
+                                icon: Icons.check_circle_rounded,
+                                iconColor: const Color(0xFF24D164),
+                                backgroundColor: const Color(0xFFF0FDF4),
+                                borderColor: const Color(0xFF24D164),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Recent Requests
+                        SectionHeader(
+                          title: 'Recent Requests',
+                          actionLabel: 'View all',
+                          onActionTap:
+                              () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const WorkOrderPage(),
+                                ),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        recentRequests.isEmpty
+                            ? Container(
                               width: double.infinity,
                               padding: const EdgeInsets.all(24),
                               decoration: BoxDecoration(
@@ -431,66 +594,70 @@ class _HomeState extends State<HomePage> {
                                 ],
                               ),
                             )
-                          : Column(
-                              children: recentConcernSlips
-                                  .map((cs) => _buildConcernSlipCard(cs))
-                                  .toList(),
+                            : Column(
+                              children:
+                                  recentRequests
+                                      .map(
+                                        (request) => _buildRequestCard(request),
+                                      )
+                                      .toList(),
                             ),
-                      const SizedBox(height: 24),
+                        const SizedBox(height: 24),
 
-                      // Latest Announcement
-                      SectionHeader(
-                        title: 'Latest Announcement',
-                        actionLabel: 'View all',
-                        onActionTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const AnnouncementPage(),
+                        // Latest Announcement
+                        SectionHeader(
+                          title: 'Latest Announcement',
+                          actionLabel: 'View all',
+                          onActionTap:
+                              () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const AnnouncementPage(),
+                                ),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF9FAFB),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: const Column(
+                            children: [
+                              Icon(
+                                Icons.announcement_outlined,
+                                size: 48,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                'No announcements',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF374151),
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Building announcements will appear here',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Color(0xFF6B7280),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF9FAFB),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE5E7EB)),
-                        ),
-                        child: const Column(
-                          children: [
-                            Icon(
-                              Icons.announcement_outlined,
-                              size: 48,
-                              color: Color(0xFF9CA3AF),
-                            ),
-                            SizedBox(height: 12),
-                            Text(
-                              'No announcements',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF374151),
-                              ),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              'Building announcements will appear here',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Color(0xFF6B7280),
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                    ],
+                        const SizedBox(height: 24),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
       bottomNavigationBar: NavBar(
         items: _navItems,
         currentIndex: _selectedIndex,

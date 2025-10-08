@@ -1,304 +1,408 @@
 import 'dart:async';
 import 'package:facilityfix/models/cards.dart';
-import 'package:facilityfix/staff/announcement.dart';
-import 'package:facilityfix/staff/calendar.dart' hide WorkOrder;
-import 'package:facilityfix/staff/chat.dart';
-import 'package:facilityfix/staff/home.dart';
-import 'package:facilityfix/staff/inventory.dart';
-import 'package:facilityfix/staff/notification.dart';
-import 'package:facilityfix/staff/view_details/workorder.dart'
-    show WorkOrderDetails, WorkOrderDetailsPage;
+import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/tenant/announcement.dart';
+import 'package:facilityfix/tenant/chat.dart';
+import 'package:facilityfix/tenant/home.dart';
+import 'package:facilityfix/tenant/notification.dart';
+import 'package:facilityfix/tenant/profile.dart';
+import 'package:facilityfix/tenant/request_forms.dart';
+import 'package:facilityfix/tenant/view_details.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/helper_models.dart';
+import 'package:facilityfix/widgets/modals.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 class WorkOrderPage extends StatefulWidget {
-  final String staffDepartment;
-
-  const WorkOrderPage({
-    super.key,
-    this.staffDepartment = 'Plumbing',
-  });
+  const WorkOrderPage({super.key});
 
   @override
   State<WorkOrderPage> createState() => _WorkOrderPageState();
 }
 
 class _WorkOrderPageState extends State<WorkOrderPage> {
-  String _selectedTabLabel = 'Repair Task';
+  // ─────────────── Tabs (by request type) ───────────────
+  String _selectedTabLabel = "All";
+
+  // ─────────────── Filters ───────────────
   String _selectedStatus = 'All';
-  String _selectedPriority = 'All';
+  String _selectedDepartment = 'All'; // mapped as "classification"
   final TextEditingController _searchController = TextEditingController();
 
-  final Map<String, String> _taskTypeById = const {
-    'CS-2025-001': 'repair detail',
-    'CS-2025-002': 'repair detail',
-    'JS-2025-031': 'repair detail',
-    'JS-2025-032': 'repair detail',
-    'JS-2025-033': 'repair detail',
-    'MT-P-2025-011': 'maintenance detail',
-    'MT-P-2025-012': 'maintenance detail',
-  };
+  // ─────────────── Dynamic data from API ───────────────
+  List<Map<String, dynamic>> _allRequests = [];
+  bool _isLoading = true;
 
-  static const List<String> _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-  ];
-  String shortDate(DateTime d) => '${_months[d.month - 1]} ${d.day}';
-  String _norm(String? s) => (s ?? '').toLowerCase().trim();
-
-  final List<WorkOrder> _all = [
-    WorkOrder(
-      title: 'Leaking faucet',
-      id: 'CS-2025-001',
-      createdAt: DateFormat('MMMM d, yyyy').parse('August 25, 2025'),
-      statusTag: 'Assigned',
-      departmentTag: 'Plumbing',
-      requestTypeTag: 'Concern Slip',
-      unitId: 'A 1001',
-      priorityTag: 'High',
-      assignedStaff: 'Juan Dela Cruz',
-      staffDepartment: 'Plumbing',
-      staffPhotoUrl: 'assets/images/avatar.png',
-    ),
-    WorkOrder(
-      title: 'Leaking faucet',
-      id: 'CS-2025-002',
-      createdAt: DateFormat('MMMM d, yyyy').parse('August 22, 2025'),
-      statusTag: 'Done',
-      departmentTag: 'Plumbing',
-      requestTypeTag: 'Concern Slip',
-      unitId: 'A 1001',
-      priorityTag: 'High',
-      assignedStaff: 'Juan Dela Cruz',
-      staffDepartment: 'Plumbing',
-      staffPhotoUrl: 'assets/images/avatar.png',
-    ),
-    WorkOrder(
-      title: 'Leaking faucet',
-      id: 'JS-2025-031',
-      createdAt: DateFormat('MMMM d, yyyy').parse('August 21, 2025'),
-      statusTag: 'Assigned',
-      departmentTag: 'Plumbing',
-      requestTypeTag: 'Job Service',
-      unitId: 'A 1001',
-      priorityTag: 'High',
-      assignedStaff: 'Juan Dela Cruz',
-      staffDepartment: 'Plumbing',
-      staffPhotoUrl: 'assets/images/avatar.png',
-    ),
-    WorkOrder(
-      title: 'Quarterly Pipe Inspection',
-      id: 'MT-P-2025-011',
-      createdAt: DateFormat('MMMM d, yyyy').parse('August 30, 2025'),
-      statusTag: 'Scheduled',
-      departmentTag: 'Plumbing',
-      requestTypeTag: 'Work Order',
-      unitId: 'Tower A - 5th Floor',
-      priorityTag: 'Medium',
-      assignedStaff: 'Juan Dela Cruz',
-      staffDepartment: 'Plumbing',
-      staffPhotoUrl: 'assets/images/avatar.png',
-    ),
-  ];
-
-  final Map<String, String> _statusOverrideById = {};
-  String _statusOf(WorkOrder w) => _statusOverrideById[w.id] ?? w.statusTag;
-
+  // ===== Refresh =============================================================
   Future<void> _refresh() async {
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-    setState(() {});
+    await _loadAllRequests();
   }
 
+  Future<void> _loadAllRequests() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final apiService = APIService();
+      final allRequests = await apiService.getAllTenantRequests();
+
+      if (mounted) {
+        setState(() {
+          _allRequests =
+              allRequests.map((request) {
+                // Convert API response to WorkOrder-like structure
+                return {
+                  'id': request['formatted_id'] ?? request['id'] ?? '',
+                  'title': request['title'] ?? 'Untitled Request',
+                  'created_at':
+                      request['created_at'] ?? DateTime.now().toIso8601String(),
+                  'status': request['status'] ?? 'pending',
+                  'category':
+                      request['category'] ??
+                      request['department_tag'] ??
+                      'general',
+                  'priority': request['priority'] ?? 'medium',
+                  'request_type': request['request_type'] ?? 'Concern Slip',
+                  'unit_id': request['unit_id'] ?? '',
+                  'assigned_staff':
+                      request['assigned_to'] ?? request['assigned_staff'],
+                  'staff_department':
+                      request['staff_department'] ?? request['category'],
+                  'description': request['description'] ?? '',
+                  'location': request['location'] ?? '',
+                };
+              }).toList();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading requests: $e');
+      if (mounted) {
+        setState(() {
+          _allRequests = [];
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() => setState(() {}));
+    _loadAllRequests();
+  }
+
+  // ===== Bottom nav ==========================================================
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
     NavItem(icon: Icons.announcement_rounded),
-    NavItem(icon: Icons.calendar_month),
-    NavItem(icon: Icons.inventory),
+    NavItem(icon: Icons.person),
   ];
 
   void _onTabTapped(int index) {
     final destinations = [
       const HomePage(),
-      WorkOrderPage(staffDepartment: widget.staffDepartment),
+      const WorkOrderPage(),
       const AnnouncementPage(),
-      const CalendarPage(),
-      const InventoryPage(),
+      const ProfilePage(),
     ];
     if (index != 1) {
       Navigator.pushReplacement(
         context,
-        PageRouteBuilder(
-          pageBuilder: (_, __, ___) => destinations[index],
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-        ),
+        MaterialPageRoute(builder: (_) => destinations[index]),
       );
     }
   }
 
-  bool _isMaintenanceTask(WorkOrder w) =>
-      (_taskTypeById[w.id]?.toLowerCase() ?? 'repair detail') ==
-      'maintenance detail';
-  bool _isRepairTask(WorkOrder w) => !_isMaintenanceTask(w);
-
-  bool _tabMatches(WorkOrder w) {
-    final tab = _norm(_selectedTabLabel);
-    if (tab == 'repair task') return _isRepairTask(w);
-    return _isMaintenanceTask(w);
+  // ===== Popup to create request ============================================
+  void _showRequestDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder:
+          (_) => CustomPopup(
+            title: 'Create a Request',
+            message: 'Would you like to create a new request?',
+            primaryText: 'Yes, Continue',
+            onPrimaryPressed: () {
+              Navigator.of(context).pop();
+              showDialog(
+                context: context,
+                builder:
+                    (_) => Dialog(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 20,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              'What type of request would you like to create?',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            ListTile(
+                              leading: const Icon(Icons.assignment_outlined),
+                              title: const Text('Concern Slip'),
+                              onTap: () {
+                                Navigator.of(context).pop();
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder:
+                                        (_) => const RequestForm(
+                                          requestType: 'Concern Slip',
+                                        ),
+                                  ),
+                                );
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(
+                                Icons.design_services_outlined,
+                              ),
+                              title: const Text('Job Service Request'),
+                              onTap: () {
+                                Navigator.of(context).pop();
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder:
+                                        (_) => const RequestForm(
+                                          requestType: 'Job Service',
+                                        ),
+                                  ),
+                                );
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.build_outlined),
+                              title: const Text('Work Order Permit'),
+                              onTap: () {
+                                Navigator.of(context).pop();
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder:
+                                        (_) => const RequestForm(
+                                          requestType: 'Work Order',
+                                        ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+              );
+            },
+            secondaryText: 'Cancel',
+            onSecondaryPressed: () => Navigator.of(context).pop(),
+          ),
+    );
   }
 
-  bool _departmentAllowed(WorkOrder w) {
-    final dep = _norm(w.departmentTag);
-    final staff = _norm(widget.staffDepartment);
-    if (staff == 'all' || staff.isEmpty) return true;
-    return dep == staff;
+  // ===== Filtering logic =====================================================
+  static const List<String> _months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  String shortDate(DateTime d) => '${_months[d.month - 1]} ${d.day}';
+  String _norm(String? s) => (s ?? '').toLowerCase().trim();
+
+  bool _tabMatchesByRequestType(Map<String, dynamic> w) {
+    final type = _norm(w['request_type']);
+    switch (_norm(_selectedTabLabel)) {
+      case 'all':
+        return true;
+      case 'concern slip':
+        return type == 'concern slip';
+      case 'job service':
+        return type == 'job service';
+      case 'work order':
+        return type == 'work order';
+      default:
+        return true;
+    }
   }
 
-  bool _statusAllowed(WorkOrder w) {
-    final sel = _norm(_selectedStatus);
-    if (sel == 'all' || sel.isEmpty) return true;
-    return _norm(_statusOf(w)) == sel;
+  bool _statusMatches(Map<String, dynamic> w) {
+    if (_selectedStatus == 'All') return true;
+    return _norm(w['status']) == _norm(_selectedStatus);
   }
 
-  bool _priorityAllowed(WorkOrder w) {
-    final sel = _norm(_selectedPriority);
-    if (sel == 'all' || sel.isEmpty) return true;
-    return _norm(w.priorityTag ?? '') == sel;
+  bool _departmentMatches(Map<String, dynamic> w) {
+    if (_selectedDepartment == 'All') return true;
+    return _norm(w['category']) == _norm(_selectedDepartment);
   }
 
-  bool _searchMatches(WorkOrder w) {
+  bool _searchMatches(Map<String, dynamic> w) {
     final q = _norm(_searchController.text);
     if (q.isEmpty) return true;
-    final dateText = shortDate(w.createdAt);
+
+    final createdAt =
+        DateTime.tryParse(w['created_at'] ?? '') ?? DateTime.now();
+    final dateText = shortDate(createdAt);
+
     return <String>[
-      w.title,
-      w.id,
-      w.departmentTag ?? '',
-      w.unitId ?? '',
-      w.statusTag,
-      w.requestTypeTag,
+      w['title'] ?? '',
+      w['id'] ?? '',
+      w['category'] ?? '',
+      w['unit_id'] ?? '',
+      w['status'] ?? '',
+      w['request_type'] ?? '',
       dateText,
-      w.priorityTag ?? '',
     ].any((s) => _norm(s).contains(q));
   }
 
-  List<WorkOrder> get _filtered => _all
-      .where(_departmentAllowed)
-      .where(_tabMatches)
-      .where(_statusAllowed)
-      .where(_priorityAllowed)
-      .where(_searchMatches)
-      .toList();
+  List<Map<String, dynamic>> get _filtered =>
+      _allRequests
+          .where(_tabMatchesByRequestType)
+          .where(_statusMatches)
+          .where(_departmentMatches)
+          .where(_searchMatches)
+          .toList();
 
-  List<WorkOrder> get _filteredSorted {
-    final list = List<WorkOrder>.from(_filtered);
-    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  List<Map<String, dynamic>> get _filteredSorted {
+    final list = List<Map<String, dynamic>>.from(_filtered);
+    list.sort((a, b) {
+      final aDate = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime.now();
+      final bDate = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime.now();
+      return bDate.compareTo(aDate);
+    });
     return list;
   }
 
+  List<String> get _statusOptions {
+    final base = _allRequests
+        .where(_tabMatchesByRequestType)
+        .where(_departmentMatches)
+        .where(_searchMatches);
+    final set = <String>{};
+    for (final w in base) {
+      final s = (w['status'] ?? '').toString().trim();
+      if (s.isNotEmpty) set.add(s);
+    }
+    final list = set.toList()..sort();
+    return ['All', ...list];
+  }
+
+  List<String> get _deptOptions {
+    // predefined departments
+    final predefined = {
+      'Maintenance',
+      'Carpentry',
+      'Plumbing',
+      'Electrical',
+      'Masonry',
+    };
+
+    final base = _allRequests
+        .where(_tabMatchesByRequestType)
+        .where(_statusMatches)
+        .where(_searchMatches);
+
+    final set = <String>{};
+    for (final w in base) {
+      final d = (w['category'] ?? '').toString().trim();
+      if (d.isNotEmpty) set.add(d);
+    }
+
+    // merge both sets
+    final list = {...predefined, ...set}.toList()..sort();
+    return ['All', ...list];
+  }
+
   List<TabItem> get _tabs {
-    final visible = _all.where(_departmentAllowed).where(_searchMatches).toList();
-    final repairCount = visible.where(_isRepairTask).length;
-    final maintenanceCount = visible.where(_isMaintenanceTask).length;
+    final visible =
+        _allRequests
+            .where(_statusMatches)
+            .where(_departmentMatches)
+            .where(_searchMatches)
+            .toList();
+
+    int countFor(String type) =>
+        visible.where((w) => _norm(w['request_type']) == _norm(type)).length;
 
     return [
-      TabItem(label: 'Repair Task', count: repairCount),
-      TabItem(label: 'Maintenance Task', count: maintenanceCount),
+      TabItem(label: 'All', count: visible.length),
+      TabItem(label: 'Concern Slip', count: countFor('concern slip')),
+      TabItem(label: 'Job Service', count: countFor('job service')),
+      TabItem(label: 'Work Order', count: countFor('work order')),
     ];
   }
 
-  /// ✅ Fixed filters for both tabs
-  final List<String> _statusOptions = [
-    'All', 'Pending', 'Assigned', 'Scheduled', 'On Hold'
-  ];
+  String _routeLabelFor(Map<String, dynamic> w) {
+    final type = _norm(w['request_type']);
+    final status = _norm(w['status']);
 
-  final List<String> _priorityOptions = [
-    'All', 'High', 'Medium', 'Low'
-  ];
-
-  String _routeLabelFor(WorkOrder w) {
-    final status = _norm(_statusOf(w));
-    final type = _norm(w.requestTypeTag);
-    if (_isMaintenanceTask(w)) {
-      if (status == 'scheduled') return 'maintenance task scheduled';
-      if (status == 'done' || status == 'assessed' || status == 'closed') {
-        return 'maintenance task assessed';
-      }
-      return 'maintenance task scheduled';
+    switch (type) {
+      case 'concern slip':
+        if (status == 'pending') return 'concern slip';
+        if (status == 'assigned') return 'concern slip assigned';
+        if (status == 'assessed') return 'concern slip assessed';
+        return 'concern slip';
+      case 'job service':
+        if (status == 'done' || status == 'assessed' || status == 'closed') {
+          return 'job service assessed';
+        }
+        return 'job service assigned';
+      case 'work order':
+        return 'work order';
+      default:
+        return type.isEmpty ? 'concern slip' : type;
     }
-    if (type == 'concern slip') {
-      if (status == 'assigned') return 'concern slip assigned';
-      if (status == 'assessed' || status == 'done' || status == 'closed') {
-        return 'concern slip assessed';
-      }
-      return 'concern slip assigned';
-    }
-    if (type == 'job service') {
-      if (status == 'done' || status == 'assessed' || status == 'closed') {
-        return 'job service assessed';
-      }
-      return 'job service assigned';
-    }
-    return 'concern slip assigned';
   }
 
-  Widget buildCard(WorkOrder w) {
-    if (_isMaintenanceTask(w)) {
-      return MaintenanceCard(
-        title: w.title,
-        id: w.id,
-        createdAt: w.createdAt,
-        statusTag: w.statusTag,
-        departmentTag: w.departmentTag,
-        priority: w.priorityTag,
-        location: w.unitId ?? '',
-        requestTypeTag: w.requestTypeTag,
-        assignedStaff: w.assignedStaff,
-        staffDepartment: w.staffDepartment,
-        staffPhotoUrl: w.staffPhotoUrl,
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => WorkOrderDetailsPage(
-                selectedTabLabel: _routeLabelFor(w),
-              ),
-            ),
-          );
-        },
-        onChatTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ChatPage()),
-          );
-        },
-      );
-    }
+  Widget buildCard(Map<String, dynamic> r) {
+    final createdAt =
+        DateTime.tryParse(r['created_at'] ?? '') ?? DateTime.now();
 
     return RepairCard(
-      title: w.title,
-      id: w.id,
-      createdAt: w.createdAt,
-      statusTag: w.statusTag,
-      departmentTag: w.departmentTag,
-      priorityTag: w.priorityTag,
-      unitId: w.unitId ?? '',
-      requestTypeTag: w.requestTypeTag,
-      assignedStaff: w.assignedStaff,
-      staffDepartment: w.staffDepartment,
+      title: r['title'] ?? 'Untitled Request',
+      id: r['id'] ?? '',
+      createdAt: createdAt,
+      statusTag: r['status'] ?? 'pending',
+      departmentTag: r['category'],
+      priorityTag: r['priority'],
+      unitId: r['unit_id'] ?? '',
+      requestTypeTag: r['request_type'] ?? 'Concern Slip',
+      assignedStaff: r['assigned_staff'],
+      staffDepartment: r['staff_department'],
       onTap: () {
+        final routeLabel = _routeLabelFor(r);
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => WorkOrderDetailsPage(
-              selectedTabLabel: _routeLabelFor(w),
-            ),
+            builder:
+                (_) => ViewDetailsPage(
+                  selectedTabLabel: routeLabel,
+                  requestTypeTag: r['request_type'] ?? 'Concern Slip',
+                ),
           ),
         );
       },
@@ -312,12 +416,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    _searchController.addListener(() => setState(() {}));
-  }
-
-  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -326,6 +424,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   @override
   Widget build(BuildContext context) {
     final items = _filteredSorted;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
@@ -345,79 +444,102 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _refresh,
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SearchAndFilterBar(
-                  searchController: _searchController,
-                  selectedStatus: _selectedStatus,
-                  statuses: _statusOptions,
-                  selectedClassification: _selectedPriority,
-                  classifications: _priorityOptions,
-                  onStatusChanged: (status) {
-                    setState(() {
-                      _selectedStatus = status.trim().isEmpty ? 'All' : status;
-                    });
-                  },
-                  onClassificationChanged: (prio) {
-                    setState(() {
-                      _selectedPriority = prio.trim().isEmpty ? 'All' : prio;
-                    });
-                  },
-                  onSearchChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 16),
-                StatusTabSelector(
-                  tabs: _tabs,
-                  selectedLabel: _selectedTabLabel,
-                  onTabSelected: (label) =>
-                      setState(() => _selectedTabLabel = label),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    const Text(
-                      'Recent Requests',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF2F4F7),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        '${items.length}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF475467),
-                          fontWeight: FontWeight.w600,
+          child: Stack(
+            children: [
+              _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SearchAndFilterBar(
+                          searchController: _searchController,
+                          selectedStatus: _selectedStatus,
+                          statuses: _statusOptions,
+                          selectedClassification: _selectedDepartment,
+                          classifications: _deptOptions,
+                          onStatusChanged: (status) {
+                            setState(() {
+                              _selectedStatus =
+                                  status.trim().isEmpty ? 'All' : status;
+                            });
+                          },
+                          onClassificationChanged: (dept) {
+                            setState(() {
+                              _selectedDepartment =
+                                  dept.trim().isEmpty ? 'All' : dept;
+                            });
+                          },
+                          onSearchChanged: (_) {
+                            setState(() {});
+                          },
                         ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: items.isEmpty
-                      ? const EmptyState()
-                      : ListView.separated(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          itemCount: items.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (_, i) => buildCard(items[i]),
+                        const SizedBox(height: 16),
+
+                        StatusTabSelector(
+                          tabs: _tabs,
+                          selectedLabel: _selectedTabLabel,
+                          onTabSelected:
+                              (label) =>
+                                  setState(() => _selectedTabLabel = label),
                         ),
-                ),
-              ],
-            ),
+                        const SizedBox(height: 20),
+
+                        Row(
+                          children: [
+                            Text(
+                              'Recent $_selectedTabLabel',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF2F4F7),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                '${items.length}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF475467),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        Expanded(
+                          child:
+                              items.isEmpty
+                                  ? const EmptyState()
+                                  : ListView.separated(
+                                    physics:
+                                        const AlwaysScrollableScrollPhysics(),
+                                    itemCount: items.length,
+                                    separatorBuilder:
+                                        (_, __) => const SizedBox(height: 12),
+                                    itemBuilder: (_, i) => buildCard(items[i]),
+                                  ),
+                        ),
+                      ],
+                    ),
+                  ),
+              Positioned(
+                bottom: 24,
+                right: 24,
+                child: AddButton(onPressed: () => _showRequestDialog(context)),
+              ),
+            ],
           ),
         ),
       ),
