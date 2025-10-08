@@ -1,31 +1,34 @@
+import 'package:flutter/material.dart';
 
 class WorkOrder {
-  // Basic Information 
+  // Basic Information
   final String id;
   final DateTime createdAt;
   final DateTime? updatedAt; // mirrors createdAt if null
-  final String requestTypeTag; // e.g. "Concern Slip" | "Job Service" | "Work Order" | "Maintenance"
+  final String
+  requestTypeTag; // e.g. "Concern Slip" | "Job Service" | "Work Order" | "Maintenance"
   final String? departmentTag; // e.g. "Plumbing"
   final String? resolutionType; // e.g. "job_service", "work_permit", "rejected"
   final String? priorityTag; // e.g. "High" | "Medium" | "Low"
-  final String statusTag; // e.g. "Pending" | "Assigned" | "In Progress" | "Done"
+  final String
+  statusTag; // e.g. "Pending" | "Assigned" | "In Progress" | "Done"
 
-  // Details 
+  // Details
   final String title;
   final String? unitId; // e.g. "A-101"
   final String? location; // e.g. "Tower A - 5th Floor"
 
-  // Staff 
+  // Staff
   final String? assignedStaff; // e.g. "Juan Dela Cruz"
   final String? staffDepartment; // e.g. "Electrical"
   final String? staffPhotoUrl; // local asset or network URL
 
-  // Optional Assessment Fields (future-proof) 
+  // Optional Assessment Fields (future-proof)
   final bool? hasInitialAssessment;
   final bool? hasCompletionAssessment;
   final String? completionRemarks;
 
-  // Constructor 
+  // Constructor
   const WorkOrder({
     required this.id,
     required this.createdAt,
@@ -58,7 +61,8 @@ class RepairCardVM {
   final String? departmentTag;
   final String? resolutionType; // job_service, work_permit, rejected
   final String? priorityTag; // High | Medium | Low
-  final String statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+  final String
+  statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
 
   // Details
   final String title;
@@ -154,7 +158,8 @@ class MaintenanceCardVM {
   final String? departmentTag;
   final String? resolutionType; // job_service, work_permit, rejected
   final String? priorityTag; // High | Medium | Low
-  final String statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+  final String
+  statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
 
   // Details
   final String title;

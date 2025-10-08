@@ -3,7 +3,6 @@ import 'package:http/http.dart' as http;
 
 import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/services/auth_storage.dart';
-import 'package:facilityfix/services/local_storage_service.dart';
 
 class APIService {
   /// The app-configured role used to pick a default base URL at construction.
@@ -21,21 +20,21 @@ class APIService {
   // ===== Constructors =====
 
   APIService({AppRole? roleOverride, Map<String, String>? headers})
-      : role = roleOverride ?? AppEnv.role,
-        baseUrl = AppEnv.baseUrlWithLan(roleOverride ?? AppEnv.role),
-        defaultHeaders = {
-          'Content-Type': 'application/json',
-          if (headers != null) ...headers,
-        },
-        _currentRoleLabel = (roleOverride ?? AppEnv.role).name;
+    : role = roleOverride ?? AppEnv.role,
+      baseUrl = AppEnv.baseUrlWithLan(roleOverride ?? AppEnv.role),
+      defaultHeaders = {
+        'Content-Type': 'application/json',
+        if (headers != null) ...headers,
+      },
+      _currentRoleLabel = (roleOverride ?? AppEnv.role).name;
 
   APIService.fromBaseUrl(this.baseUrl, {Map<String, String>? headers})
-      : role = AppEnv.role,
-        defaultHeaders = {
-          'Content-Type': 'application/json',
-          if (headers != null) ...headers,
-        },
-        _currentRoleLabel = AppEnv.role.name;
+    : role = AppEnv.role,
+      defaultHeaders = {
+        'Content-Type': 'application/json',
+        if (headers != null) ...headers,
+      },
+      _currentRoleLabel = AppEnv.role.name;
 
   // ===== Low-level helpers =====
 
@@ -126,9 +125,9 @@ class APIService {
   }
 
   Map<String, String> _authHeaders(String token) => {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      };
+    'Authorization': 'Bearer $token',
+    'Content-Type': 'application/json',
+  };
 
   // Decode JWT payload safely
   Map<String, dynamic> _decodeJwtPayload(String token) {
@@ -304,7 +303,172 @@ class APIService {
     return await AuthStorage.getProfile();
   }
 
-  // ===== Concern Slips =====
+  // ===== ID Generation =====
+
+  Future<String> getNextConcernSlipId() async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await get(
+        '/concern-slips/next-id',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return data['next_id'] ?? _generateFallbackId('CS');
+      } else {
+        return _generateFallbackId('CS');
+      }
+    } catch (e) {
+      print('Error getting next concern slip ID: $e');
+      return _generateFallbackId('CS');
+    }
+  }
+
+  Future<String> getNextJobServiceId() async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await get(
+        '/job-services/next-id',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return data['next_id'] ?? _generateFallbackId('JS');
+      } else {
+        return _generateFallbackId('JS');
+      }
+    } catch (e) {
+      print('Error getting next job service ID: $e');
+      return _generateFallbackId('JS');
+    }
+  }
+
+  Future<String> getNextWorkOrderId() async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await get(
+        '/work-orders/next-id',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return data['next_id'] ?? _generateFallbackId('WP');
+      } else {
+        return _generateFallbackId('WP');
+      }
+    } catch (e) {
+      print('Error getting next work order ID: $e');
+      return _generateFallbackId('WP');
+    }
+  }
+
+  String _generateFallbackId(String prefix) {
+    final now = DateTime.now();
+    final year = now.year;
+    final dayOfYear = now.difference(DateTime(now.year, 1, 1)).inDays + 1;
+    return '$prefix-$year-${dayOfYear.toString().padLeft(5, '0')}';
+  }
+
+  // ===== AI Categorization =====
+
+  Future<Map<String, dynamic>> analyzeConcernWithAI({
+    required String title,
+    required String description,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = {'title': title, 'description': description};
+
+      final response = await post(
+        '/ai/analyze-concern',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        // Fallback to local analysis
+        return _performLocalAnalysis(title, description);
+      }
+    } catch (e) {
+      print('AI analysis error: $e');
+      return _performLocalAnalysis(title, description);
+    }
+  }
+
+  Map<String, dynamic> _performLocalAnalysis(String title, String description) {
+    final combinedText = '$title $description'.toLowerCase();
+
+    String category = 'general';
+    String priority = 'medium';
+
+    // Category detection
+    if (combinedText.contains('water') ||
+        combinedText.contains('leak') ||
+        combinedText.contains('pipe') ||
+        combinedText.contains('drain')) {
+      category = 'plumbing';
+    } else if (combinedText.contains('electric') ||
+        combinedText.contains('power') ||
+        combinedText.contains('light') ||
+        combinedText.contains('outlet')) {
+      category = 'electrical';
+    } else if (combinedText.contains('air') ||
+        combinedText.contains('ac') ||
+        combinedText.contains('cooling') ||
+        combinedText.contains('heating')) {
+      category = 'hvac';
+    } else if (combinedText.contains('door') ||
+        combinedText.contains('window') ||
+        combinedText.contains('wood') ||
+        combinedText.contains('cabinet')) {
+      category = 'carpentry';
+    } else if (combinedText.contains('wall') ||
+        combinedText.contains('cement') ||
+        combinedText.contains('concrete') ||
+        combinedText.contains('tile')) {
+      category = 'masonry';
+    }
+
+    // Priority detection
+    if (combinedText.contains('urgent') ||
+        combinedText.contains('emergency') ||
+        combinedText.contains('critical') ||
+        combinedText.contains('dangerous')) {
+      priority = 'critical';
+    } else if (combinedText.contains('important') ||
+        combinedText.contains('high') ||
+        combinedText.contains('asap') ||
+        combinedText.contains('quickly')) {
+      priority = 'high';
+    } else if (combinedText.contains('low') ||
+        combinedText.contains('minor') ||
+        combinedText.contains('small') ||
+        combinedText.contains('whenever')) {
+      priority = 'low';
+    }
+
+    return {
+      'category': category,
+      'priority': priority,
+      'confidence': 0.8,
+      'source': 'local_analysis',
+    };
+  }
+
+  // ===== Concern Slips - Direct Firebase Integration =====
 
   Future<Map<String, dynamic>> submitConcernSlip({
     required String title,
@@ -314,10 +478,15 @@ class APIService {
     String priority = 'medium',
     String? unitId,
     List<String>? attachments,
+    String? scheduleAvailability,
   }) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
+
+      // Get user profile for additional context
+      final profile = await getUserProfile();
+      final userId = profile?['id'] ?? profile?['user_id'];
 
       final body = {
         'title': title,
@@ -325,9 +494,16 @@ class APIService {
         'location': location,
         'category': category,
         'priority': _mapPriorityToBackend(priority),
+        'schedule_availability': scheduleAvailability,
         if (unitId != null) 'unit_id': unitId,
+        if (userId != null) 'user_id': userId,
         'attachments': attachments ?? [],
+        'request_type': 'Concern Slip',
+        'status': 'pending',
+        'submitted_at': DateTime.now().toIso8601String(),
       };
+
+      print('[API] Submitting concern slip directly to Firebase...');
 
       final response = await post(
         '/concern-slips/',
@@ -336,119 +512,364 @@ class APIService {
       );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        Map<String, dynamic> result;
-        try {
-          final decoded = jsonDecode(response.body);
-          if (decoded is Map<String, dynamic>) {
-            result = decoded;
-          } else if (decoded is bool && decoded == true) {
-            result = {
-              'success': true,
-              'message': 'Concern slip submitted successfully',
-              'id': DateTime.now().millisecondsSinceEpoch.toString(),
-            };
-          } else {
-            result = {
-              'success': true,
-              'message': 'Concern slip submitted successfully',
-              'id': DateTime.now().millisecondsSinceEpoch.toString(),
-              'raw_response': decoded,
-            };
-          }
-        } catch (e) {
-          result = {
-            'success': true,
-            'message': 'Concern slip submitted successfully',
-            'id': DateTime.now().millisecondsSinceEpoch.toString(),
-            'raw_response': response.body,
-          };
+        final result = jsonDecode(response.body) as Map<String, dynamic>;
+
+        // Generate formatted ID if not provided
+        if (!result.containsKey('formatted_id') && result.containsKey('id')) {
+          final now = DateTime.now();
+          final year = now.year;
+          final dayOfYear = now.difference(DateTime(now.year, 1, 1)).inDays + 1;
+          result['formatted_id'] =
+              'CS-$year-${dayOfYear.toString().padLeft(5, '0')}';
         }
 
-        final localConcernSlip = {
-          ...body,
-          'id': result['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
-          'status': 'submitted',
-          'submitted_at': DateTime.now().toIso8601String(),
-          'local_id': DateTime.now().millisecondsSinceEpoch.toString(),
-        };
-        await LocalStorageService.saveSubmittedConcernSlip(localConcernSlip);
-        return result;
-      } else {
-        final localConcernSlip = {
-          ...body,
-          'id': DateTime.now().millisecondsSinceEpoch.toString(),
-          'status': 'saved_locally',
-          'submitted_at': DateTime.now().toIso8601String(),
-          'local_id': DateTime.now().millisecondsSinceEpoch.toString(),
-          'error_note': 'Server temporarily unavailable - saved locally',
-        };
-        await LocalStorageService.saveSubmittedConcernSlip(localConcernSlip);
+        print(
+          '[API] Concern slip submitted successfully to Firebase: ${result['formatted_id']}',
+        );
         return {
           'success': true,
-          'message':
-              'Concern slip saved locally. It will be synced when the server is available.',
-          'id': localConcernSlip['id'],
-          'saved_locally': true,
+          'message': 'Concern slip submitted successfully',
+          'id': result['id'],
+          'formatted_id': result['formatted_id'],
+          'data': result,
         };
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Server error: ${errorBody['detail'] ?? response.body}',
+        );
       }
     } catch (e) {
-      final localConcernSlip = {
-        'title': title,
-        'description': description,
+      print('[API] Error submitting concern slip: $e');
+      throw Exception('Failed to submit concern slip: $e');
+    }
+  }
+
+  // ===== Job Services =====
+
+  Future<Map<String, dynamic>> submitJobService({
+    required String notes,
+    required String location,
+    String? unitId,
+    List<String>? attachments,
+    String? scheduleAvailability,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      // Get user profile for additional context
+      final profile = await getUserProfile();
+      final userId = profile?['id'] ?? profile?['user_id'];
+
+      final body = {
+        'notes': notes,
         'location': location,
-        'category': category,
-        'priority': _mapPriorityToBackend(priority),
+        'schedule_availability': scheduleAvailability,
         if (unitId != null) 'unit_id': unitId,
+        if (userId != null) 'user_id': userId,
         'attachments': attachments ?? [],
-        'id': DateTime.now().millisecondsSinceEpoch.toString(),
-        'status': 'saved_locally',
+        'request_type': 'Job Service',
+        'status': 'pending',
         'submitted_at': DateTime.now().toIso8601String(),
-        'local_id': DateTime.now().millisecondsSinceEpoch.toString(),
-        'error_note': 'Network error - saved locally',
       };
-      await LocalStorageService.saveSubmittedConcernSlip(localConcernSlip);
-      return {
-        'success': true,
-        'message':
-            'Concern slip saved locally. It will be synced when connection is restored.',
-        'id': localConcernSlip['id'],
-        'saved_locally': true,
+
+      print('[API] Submitting job service directly to Firebase...');
+
+      final response = await post(
+        '/job-services/',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final result = jsonDecode(response.body) as Map<String, dynamic>;
+
+        // Generate formatted ID if not provided
+        if (!result.containsKey('formatted_id') && result.containsKey('id')) {
+          final now = DateTime.now();
+          final year = now.year;
+          final dayOfYear = now.difference(DateTime(now.year, 1, 1)).inDays + 1;
+          result['formatted_id'] =
+              'JS-$year-${dayOfYear.toString().padLeft(5, '0')}';
+        }
+
+        print(
+          '[API] Job service submitted successfully to Firebase: ${result['formatted_id']}',
+        );
+        return {
+          'success': true,
+          'message': 'Job service submitted successfully',
+          'id': result['id'],
+          'formatted_id': result['formatted_id'],
+          'data': result,
+        };
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Server error: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error submitting job service: $e');
+      throw Exception('Failed to submit job service: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getTenantJobServices() async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      print('[API] Fetching job services from concern-slips endpoint...');
+
+      // Use concern-slips endpoint but filter for Job Service type
+      final response = await get(
+        '/concern-slips/',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        // Filter for Job Service requests only
+        final jobServices =
+            data
+                .where((item) => item['request_type'] == 'Job Service')
+                .cast<Map<String, dynamic>>()
+                .toList();
+
+        print(
+          '[API] Retrieved ${jobServices.length} job services from Firebase',
+        );
+        return jobServices;
+      } else {
+        throw Exception('Failed to fetch job services: ${response.body}');
+      }
+    } catch (e) {
+      print('[API] Error getting tenant job services: $e');
+      // Return empty list instead of throwing to prevent app crashes
+      return [];
+    }
+  }
+
+  // ===== Work Orders =====
+
+  Future<Map<String, dynamic>> submitWorkOrder({
+    required String requestType,
+    required String location,
+    required String validFrom,
+    required String validTo,
+    required List<Map<String, String>> contractors,
+    String? unitId,
+    List<String>? attachments,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      // Get user profile for additional context
+      final profile = await getUserProfile();
+      final userId = profile?['id'] ?? profile?['user_id'];
+
+      final body = {
+        'request_type_detail': requestType,
+        'location': location,
+        'valid_from': validFrom,
+        'valid_to': validTo,
+        'contractors': contractors,
+        if (unitId != null) 'unit_id': unitId,
+        if (userId != null) 'user_id': userId,
+        'attachments': attachments ?? [],
+        'request_type': 'Work Order Permit',
+        'status': 'pending',
+        'submitted_at': DateTime.now().toIso8601String(),
       };
+
+      print('[API] Submitting work order directly to Firebase...');
+
+      final response = await post(
+        '/work-orders/',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final result = jsonDecode(response.body) as Map<String, dynamic>;
+
+        // Generate formatted ID if not provided
+        if (!result.containsKey('formatted_id') && result.containsKey('id')) {
+          final now = DateTime.now();
+          final year = now.year;
+          final dayOfYear = now.difference(DateTime(now.year, 1, 1)).inDays + 1;
+          result['formatted_id'] =
+              'WP-$year-${dayOfYear.toString().padLeft(5, '0')}';
+        }
+
+        print(
+          '[API] Work order submitted successfully to Firebase: ${result['formatted_id']}',
+        );
+        return {
+          'success': true,
+          'message': 'Work order submitted successfully',
+          'id': result['id'],
+          'formatted_id': result['formatted_id'],
+          'data': result,
+        };
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Server error: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error submitting work order: $e');
+      throw Exception('Failed to submit work order: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getTenantWorkOrders() async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      print('[API] Fetching work orders from concern-slips endpoint...');
+
+      // Use concern-slips endpoint but filter for Work Order type
+      final response = await get(
+        '/concern-slips/',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        // Filter for Work Order requests only
+        final workOrders =
+            data
+                .where(
+                  (item) =>
+                      item['request_type'] == 'Work Order Permit' ||
+                      item['request_type'] == 'Work Order',
+                )
+                .cast<Map<String, dynamic>>()
+                .toList();
+
+        print('[API] Retrieved ${workOrders.length} work orders from Firebase');
+        return workOrders;
+      } else {
+        throw Exception('Failed to fetch work orders: ${response.body}');
+      }
+    } catch (e) {
+      print('[API] Error getting tenant work orders: $e');
+      // Return empty list instead of throwing to prevent app crashes
+      return [];
     }
   }
 
   Future<List<Map<String, dynamic>>> getTenantConcernSlips() async {
     try {
       await _refreshRoleLabelFromToken();
-      final localSlips = await LocalStorageService.getSubmittedConcernSlips();
-      final token = await AuthStorage.getToken();
+      final token = await _requireToken();
 
-      if (token != null && localSlips.isNotEmpty) {
-        for (var slip in localSlips) {
-          if (slip['id'] != null) {
-            try {
-              final response = await get(
-                '/concern-slips/${slip['id']}',
-                headers: _authHeaders(token),
-              );
-              if (response.statusCode == 200) {
-                final serverSlip = jsonDecode(response.body) as Map<String, dynamic>;
-                slip['status'] = serverSlip['status'] ?? slip['status'];
-                slip['updated_at'] = serverSlip['updated_at'] ?? slip['updated_at'];
-              }
-            } catch (_) {}
-          }
-        }
+      print('[API] Fetching concern slips directly from Firebase...');
+
+      final response = await get(
+        '/concern-slips/',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        // Filter for Concern Slip requests only
+        final concernSlips =
+            data
+                .where(
+                  (item) =>
+                      item['request_type'] == 'Concern Slip' ||
+                      item['request_type'] == null,
+                )
+                .cast<Map<String, dynamic>>()
+                .toList();
+
+        print(
+          '[API] Retrieved ${concernSlips.length} concern slips from Firebase',
+        );
+        return concernSlips;
+      } else {
+        throw Exception('Failed to fetch concern slips: ${response.body}');
       }
-      return localSlips;
     } catch (e) {
-      // ignore: avoid_print
-      print('Error getting tenant concern slips: $e');
-      return [];
+      print('[API] Error getting tenant concern slips: $e');
+      throw Exception('Failed to fetch concern slips: $e');
     }
   }
 
-  Future<Map<String, dynamic>> getConcernSlip(String concernSlipId) async {
+  Future<Map<String, dynamic>> updateConcernSlip({
+    required String concernSlipId,
+    String? title,
+    String? description,
+    String? location,
+    String? category,
+    String? priority,
+    String? unitId,
+    List<String>? attachments,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = <String, dynamic>{};
+      if (title != null) body['title'] = title;
+      if (description != null) body['description'] = description;
+      if (location != null) body['location'] = location;
+      if (category != null) body['category'] = category;
+      if (priority != null) body['priority'] = _mapPriorityToBackend(priority);
+      if (unitId != null) body['unit_id'] = unitId;
+      if (attachments != null) body['attachments'] = attachments;
+
+      final response = await http.patch(
+        _u('/concern-slips/$concernSlipId'),
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to update concern slip: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error updating concern slip: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> deleteConcernSlip(String concernSlipId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await delete(
+        '/concern-slips/$concernSlipId',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to delete concern slip: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error deleting concern slip: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> getConcernSlipById(String concernSlipId) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
@@ -456,17 +877,17 @@ class APIService {
         '/concern-slips/$concernSlipId',
         headers: _authHeaders(token),
       );
+
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       } else {
         final errorBody = _tryDecode(response.body);
         throw Exception(
-          'Failed to get concern slip: ${errorBody['detail'] ?? response.body}',
+          'Failed to get concern slip by ID: ${errorBody['detail'] ?? response.body}',
         );
       }
     } catch (e) {
-      // ignore: avoid_print
-      print('Error getting concern slip: $e');
+      print('Error getting concern slip by ID: $e');
       rethrow;
     }
   }
@@ -475,7 +896,10 @@ class APIService {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
-      final response = await get('/concern-slips/', headers: _authHeaders(token));
+      final response = await get(
+        '/concern-slips/',
+        headers: _authHeaders(token),
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -487,30 +911,7 @@ class APIService {
         );
       }
     } catch (e) {
-      // ignore: avoid_print
       print('Error getting all concern slips: $e');
-      rethrow;
-    }
-  }
-
-  Future<Map<String, dynamic>> getConcernSlipById(String concernSlipId) async {
-    try {
-      await _refreshRoleLabelFromToken();
-      final token = await _requireToken();
-      final response =
-          await get('/concern-slips/$concernSlipId', headers: _authHeaders(token));
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      } else {
-        final errorBody = _tryDecode(response.body);
-        throw Exception(
-          'Failed to get concern slip by ID: ${errorBody['detail'] ?? response.body}',
-        );
-      }
-    } catch (e) {
-      // ignore: avoid_print
-      print('Error getting concern slip by ID: $e');
       rethrow;
     }
   }
@@ -521,8 +922,7 @@ class APIService {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
-      final response =
-          await get('/maintenance/', headers: _authHeaders(token));
+      final response = await get('/maintenance/', headers: _authHeaders(token));
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -534,7 +934,6 @@ class APIService {
         );
       }
     } catch (e) {
-      // ignore: avoid_print
       print('Error getting all maintenance: $e');
       rethrow;
     }
@@ -553,57 +952,72 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      final qs = Uri(
-        queryParameters: {
-          'building_id': buildingId,
-          'audience': audience,
-          'active_only': activeOnly.toString(),
-          'limit': limit.toString(),
-          'include_dismissed': includeDismissed.toString(),
-        },
-      ).query;
+      final qs =
+          Uri(
+            queryParameters: {
+              'building_id': buildingId,
+              'audience': audience,
+              'active_only': activeOnly.toString(),
+              'limit': limit.toString(),
+              'include_dismissed': includeDismissed.toString(),
+            },
+          ).query;
 
-      final response = await get('/announcements?$qs', headers: _authHeaders(token));
+      final response = await get(
+        '/announcements?$qs',
+        headers: _authHeaders(token),
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map<String, dynamic>) {
           final list = decoded['announcements'];
           if (list is List) {
-            return list.whereType<Map<String, dynamic>>().toList(growable: false);
+            return list.whereType<Map<String, dynamic>>().toList(
+              growable: false,
+            );
           }
           return const <Map<String, dynamic>>[];
         }
         if (decoded is List) {
-          return decoded.whereType<Map<String, dynamic>>().toList(growable: false);
+          return decoded.whereType<Map<String, dynamic>>().toList(
+            growable: false,
+          );
         }
         return const <Map<String, dynamic>>[];
       } else {
         final errorBody = _tryDecode(response.body);
-        throw Exception('Failed to get announcements: ${errorBody['detail'] ?? response.body}');
+        throw Exception(
+          'Failed to get announcements: ${errorBody['detail'] ?? response.body}',
+        );
       }
     } catch (e) {
-      // ignore: avoid_print
       print('Error getting announcements: $e');
       rethrow;
     }
   }
 
-  Future<Map<String, dynamic>> getAnnouncementById(String announcementId) async {
+  Future<Map<String, dynamic>> getAnnouncementById(
+    String announcementId,
+  ) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
-      final response = await get('/announcements/$announcementId', headers: _authHeaders(token));
+      final response = await get(
+        '/announcements/$announcementId',
+        headers: _authHeaders(token),
+      );
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map<String, dynamic>) return decoded;
         throw Exception('Unexpected response format for announcement detail.');
       } else {
         final errorBody = _tryDecode(response.body);
-        throw Exception('Failed to get announcement: ${errorBody['detail'] ?? response.body}');
+        throw Exception(
+          'Failed to get announcement: ${errorBody['detail'] ?? response.body}',
+        );
       }
     } catch (e) {
-      // ignore: avoid_print
       print('Error getting announcement by id: $e');
       rethrow;
     }
@@ -620,13 +1034,15 @@ class APIService {
       );
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final decoded = jsonDecode(response.body);
-        return (decoded is Map<String, dynamic>) && (decoded['success'] == true);
+        return (decoded is Map<String, dynamic>) &&
+            (decoded['success'] == true);
       } else {
         final errorBody = _tryDecode(response.body);
-        throw Exception('Failed to dismiss announcement: ${errorBody['detail'] ?? response.body}');
+        throw Exception(
+          'Failed to dismiss announcement: ${errorBody['detail'] ?? response.body}',
+        );
       }
     } catch (e) {
-      // ignore: avoid_print
       print('Error dismissing announcement: $e');
       rethrow;
     }
@@ -675,10 +1091,11 @@ class APIService {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       } else {
         final errorBody = _tryDecode(resp.body);
-        throw Exception('Failed to create announcement: ${errorBody['detail'] ?? resp.body}');
+        throw Exception(
+          'Failed to create announcement: ${errorBody['detail'] ?? resp.body}',
+        );
       }
     } catch (e) {
-      // ignore: avoid_print
       print('Error createAnnouncement: $e');
       rethrow;
     }
@@ -728,10 +1145,11 @@ class APIService {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       } else {
         final errorBody = _tryDecode(resp.body);
-        throw Exception('Failed to update announcement: ${errorBody['detail'] ?? resp.body}');
+        throw Exception(
+          'Failed to update announcement: ${errorBody['detail'] ?? resp.body}',
+        );
       }
     } catch (e) {
-      // ignore: avoid_print
       print('Error updateAnnouncement: $e');
       rethrow;
     }
@@ -745,9 +1163,12 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      final qs = Uri(queryParameters: {
-        'notify_deactivation': notifyDeactivation.toString(),
-      }).query;
+      final qs =
+          Uri(
+            queryParameters: {
+              'notify_deactivation': notifyDeactivation.toString(),
+            },
+          ).query;
 
       final resp = await delete(
         '/announcements/$announcementId?$qs',
@@ -758,16 +1179,19 @@ class APIService {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       } else {
         final errorBody = _tryDecode(resp.body);
-        throw Exception('Failed to deactivate announcement: ${errorBody['detail'] ?? resp.body}');
+        throw Exception(
+          'Failed to deactivate announcement: ${errorBody['detail'] ?? resp.body}',
+        );
       }
     } catch (e) {
-      // ignore: avoid_print
       print('Error deactivateAnnouncement: $e');
       rethrow;
     }
   }
 
-  Future<Map<String, dynamic>> rebroadcastAnnouncement(String announcementId) async {
+  Future<Map<String, dynamic>> rebroadcastAnnouncement(
+    String announcementId,
+  ) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
@@ -781,10 +1205,11 @@ class APIService {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       } else {
         final errorBody = _tryDecode(resp.body);
-        throw Exception('Failed to rebroadcast announcement: ${errorBody['detail'] ?? resp.body}');
+        throw Exception(
+          'Failed to rebroadcast announcement: ${errorBody['detail'] ?? resp.body}',
+        );
       }
     } catch (e) {
-      // ignore: avoid_print
       print('Error rebroadcastAnnouncement: $e');
       rethrow;
     }
@@ -794,16 +1219,88 @@ class APIService {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
-      final resp = await get('/announcements/types/available', headers: _authHeaders(token));
+      final resp = await get(
+        '/announcements/types/available',
+        headers: _authHeaders(token),
+      );
       if (resp.statusCode >= 200 && resp.statusCode < 300) {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       } else {
         final errorBody = _tryDecode(resp.body);
-        throw Exception('Failed to get announcement types: ${errorBody['detail'] ?? resp.body}');
+        throw Exception(
+          'Failed to get announcement types: ${errorBody['detail'] ?? resp.body}',
+        );
       }
     } catch (e) {
-      // ignore: avoid_print
       print('Error getAnnouncementTypes: $e');
+      rethrow;
+    }
+  }
+
+  // ===== Tenant Requests =====
+
+  Future<List<Map<String, dynamic>>> getAllTenantRequests() async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      // Fetch all requests from the concern-slips endpoint (which contains all request types)
+      final response = await get(
+        '/concern-slips/',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final List<dynamic> data = jsonDecode(response.body);
+        final allRequests =
+            data.map((item) {
+              final map = item as Map<String, dynamic>;
+
+              // Ensure request_type is set
+              if (!map.containsKey('request_type') ||
+                  map['request_type'] == null) {
+                map['request_type'] = 'Concern Slip';
+              }
+
+              // Add formatted_id if not present
+              if (!map.containsKey('formatted_id')) {
+                final id = map['id'] ?? '';
+                final requestType = map['request_type'] ?? 'Concern Slip';
+                final now = DateTime.now();
+                final year = now.year;
+
+                String prefix = 'CS';
+                if (requestType == 'Job Service') {
+                  prefix = 'JS';
+                } else if (requestType == 'Work Order Permit' ||
+                    requestType == 'Work Order') {
+                  prefix = 'WP';
+                }
+
+                map['formatted_id'] =
+                    '$prefix-$year-${id.toString().padLeft(5, '0')}';
+              }
+
+              return map;
+            }).toList();
+
+        // Sort by submission date (latest first)
+        allRequests.sort((a, b) {
+          final aDate =
+              DateTime.tryParse(a['submitted_at'] ?? a['created_at'] ?? '') ??
+              DateTime.now();
+          final bDate =
+              DateTime.tryParse(b['submitted_at'] ?? b['created_at'] ?? '') ??
+              DateTime.now();
+          return bDate.compareTo(aDate);
+        });
+
+        return allRequests;
+      } else {
+        throw Exception('Failed to fetch tenant requests: ${response.body}');
+      }
+    } catch (e) {
+      print('Error getting all tenant requests: $e');
       rethrow;
     }
   }

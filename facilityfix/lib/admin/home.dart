@@ -28,6 +28,12 @@ class _HomeState extends State<HomePage> {
   static const String _roleLabel = 'Administrator';
   bool _isLoading = false;
 
+  // Dashboard data from API
+  List<Map<String, dynamic>> _recentRepairRequests = [];
+  List<Map<String, dynamic>> _recentMaintenance = [];
+  int _activeWorkOrders = 0;
+  int _maintenanceDue = 0;
+
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
@@ -40,6 +46,7 @@ class _HomeState extends State<HomePage> {
   void initState() {
     super.initState();
     _loadUserData(); // 🔌 fetch admin profile on launch
+    _loadDashboardData(); // 🔌 fetch dashboard data
   }
 
   void _onTabTapped(int index) {
@@ -119,6 +126,164 @@ class _HomeState extends State<HomePage> {
     }
   }
 
+  // ───────── dashboard data helpers ─────────
+
+  Future<void> _loadDashboardData() async {
+    if (!mounted) return;
+
+    try {
+      final apiService = APIService();
+      
+      // Fetch all tenant requests (includes Concern Slips, Job Services, Work Orders)
+      final allRequests = await apiService.getAllTenantRequests();
+      
+      // Fetch maintenance tasks
+      final maintenanceTasks = await apiService.getAllMaintenance();
+
+      if (mounted) {
+        setState(() {
+          // Process repair requests (recent 2 items)
+          _recentRepairRequests = allRequests
+              .where((request) => 
+                  request['request_type'] == 'Concern Slip' ||
+                  request['request_type'] == 'Job Service' ||
+                  request['request_type'] == 'Work Order Permit')
+              .take(2)
+              .map((request) => _processRequestData(request))
+              .toList();
+
+          // Process maintenance tasks (recent 2 items)  
+          _recentMaintenance = maintenanceTasks
+              .take(2)
+              .map((task) => _processMaintenanceData(task))
+              .toList();
+
+          // Calculate statistics
+          _activeWorkOrders = allRequests
+              .where((request) => 
+                  request['status'] == 'assigned' || 
+                  request['status'] == 'in_progress')
+              .length;
+          
+          _maintenanceDue = maintenanceTasks
+              .where((task) => 
+                  task['status'] == 'scheduled' || 
+                  task['status'] == 'pending')
+              .length;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading dashboard data: $e');
+      // Keep existing data or show empty state
+    }
+  }
+
+  Map<String, dynamic> _processRequestData(Map<String, dynamic> request) {
+    return {
+      'title': request['title'] ?? 'Untitled Request',
+      'id': request['formatted_id'] ?? request['id'] ?? 'N/A',
+      'createdAt': _parseDate(request['created_at']),
+      'statusTag': _capitalizeStatus(request['status'] ?? 'pending'),
+      'departmentTag': _mapCategoryToDepartment(request['category']),
+      'priorityTag': _capitalizePriority(request['priority']),
+      'unitId': request['unit_id'] ?? 'N/A',
+      'requestTypeTag': request['request_type'] ?? 'Concern Slip',
+      'assignedStaff': null,
+      'staffDepartment': null,
+    };
+  }
+
+  Map<String, dynamic> _processMaintenanceData(Map<String, dynamic> task) {
+    return {
+      'title': task['task_title'] ?? task['title'] ?? 'Maintenance Task',
+      'id': task['formatted_id'] ?? task['id'] ?? 'N/A',
+      'createdAt': _parseDate(task['scheduled_date'] ?? task['created_at']),
+      'statusTag': _capitalizeStatus(task['status'] ?? 'scheduled'),
+      'departmentTag': _mapCategoryToDepartment(task['category'] ?? task['department']),
+      'priority': _capitalizePriority(task['priority']),
+      'location': task['location'] ?? 'N/A',
+      'requestTypeTag': 'Maintenance',
+      'assignedStaff': task['assigned_staff'] ?? task['assigned_to'],
+      'staffDepartment': _mapCategoryToDepartment(task['category'] ?? task['department']),
+      'staffPhotoUrl': 'assets/images/avatar.png',
+    };
+  }
+
+  DateTime _parseDate(dynamic dateValue) {
+    if (dateValue == null) return DateTime.now();
+    
+    try {
+      if (dateValue is String) {
+        return DateTime.parse(dateValue);
+      } else if (dateValue is DateTime) {
+        return dateValue;
+      }
+    } catch (e) {
+      debugPrint('Error parsing date: $e');
+    }
+    
+    return DateTime.now();
+  }
+
+  String _capitalizeStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return 'Pending';
+      case 'assigned':
+        return 'Assigned';
+      case 'in_progress':
+        return 'In Progress';
+      case 'assessed':
+        return 'Assessed';
+      case 'completed':
+        return 'Completed';
+      case 'scheduled':
+        return 'Scheduled';
+      case 'done':
+        return 'Done';
+      default:
+        return status;
+    }
+  }
+
+  String _capitalizePriority(String? priority) {
+    if (priority == null) return 'Medium';
+    
+    switch (priority.toLowerCase()) {
+      case 'low':
+        return 'Low';
+      case 'medium':
+        return 'Medium';
+      case 'high':
+        return 'High';
+      case 'critical':
+        return 'Critical';
+      default:
+        return 'Medium';
+    }
+  }
+
+  String _mapCategoryToDepartment(String? category) {
+    if (category == null) return 'General';
+    
+    switch (category.toLowerCase()) {
+      case 'electrical':
+        return 'Electrical';
+      case 'plumbing':
+        return 'Plumbing';
+      case 'hvac':
+        return 'HVAC';
+      case 'carpentry':
+        return 'Carpentry';
+      case 'maintenance':
+        return 'Maintenance';
+      case 'masonry':
+        return 'Masonry';
+      default:
+        return 'General';
+    }
+  }
+
   // ───────── UI ─────────
 
   @override
@@ -155,209 +320,218 @@ class _HomeState extends State<HomePage> {
       body: SafeArea(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Greeting (uses admin first name when available)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text.rich(
-                          TextSpan(
-                            text: 'Hello, ',
-                            style: const TextStyle(
-                              color: Color(0xFF1B1D21),
-                              fontSize: 22,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: -0.5,
-                            ),
-                            children: [
-                              TextSpan(
-                                text: _userName,
-                                style: const TextStyle(
-                                  color: Color(0xFF101828),
-                                  fontWeight: FontWeight.w800,
-                                ),
+            : RefreshIndicator(
+                onRefresh: () async {
+                  await _loadUserData();
+                  await _loadDashboardData();
+                },
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Greeting (uses admin first name when available)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text.rich(
+                            TextSpan(
+                              text: 'Hello, ',
+                              style: const TextStyle(
+                                color: Color(0xFF1B1D21),
+                                fontSize: 22,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.5,
                               ),
-                            ],
+                              children: [
+                                TextSpan(
+                                  text: _userName,
+                                  style: const TextStyle(
+                                    color: Color(0xFF101828),
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        const Text(
-                          'Administrator',
-                          style: TextStyle(
-                            color: Color(0xFF667085),
-                            fontSize: 13,
-                            height: 1.35,
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Administrator',
+                            style: TextStyle(
+                              color: Color(0xFF667085),
+                              fontSize: 13,
+                              height: 1.35,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
 
-                    // Quick status cards
-                    Row(
-                      children: const [
-                        Expanded(
-                          child: StatusCard(
-                            title: 'Repair\tRequest',
-                            count: '1',
-                            icon: Icons.settings_outlined,
-                            iconColor: Color(0xFF005CE8),
-                            backgroundColor: Color(0xFFEFF4FF),
-                            borderColor: Color(0xFF005CE8),
+                      // Quick status cards (now with real data)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: StatusCard(
+                              title: 'Repair\tRequest',
+                              count: '$_activeWorkOrders',
+                              icon: Icons.settings_outlined,
+                              iconColor: Color(0xFF005CE8),
+                              backgroundColor: Color(0xFFEFF4FF),
+                              borderColor: Color(0xFF005CE8),
+                            ),
                           ),
-                        ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: StatusCard(
-                            title: 'Maintenance\tDue',
-                            count: '0',
-                            icon: Icons.check_circle_rounded,
-                            iconColor: Color(0xFF24D164),
-                            backgroundColor: Color(0xFFF0FDF4),
-                            borderColor: Color(0xFF24D164),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: StatusCard(
+                              title: 'Maintenance\tDue',
+                              count: '$_maintenanceDue',
+                              icon: Icons.check_circle_rounded,
+                              iconColor: Color(0xFF24D164),
+                              backgroundColor: Color(0xFFF0FDF4),
+                              borderColor: Color(0xFF24D164),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
 
-                    // Recent Repair Tasks
-                    SectionHeader(
-                      title: 'Recent Repair Request',
-                      actionLabel: 'View all',
-                      onActionTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const WorkOrderPage(),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    Column(
-                      children: [
-                        RepairCard(
-                          title: 'Leaking faucet',
-                          id: 'CS-2025-005',
-                          createdAt: DateFormat('MMMM d, yyyy')
-                              .parse('August 22, 2025'),
-                          statusTag: 'Pending',
-                          departmentTag: 'Plumbing',
-                          requestTypeTag: 'Concern Slip',
-                          unitId: 'A 1001',
-                          priorityTag: null,
-                          onTap: () {},
-                          onChatTap: () {},
-                        ),
-                        const SizedBox(height: 12),
-                        RepairCard(
-                          title: 'Broken sink handle',
-                          id: 'CS-2025-006',
-                          createdAt: DateFormat('MMMM d, yyyy')
-                              .parse('August 23, 2025'),
-                          statusTag: 'Pending',
-                          departmentTag: 'Plumbing',
-                          requestTypeTag: 'Concern Slip',
-                          unitId: 'A 1002',
-                          priorityTag: 'High',
-                          onTap: () {},
-                          onChatTap: () {},
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
+                      // Recent Repair Tasks (now with real data)
+                      SectionHeader(
+                        title: 'Recent Repair Request',
+                        actionLabel: 'View all',
+                        onActionTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const WorkOrderPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      Column(
+                        children: _recentRepairRequests.isNotEmpty
+                            ? _recentRepairRequests.map((request) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: RepairCard(
+                                    title: request['title'],
+                                    id: request['id'],
+                                    createdAt: request['createdAt'],
+                                    statusTag: request['statusTag'],
+                                    departmentTag: request['departmentTag'],
+                                    requestTypeTag: request['requestTypeTag'],
+                                    unitId: request['unitId'],
+                                    priorityTag: request['priorityTag'],
+                                    onTap: () {},
+                                    onChatTap: () {},
+                                  ),
+                                );
+                              }).toList()
+                            : [
+                                const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(32.0),
+                                    child: Text(
+                                      'No recent repair requests',
+                                      style: TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                      ),
+                      const SizedBox(height: 24),
 
-                    // Recent Maintenance Tasks
-                    SectionHeader(
-                      title: 'Recent Maintenance',
-                      actionLabel: 'View all',
-                      onActionTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const WorkOrderPage(),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    Column(
-                      children: [
-                        MaintenanceCard(
-                          title: 'Quarterly Pipe Inspection',
-                          id: 'MT-P-2025-011',
-                          createdAt:
-                              DateTime(DateTime.now().year, 8, 28),
-                          statusTag: 'In Progress',
-                          departmentTag: 'Plumbing',
-                          priority: 'High',
-                          location: 'Tower A - 5th Floor',
-                          requestTypeTag: 'Maintenance',
-                          assignedStaff: 'Juan Dela Cruz',
-                          staffDepartment: 'Plumbing',
-                          staffPhotoUrl: 'assets/images/avatar.png',
-                          onTap: () {},
-                          onChatTap: () {},
-                        ),
-                        const SizedBox(height: 12),
-                        MaintenanceCard(
-                          title: 'Generator Check-up',
-                          id: 'MT-E-2025-013',
-                          createdAt:
-                              DateTime(DateTime.now().year, 8, 27),
-                          statusTag: 'Done',
-                          departmentTag: 'Electrical',
-                          priority: 'Medium',
-                          location: 'Basement - Power Room',
-                          requestTypeTag: 'Maintenance',
-                          assignedStaff: 'Juan Dela Cruz',
-                          staffDepartment: 'Electrical',
-                          staffPhotoUrl: 'assets/images/avatar.png',
-                          onTap: () {},
-                          onChatTap: () {},
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
+                      // Recent Maintenance Tasks (now with real data)
+                      SectionHeader(
+                        title: 'Recent Maintenance',
+                        actionLabel: 'View all',
+                        onActionTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const WorkOrderPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      Column(
+                        children: _recentMaintenance.isNotEmpty
+                            ? _recentMaintenance.map((task) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: MaintenanceCard(
+                                    title: task['title'],
+                                    id: task['id'],
+                                    createdAt: task['createdAt'],
+                                    statusTag: task['statusTag'],
+                                    departmentTag: task['departmentTag'],
+                                    priority: task['priority'],
+                                    location: task['location'],
+                                    requestTypeTag: task['requestTypeTag'],
+                                    assignedStaff: task['assignedStaff'],
+                                    staffDepartment: task['staffDepartment'],
+                                    staffPhotoUrl: task['staffPhotoUrl'],
+                                    onTap: () {},
+                                    onChatTap: () {},
+                                  ),
+                                );
+                              }).toList()
+                            : [
+                                const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(32.0),
+                                    child: Text(
+                                      'No recent maintenance tasks',
+                                      style: TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                      ),
+                      const SizedBox(height: 24),
 
-                    // Announcements
-                    SectionHeader(
-                      title: 'Latest Announcement',
-                      actionLabel: 'View all',
-                      onActionTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                const AnnouncementPage(),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    AnnouncementCard(
-                      title: 'Utility Interruption',
-                      createdAt:
-                          DateTime.now().subtract(const Duration(days: 3)),
-                      announcementType: 'utility interruption',
-                      isRead: true,
-                      id: '',
-                      onTap: () {},
-                    ),
-                    const SizedBox(height: 24),
+                      // Announcements
+                      SectionHeader(
+                        title: 'Latest Announcement',
+                        actionLabel: 'View all',
+                        onActionTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const AnnouncementPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      AnnouncementCard(
+                        title: 'Utility Interruption',
+                        createdAt:
+                            DateTime.now().subtract(const Duration(days: 3)),
+                        announcementType: 'utility interruption',
+                        isRead: true,
+                        id: '',
+                        onTap: () {},
+                      ),
+                      const SizedBox(height: 24),
 
-                    // Analytics
-                    const SectionHeader(
-                      title: 'Analytics',
-                      actionLabel: '',
-                    ),
-                    const SizedBox(height: 12),
-                  ],
+                      // Analytics
+                      const SectionHeader(
+                        title: 'Analytics',
+                        actionLabel: '',
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  ),
                 ),
               ),
       ),
