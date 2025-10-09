@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../config/env.dart';
+import '../../services/auth_storage.dart';
 
 class ApiService {
   // Base URL for the backend API
@@ -12,13 +13,32 @@ class ApiService {
   factory ApiService() => _instance;
   ApiService._internal();
 
-  // Store auth token
+  // Store auth token (deprecated - use AuthStorage instead)
   String? _authToken;
 
+  @Deprecated('Use AuthStorage.saveToken() instead')
   void setAuthToken(String token) {
     _authToken = token;
   }
 
+  // Get auth headers with token from AuthStorage
+  Future<Map<String, String>> _getAuthHeaders() async {
+    final token = await AuthStorage.getToken();
+    
+    if (token == null) {
+      print('[API] WARNING: No token found in AuthStorage!');
+    } else {
+      print('[API] Token found, length: ${token.length}');
+      print('[API] Token preview: ${token.substring(0, token.length > 20 ? 20 : token.length)}...');
+    }
+    
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    }; 
+  }
+
+  // Legacy getter for backward compatibility
   Map<String, String> get _headers => {
     'Content-Type': 'application/json',
     if (_authToken != null) 'Authorization': 'Bearer $_authToken',
@@ -166,6 +186,132 @@ class ApiService {
       }
     } catch (e) {
       print('[v0] Error fetching comprehensive analytics report: $e');
+      rethrow;
+    }
+  }
+
+  /// Export analytics data as CSV
+  Future<String> exportAnalyticsCSV({
+    required String reportType,
+    int days = 30,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '$baseUrl/analytics/export/csv?report_type=$reportType&days=$days',
+        ),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        return response.body;
+      } else {
+        throw Exception(
+          'Failed to export analytics CSV: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error exporting analytics CSV: $e');
+      rethrow;
+    }
+  }
+
+  /// Export analytics data as JSON
+  Future<String> exportAnalyticsJSON({
+    required String reportType,
+    int days = 30,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '$baseUrl/analytics/export/json?report_type=$reportType&days=$days',
+        ),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        return response.body;
+      } else {
+        throw Exception(
+          'Failed to export analytics JSON: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error exporting analytics JSON: $e');
+      rethrow;
+    }
+  }
+
+  /// Get time series data for charts
+  Future<Map<String, dynamic>> getTimeSeriesData({
+    String metric = 'requests',
+    int days = 30,
+    String interval = 'daily',
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '$baseUrl/analytics/time-series?metric=$metric&days=$days&interval=$interval',
+        ),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to load time series data: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error fetching time series data: $e');
+      rethrow;
+    }
+  }
+
+  /// Get comparison data between periods
+  Future<Map<String, dynamic>> getComparisonData({
+    int period1Days = 30,
+    int period2Days = 30,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '$baseUrl/analytics/comparison?period1_days=$period1Days&period2_days=$period2Days',
+        ),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to load comparison data: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error fetching comparison data: $e');
+      rethrow;
+    }
+  }
+
+  /// Get predictive insights
+  Future<Map<String, dynamic>> getPredictiveInsights() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/analytics/predictive-insights'),
+        headers: _headers,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to load predictive insights: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error fetching predictive insights: $e');
       rethrow;
     }
   }
@@ -434,29 +580,43 @@ class ApiService {
   // ============================================
 
   Future<Map<String, dynamic>> getMaintenanceTasks({
-    required String buildingId,
+    String? buildingId,
     String? status,
     String? assignedTo,
+    String? category,
     DateTime? dateFrom,
     DateTime? dateTo,
   }) async {
     try {
       final queryParams = <String, String>{
-        'building_id': buildingId,
+        if (buildingId != null) 'building_id': buildingId,
         if (status != null) 'status': status,
         if (assignedTo != null) 'assigned_to': assignedTo,
+        if (category != null) 'category': category,
         if (dateFrom != null) 'date_from': dateFrom.toIso8601String(),
         if (dateTo != null) 'date_to': dateTo.toIso8601String(),
       };
 
-      final uri = Uri.parse(
-        '$baseUrl/maintenance-calendar/tasks',
-      ).replace(queryParameters: queryParams);
+      final baseUri = Uri.parse('$baseUrl/maintenance/');
+      final uri = queryParams.isEmpty
+          ? baseUri
+          : baseUri.replace(queryParameters: queryParams);
 
       final response = await http.get(uri, headers: _headers);
 
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        final decoded = json.decode(response.body);
+        if (decoded is List) {
+          return {
+            'success': true,
+            'tasks': decoded,
+            'count': decoded.length,
+          };
+        }
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+        throw Exception('Unexpected maintenance tasks response format');
       } else {
         throw Exception(
           'Failed to load maintenance tasks: ${response.statusCode}',
@@ -474,7 +634,7 @@ class ApiService {
       print('[v0] Fetching maintenance task: $taskId');
 
       final response = await http.get(
-        Uri.parse('$baseUrl/maintenance-calendar/tasks/$taskId'),
+        Uri.parse('$baseUrl/maintenance/$taskId'),
         headers: _headers,
       );
 
@@ -500,7 +660,7 @@ class ApiService {
       print('[v0] Creating maintenance task: ${json.encode(taskData)}');
 
       final response = await http.post(
-        Uri.parse('$baseUrl/maintenance-calendar/tasks'),
+        Uri.parse('$baseUrl/maintenance/'),
         headers: _headers,
         body: json.encode(taskData),
       );
@@ -527,7 +687,7 @@ class ApiService {
   ) async {
     try {
       final response = await http.put(
-        Uri.parse('$baseUrl/maintenance-calendar/tasks/$taskId'),
+        Uri.parse('$baseUrl/maintenance/$taskId'),
         headers: _headers,
         body: json.encode(updateData),
       );
@@ -548,7 +708,7 @@ class ApiService {
   Future<Map<String, dynamic>> deleteMaintenanceTask(String taskId) async {
     try {
       final response = await http.delete(
-        Uri.parse('$baseUrl/maintenance-calendar/tasks/$taskId'),
+        Uri.parse('$baseUrl/maintenance/$taskId'),
         headers: _headers,
       );
 
@@ -1184,12 +1344,16 @@ class ApiService {
   // ANNOUNCEMENT ENDPOINTS
   // ============================================
 
-  /// Get all announcements for a building
+  /// Get all announcements for a building with advanced filtering
   Future<Map<String, dynamic>> getAnnouncements({
     required String buildingId,
     String audience = 'all',
     bool activeOnly = true,
     int limit = 50,
+    String? announcementType,
+    String? priorityLevel,
+    String? tags,
+    bool publishedOnly = true,
   }) async {
     try {
       final queryParams = <String, String>{
@@ -1197,18 +1361,36 @@ class ApiService {
         'audience': audience,
         'active_only': activeOnly.toString(),
         'limit': limit.toString(),
+        'published_only': publishedOnly.toString(),
       };
+
+      if (announcementType != null) {
+        queryParams['announcement_type'] = announcementType;
+      }
+      if (priorityLevel != null) {
+        queryParams['priority_level'] = priorityLevel;
+      }
+      if (tags != null) {
+        queryParams['tags'] = tags;
+      }
 
       final uri = Uri.parse(
         '$baseUrl/announcements/',
       ).replace(queryParameters: queryParams);
 
-      final response = await http.get(uri, headers: _headers);
+      final headers = await _getAuthHeaders();
+      print('[API] Request headers: ${headers.keys.join(", ")}');
+      print('[API] Request URL: $uri');
+      
+      final response = await http.get(uri, headers: headers);
 
+      print('[API] Response status: ${response.statusCode}');
+      
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        throw Exception('Failed to load announcements: ${response.statusCode}');
+        print('[API] Error response body: ${response.body}');
+        throw Exception('Failed to load announcements: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
       print('[v0] Error fetching announcements: $e');
@@ -1219,9 +1401,10 @@ class ApiService {
   /// Get a specific announcement by ID
   Future<Map<String, dynamic>> getAnnouncement(String announcementId) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/announcements/$announcementId'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -1242,9 +1425,10 @@ class ApiService {
     try {
       print('[v0] Creating announcement: ${json.encode(announcementData)}');
 
+      final headers = await _getAuthHeaders();
       final response = await http.post(
         Uri.parse('$baseUrl/announcements/'),
-        headers: _headers,
+        headers: headers,
         body: json.encode(announcementData),
       );
 
@@ -1274,9 +1458,10 @@ class ApiService {
         '[v0] Updating announcement $announcementId: ${json.encode(updateData)}',
       );
 
+      final headers = await _getAuthHeaders();
       final response = await http.put(
         Uri.parse('$baseUrl/announcements/$announcementId'),
-        headers: _headers,
+        headers: headers,
         body: json.encode(updateData),
       );
 
@@ -1306,7 +1491,8 @@ class ApiService {
         queryParameters: {'notify_deactivation': notifyDeactivation.toString()},
       );
 
-      final response = await http.delete(uri, headers: _headers);
+      final headers = await _getAuthHeaders();
+      final response = await http.delete(uri, headers: headers);
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
@@ -1326,9 +1512,10 @@ class ApiService {
     String buildingId,
   ) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/announcements/building/$buildingId/stats'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -1347,9 +1534,10 @@ class ApiService {
   /// Get available announcement types and audiences
   Future<Map<String, dynamic>> getAnnouncementTypes() async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/announcements/types/available'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -1361,6 +1549,97 @@ class ApiService {
       }
     } catch (e) {
       print('[v0] Error fetching announcement types: $e');
+      rethrow;
+    }
+  }
+
+  /// Get user-targeted announcements
+  Future<Map<String, dynamic>> getUserTargetedAnnouncements({
+    required String buildingId,
+    bool activeOnly = true,
+    int limit = 50,
+  }) async {
+    try {
+      final queryParams = <String, String>{
+        'building_id': buildingId,
+        'active_only': activeOnly.toString(),
+        'limit': limit.toString(),
+      };
+
+      final uri = Uri.parse(
+        '$baseUrl/announcements/user/targeted',
+      ).replace(queryParameters: queryParams);
+
+      final headers = await _getAuthHeaders();
+      final response = await http.get(uri, headers: headers);
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to load targeted announcements: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('[v0] Error fetching targeted announcements: $e');
+      rethrow;
+    }
+  }
+
+  /// Mark announcement as viewed
+  Future<Map<String, dynamic>> markAnnouncementViewed(String announcementId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/announcements/$announcementId/view'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to mark announcement as viewed: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('[v0] Error marking announcement as viewed: $e');
+      rethrow;
+    }
+  }
+
+  /// Publish scheduled announcements (Admin only)
+  Future<Map<String, dynamic>> publishScheduledAnnouncements() async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/announcements/publish-scheduled'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to publish scheduled announcements: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('[v0] Error publishing scheduled announcements: $e');
+      rethrow;
+    }
+  }
+
+  /// Expire old announcements (Admin only)
+  Future<Map<String, dynamic>> expireOldAnnouncements() async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/announcements/expire-old'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to expire announcements: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('[v0] Error expiring announcements: $e');
       rethrow;
     }
   }

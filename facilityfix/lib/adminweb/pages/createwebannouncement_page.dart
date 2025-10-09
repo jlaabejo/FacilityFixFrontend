@@ -200,6 +200,25 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
     );
   }
 
+  // Convert DD/MM/YYYY date format to ISO 8601 format for backend
+  String? _convertDateToISO(String dateString) {
+    try {
+      // Parse the date from DD/MM/YYYY format
+      final parts = dateString.split('/');
+      if (parts.length != 3) return null;
+      
+      final day = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final year = int.parse(parts[2]);
+      
+      final dateTime = DateTime(year, month, day);
+      return dateTime.toIso8601String();
+    } catch (e) {
+      print('[v0] Error converting date to ISO: $e');
+      return null;
+    }
+  }
+
   // Submit form - ready for backend integration
   void _submitForm() async {
     if (!_validateForm()) return;
@@ -210,13 +229,16 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
       'type': _selectedType ?? 'General Announcement',
       'audience': _selectedAudience?.toLowerCase() ?? 'all',
       'location_affected': _selectedLocation,
-      'start_date':
+      'scheduled_publish_date':
           _startDateController.text.isNotEmpty
-              ? _startDateController.text
+              ? _convertDateToISO(_startDateController.text)
               : null,
-      'end_date':
-          _endDateController.text.isNotEmpty ? _endDateController.text : null,
-      'pin_to_dashboard': _pinToDashboard,
+      'expiry_date':
+          _endDateController.text.isNotEmpty 
+              ? _convertDateToISO(_endDateController.text) 
+              : null,
+      'is_pinned': _pinToDashboard,
+      'is_published': true, // Publish immediately
       'building_id': 'building_001', // TODO: Get from user session
       'created_by': 'admin_user', // TODO: Get from user session
     };

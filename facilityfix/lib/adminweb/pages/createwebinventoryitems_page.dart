@@ -876,7 +876,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          initialValue: value,
+          value: value,
           validator: validator,
           decoration: InputDecoration(
             hintText: 'Select $label',

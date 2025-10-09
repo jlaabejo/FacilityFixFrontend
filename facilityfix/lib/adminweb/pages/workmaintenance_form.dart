@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
@@ -21,6 +23,20 @@ class _InternalMaintenanceFormPageState
 
   // For consistent field heights
   static const double _kFieldHeight = 56;
+  static const List<String> _monthNames = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
 
   // -------------------- CONTROLLERS --------------------
   final _taskTitleController = TextEditingController();
@@ -45,6 +61,7 @@ class _InternalMaintenanceFormPageState
   String? _selectedDepartment;
   String? _selectedAdminNotification;
   String? _selectedStaffNotification;
+  String? _selectedStaffUserId; // Store the actual staff UID
 
   DateTime? _dateCreated;
   DateTime? _startDate;
@@ -150,6 +167,9 @@ class _InternalMaintenanceFormPageState
     _dateCreated = DateTime.now();
     _dateCreatedController.text = _fmtDate(_dateCreated!);
 
+  _startDate = DateTime.now();
+  _startDateController.text = _fmtDate(_startDate!);
+
     // Load staff members
     await _loadStaffMembers();
   }
@@ -198,6 +218,126 @@ class _InternalMaintenanceFormPageState
     setState(() {
       _checklistItems.removeWhere((item) => item['id'] == id);
     });
+  }
+
+  DateTime _calculateNextDueDate(DateTime base, String frequency) {
+    switch (frequency) {
+      case 'Daily':
+        return base.add(const Duration(days: 1));
+      case 'Weekly':
+        return base.add(const Duration(days: 7));
+      case 'Monthly':
+        return _addMonths(base, 1);
+      case 'Quarterly':
+        return _addMonths(base, 3);
+      case 'Annually':
+        return _addMonths(base, 12);
+      default:
+        return base;
+    }
+  }
+
+  DateTime _addMonths(DateTime date, int monthsToAdd) {
+    final totalMonths = date.month + monthsToAdd;
+    final year = date.year + ((totalMonths - 1) ~/ 12);
+    final month = ((totalMonths - 1) % 12) + 1;
+    final day = math.min(date.day, _daysInMonth(year, month));
+    return DateTime(year, month, day);
+  }
+
+  int _daysInMonth(int year, int month) {
+    final nextMonth = month == 12 ? 1 : month + 1;
+    final nextMonthYear = month == 12 ? year + 1 : year;
+    return DateTime(nextMonthYear, nextMonth, 1)
+        .subtract(const Duration(days: 1))
+        .day;
+  }
+
+  void _handleRecurrenceChange(String? value) {
+    if (value == null) {
+      setState(() {
+        _selectedRecurrence = null;
+        _nextDueDate = null;
+        _nextDueDateController.clear();
+      });
+      return;
+    }
+
+    final baseStart = _startDate ?? DateTime.now();
+    final normalized = DateTime(baseStart.year, baseStart.month, baseStart.day);
+    final nextDue = _calculateNextDueDate(normalized, value);
+
+    setState(() {
+      _selectedRecurrence = value;
+      _startDate = normalized;
+      _nextDueDate = nextDue;
+      _updateDateControllers();
+    });
+  }
+
+  void _handleStartDateChange(DateTime date) {
+    final normalized = DateTime(date.year, date.month, date.day);
+
+    setState(() {
+      _startDate = normalized;
+      if (_selectedRecurrence != null) {
+        _nextDueDate = _calculateNextDueDate(normalized, _selectedRecurrence!);
+      }
+      _updateDateControllers();
+    });
+  }
+
+  void _updateDateControllers() {
+    if (_startDate != null) {
+      _startDateController.text = _fmtDate(_startDate!);
+    }
+    if (_nextDueDate != null) {
+      _nextDueDateController.text = _fmtDate(_nextDueDate!);
+    }
+  }
+
+  String _formatFriendlyDate(DateTime date) {
+    final month = _monthNames[date.month - 1];
+    return '$month ${date.day}, ${date.year}';
+  }
+
+  String? _recurrenceSummaryText() {
+    if (_selectedRecurrence == null || _startDate == null || _nextDueDate == null) {
+      return null;
+    }
+
+    final start = _formatFriendlyDate(_startDate!);
+    final next = _formatFriendlyDate(_nextDueDate!);
+    return 'Repeats $_selectedRecurrence starting $start. Next occurrence $next';
+  }
+
+  Widget _buildRecurrenceSummary() {
+    final summary = _recurrenceSummaryText();
+    if (summary == null) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.shade100),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.event_repeat, color: Colors.blue),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              summary,
+              style: const TextStyle(color: Colors.blue, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // -------------------- VALIDATORS --------------------
@@ -258,15 +398,16 @@ class _InternalMaintenanceFormPageState
     }
 
     final id = _codeIdController.text;
+    final scheduledDateIso = _startDate?.toUtc().toIso8601String();
     final maintenance = <String, dynamic>{
       'id': id,
       'maintenanceType': 'Internal',
       'taskTitle': _taskTitleController.text.trim(),
       'taskCode': id,
       'dateCreated': _dateCreatedController.text,
-      'priority': _selectedPriority,
-      'status': _selectedStatus,
-      'location': _selectedLocation,
+  'priority': _selectedPriority ?? 'medium',
+  'status': _selectedStatus ?? 'scheduled',
+  'location': _selectedLocation ?? '',
       'description': _descriptionController.text.trim(),
       'recurrence': _selectedRecurrence,
       'estimatedDuration': _estimatedDurationController.text.trim(),
@@ -282,6 +423,24 @@ class _InternalMaintenanceFormPageState
           _selectedStaffNotification ?? '3 days before, 1 day before',
       'remarks': _remarksController.text.trim(),
       'tags': ['High-Turnover', 'Repair-Prone'],
+      // Backend-aligned fields
+      'task_title': _taskTitleController.text.trim(),
+      'task_description': _descriptionController.text.trim(),
+      'building_id': 'default_building',
+      'scheduled_date': scheduledDateIso ?? _startDateController.text,
+      'category': 'preventive',
+      'task_type': 'internal',
+      'recurrence_type':
+          _selectedRecurrence != null
+              ? _selectedRecurrence!.toLowerCase()
+              : 'none',
+      'assigned_to': _selectedStaffUserId ?? _assignedStaffController.text.trim(),
+      'assigned_staff_name': _assignedStaffController.text.trim(),
+      'department': _selectedDepartment,
+      'checklist_completed': _checklistItems,
+      'parts_used': <Map<String, dynamic>>[],
+      'tools_used': <String>[],
+      'photos': <String>[],
     };
 
     try {
@@ -763,13 +922,12 @@ class _InternalMaintenanceFormPageState
 
                       Row(
                         children: [
-                          // Recurrence
                           Expanded(
                             child: _fieldBox(
                               child: DropdownButtonFormField<String>(
                                 value: _selectedRecurrence,
                                 validator: _reqDropdown,
-                                decoration: _decoration('Input'),
+                                decoration: _decoration('Select frequency...'),
                                 items:
                                     const [
                                           'Daily',
@@ -785,23 +943,17 @@ class _InternalMaintenanceFormPageState
                                           ),
                                         )
                                         .toList(),
-                                onChanged:
-                                    (v) =>
-                                        setState(() => _selectedRecurrence = v),
+                                onChanged: _handleRecurrenceChange,
                               ),
                             ),
                           ),
                           const SizedBox(width: 24),
-
-                          // Estimated Duration
                           Expanded(
                             child: _fieldBox(
                               child: TextFormField(
                                 controller: _estimatedDurationController,
                                 validator: _durationValidator,
-                                decoration: _decoration(
-                                  'e.g., 3 hrs / 45 mins',
-                                ),
+                                decoration: _decoration('e.g., 3 hrs / 45 mins'),
                               ),
                             ),
                           ),
@@ -811,25 +963,16 @@ class _InternalMaintenanceFormPageState
 
                       Row(
                         children: [
-                          // Start Date
                           Expanded(
                             child: _fieldBox(
                               child: TextFormField(
                                 controller: _startDateController,
                                 validator: _req,
                                 readOnly: true,
-                                onTap:
-                                    () => _pickDate(
-                                      initial: _startDate ?? DateTime.now(),
-                                      onPick: (d) {
-                                        setState(() {
-                                          _startDate = d;
-                                          _startDateController.text = _fmtDate(
-                                            d,
-                                          );
-                                        });
-                                      },
-                                    ),
+                                onTap: () => _pickDate(
+                                  initial: _startDate ?? DateTime.now(),
+                                  onPick: _handleStartDateChange,
+                                ),
                                 decoration: _decoration('YYYY-MM-DD').copyWith(
                                   suffixIcon: const Icon(
                                     Icons.calendar_today,
@@ -840,25 +983,12 @@ class _InternalMaintenanceFormPageState
                             ),
                           ),
                           const SizedBox(width: 24),
-
-                          // Next Due Date
                           Expanded(
                             child: _fieldBox(
                               child: TextFormField(
                                 controller: _nextDueDateController,
                                 validator: _req,
                                 readOnly: true,
-                                onTap:
-                                    () => _pickDate(
-                                      initial: _nextDueDate ?? DateTime.now(),
-                                      onPick: (d) {
-                                        setState(() {
-                                          _nextDueDate = d;
-                                          _nextDueDateController
-                                              .text = _fmtDate(d);
-                                        });
-                                      },
-                                    ),
                                 decoration: _decoration('YYYY-MM-DD').copyWith(
                                   suffixIcon: const Icon(
                                     Icons.calendar_today,
@@ -870,10 +1000,11 @@ class _InternalMaintenanceFormPageState
                           ),
                         ],
                       ),
-
+                      _buildRecurrenceSummary(),
                       const SizedBox(height: 40),
+
                       const Text(
-                        "Assignment & Execution",
+                        "Responsible Team",
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w600,
@@ -884,13 +1015,12 @@ class _InternalMaintenanceFormPageState
 
                       Row(
                         children: [
-                          // Department
                           Expanded(
                             child: _fieldBox(
                               child: DropdownButtonFormField<String>(
                                 value: _selectedDepartment,
                                 validator: _reqDropdown,
-                                decoration: _decoration('Select Department...'),
+                                decoration: _decoration('Select department...'),
                                 items:
                                     const [
                                           'Maintenance',
@@ -906,36 +1036,12 @@ class _InternalMaintenanceFormPageState
                                         )
                                         .toList(),
                                 onChanged:
-                                    (v) =>
-                                        setState(() => _selectedDepartment = v),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-
-                          // Assigned Staff - REMOVED FROM HERE AS IT'S MOVED UP TO BASIC INFO
-                          // Expanded(
-                          //   child: _fieldBox(
-                          //     child: TextFormField(
-                          //       controller: _assignedStaffController,
-                          //       validator: _req,
-                          //       decoration: _decoration('Add Staff...'),
-                          //     ),
-                          //   ),
-                          // ),
-                          // Placeholder for potential additional staff assignment if needed
-                          Expanded(
-                            child: _fieldBox(
-                              child: TextFormField(
-                                decoration: _decoration(
-                                  'Add Staff...',
-                                ), // Keep as a placeholder or for future use
+                                    (v) => setState(() => _selectedDepartment = v),
                               ),
                             ),
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 40),
                       const Text(
                         "Attachments",
@@ -1044,41 +1150,22 @@ class _InternalMaintenanceFormPageState
                                           ),
                                         )
                                         .toList(),
-                                onChanged:
-                                    (v) => setState(
-                                      () => _selectedAdminNotification = v,
-                                    ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: _fieldBox(
-                              child: DropdownButtonFormField<String>(
-                                value: _selectedStaffNotification,
-                                decoration: _decoration('Before due date'),
-                                items:
-                                    const [
-                                          'Before due date',
-                                          '1 day before',
-                                          '3 days before',
-                                          '1 week before',
-                                        ]
-                                        .map(
-                                          (v) => DropdownMenuItem(
-                                            value: v,
-                                            child: Text(v),
-                                          ),
-                                        )
-                                        .toList(),
-                                onChanged:
-                                    (v) => setState(
-                                      () => _selectedStaffNotification = v,
-                                    ),
+                                onChanged: (v) => setState(() {
+                                  _selectedAdminNotification = v;
+                                  _selectedStaffNotification = v;
+                                }),
                               ),
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Applies to both admin and assigned staff reminders.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
                       ),
 
                       const SizedBox(height: 40),

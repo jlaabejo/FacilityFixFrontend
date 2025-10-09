@@ -22,15 +22,41 @@ class AuthService {
       );
 
       // Get Firebase ID token
-      final idToken = await credential.user!.getIdToken();
+      final idToken = await credential.user?.getIdToken();
+      if (idToken == null) {
+        throw Exception('Failed to get authentication token');
+      }
 
       // Exchange token with backend
-      final authResponse = await _apiService.exchangeToken(idToken!);
+      final authResponse = await _apiService.exchangeToken(idToken);
 
       return authResponse;
+    } on FirebaseAuthException catch (e) {
+      print('[FacilityFix] Firebase Auth error: ${e.code} - ${e.message}');
+      String errorMessage = 'Failed to sign in';
+      switch (e.code) {
+        case 'user-not-found':
+          errorMessage = 'No user found with this email';
+          break;
+        case 'wrong-password':
+          errorMessage = 'Incorrect password';
+          break;
+        case 'invalid-email':
+          errorMessage = 'Invalid email address';
+          break;
+        case 'user-disabled':
+          errorMessage = 'This account has been disabled';
+          break;
+        case 'too-many-requests':
+          errorMessage = 'Too many attempts. Please try again later';
+          break;
+        default:
+          errorMessage = e.message ?? 'Authentication failed';
+      }
+      throw Exception(errorMessage);
     } catch (e) {
       print('[FacilityFix] Sign in error: $e');
-      throw Exception('Failed to sign in: $e');
+      throw Exception('Failed to sign in: ${e.toString()}');
     }
   }
 
@@ -55,10 +81,13 @@ class AuthService {
       );
 
       // Update display name
-      await credential.user!.updateDisplayName('$firstName $lastName');
+      await credential.user?.updateDisplayName('$firstName $lastName');
 
       // Get Firebase ID token
-      final idToken = await credential.user!.getIdToken();
+      final idToken = await credential.user?.getIdToken();
+      if (idToken == null) {
+        throw Exception('Failed to get authentication token after registration');
+      }
 
       // Register with backend
       final registrationRequest = UserRegistrationRequest(
@@ -74,15 +103,35 @@ class AuthService {
         staffDepartment: department,
       );
 
-      final userResponse = await _apiService.registerUser(registrationRequest);
+      await _apiService.registerUser(registrationRequest);
 
       // Exchange token with backend
-      final authResponse = await _apiService.exchangeToken(idToken!);
+      final authResponse = await _apiService.exchangeToken(idToken);
 
       return authResponse;
+    } on FirebaseAuthException catch (e) {
+      print('[FacilityFix] Firebase Auth registration error: ${e.code} - ${e.message}');
+      String errorMessage = 'Failed to register';
+      switch (e.code) {
+        case 'email-already-in-use':
+          errorMessage = 'An account already exists with this email';
+          break;
+        case 'invalid-email':
+          errorMessage = 'Invalid email address';
+          break;
+        case 'operation-not-allowed':
+          errorMessage = 'Email/password accounts are not enabled';
+          break;
+        case 'weak-password':
+          errorMessage = 'Password is too weak';
+          break;
+        default:
+          errorMessage = e.message ?? 'Registration failed';
+      }
+      throw Exception(errorMessage);
     } catch (e) {
       print('[FacilityFix] Registration error: $e');
-      throw Exception('Failed to register: $e');
+      throw Exception('Failed to register: ${e.toString()}');
     }
   }
 
@@ -105,6 +154,9 @@ class AuthService {
         return await user.getIdToken();
       }
       return null;
+    } on FirebaseAuthException catch (e) {
+      print('[FacilityFix] Firebase Auth get token error: ${e.code} - ${e.message}');
+      return null;
     } catch (e) {
       print('[FacilityFix] Get token error: $e');
       return null;
@@ -117,11 +169,17 @@ class AuthService {
       final user = _firebaseAuth.currentUser;
       if (user != null) {
         final idToken = await user.getIdToken(true); // Force refresh
-        await _apiService.exchangeToken(idToken!);
+        if (idToken == null) {
+          throw Exception('Failed to refresh authentication token');
+        }
+        await _apiService.exchangeToken(idToken);
       }
+    } on FirebaseAuthException catch (e) {
+      print('[FacilityFix] Firebase Auth refresh error: ${e.code} - ${e.message}');
+      throw Exception('Failed to refresh authentication: ${e.message ?? e.code}');
     } catch (e) {
       print('[FacilityFix] Refresh auth error: $e');
-      throw Exception('Failed to refresh authentication: $e');
+      throw Exception('Failed to refresh authentication: ${e.toString()}');
     }
   }
 
@@ -130,9 +188,16 @@ class AuthService {
       final user = _firebaseAuth.currentUser;
       if (user != null) {
         final idToken = await user.getIdToken();
-        final userResponse = await _apiService.getCurrentUserProfile(idToken!);
+        if (idToken == null) {
+          print('[FacilityFix] Failed to get ID token for current user');
+          return null;
+        }
+        final userResponse = await _apiService.getCurrentUserProfile(idToken);
         return userResponse;
       }
+      return null;
+    } on FirebaseAuthException catch (e) {
+      print('[FacilityFix] Firebase Auth get current user error: ${e.code} - ${e.message}');
       return null;
     } catch (e) {
       print('[FacilityFix] Get current user error: $e');

@@ -1,13 +1,13 @@
 // ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables
 
 import 'package:facilityfix/admin/announcement.dart';
-import 'package:facilityfix/admin/chat.dart';
 import 'package:facilityfix/admin/home.dart';
 import 'package:facilityfix/admin/inventory.dart';
 import 'package:facilityfix/admin/notification.dart';
 import 'package:facilityfix/admin/view_details/workorder_details.dart';
 import 'package:facilityfix/admin/workorder.dart';
 import 'package:facilityfix/models/cards.dart';
+import 'package:facilityfix/services/api_services.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:intl/intl.dart';
@@ -37,18 +37,127 @@ class _CalendarPageState extends State<CalendarPage> {
     NavItem(icon: Icons.inventory),
   ];
 
-  // Sample data
-  final List<WorkOrder> _all = [
-    WorkOrder(
-      title: 'Leaking faucet',
-      id: 'CS-2025-005',
-      createdAt: DateFormat('MMMM d, yyyy').parse('August 22, 2025'),
-      statusTag: 'Pending',
-      departmentTag: 'Plumbing',
+  // Real data from API
+  List<WorkOrder> _allWorkOrders = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCalendarData();
+  }
+
+  Future<void> _loadCalendarData() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+
+      final apiService = APIService();
+      
+      // Fetch concern slips
+      final concernSlips = await apiService.getAllConcernSlips();
+      
+      // Fetch maintenance tasks
+      final maintenanceTasks = await apiService.getAllMaintenance();
+
+      if (mounted) {
+        setState(() {
+          _allWorkOrders = [];
+          
+          // Process concern slips into WorkOrder objects
+          for (var slip in concernSlips) {
+            _allWorkOrders.add(_processConcernSlipToWorkOrder(slip));
+          }
+          
+          // Process maintenance tasks as WorkOrder objects
+          for (var task in maintenanceTasks) {
+            _allWorkOrders.add(_processMaintenanceToWorkOrder(task));
+          }
+          
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to load calendar data: $e';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  WorkOrder _processConcernSlipToWorkOrder(Map<String, dynamic> slip) {
+    return WorkOrder(
+      id: slip['formatted_id'] ?? slip['id'] ?? 'N/A',
+      title: slip['title'] ?? 'Concern Slip',
+      createdAt: _parseDate(slip['created_at'] ?? slip['submitted_at']),
+      updatedAt: _parseDate(slip['updated_at']),
+      statusTag: _capitalizeStatus(slip['status'] ?? 'pending'),
+      departmentTag: _mapCategoryToDepartment(slip['category']),
+      priorityTag: _capitalizePriority(slip['priority']),
+      unitId: slip['unit_id'] ?? slip['location'],
       requestTypeTag: 'Concern Slip',
-      unitId: 'A 1001',
-    ),
-  ];
+      assignedStaff: slip['assigned_to'] ?? slip['assigned_staff'],
+      staffDepartment: _mapCategoryToDepartment(slip['category']),
+    );
+  }
+
+  WorkOrder _processMaintenanceToWorkOrder(Map<String, dynamic> task) {
+    return WorkOrder(
+      id: task['formatted_id'] ?? task['id'] ?? 'N/A',
+      title: task['task_title'] ?? task['title'] ?? 'Maintenance Task',
+      createdAt: _parseDate(task['scheduled_date'] ?? task['created_at']),
+      updatedAt: _parseDate(task['updated_at']),
+      statusTag: _capitalizeStatus(task['status'] ?? 'scheduled'),
+      departmentTag: _mapCategoryToDepartment(task['category'] ?? task['department']),
+      priorityTag: _capitalizePriority(task['priority']),
+      unitId: task['location'],
+      requestTypeTag: 'Maintenance',
+      assignedStaff: task['assigned_to'] ?? task['assigned_staff'],
+      staffDepartment: _mapCategoryToDepartment(task['category'] ?? task['department']),
+    );
+  }
+
+  DateTime _parseDate(dynamic dateValue) {
+    if (dateValue == null) return DateTime.now();
+    if (dateValue is DateTime) return dateValue;
+    if (dateValue is String) {
+      return DateTime.tryParse(dateValue) ?? DateTime.now();
+    }
+    return DateTime.now();
+  }
+
+  String _capitalizeStatus(String status) {
+    return status.split('_').map((word) => 
+      word.isEmpty ? '' : word[0].toUpperCase() + word.substring(1)
+    ).join(' ');
+  }
+
+  String _capitalizePriority(String? priority) {
+    if (priority == null) return 'Medium';
+    return priority[0].toUpperCase() + priority.substring(1).toLowerCase();
+  }
+
+  String? _mapCategoryToDepartment(String? category) {
+    if (category == null) return null;
+    
+    final Map<String, String> categoryMapping = {
+      'plumbing': 'Plumbing',
+      'electrical': 'Electrical',
+      'hvac': 'HVAC',
+      'carpentry': 'Carpentry',
+      'painting': 'Painting',
+      'cleaning': 'Cleaning',
+      'security': 'Security',
+      'general': 'General',
+    };
+    
+    return categoryMapping[category.toLowerCase()] ?? category;
+  }
 
   void _onTabTapped(int index) {
     final destinations = [
@@ -70,7 +179,7 @@ class _CalendarPageState extends State<CalendarPage> {
   // Helper to get tasks per day
   List<WorkOrder> _tasksFor(DateTime day) {
     final normalized = DateTime(day.year, day.month, day.day);
-    return _all.where((w) {
+    return _allWorkOrders.where((w) {
       final dt = w.createdAt;
       return DateTime(dt.year, dt.month, dt.day) == normalized;
     }).toList();
@@ -80,21 +189,191 @@ class _CalendarPageState extends State<CalendarPage> {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.grey.shade200),
+          side: BorderSide(color: _getTypeColor(w.requestTypeTag).withOpacity(0.3), width: 2),
         ),
         child: ListTile(
-          leading: Icon(Icons.home_repair_service, color: kPrimary),
-          title: Text(w.title),
-          subtitle: Text('${w.requestTypeTag} • Unit ${w.unitId}'),
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  WorkOrderDetailsPage(selectedTabLabel: 'concern slip assigned'),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: _getTypeColor(w.requestTypeTag).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              w.requestTypeTag == 'Maintenance' 
+                ? Icons.build_circle 
+                : Icons.assignment_outlined, 
+              color: _getTypeColor(w.requestTypeTag),
+              size: 24,
             ),
           ),
+          title: Text(
+            w.title,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 4),
+              Text(
+                '${w.requestTypeTag} • Unit ${w.unitId ?? 'N/A'}',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              if (w.assignedStaff != null && w.assignedStaff!.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(Icons.person_outline, size: 12, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        w.assignedStaff!,
+                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+          trailing: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: _getStatusColor(w.statusTag),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              w.statusTag,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          onTap: () => _showTaskDetails(w),
         ),
       );
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return Colors.orange;
+      case 'assigned':
+      case 'in progress':
+      case 'in_progress':
+        return Colors.blue;
+      case 'done':
+      case 'completed':
+        return Colors.green;
+      case 'on hold':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Color _getTypeColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'maintenance':
+        return const Color(0xFF00BCD4); // Cyan for maintenance
+      case 'concern slip':
+        return const Color(0xFFFF6B6B); // Red for concern slips
+      case 'job service':
+        return const Color(0xFF4CAF50); // Green for job services
+      case 'work order':
+        return const Color(0xFFFF9800); // Orange for work orders
+      default:
+        return kPrimary;
+    }
+  }
+
+  void _showTaskDetails(WorkOrder task) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(task.title),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildDetailRow('ID:', task.id),
+                _buildDetailRow('Type:', task.requestTypeTag),
+                _buildDetailRow('Status:', task.statusTag),
+                if (task.unitId != null) _buildDetailRow('Unit:', task.unitId!),
+                if (task.departmentTag != null) _buildDetailRow('Department:', task.departmentTag!),
+                if (task.priorityTag != null) _buildDetailRow('Priority:', task.priorityTag!),
+                if (task.assignedStaff != null) _buildDetailRow('Assigned Staff:', task.assignedStaff!),
+                _buildDetailRow('Created:', DateFormat('MMM d, yyyy HH:mm').format(task.createdAt)),
+                if (task.updatedAt != null && task.updatedAt != task.createdAt)
+                  _buildDetailRow('Updated:', DateFormat('MMM d, yyyy HH:mm').format(task.updatedAt!)),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => WorkOrderDetailsPage(
+                      selectedTabLabel: task.requestTypeTag.toLowerCase().contains('concern') 
+                        ? 'concern slip assigned' 
+                        : 'work order details',
+                    ),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kPrimary,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('View Details'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: kMutedText,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -115,15 +394,51 @@ class _CalendarPageState extends State<CalendarPage> {
               );
             },
           ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadCalendarData,
+          ),
         ],
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(),
+              )
+            : _errorMessage != null
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          size: 64,
+                          color: Colors.red.shade300,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          _errorMessage!,
+                          style: const TextStyle(color: kMutedText),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: _loadCalendarData,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: kPrimary,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
                 // === Date timeline with header ===
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -261,25 +576,33 @@ class _CalendarPageState extends State<CalendarPage> {
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: tasks.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'No tasks for this day.',
-                              style: TextStyle(color: kMutedText),
+                    child: RefreshIndicator(
+                      onRefresh: _loadCalendarData,
+                      child: tasks.isEmpty
+                          ? ListView(
+                              children: const [
+                                SizedBox(height: 100),
+                                Center(
+                                  child: Text(
+                                    'No tasks for this day.',
+                                    style: TextStyle(color: kMutedText),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : ListView.separated(
+                              itemCount: tasks.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (_, i) => _buildItem(tasks[i]),
                             ),
-                          )
-                        : ListView.separated(
-                            itemCount: tasks.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 8),
-                            itemBuilder: (_, i) => _buildItem(tasks[i]),
-                          ),
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ),
-        ),
+                        ],
+                      ),
+                    ),
+                  ),
       ),
       bottomNavigationBar: NavBar(
         items: _navItems,

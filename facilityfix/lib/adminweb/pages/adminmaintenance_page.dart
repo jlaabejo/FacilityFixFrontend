@@ -54,10 +54,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
         _error = null;
       });
 
-      // TODO: Replace with actual building ID from user context
-      final response = await _apiService.getMaintenanceTasks(
-        buildingId: 'default_building_id',
-      );
+      final response = await _apiService.getMaintenanceTasks();
 
       if (response['success'] == true) {
         final tasks = response['tasks'] as List<dynamic>;
@@ -152,6 +149,17 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     style: style,
   );
 
+  // Helper to safely extract field values with multiple possible keys
+  String _getTaskField(Map<String, dynamic> task, List<String> keys, String defaultValue) {
+    for (final key in keys) {
+      final value = task[key];
+      if (value != null && value.toString().isNotEmpty) {
+        return value.toString();
+      }
+    }
+    return defaultValue;
+  }
+
   // Action dropdown menu methods
   void _showActionMenu(
     BuildContext context,
@@ -236,21 +244,38 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     }
   }
 
+  String _resolveMaintenanceType(Map<String, dynamic> maintenance) {
+    final candidates = [
+      maintenance['maintenanceType'],
+      maintenance['maintenance_type'],
+      maintenance['task_type'],
+      maintenance['taskType'],
+      maintenance['type'],
+    ];
+
+    for (final candidate in candidates) {
+      if (candidate == null) continue;
+      final raw = candidate.toString().toLowerCase().trim();
+      if (raw.isEmpty) continue;
+      if (raw.contains('external') || raw == 'epm') {
+        return 'external';
+      }
+      if (raw.contains('internal') || raw == 'ipm') {
+        return 'internal';
+      }
+    }
+
+    return '';
+  }
+
   // View method
   void _viewMaintenance(Map<String, dynamic> maintenance) {
     final id = (maintenance['id'] ?? '').toString();
-    final rawType =
-        (maintenance['maintenanceType'] ??
-                maintenance['type'] ??
-                maintenance['maintenance_type'] ??
-                '')
-            .toString()
-            .toLowerCase()
-            .trim();
+    final typeSlug = _resolveMaintenanceType(maintenance);
 
-    if (rawType.contains('internal')) {
+    if (typeSlug.contains('internal')) {
       context.push('/work/maintenance/$id/internal', extra: maintenance);
-    } else if (rawType.contains('external')) {
+    } else if (typeSlug.contains('external')) {
       context.push('/work/maintenance/$id/external', extra: maintenance);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -262,18 +287,11 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
   // Edit method
   void _editMaintenance(Map<String, dynamic> maintenance) {
     final id = (maintenance['id'] ?? '').toString();
-    final rawType =
-        (maintenance['maintenanceType'] ??
-                maintenance['type'] ??
-                maintenance['maintenance_type'] ??
-                '')
-            .toString()
-            .toLowerCase()
-            .trim();
+    final typeSlug = _resolveMaintenanceType(maintenance);
 
-    if (rawType.contains('internal')) {
+    if (typeSlug.contains('internal')) {
       context.push('/work/maintenance/$id/internal?edit=1', extra: maintenance);
-    } else if (rawType.contains('external')) {
+    } else if (typeSlug.contains('external')) {
       context.push('/work/maintenance/$id/external?edit=1', extra: maintenance);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -666,15 +684,20 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                         ],
                         rows:
                             _tasks.map((task) {
+                              final taskId = _getTaskField(task, ['id', 'formatted_id', 'task_code'], 'N/A');
+                              final location = _getTaskField(task, ['location'], 'N/A');
+                              final title = _getTaskField(task, ['task_title', 'taskTitle', 'title'], 'N/A');
+                              final status = _getTaskField(task, ['status'], 'scheduled');
+                              final scheduledDate = task['scheduled_date'] ?? task['startDate'] ?? task['start_date'];
+                              final recurrence = _getTaskField(task, ['recurrence', 'recurrence_type', 'recurrence_pattern'], 'none');
+                              
                               return DataRow(
                                 cells: [
                                   DataCell(
                                     _fixedCell(
                                       0,
                                       _ellipsis(
-                                        task['id'] ??
-                                            task['task_code'] ??
-                                            'N/A',
+                                        taskId,
                                         style: TextStyle(
                                           color: Colors.grey[700],
                                           fontSize: 13,
@@ -685,46 +708,31 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                                   DataCell(
                                     _fixedCell(
                                       1,
-                                      _ellipsis(task['location'] ?? 'N/A'),
+                                      _ellipsis(location),
                                     ),
                                   ),
                                   DataCell(
                                     _fixedCell(
                                       2,
-                                      _ellipsis(
-                                        task['task_title'] ??
-                                            task['taskTitle'] ??
-                                            'N/A',
-                                      ),
+                                      _ellipsis(title),
                                     ),
                                   ),
                                   DataCell(
                                     _fixedCell(
                                       3,
-                                      _buildStatusChip(
-                                        task['status'] ?? 'scheduled',
-                                      ),
+                                      _buildStatusChip(status),
                                     ),
                                   ),
                                   DataCell(
                                     _fixedCell(
                                       4,
-                                      _ellipsis(
-                                        _formatDate(
-                                          task['scheduled_date'] ??
-                                              task['startDate'],
-                                        ),
-                                      ),
+                                      _ellipsis(_formatDate(scheduledDate)),
                                     ),
                                   ),
                                   DataCell(
                                     _fixedCell(
                                       5,
-                                      _ellipsis(
-                                        task['recurrence'] ??
-                                            task['recurrence_pattern'] ??
-                                            'N/A',
-                                      ),
+                                      _ellipsis(recurrence),
                                     ),
                                   ),
                                   DataCell(

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
@@ -52,8 +54,22 @@ class _ExternalMaintenanceFormPageState
   DateTime? _loggedDate;
   String? _selectedAssessmentReceived;
   String? _selectedLoggedBy = 'Auto-filled';
-  DateTime? _assignedStaffDate;
   String? _selectedAdminNotifications;
+
+  static const List<String> _monthNames = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
 
   // ---------- Options ----------
   final List<String> _serviceCategoryOptions = [
@@ -103,6 +119,127 @@ class _ExternalMaintenanceFormPageState
     '1 day before',
     '1 week before',
   ];
+
+  DateTime _calculateNextDueDate(DateTime base, String frequency) {
+    switch (frequency) {
+      case 'Weekly':
+        return base.add(const Duration(days: 7));
+      case 'Monthly':
+        return _addMonths(base, 1);
+      case '3 Months':
+        return _addMonths(base, 3);
+      case '6 Months':
+        return _addMonths(base, 6);
+      case 'Yearly':
+        return _addMonths(base, 12);
+      default:
+        return base;
+    }
+  }
+
+  DateTime _addMonths(DateTime date, int monthsToAdd) {
+    final totalMonths = date.month + monthsToAdd;
+    final year = date.year + ((totalMonths - 1) ~/ 12);
+    final month = ((totalMonths - 1) % 12) + 1;
+    final day = math.min(date.day, _daysInMonth(year, month));
+    return DateTime(year, month, day);
+  }
+
+  int _daysInMonth(int year, int month) {
+    final nextMonth = month == 12 ? 1 : month + 1;
+    final nextMonthYear = month == 12 ? year + 1 : year;
+    return DateTime(nextMonthYear, nextMonth, 1)
+        .subtract(const Duration(days: 1))
+        .day;
+  }
+
+  void _applyRecurrenceSchedule(String? value) {
+    if (value == null) {
+      setState(() => _selectedRecurrence = null);
+      return;
+    }
+
+  final rawStart = _startDate ?? DateTime.now();
+  final baseStart = DateTime(rawStart.year, rawStart.month, rawStart.day);
+  final nextDue = _calculateNextDueDate(baseStart, value);
+
+    setState(() {
+      _selectedRecurrence = value;
+      _startDate = baseStart;
+      _nextDueDate = nextDue;
+      _serviceWindowStart = baseStart;
+      _serviceWindowEnd = nextDue;
+    });
+  }
+
+  void _handleStartDateChange(DateTime date) {
+    final normalized = DateTime(date.year, date.month, date.day);
+
+    setState(() {
+      _startDate = normalized;
+      if (_selectedRecurrence != null) {
+        final nextDue = _calculateNextDueDate(normalized, _selectedRecurrence!);
+        _nextDueDate = nextDue;
+        _serviceWindowStart = normalized;
+        _serviceWindowEnd = nextDue;
+      }
+    });
+  }
+
+  String _formatFriendlyDate(DateTime date) {
+    final month = _monthNames[date.month - 1];
+    return '$month ${date.day}, ${date.year}';
+  }
+
+  String? _recurrenceSummaryText() {
+    if (_selectedRecurrence == null || _startDate == null || _nextDueDate == null) {
+      return null;
+    }
+
+    final start = _formatFriendlyDate(_startDate!);
+    final next = _formatFriendlyDate(_nextDueDate!);
+    final windowStart = _serviceWindowStart != null
+        ? _formatFriendlyDate(_serviceWindowStart!)
+        : null;
+    final windowEnd = _serviceWindowEnd != null
+        ? _formatFriendlyDate(_serviceWindowEnd!)
+        : null;
+
+    final buffer = StringBuffer('Repeats $_selectedRecurrence starting $start. Next occurrence $next');
+    if (windowStart != null && windowEnd != null) {
+      buffer.write(' - Service window $windowStart to $windowEnd');
+    }
+    return buffer.toString();
+  }
+
+  Widget _buildRecurrenceSummary() {
+    final summary = _recurrenceSummaryText();
+    if (summary == null) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.shade100),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.event_repeat, color: Colors.blue),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              summary,
+              style: const TextStyle(color: Colors.blue, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   // ---------- Routing helpers ----------
   String? _getRoutePath(String routeKey) {
@@ -444,6 +581,16 @@ class _ExternalMaintenanceFormPageState
                         placeholder: "Enter Description...",
                         validator: _req,
                       ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: _buildTextField(
+                          label: "Responsible Department",
+                          controller: _departmentController,
+                          placeholder: "Enter Department",
+                          validator: _req,
+                        ),
+                      ),
                       const SizedBox(height: 40),
 
                       // Contractor Info
@@ -508,9 +655,7 @@ class _ExternalMaintenanceFormPageState
                               value: _selectedRecurrence,
                               placeholder: "Input",
                               options: _recurrenceOptions,
-                              onChanged:
-                                  (v) =>
-                                      setState(() => _selectedRecurrence = v),
+                              onChanged: _applyRecurrenceSchedule,
                               validator: (v) => v == null ? 'Required' : null,
                             ),
                           ),
@@ -520,13 +665,13 @@ class _ExternalMaintenanceFormPageState
                               label: "Start Date",
                               selectedDate: _startDate,
                               placeholder: "DD / MM / YY",
-                              onDateSelected:
-                                  (d) => setState(() => _startDate = d),
+                              onDateSelected: _handleStartDateChange,
                               requiredField: true,
                             ),
                           ),
                         ],
                       ),
+                      _buildRecurrenceSummary(),
                       const SizedBox(height: 24),
 
                       Row(
@@ -539,6 +684,7 @@ class _ExternalMaintenanceFormPageState
                               onDateSelected:
                                   (d) => setState(() => _nextDueDate = d),
                               requiredField: true,
+                              enabled: false,
                             ),
                           ),
                           const SizedBox(width: 24),
@@ -567,6 +713,7 @@ class _ExternalMaintenanceFormPageState
                                               () => _serviceWindowStart = d,
                                             ),
                                         showLabel: false,
+                                        enabled: false,
                                       ),
                                     ),
                                     const SizedBox(width: 12),
@@ -580,6 +727,7 @@ class _ExternalMaintenanceFormPageState
                                               () => _serviceWindowEnd = d,
                                             ),
                                         showLabel: false,
+                                        enabled: false,
                                       ),
                                     ),
                                   ],
@@ -705,34 +853,6 @@ class _ExternalMaintenanceFormPageState
                               label: "Recommendation",
                               controller: _recommendationController,
                               placeholder: "Enter Recommendation...",
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 40),
-
-                      // Assignment & Execution
-                      _buildSectionTitle("Assignment & Execution"),
-                      const SizedBox(height: 24),
-
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildTextField(
-                              label: "Department",
-                              controller: _departmentController,
-                              placeholder: "Enter Department",
-                              validator: _req,
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: _buildDateField(
-                              label: "Assigned Staff",
-                              selectedDate: _assignedStaffDate,
-                              placeholder: "DD / MM / YY",
-                              onDateSelected:
-                                  (d) => setState(() => _assignedStaffDate = d),
                             ),
                           ),
                         ],
@@ -920,75 +1040,62 @@ class _ExternalMaintenanceFormPageState
       return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     }
 
-    final taskData = {
-      'task_code': _taskCodeController.text.trim(),
-      'task_title': _taskTitleController.text.trim(),
-      'taskTitle':
-          _taskTitleController.text
-              .trim(), // Add camelCase version for view page
-      'maintenance_type': 'external',
-      'maintenanceType': 'External / 3rd-Party', // Add camelCase version
-      'service_category': _selectedServiceCategory,
-      'serviceCategory': _selectedServiceCategory, // Add camelCase version
-      'created_by': _createdByController.text.trim(),
-      'createdBy': _createdByController.text.trim(), // Add camelCase version
-      'date_created': formatDate(_dateCreated!),
-      'dateCreated': formatDate(_dateCreated!), // Add camelCase version
-      'priority': _selectedPriority,
-      'status': _selectedStatus,
-      'location': _selectedLocation,
-      'description': _descriptionController.text.trim(),
-      'contractor_name': _contractorNameController.text.trim(),
-      'contractorName':
-          _contractorNameController.text.trim(), // Add camelCase version
-      'contact_person': _contactPersonController.text.trim(),
-      'contactPerson':
-          _contactPersonController.text.trim(), // Add camelCase version
-      'contact_number': _contactNumberController.text.trim(),
-      'contractPhone':
-          _contactNumberController.text.trim(), // Add camelCase version
-      'email': _emailController.text.trim(),
-      'contractEmail': _emailController.text.trim(), // Add camelCase version
-      'recurrence': _selectedRecurrence,
-      'start_date': formatDate(_startDate!),
-      'startDate': formatDate(_startDate!), // Add camelCase version
-      'next_due_date': formatDate(_nextDueDate!),
-      'nextDueDate': formatDate(_nextDueDate!), // Add camelCase version
-      'service_window_start':
-          _serviceWindowStart != null ? formatDate(_serviceWindowStart!) : null,
-      'serviceWindowStart':
-          _serviceWindowStart != null
-              ? formatDate(_serviceWindowStart!)
-              : null, // Add camelCase version
-      'service_window_end':
-          _serviceWindowEnd != null ? formatDate(_serviceWindowEnd!) : null,
-      'serviceWindowEnd':
-          _serviceWindowEnd != null
-              ? formatDate(_serviceWindowEnd!)
-              : null, // Add camelCase version
-      'assessment_received': _selectedAssessmentReceived,
-      'assessmentReceived':
-          _selectedAssessmentReceived, // Add camelCase version
-      'logged_by': _selectedLoggedBy,
-      'loggedBy': _selectedLoggedBy, // Add camelCase version
-      'logged_date': _loggedDate != null ? formatDate(_loggedDate!) : null,
-      'loggedDate':
-          _loggedDate != null
-              ? formatDate(_loggedDate!)
-              : null, // Add camelCase version
-      'assessment': _assessmentController.text.trim(),
-      'recommendation': _recommendationController.text.trim(),
-      'department': _departmentController.text.trim(),
-      'assigned_staff_date':
-          _assignedStaffDate != null ? formatDate(_assignedStaffDate!) : null,
-      'admin_notification': _selectedAdminNotifications,
-      'adminNotify': _selectedAdminNotifications, // Add camelCase version
-      'building_id': 'default_building',
-    };
+  final scheduledDateIso = _startDate!.toUtc().toIso8601String();
+
+  final taskData = {
+    'task_code': _taskCodeController.text.trim(),
+    'task_title': _taskTitleController.text.trim(),
+    'task_description': _descriptionController.text.trim(),
+    'maintenance_type': 'external',
+    'service_category': _selectedServiceCategory,
+    'created_by': _createdByController.text.trim(),
+    'date_created': formatDate(_dateCreated!),
+    'priority': _selectedPriority ?? 'medium',
+    'status': _selectedStatus ?? 'scheduled',
+    'location': _selectedLocation ?? '',
+    'description': _descriptionController.text.trim(),
+    'contractor_name': _contractorNameController.text.trim(),
+    'contact_person': _contactPersonController.text.trim(),
+    'contact_number': _contactNumberController.text.trim(),
+    'email': _emailController.text.trim(),
+    'recurrence': _selectedRecurrence,
+    'start_date': formatDate(_startDate!),
+    'scheduled_date': scheduledDateIso,
+    'next_due_date': formatDate(_nextDueDate!),
+    'service_window_start':
+      _serviceWindowStart != null ? formatDate(_serviceWindowStart!) : null,
+    'service_window_end':
+      _serviceWindowEnd != null ? formatDate(_serviceWindowEnd!) : null,
+    'assessment_received': _selectedAssessmentReceived,
+    'logged_by': _selectedLoggedBy,
+    'logged_date': _loggedDate != null ? formatDate(_loggedDate!) : null,
+    'assessment': _assessmentController.text.trim(),
+    'recommendation': _recommendationController.text.trim(),
+    'department': _departmentController.text.trim(),
+    'admin_notification': _selectedAdminNotifications,
+    'building_id': 'default_building',
+    'task_type': 'external',
+    'category': _selectedServiceCategory ?? 'maintenance',
+    'recurrence_type':
+      _selectedRecurrence != null
+        ? _selectedRecurrence!.toLowerCase()
+        : 'none',
+    'assigned_to': _contractorNameController.text.trim(),
+    'checklist_completed': <Map<String, dynamic>>[],
+    'parts_used': <Map<String, dynamic>>[],
+    'tools_used': <String>[],
+    'photos': <String>[],
+  };
 
     try {
       final result = await _apiService.createMaintenanceTask(taskData);
-      print('[v0] External maintenance task created: ${result['task_id']}');
+      final createdTask =
+          result['task'] is Map<String, dynamic>
+              ? result['task'] as Map<String, dynamic>
+              : null;
+      final createdId =
+          createdTask?['id'] ?? result['id'] ?? result['task_id'];
+      print('[v0] External maintenance task created: $createdId');
 
       if (mounted) {
         context.push(

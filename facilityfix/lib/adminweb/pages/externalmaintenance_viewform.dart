@@ -211,8 +211,15 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
       }
     } catch (e) {
       print('[v0] Error fetching task data: $e');
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to load task data: $e';
+        });
+      }
     }
   }
+  
+  String? _error;
 
   String _mapBackendKey(String frontendKey) {
     const mapping = {
@@ -237,6 +244,7 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     return mapping[frontendKey] ?? frontendKey;
   }
 
+  @override
   void dispose() {
     _maintenanceTypeCtrl.dispose();
     _serviceCategoryCtrl.dispose();
@@ -414,105 +422,127 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
           _handleLogout(context);
         }
       },
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Work Orders Title
-              const Text(
-                "Work Orders",
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
+      body: _error != null
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Error: $_error',
+                    style: const TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _error = null;
+                      });
+                      _fetchTaskData();
+                    },
+                    child: const Text('Retry'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-
-              _buildBreadcrumb(),
-              const SizedBox(height: 24),
-
-              // Main content container
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.1),
-                      spreadRadius: 0,
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
+            )
+          : Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Form(
+                key: _formKey,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildNotificationBanner(),
-                    const SizedBox(height: 32),
-
-                    // Task header (title + code + assignee) + status chips
-                    _buildTaskHeader(),
-                    const SizedBox(height: 32),
-
-                    // Two columns
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Left column
-                        Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _buildBasicInformationCard(),
-                              const SizedBox(height: 24),
-                              _buildTaskScopeCard(),
-                              const SizedBox(height: 24),
-                              _buildContractorInformationCard(),
-                              const SizedBox(height: 24),
-                              _buildAttachmentsCard(),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 24),
-
-                        // Right column
-                        Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _buildRecurrenceScheduleCard(),
-                              const SizedBox(height: 24),
-                              _buildAssessmentTrackingCard(),
-                              const SizedBox(height: 24),
-                              _buildNotificationsCard(),
-                            ],
-                          ),
-                        ),
-                      ],
+                    // Work Orders Title
+                    const Text(
+                      "Work Orders",
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
                     ),
+                    const SizedBox(height: 16),
 
-                    const SizedBox(height: 32),
+                    _buildBreadcrumb(),
+                    const SizedBox(height: 24),
 
-                    // Bottom actions: Edit (view) / Cancel+Save (edit)
-                    _buildBottomActionBar(),
+                    // Main content container
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(32),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.1),
+                            spreadRadius: 0,
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildNotificationBanner(),
+                          const SizedBox(height: 32),
+
+                          // Task header (title + code + assignee) + status chips
+                          _buildTaskHeader(),
+                          const SizedBox(height: 32),
+
+                          // Two columns
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Left column
+                              Expanded(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _buildBasicInformationCard(),
+                                    const SizedBox(height: 24),
+                                    _buildTaskScopeCard(),
+                                    const SizedBox(height: 24),
+                                    _buildContractorInformationCard(),
+                                    const SizedBox(height: 24),
+                                    _buildAttachmentsCard(),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 24),
+
+                              // Right column
+                              Expanded(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _buildRecurrenceScheduleCard(),
+                                    const SizedBox(height: 24),
+                                    _buildAssessmentTrackingCard(),
+                                    const SizedBox(height: 24),
+                                    _buildNotificationsCard(),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 32),
+
+                          // Bottom actions: Edit (view) / Cancel+Save (edit)
+                          _buildBottomActionBar(),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 

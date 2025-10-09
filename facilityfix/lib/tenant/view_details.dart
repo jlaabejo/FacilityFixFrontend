@@ -518,7 +518,7 @@ class _EditConcernSlipPageState extends State<EditConcernSlipPage> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: _selectedCategory,
+                  initialValue: _selectedCategory,
                   decoration: const InputDecoration(
                     labelText: 'Category',
                     border: OutlineInputBorder(),
@@ -538,7 +538,7 @@ class _EditConcernSlipPageState extends State<EditConcernSlipPage> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: _selectedPriority,
+                  initialValue: _selectedPriority,
                   decoration: const InputDecoration(
                     labelText: 'Priority',
                     border: OutlineInputBorder(),
@@ -1221,8 +1221,6 @@ class _DetailsPayload {
 
   const _DetailsPayload({
     required this.child,
-    this.ctaLabel,
-    this.onCtaPressed,
   });
 
   bool get hasCta => ctaLabel != null && onCtaPressed != null;

@@ -2546,10 +2546,6 @@ class _SectionCard extends StatelessWidget {
   const _SectionCard({
     this.title,
     this.content,
-    this.child,
-    this.padding = const EdgeInsets.all(16),
-    this.margin,
-    this.hideIfEmpty = false,
   });
 
   double _scale(BuildContext context) => uiScale(context);

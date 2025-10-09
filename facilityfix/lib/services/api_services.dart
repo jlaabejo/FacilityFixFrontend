@@ -690,6 +690,7 @@ class APIService {
       final response = await post(
         '/work-orders/',
         headers: _authHeaders(token),
+        body: jsonEncode(body),
       );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -947,24 +948,20 @@ class APIService {
     bool activeOnly = true,
     int limit = 50,
     bool includeDismissed = false,
+    String? announcementType,
+    String? priorityLevel,
+    String? tags,
   }) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      final qs =
-          Uri(
-            queryParameters: {
-              'building_id': buildingId,
-              'audience': audience,
-              'active_only': activeOnly.toString(),
-              'limit': limit.toString(),
-              'include_dismissed': includeDismissed.toString(),
-            },
-          ).query;
+
+   
+
 
       final response = await get(
-        '/announcements?$qs',
+        '/announcements',
         headers: _authHeaders(token),
       );
 
@@ -1237,6 +1234,76 @@ class APIService {
     }
   }
 
+  /// Get user-targeted announcements
+  Future<List<Map<String, dynamic>>> getUserTargetedAnnouncements({
+    required String buildingId,
+    bool activeOnly = true,
+    int limit = 50,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final qs = Uri(
+        queryParameters: {
+          'building_id': buildingId,
+          'active_only': activeOnly.toString(),
+          'limit': limit.toString(),
+        },
+      ).query;
+
+      final response = await get(
+        '/announcements/user/targeted?$qs',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          final list = decoded['announcements'];
+          if (list is List) {
+            return list.whereType<Map<String, dynamic>>().toList(growable: false);
+          }
+          return const <Map<String, dynamic>>[];
+        }
+        return const <Map<String, dynamic>>[];
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get targeted announcements: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getUserTargetedAnnouncements: $e');
+      rethrow;
+    }
+  }
+
+  /// Mark announcement as viewed
+  Future<Map<String, dynamic>> markAnnouncementViewed(String announcementId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await post(
+        '/announcements/$announcementId/view',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to mark announcement as viewed: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error markAnnouncementViewed: $e');
+      rethrow;
+    }
+  }
+
   // ===== Tenant Requests =====
 
   Future<List<Map<String, dynamic>>> getAllTenantRequests() async {
@@ -1335,5 +1402,96 @@ class APIService {
 
   String mapCategoryToBackend(String uiCategory) {
     return uiCategory; // passthrough for now
+  }
+
+  // ===== Staff Management =====
+
+  /// Get all staff members with optional filtering by department
+  Future<List<Map<String, dynamic>>> getStaffMembers({
+    String? department,
+    bool availableOnly = false,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      // Build query parameters
+      final queryParams = <String, String>{};
+      if (department != null && department.isNotEmpty) {
+        queryParams['department'] = department;
+      }
+      if (availableOnly) {
+        queryParams['available_only'] = 'true';
+      }
+
+      final queryString =
+          queryParams.isEmpty
+              ? ''
+              : '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}';
+
+      print('[API] Fetching staff members with filters: $queryParams');
+
+      final response = await get(
+        '/users/staff$queryString',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data is List) {
+          final staffList = data.cast<Map<String, dynamic>>();
+          print('[API] Retrieved ${staffList.length} staff members');
+          return staffList;
+        }
+        return [];
+      } else {
+        print('[API] Error fetching staff members: ${response.statusCode} ${response.body}');
+        throw Exception('Failed to fetch staff members: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('[API] Error getting staff members: $e');
+      rethrow;
+    }
+  }
+
+  /// Assign a staff member to a concern slip for assessment
+  Future<Map<String, dynamic>> assignStaffToConcernSlip(
+    String concernSlipId,
+    String staffUserId,
+  ) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = jsonEncode({
+        'assigned_to': staffUserId,
+      });
+
+      print(
+        '[API] Assigning staff $staffUserId to concern slip $concernSlipId',
+      );
+
+      final response = await http.patch(
+        _u('/concern-slips/$concernSlipId/assign-staff'),
+        headers: _authHeaders(token),
+        body: body,
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        print('[API] Staff assigned successfully');
+        return data;
+      } else {
+        print(
+          '[API] Error assigning staff: ${response.statusCode} ${response.body}',
+        );
+        throw Exception(
+          'Failed to assign staff: ${response.statusCode} - ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error assigning staff to concern slip: $e');
+      rethrow;
+    }
   }
 }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:universal_html/html.dart' as html;
+import 'dart:convert';
 import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
 
@@ -28,6 +31,9 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
   Map<String, dynamic>? _categoryBreakdown;
   Map<String, dynamic>? _heatMapData;
   Map<String, dynamic>? _workOrderTrends;
+  Map<String, dynamic>? _timeSeriesData;
+  Map<String, dynamic>? _staffPerformance;
+  Map<String, dynamic>? _equipmentInsights;
 
   // Computed statistics
   int _totalRequests = 0;
@@ -36,11 +42,42 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
   double _resolutionTime = 0.0;
   Map<String, int> _categoryData = {};
   Map<String, List<HeatMapData>> _buildingHeatMap = {};
+  List<Map<String, dynamic>> _trendChartData = [];
 
   @override
   void initState() {
     super.initState();
-    _fetchAnalyticsData();
+    _initializeAuth();
+  }
+
+  Future<void> _initializeAuth() async {
+    try {
+      // Get current user's token
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final token = await user.getIdToken();
+        if (token != null) {
+          _apiService.setAuthToken(token);
+          await _fetchAnalyticsData();
+        } else {
+          setState(() {
+            _errorMessage = 'Authentication token not available';
+            _isLoading = false;
+          });
+        }
+      } else {
+        setState(() {
+          _errorMessage = 'User not logged in';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('[v0] Error initializing auth: $e');
+      setState(() {
+        _errorMessage = 'Authentication error: $e';
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _fetchAnalyticsData() async {
@@ -58,16 +95,23 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
         _apiService.getCategoryBreakdown(),
         _apiService.getHeatMapData(days: _getDaysFromDateRange()),
         _apiService.getWorkOrderTrends(days: _getDaysFromDateRange()),
+        _apiService.getTimeSeriesData(days: _getDaysFromDateRange()),
+        _apiService.getStaffPerformanceInsights(days: _getDaysFromDateRange()),
+        _apiService.getEquipmentInsights(days: _getDaysFromDateRange()),
       ]);
 
       _dashboardStats = results[0];
       _categoryBreakdown = results[1];
       _heatMapData = results[2];
       _workOrderTrends = results[3];
+      _timeSeriesData = results[4];
+      _staffPerformance = results[5];
+      _equipmentInsights = results[6];
 
       print('[v0] Dashboard stats: $_dashboardStats');
       print('[v0] Category breakdown: $_categoryBreakdown');
       print('[v0] Heat map data: $_heatMapData');
+      print('[v0] Time series data: $_timeSeriesData');
 
       // Process the data
       _processAnalyticsData();
@@ -124,6 +168,19 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
     // Process heat map data
     if (_heatMapData != null) {
       _buildingHeatMap = _processHeatMapData(_heatMapData!);
+    }
+
+    // Process time series data for trend charts
+    if (_timeSeriesData != null) {
+      final dataPoints = _timeSeriesData!['data_points'] as List<dynamic>?;
+      if (dataPoints != null) {
+        _trendChartData = dataPoints.map((point) {
+          return {
+            'date': point['date'] as String,
+            'value': (point['value'] as num).toDouble(),
+          };
+        }).toList();
+      }
     }
   }
 
@@ -236,6 +293,88 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
         );
       },
     );
+  }
+
+  // Export analytics data
+  Future<void> _exportData(String format) async {
+    try {
+      String reportType = 'comprehensive';
+      int days = _getDaysFromDateRange();
+
+      if (format == 'csv') {
+        final csvData = await _apiService.exportAnalyticsCSV(
+          reportType: reportType,
+          days: days,
+        );
+        _downloadFile(csvData, 'analytics_report.csv', 'text/csv');
+      } else if (format == 'json') {
+        final jsonData = await _apiService.exportAnalyticsJSON(
+          reportType: reportType,
+          days: days,
+        );
+        _downloadFile(jsonData, 'analytics_report.json', 'application/json');
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Analytics exported successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('[v0] Error exporting data: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to export data: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Download file (web implementation)
+  void _downloadFile(String content, String filename, String mimeType) {
+    print('[v0] Downloading file: $filename');
+    print('[v0] Content length: ${content.length} bytes');
+    
+    try {
+      // Create a blob from the content
+      final bytes = utf8.encode(content);
+      final blob = html.Blob([bytes], mimeType);
+      
+      // Create a download URL and trigger download
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', filename)
+        ..click();
+      
+      // Clean up the URL
+      html.Url.revokeObjectUrl(url);
+      
+      print('[v0] Download triggered successfully');
+      
+      // Show success message to user
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Download started: $filename'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      print('[v0] Error triggering download: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to download file: $e'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   @override
@@ -635,27 +774,57 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
             ),
             const SizedBox(width: 12),
 
-            // Export Button
-            ElevatedButton.icon(
-              onPressed: () {
-                // TODO: Implement export functionality
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Export functionality coming soon'),
-                  ),
-                );
+            // Export Button with Menu
+            PopupMenuButton<String>(
+              onSelected: (String format) {
+                _exportData(format);
               },
-              icon: const Icon(Icons.file_download, size: 18),
-              label: const Text('Export'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
+              itemBuilder: (BuildContext context) => [
+                const PopupMenuItem(
+                  value: 'csv',
+                  child: Row(
+                    children: [
+                      Icon(Icons.table_chart, size: 18),
+                      SizedBox(width: 8),
+                      Text('Export as CSV'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'json',
+                  child: Row(
+                    children: [
+                      Icon(Icons.code, size: 18),
+                      SizedBox(width: 8),
+                      Text('Export as JSON'),
+                    ],
+                  ),
+                ),
+              ],
+              child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 12,
                 ),
-                shape: RoundedRectangleBorder(
+                decoration: BoxDecoration(
+                  color: Colors.blue,
                   borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.file_download, size: 18, color: Colors.white),
+                    SizedBox(width: 8),
+                    Text(
+                      'Export',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(width: 4),
+                    Icon(Icons.arrow_drop_down, size: 18, color: Colors.white),
+                  ],
                 ),
               ),
             ),
@@ -951,9 +1120,26 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
   }
 
   // ============================================
-  // DOWNTIME TRACKING CHART WIDGET
+  // REQUEST TRENDS CHART WIDGET
   // ============================================
   Widget _buildDowntimeTrackingChart() {
+    // Generate spots from real data
+    final List<FlSpot> spots = [];
+    if (_trendChartData.isNotEmpty) {
+      for (int i = 0; i < _trendChartData.length && i < 30; i++) {
+        spots.add(FlSpot(i.toDouble(), _trendChartData[i]['value']));
+      }
+    } else {
+      // Fallback data
+      for (int i = 0; i < 7; i++) {
+        spots.add(FlSpot(i.toDouble(), (i * 2 + 1).toDouble()));
+      }
+    }
+
+    final double maxY = spots.isEmpty
+        ? 10
+        : (spots.map((s) => s.y).reduce((a, b) => a > b ? a : b) * 1.2);
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -977,7 +1163,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Downtime Tracking',
+                  'Request Trends',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 Container(
@@ -1008,6 +1194,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                         setState(() {
                           selectedDowntimeUnit = newValue!;
                         });
+                        _fetchAnalyticsData();
                       },
                     ),
                   ),
@@ -1019,56 +1206,53 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
             // Area Chart
             SizedBox(
               height: 300,
-              child: LineChart(
+              child: spots.isEmpty
+                  ? const Center(child: Text('No data available'))
+                  : LineChart(
                 LineChartData(
                   gridData: FlGridData(
                     show: true,
                     drawVerticalLine: false,
-                    horizontalInterval: 1,
+                    horizontalInterval: maxY / 5,
                     getDrawingHorizontalLine: (value) {
                       return FlLine(color: Colors.grey[200]!, strokeWidth: 1);
                     },
                   ),
                   titlesData: FlTitlesData(
                     show: true,
-                    rightTitles: AxisTitles(
+                    rightTitles: const AxisTitles(
                       sideTitles: SideTitles(showTitles: false),
                     ),
-                    topTitles: AxisTitles(
+                    topTitles: const AxisTitles(
                       sideTitles: SideTitles(showTitles: false),
                     ),
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
                         reservedSize: 30,
-                        interval: 1,
+                        interval: (spots.length / 5).ceilToDouble(),
                         getTitlesWidget: (double value, TitleMeta meta) {
-                          const style = TextStyle(
-                            color: Colors.grey,
-                            fontWeight: FontWeight.w400,
-                            fontSize: 12,
-                          );
-                          Widget text;
-                          switch (value.toInt()) {
-                            case 0:
-                              text = const Text('Week 1', style: style);
-                              break;
-                            case 1:
-                              text = const Text('Week 2', style: style);
-                              break;
-                            case 2:
-                              text = const Text('Week 3', style: style);
-                              break;
-                            case 3:
-                              text = const Text('Week 4', style: style);
-                              break;
-                            default:
-                              text = const Text('', style: style);
-                              break;
+                          if (value.toInt() >= _trendChartData.length) {
+                            return const Text('');
                           }
+                          final date = _trendChartData.isNotEmpty &&
+                                  value.toInt() < _trendChartData.length
+                              ? _trendChartData[value.toInt()]['date'] as String
+                              : '';
+                          // Show only day (DD)
+                          final dayStr = date.split('-').length > 2
+                              ? date.split('-')[2]
+                              : value.toInt().toString();
                           return SideTitleWidget(
                             axisSide: meta.axisSide,
-                            child: text,
+                            child: Text(
+                              dayStr,
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontWeight: FontWeight.w400,
+                                fontSize: 11,
+                              ),
+                            ),
                           );
                         },
                       ),
@@ -1076,7 +1260,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                     leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        interval: 1,
+                        interval: maxY / 5,
                         getTitlesWidget: (double value, TitleMeta meta) {
                           return Text(
                             value.toInt().toString(),
@@ -1087,70 +1271,34 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                             ),
                           );
                         },
-                        reservedSize: 28,
+                        reservedSize: 32,
                       ),
                     ),
                   ),
                   borderData: FlBorderData(show: false),
                   minX: 0,
-                  maxX: 3,
+                  maxX: (spots.length - 1).toDouble(),
                   minY: 0,
-                  maxY: 5,
+                  maxY: maxY,
                   lineBarsData: [
-                    // Unit A - Green line
                     LineChartBarData(
-                      spots: const [
-                        FlSpot(0, 2.8),
-                        FlSpot(1, 2.2),
-                        FlSpot(2, 2.5),
-                        FlSpot(3, 2.1),
-                      ],
-                      isCurved: true,
-                      color: Colors.green,
-                      barWidth: 3,
-                      isStrokeCapRound: true,
-                      dotData: FlDotData(show: false),
-                      belowBarData: BarAreaData(
-                        show: true,
-                        color: Colors.green.withOpacity(0.1),
-                      ),
-                    ),
-
-                    // Unit B - Blue line
-                    LineChartBarData(
-                      spots: const [
-                        FlSpot(0, 4.2),
-                        FlSpot(1, 2.8),
-                        FlSpot(2, 3.5),
-                        FlSpot(3, 3.2),
-                      ],
+                      spots: spots,
                       isCurved: true,
                       color: Colors.blue,
                       barWidth: 3,
                       isStrokeCapRound: true,
-                      dotData: FlDotData(show: false),
+                      dotData: const FlDotData(show: true),
                       belowBarData: BarAreaData(
                         show: true,
-                        color: Colors.blue.withOpacity(0.1),
-                      ),
-                    ),
-
-                    // Unit C - Red line
-                    LineChartBarData(
-                      spots: const [
-                        FlSpot(0, 4.8),
-                        FlSpot(1, 4.2),
-                        FlSpot(2, 4.5),
-                        FlSpot(3, 4.1),
-                      ],
-                      isCurved: true,
-                      color: Colors.red,
-                      barWidth: 3,
-                      isStrokeCapRound: true,
-                      dotData: FlDotData(show: false),
-                      belowBarData: BarAreaData(
-                        show: true,
-                        color: Colors.red.withOpacity(0.1),
+                        color: Colors.blue.withOpacity(0.15),
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.blue.withOpacity(0.3),
+                            Colors.blue.withOpacity(0.05),
+                          ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
                       ),
                     ),
                   ],
@@ -1159,15 +1307,31 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
             ),
             const SizedBox(height: 16),
 
-            // Chart Legend
+            // Chart Legend and Summary
             Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildChartLegendItem('Unit A', Colors.green),
-                const SizedBox(width: 24),
-                _buildChartLegendItem('Unit B', Colors.blue),
-                const SizedBox(width: 24),
-                _buildChartLegendItem('Unit C', Colors.red),
+                _buildChartLegendItem('Daily Requests', Colors.blue),
+                if (_timeSeriesData != null)
+                  Row(
+                    children: [
+                      Text(
+                        'Total: ${_timeSeriesData!['summary']?['total'] ?? 0}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Text(
+                        'Avg: ${(_timeSeriesData!['summary']?['average'] ?? 0).toStringAsFixed(1)}/day',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ],

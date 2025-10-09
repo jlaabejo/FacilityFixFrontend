@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../layout/facilityfix_layout.dart';
 import '../popupwidgets/announcement_viewdetails_popup.dart';
 import '../services/api_service.dart';
+import '../../services/auth_storage.dart';
 
 class AdminWebAnnouncementPage extends StatefulWidget {
   const AdminWebAnnouncementPage({super.key});
@@ -292,11 +293,37 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        final token = await user.getIdToken();
-        if (token != null) {
-          _apiService.setAuthToken(token);
-          print('[v0] Auth token set for user: ${user.email}');
+        try {
+          // Use getIdToken with force refresh = false to avoid type issues
+          final token = await user.getIdToken(false);
+          if (token != null) {
+            // Save to AuthStorage for new auth system
+            await AuthStorage.saveToken(token);
+            // Also set for backward compatibility
+            _apiService.setAuthToken(token);
+            print('[v0] Auth token saved for user: ${user.email}');
+            print('[v0] Token preview: ${token.substring(0, 20)}...');
+          } else {
+            print('[v0] ERROR: Token is null for user: ${user.email}');
+          }
+        } catch (tokenError) {
+          print('[v0] Error getting token: $tokenError');
+          // Try to get token without forcing refresh as fallback
+          try {
+            final token = await user.getIdToken();
+            if (token != null) {
+              await AuthStorage.saveToken(token);
+              _apiService.setAuthToken(token);
+              print('[v0] Auth token saved (fallback) for user: ${user.email}');
+            }
+          } catch (fallbackError) {
+            print('[v0] Fallback token retrieval failed: $fallbackError');
+            throw Exception('Failed to retrieve authentication token');
+          }
         }
+      } else {
+        print('[v0] ERROR: No current user found');
+        throw Exception('No authenticated user found');
       }
       // Fetch announcements after auth is set
       await _fetchAnnouncements();
@@ -503,7 +530,7 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                 // Create New button
                 ElevatedButton.icon(
                   onPressed: () {
-                    context.go('/announcement/create');
+                    context.go('/adminweb/pages/createannouncement');
                   },
                   icon: const Icon(Icons.add, size: 22),
                   label: const Text(

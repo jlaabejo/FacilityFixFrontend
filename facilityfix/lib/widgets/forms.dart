@@ -778,7 +778,7 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
           // SINGLE-SELECT
           if (!widget.isMultiSelect)
             DropdownButtonFormField<T>(
-              value: widget.value,
+              initialValue: widget.value,
               isExpanded: true,
               isDense: widget.isDense ?? false, // optional
               alignment: AlignmentDirectional.centerStart,
@@ -1253,8 +1253,8 @@ class NotificationChecklist extends StatelessWidget {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           side: const BorderSide(color: _stroke, width: 1.2),
-                          fillColor: MaterialStateProperty.resolveWith((states) {
-                            if (states.contains(MaterialState.selected)) return _brand;
+                          fillColor: WidgetStateProperty.resolveWith((states) {
+                            if (states.contains(WidgetState.selected)) return _brand;
                             return Colors.white;
                           }),
                           checkColor: Colors.white,

@@ -184,7 +184,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                   child: Row(
                     children: [
                       Image.asset(
-                        'lib/adminweb/assets/images/logo.png',
+                        'assets/images/logo.png',
                         height: 40,
                       ),
                       const SizedBox(width: 8),

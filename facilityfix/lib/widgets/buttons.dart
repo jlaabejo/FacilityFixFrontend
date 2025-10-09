@@ -600,7 +600,7 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
             )
           else
             DropdownButtonFormField<T>(
-              value: widget.value,
+              initialValue: widget.value,
               isExpanded: true,
               decoration: InputDecoration(
                 hintText: widget.hintText ?? 'Select ${widget.label}...',
@@ -757,7 +757,7 @@ class _RequestTypePickerState extends State<RequestTypePicker> {
 
         // Dropdown
         DropdownButtonFormField<String>(
-          value: _selected,
+          initialValue: _selected,
           isExpanded: true,
           decoration: _inputDec(),
           items: _presets

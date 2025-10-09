@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../services/api_services.dart';
 import '../layout/facilityfix_layout.dart';
 import '../popupwidgets/createmaintenancedialogue_popup.dart';
 
@@ -15,50 +16,105 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
   final DateTime _currentDate = DateTime.now();
   DateTime _selectedMonth = DateTime.now();
 
-  // Sample task data - in real app, this would come from your database
-  final List<Map<String, dynamic>> _tasks = [
-    {
-      'id': 'PM-GEN-AC-001',
-      'title': 'Routine Air Conditioning',
-      'description':
-          'Regular maintenance of the main boiler system. Check pressure levels, clean filters, and inspect all connections and valves for leaks.',
-      'assignedTo': 'Kevin Gilbert',
-      'date': DateTime(2025, 6, 28), // June 28, 2025
-      'type': 'maintenance', // maintenance or repair
-      'priority': 'high', // high, medium, low
-      'status': 'scheduled',
-    },
-    {
-      'id': 'RP-ELEV-001',
-      'title': 'Elevator Maintenance',
-      'description': 'Scheduled elevator maintenance and safety inspection',
-      'assignedTo': 'John Smith',
-      'date': DateTime(2025, 6, 7), // June 7, 2025
-      'type': 'repair',
-      'priority': 'medium',
-      'status': 'in_progress',
-    },
-    {
-      'id': 'PM-PEST-001',
-      'title': 'Pest Control',
-      'description': 'Monthly pest control treatment for common areas',
-      'assignedTo': 'Sarah Johnson',
-      'date': DateTime(2025, 6, 26), // June 26, 2025
+  // Real task data from API
+  List<Map<String, dynamic>> _tasks = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCalendarData();
+  }
+
+  Future<void> _loadCalendarData() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+
+      final apiService = APIService();
+      
+      // Fetch concern slips
+      final concernSlips = await apiService.getAllConcernSlips();
+      print('[CALENDAR] Fetched ${concernSlips.length} concern slips');
+      
+      // Fetch maintenance tasks
+      final maintenanceTasks = await apiService.getAllMaintenance();
+      print('[CALENDAR] Fetched ${maintenanceTasks.length} maintenance tasks');
+
+      if (mounted) {
+        setState(() {
+          _tasks = [];
+          
+          // Process concern slips
+          for (var slip in concernSlips) {
+            final processed = _processConcernSlip(slip);
+            print('[CALENDAR] Processed concern slip: ${processed['id']} on ${processed['date']}');
+            _tasks.add(processed);
+          }
+          
+          // Process maintenance tasks
+          for (var task in maintenanceTasks) {
+            final processed = _processMaintenanceTask(task);
+            print('[CALENDAR] Processed maintenance: ${processed['id']} on ${processed['date']}');
+            _tasks.add(processed);
+          }
+          
+          print('[CALENDAR] Total tasks loaded: ${_tasks.length}');
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('[CALENDAR] Error loading data: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to load calendar data: $e';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Map<String, dynamic> _processConcernSlip(Map<String, dynamic> slip) {
+    return {
+      'id': slip['formatted_id'] ?? slip['id'] ?? 'N/A',
+      'title': slip['title'] ?? 'Concern Slip',
+      'description': slip['description'] ?? '',
+      'assignedTo': slip['assigned_to'] ?? slip['assigned_staff'] ?? 'Unassigned',
+      'date': _parseDate(slip['created_at'] ?? slip['submitted_at']),
+      'type': 'concern_slip',
+      'priority': (slip['priority'] ?? 'medium').toString().toLowerCase(),
+      'status': (slip['status'] ?? 'pending').toString().toLowerCase(),
+      'category': slip['category'] ?? 'general',
+      'location': slip['unit_id'] ?? slip['location'] ?? 'N/A',
+    };
+  }
+
+  Map<String, dynamic> _processMaintenanceTask(Map<String, dynamic> task) {
+    return {
+      'id': task['formatted_id'] ?? task['id'] ?? 'N/A',
+      'title': task['task_title'] ?? task['title'] ?? 'Maintenance Task',
+      'description': task['task_description'] ?? task['description'] ?? '',
+      'assignedTo': task['assigned_to'] ?? task['assigned_staff'] ?? 'Unassigned',
+      'date': _parseDate(task['scheduled_date'] ?? task['created_at']),
       'type': 'maintenance',
-      'priority': 'low',
-      'status': 'scheduled',
-    },
-    {
-      'id': 'test',
-      'title': 'Pest Control',
-      'description': 'Monthly pest control treatment for common areas',
-      'assignedTo': 'Sarah Johnson',
-      'date': DateTime(2025, 6, 9), // June 26, 2025
-      'type': 'maintenance',
-      'priority': 'low',
-      'status': 'scheduled',
-    },
-  ];
+      'priority': (task['priority'] ?? 'medium').toString().toLowerCase(),
+      'status': (task['status'] ?? 'scheduled').toString().toLowerCase(),
+      'category': task['category'] ?? 'preventive',
+      'location': task['location'] ?? 'N/A',
+    };
+  }
+
+  DateTime _parseDate(dynamic dateValue) {
+    if (dateValue == null) return DateTime.now();
+    if (dateValue is DateTime) return dateValue;
+    if (dateValue is String) {
+      return DateTime.tryParse(dateValue) ?? DateTime.now();
+    }
+    return DateTime.now();
+  }
 
   // Helper function to convert routeKey to actual route path
   String? _getRoutePath(String routeKey) {
@@ -334,26 +390,34 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
 
   // Get tasks for a specific date
   List<Map<String, dynamic>> _getTasksForDate(DateTime date) {
-    return _tasks.where((task) {
+    final matches = _tasks.where((task) {
       DateTime taskDate = task['date'] as DateTime;
-      return taskDate.year == date.year &&
+      final matches = taskDate.year == date.year &&
           taskDate.month == date.month &&
           taskDate.day == date.day;
+      return matches;
     }).toList();
-  }
-
-  // Check if date has any tasks
-  bool _hasTasksOnDate(DateTime date) {
-    return _getTasksForDate(date).isNotEmpty;
+    
+    if (matches.isNotEmpty) {
+      print('[CALENDAR] Found ${matches.length} tasks for ${date.year}-${date.month}-${date.day}');
+    }
+    
+    return matches;
   }
 
   // Get task color based on type
   Color _getTaskColor(String type) {
-    switch (type) {
+    switch (type.toLowerCase()) {
       case 'maintenance':
         return const Color(0xFF00BCD4); // Cyan/Blue for maintenance
       case 'repair':
         return const Color(0xFF4CAF50); // Green for repair
+      case 'concern_slip':
+      case 'concern slip':
+        return const Color(0xFFFF6B6B); // Red for concern slips
+      case 'job_service':
+      case 'job service':
+        return const Color(0xFFFFB84D); // Orange for job services
       default:
         return Colors.grey;
     }
@@ -590,6 +654,86 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
     return months[month - 1];
   }
 
+  // Build legend item
+  Widget _buildLegendItem(String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[700],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Build summary card
+  Widget _buildSummaryCard(String label, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Get tasks for a specific month
+  List<Map<String, dynamic>> _getTasksForMonth(DateTime month) {
+    return _tasks.where((task) {
+      DateTime taskDate = task['date'] as DateTime;
+      return taskDate.year == month.year && taskDate.month == month.month;
+    }).toList();
+  }
+
   // Build calendar day cell
   Widget _buildDayCell(DateTime date, bool isCurrentMonth) {
     final tasks = _getTasksForDate(date);
@@ -650,15 +794,28 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                                   color: _getTaskColor(tasks[0]['type']),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: Text(
-                                  tasks[0]['title'],
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        tasks[0]['title'],
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (tasks[0]['assignedTo'] != null && 
+                                        tasks[0]['assignedTo'] != 'Unassigned')
+                                      const Icon(
+                                        Icons.person,
+                                        color: Colors.white,
+                                        size: 10,
+                                      ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -1061,7 +1218,56 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
           _handleLogout(context);
         }
       },
-      body: Padding(
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : _errorMessage != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        color: Colors.red,
+                        size: 48,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Error loading calendar data',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _errorMessage!,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: _loadCalendarData,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Retry'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF005CE7),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1104,7 +1310,98 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
               ],
             ),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 16),
+
+            // ----- Color Legend -----
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, size: 16, color: Colors.grey),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Legend:',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  _buildLegendItem('Maintenance', const Color(0xFF00BCD4)),
+                  const SizedBox(width: 16),
+                  _buildLegendItem('Concern Slip', const Color(0xFFFF6B6B)),
+                  const SizedBox(width: 16),
+                  _buildLegendItem('Job Service', const Color(0xFFFFB84D)),
+                  const SizedBox(width: 16),
+                  _buildLegendItem('Repair', const Color(0xFF4CAF50)),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.person, size: 12, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Assigned',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // ----- Task Summary -----
+            Row(
+              children: [
+                _buildSummaryCard(
+                  'Total Tasks',
+                  _tasks.length.toString(),
+                  Icons.task_alt,
+                  Colors.blue,
+                ),
+                const SizedBox(width: 12),
+                _buildSummaryCard(
+                  'This Month',
+                  _getTasksForMonth(_selectedMonth).length.toString(),
+                  Icons.calendar_today,
+                  Colors.green,
+                ),
+                const SizedBox(width: 12),
+                _buildSummaryCard(
+                  'Assigned',
+                  _tasks.where((t) => t['assignedTo'] != 'Unassigned').length.toString(),
+                  Icons.person,
+                  Colors.orange,
+                ),
+                const SizedBox(width: 12),
+                _buildSummaryCard(
+                  'Pending',
+                  _tasks.where((t) => t['status'].toString().toLowerCase() == 'pending').length.toString(),
+                  Icons.pending_actions,
+                  Colors.red,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
 
             // ----- Calendar container -----
             Container(
@@ -1158,8 +1455,22 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                             ],
                           ),
 
-                          // keep your simple months dropdown button here
-                          _monthDropdown(),
+                          Row(
+                            children: [
+                              // Refresh button
+                              IconButton(
+                                onPressed: _loadCalendarData,
+                                icon: const Icon(Icons.refresh),
+                                tooltip: 'Refresh calendar data',
+                                style: IconButton.styleFrom(
+                                  backgroundColor: Colors.grey[100],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              // keep your simple months dropdown button here
+                              _monthDropdown(),
+                            ],
+                          ),
                         ],
                       ),
                     ),

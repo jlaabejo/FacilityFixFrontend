@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../layout/facilityfix_layout.dart';
+import '../layout/facilityfix_layout.dart'; 
+import '../../services/api_services.dart'; 
+
 
 class InternalTaskViewPage extends StatefulWidget {
   /// Deep-linkable view with optional edit mode.
@@ -20,6 +22,12 @@ class InternalTaskViewPage extends StatefulWidget {
 }
 
 class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
+  // ------------------------ API Service ------------------------
+  final APIService _apiService = APIService();
+  bool _isLoading = true;
+  String? _error;
+  Map<String, dynamic>? _taskData;
+
   // ------------------------ Navigation helpers ------------------------
   String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
@@ -90,6 +98,9 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
   // Header chips (view-only)
   List<String> _tags = const [];
 
+  // Attachments sourced from backend/task payload
+  final List<Map<String, String?>> _attachments = [];
+
   // Snapshot used for Cancel
   late Map<String, String> _original;
 
@@ -100,44 +111,119 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
   @override
   void initState() {
     super.initState();
+    _initializeData();
+  }
 
-    final Map<String, dynamic> seed = widget.initialTask ?? {};
+  Future<void> _initializeData() async {
+    try {
+      // Fetch task data from backend if not provided
+      if (widget.initialTask == null) {
+        // Get all maintenance tasks and find the one with matching ID
+        final allTasks = await _apiService.getAllMaintenance();
+        _taskData = allTasks.firstWhere(
+          (task) => (task['formatted_id'] == widget.taskId || task['id'] == widget.taskId),
+          orElse: () => throw Exception('Task not found with ID: ${widget.taskId}'),
+        );
+      } else {
+        _taskData = widget.initialTask;
+      }
 
-    // Safe setter
-    void setText(TextEditingController c, String key) {
-      c.text = (seed[key]?.toString() ?? '');
+      _populateFields();
+
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('[v0] Error initializing task data: $e');
+      setState(() {
+        _error = 'Failed to load task data: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _populateFields() {
+    final Map<String, dynamic> seed = _taskData ?? {};
+
+    // Safe setter with multiple possible keys
+    void setText(TextEditingController c, List<String> keys) {
+      for (final key in keys) {
+        final value = seed[key];
+        if (value != null && value.toString().isNotEmpty) {
+          c.text = value.toString();
+          return;
+        }
+      }
+      c.text = '';
     }
 
-    // Assign from incoming data
-    setText(_departmentCtrl, 'assigneeDept');
-    setText(_createdByCtrl, 'assigneeName');
-    setText(_estimatedDurationCtrl, 'estimatedDuration');
-    setText(_locationCtrl, 'location');
-    setText(_descriptionCtrl, 'description');
-    setText(_recurrenceCtrl, 'recurrence');
-    setText(_startDateCtrl, 'startDate');
-    setText(_nextDueCtrl, 'nextDueDate');
-    setText(_assigneeNameCtrl, 'assigneeName');
-    setText(_assigneeDeptCtrl, 'assigneeDept');
-    setText(_adminNotifyCtrl, 'adminNotify');
-    setText(_staffNotifyCtrl, 'staffNotify');
+    // Assign from incoming data with fallback keys
+    setText(_departmentCtrl, ['department', 'assigneeDept']);
+    setText(_createdByCtrl, ['created_by', 'assigneeName', 'assigned_staff_name']);
+    setText(_estimatedDurationCtrl, ['estimated_duration', 'estimatedDuration']);
+    setText(_locationCtrl, ['location']);
+    setText(_descriptionCtrl, ['task_description', 'description']);
+    setText(_recurrenceCtrl, ['recurrence_type', 'recurrence']);
+    setText(_startDateCtrl, ['scheduled_date', 'startDate', 'start_date']);
+    setText(_nextDueCtrl, ['next_occurrence', 'nextDueDate', 'next_due_date']);
+    setText(_assigneeNameCtrl, ['assigned_staff_name', 'assigneeName', 'assigned_to']);
+    setText(_assigneeDeptCtrl, ['department', 'assigneeDept']);
+    setText(_adminNotifyCtrl, ['admin_notification', 'adminNotify']);
+    setText(_staffNotifyCtrl, ['staff_notification', 'staffNotify']);
 
-    if (seed['checklistItems'] != null && seed['checklistItems'] is List) {
+    void addAttachment(dynamic entry) {
+      if (entry == null) return;
+      if (entry is String && entry.isNotEmpty) {
+        _attachments.add({
+          'name': entry.split('/').isNotEmpty ? entry.split('/').last : entry,
+          'url': entry,
+        });
+      } else if (entry is Map) {
+        final name = entry['name'] ?? entry['filename'] ?? entry['title'];
+        final url = entry['url'] ?? entry['path'] ?? entry['downloadUrl'];
+        if (name != null || url != null) {
+          _attachments.add({
+            'name': name?.toString() ?? 'Attachment',
+            'url': url?.toString(),
+          });
+        }
+      }
+    }
+
+    void hydrateAttachments(dynamic raw) {
+      if (raw is List) {
+        for (final entry in raw) {
+          addAttachment(entry);
+        }
+      } else if (raw is Map && raw['items'] is List) {
+        for (final entry in raw['items']) {
+          addAttachment(entry);
+        }
+      } else if (raw is String) {
+        addAttachment(raw);
+      }
+    }
+
+    hydrateAttachments(seed['attachments']);
+    hydrateAttachments(seed['photos']);
+
+    final checklistData = seed['checklist_completed'] ?? seed['checklistItems'];
+    if (checklistData != null && checklistData is List) {
       _checklistItems.clear();
-      for (var item in seed['checklistItems']) {
+      for (var item in checklistData) {
         _checklistItems.add({
-          'text': item['task'] ?? '',
+          'text': item['task'] ?? item['description'] ?? '',
           'completed': item['completed'] ?? false,
         });
       }
     }
 
-    // Tags
+    // Tags - try to get from data or use defaults
     final dynamic t = seed['tags'];
     _tags =
-        (t is List)
+        (t is List && t.isNotEmpty)
             ? t.map((e) => e.toString()).toList()
-            : <String>['High-Turnover', 'Repair-Prone'];
+            : <String>['Maintenance', 'Internal'];
 
     _original = _takeSnapshot();
     _isEditMode = widget.startInEditMode;
@@ -205,12 +291,12 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
 
     try {
       final updateData = _takeSnapshot();
-      print('[v0] Updating maintenance task: ${widget.taskId}');
+      print('[v0] Updating maintenance task: ${widget.taskId} -> $updateData');
 
       // TODO: Call API to update the task
       // await _apiService.updateMaintenanceTask(widget.taskId, updateData);
 
-      _original = _takeSnapshot(); // update baseline
+      _original = Map<String, String>.from(updateData); // update baseline
       setState(() => _isEditMode = false);
 
       if (mounted) {
@@ -279,12 +365,38 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
           _handleLogout(context);
         }
       },
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
-          child: Column(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Error: $_error',
+                        style: const TextStyle(color: Colors.red),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _isLoading = true;
+                            _error = null;
+                          });
+                          _initializeData();
+                        },
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Form(
+                    key: _formKey,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeaderSection(), // Breadcrumbs/title
@@ -321,8 +433,10 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              widget.initialTask?['taskTitle'] ??
-                                  "Light Inspection",
+                              _taskData?['task_title'] ?? 
+                                  _taskData?['taskTitle'] ?? 
+                                  _taskData?['title'] ?? 
+                                  'Maintenance Task',
                               style: const TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
@@ -410,7 +524,10 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
 
   // ------------------------ Header (breadcrumbs only) ------------------------
   Widget _buildHeaderSection() {
-    final taskTitle = widget.initialTask?['taskTitle'] ?? 'Light Inspection';
+    final taskTitle = _taskData?['task_title'] ?? 
+                      _taskData?['taskTitle'] ?? 
+                      _taskData?['title'] ?? 
+                      'Maintenance Task';
     final assignedTo =
         _assigneeNameCtrl.text.isNotEmpty
             ? _assigneeNameCtrl.text
@@ -425,6 +542,22 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
             fontSize: 28,
             fontWeight: FontWeight.bold,
             color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Task: $taskTitle',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: Colors.black87,
+          ),
+        ),
+        Text(
+          'Assigned to: $assignedTo',
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey[700],
           ),
         ),
         const SizedBox(height: 8),
@@ -454,7 +587,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
-              child: const Text('Maintenance Tasks'),
+              child: Text(taskTitle),
             ),
           ],
         ),
@@ -494,34 +627,39 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
   // ------------------------ Notification Banner (top of container) ------------------------
   Widget _buildNotificationBanner() {
     final nextDue = _nextDueCtrl.text.trim();
+    final hasNextDue = nextDue.isNotEmpty && nextDue != 'N/A';
+    
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFE3F2FD),
+        color: hasNextDue ? const Color(0xFFE3F2FD) : Colors.grey[100]!,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.warning_amber_rounded,
-            color: Color(0xFF1976D2),
+          Icon(
+            hasNextDue ? Icons.calendar_today : Icons.info_outline,
+            color: hasNextDue ? const Color(0xFF1976D2) : Colors.grey[600],
             size: 20,
           ),
           const SizedBox(width: 12),
-          const Text(
-            "Tasks Scheduled",
+          Text(
+            hasNextDue ? "Tasks Scheduled" : "Schedule Information",
             style: TextStyle(
-              color: Color(0xFF1976D2),
+              color: hasNextDue ? const Color(0xFF1976D2) : Colors.grey[700],
               fontWeight: FontWeight.w600,
               fontSize: 14,
             ),
           ),
           const SizedBox(width: 8),
-          Text(
-            nextDue.isEmpty
-                ? "Next service date not set"
-                : "Next Service: $nextDue",
-            style: TextStyle(color: Colors.grey[700], fontSize: 14),
+          Expanded(
+            child: Text(
+              hasNextDue
+                  ? "Next Service: $nextDue"
+                  : "No next service date scheduled",
+              style: TextStyle(color: Colors.grey[700], fontSize: 14),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -752,48 +890,64 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
             ],
           ),
           const SizedBox(height: 24),
-          ...(_checklistItems.asMap().entries.map((entry) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Row(
-                children: [
-                  Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey[400]!, width: 2),
-                      borderRadius: BorderRadius.circular(4),
+          if (_checklistItems.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: Text(
+                'No checklist items available for this task.',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                textAlign: TextAlign.center,
+              ),
+            )
+          else
+            ...(_checklistItems.asMap().entries.map((entry) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[400]!, width: 2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child:
+                          entry.value['completed']
+                              ? const Icon(
+                                Icons.check,
+                                size: 14,
+                                color: Colors.green,
+                              )
+                              : null,
                     ),
-                    child:
-                        entry.value['completed']
-                            ? const Icon(
-                              Icons.check,
-                              size: 14,
-                              color: Colors.green,
-                            )
-                            : null,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      entry.value['text'],
-                      style: TextStyle(
-                        fontSize: 14,
-                        color:
-                            entry.value['completed']
-                                ? Colors.grey[500]
-                                : Colors.black87,
-                        decoration:
-                            entry.value['completed']
-                                ? TextDecoration.lineThrough
-                                : null,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        entry.value['text'],
+                        style: TextStyle(
+                          fontSize: 14,
+                          color:
+                              entry.value['completed']
+                                  ? Colors.grey[500]
+                                  : Colors.black87,
+                          decoration:
+                              entry.value['completed']
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          })),
+                  ],
+                ),
+              );
+            })),
         ],
       ),
     );
@@ -917,46 +1071,124 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
             ],
           ),
           const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey[200]!),
-            ),
-            child: Row(
+          if (_attachments.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: Text(
+                _isEditMode
+                    ? 'No attachments yet. Use the edit mode toolbar to upload files.'
+                    : 'No attachments provided.',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
+            )
+          else
+            Column(
               children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4CAF50),
-                    borderRadius: BorderRadius.circular(6),
+                for (final attachment in _attachments)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _buildAttachmentRow(attachment),
                   ),
-                  child: const Icon(Icons.image, color: Colors.white, size: 16),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        "basement-lights-before.jpg",
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      Text(
-                        "Image File",
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(Icons.visibility, color: Colors.grey[600], size: 20),
               ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttachmentRow(Map<String, String?> attachment) {
+    final name = attachment['name'] ?? 'Attachment';
+    final url = attachment['url'];
+    final ext = name.split('.').length > 1
+        ? name.split('.').last.toLowerCase()
+        : '';
+
+    IconData icon;
+    Color bgColor;
+
+    switch (ext) {
+      case 'pdf':
+        icon = Icons.picture_as_pdf;
+        bgColor = const Color(0xFFF44336);
+        break;
+      case 'png':
+      case 'jpg':
+      case 'jpeg':
+      case 'gif':
+        icon = Icons.image;
+        bgColor = const Color(0xFF4CAF50);
+        break;
+      case 'doc':
+      case 'docx':
+        icon = Icons.description;
+        bgColor = const Color(0xFF1976D2);
+        break;
+      default:
+        icon = Icons.insert_drive_file;
+        bgColor = const Color(0xFF9E9E9E);
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(icon, color: Colors.white, size: 16),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  url ?? 'No download link provided',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: url != null
+                ? () {
+                    // TODO: Implement preview/download when backend ready
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Attachment URL copied: $url')),
+                    );
+                  }
+                : null,
+            icon: Icon(
+              Icons.visibility,
+              color: url != null ? Colors.grey[600] : Colors.grey[400],
+              size: 20,
             ),
           ),
         ],
