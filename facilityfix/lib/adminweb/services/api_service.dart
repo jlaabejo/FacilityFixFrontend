@@ -235,6 +235,60 @@ class ApiService {
     }
   }
 
+  /// Export analytics data as Excel (enhanced format)
+  Future<String> exportAnalyticsExcel({
+    required String reportType,
+    int days = 30,
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse(
+          '$baseUrl/analytics/export/excel?report_type=$reportType&days=$days',
+        ),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return response.body;
+      } else {
+        throw Exception(
+          'Failed to export analytics Excel: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error exporting analytics Excel: $e');
+      rethrow;
+    }
+  }
+
+  /// Export executive dashboard summary
+  Future<String> exportDashboardSummary({
+    String format = 'csv',
+    int days = 30,
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse(
+          '$baseUrl/analytics/export/dashboard-summary?format=$format&days=$days',
+        ),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return response.body;
+      } else {
+        throw Exception(
+          'Failed to export dashboard summary: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error exporting dashboard summary: $e');
+      rethrow;
+    }
+  }
+
   /// Get time series data for charts
   Future<Map<String, dynamic>> getTimeSeriesData({
     String metric = 'requests',
@@ -363,6 +417,32 @@ class ApiService {
       }
     } catch (e) {
       print('[v0] Error assigning staff to concern slip: $e');
+      rethrow;
+    }
+  }
+
+  /// Assign staff to a job service
+  Future<Map<String, dynamic>> assignStaffToJobService(
+    String jobServiceId,
+    String staffUserId,
+  ) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.patch(
+        Uri.parse('$baseUrl/job-services/$jobServiceId/assign'),
+        headers: headers,
+        body: json.encode({'assigned_to': staffUserId}),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to assign staff to job service: ${response.statusCode} ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error assigning staff to job service: $e');
       rethrow;
     }
   }

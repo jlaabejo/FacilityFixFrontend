@@ -10,6 +10,7 @@ import 'package:facilityfix/admin/notification.dart';
 import 'package:facilityfix/admin/view_details/workorder_details.dart';
 import 'package:facilityfix/models/cards.dart';
 import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/adminweb/services/api_service.dart' as admin_api;
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:facilityfix/widgets/cards.dart'; // RepairCard, MaintenanceCard, SearchAndFilterBar, StatusTabSelector, EmptyState
@@ -54,6 +55,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
 
   // Dynamic data from API
   List<WorkOrder> _allRequests = [];
+  List<WorkOrder> _jobServices = [];
   List<WorkOrder> _maintenanceTasks = [];
   bool _isLoading = true;
 
@@ -78,20 +80,34 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
 
     try {
       final apiService = APIService();
+      final adminApiService = admin_api.ApiService();
       
-      // Fetch all tenant requests (includes all request types with AI categorization)
-      final allRequests = await apiService.getAllTenantRequests();
+      // Fetch concern slips (separate from job services)
+      final concernSlips = await apiService.getAllTenantRequests();
+      
+      // Fetch job services from dedicated endpoint
+      final jobServices = await adminApiService.getAllJobServices();
       
       // Fetch maintenance tasks
       final maintenanceTasks = await apiService.getAllMaintenance();
 
       if (mounted) {
         setState(() {
-          // Process tenant requests into WorkOrder objects
-          _allRequests = allRequests.map((request) => _processRequestToWorkOrder(request)).toList();
+          // Process concern slips into WorkOrder objects
+          _allRequests = concernSlips
+              .where((request) => request['request_type'] != 'Job Service') // Exclude job services from concern slips
+              .map((request) => _processRequestToWorkOrder(request))
+              .toList();
+          
+          // Process job services into WorkOrder objects
+          _jobServices = jobServices
+              .map((jobService) => _processJobServiceToWorkOrder(jobService))
+              .toList();
           
           // Process maintenance tasks into WorkOrder objects
-          _maintenanceTasks = maintenanceTasks.map((task) => _processMaintenanceToWorkOrder(task)).toList();
+          _maintenanceTasks = maintenanceTasks
+              .map((task) => _processMaintenanceToWorkOrder(task))
+              .toList();
           
           _isLoading = false;
         });
@@ -101,7 +117,9 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       if (mounted) {
         setState(() {
           _allRequests = [];
+          _jobServices = [];
           _maintenanceTasks = [];
+          _isLoading = false;
           _isLoading = false;
         });
       }
@@ -136,6 +154,22 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       priorityTag: _capitalizePriority(task['priority']),
       assignedStaff: task['assigned_staff'] ?? task['assigned_to'],
       staffDepartment: _mapCategoryToDepartment(task['category'] ?? task['department']),
+      staffPhotoUrl: 'assets/images/avatar.png',
+    );
+  }
+
+  WorkOrder _processJobServiceToWorkOrder(Map<String, dynamic> jobService) {
+    return WorkOrder(
+      title: jobService['title'] ?? 'Job Service Request',
+      id: jobService['formatted_id'] ?? jobService['id'] ?? 'N/A',
+      createdAt: _parseDate(jobService['created_at'] ?? jobService['submitted_at']),
+      statusTag: _capitalizeStatus(jobService['status'] ?? 'pending'),
+      departmentTag: _mapCategoryToDepartment(jobService['category']),
+      requestTypeTag: 'Job Service',
+      unitId: jobService['unit_id'] ?? jobService['location'] ?? 'N/A',
+      priorityTag: _capitalizePriority(jobService['priority']),
+      assignedStaff: jobService['assigned_to'] ?? jobService['assigned_staff'],
+      staffDepartment: _mapCategoryToDepartment(jobService['category']),
       staffPhotoUrl: 'assets/images/avatar.png',
     );
   }
@@ -324,8 +358,8 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     ].any((s) => _norm(s).contains(q));
   }
 
-  /// Get combined list of all work orders (requests + maintenance)
-  List<WorkOrder> get _allWorkOrders => [..._allRequests, ..._maintenanceTasks];
+  /// Get combined list of all work orders (concern slips + job services + maintenance)
+  List<WorkOrder> get _allWorkOrders => [..._allRequests, ..._jobServices, ..._maintenanceTasks];
 
   /// Items after applying department → status → tab → search.
   List<WorkOrder> get _filtered => _allWorkOrders

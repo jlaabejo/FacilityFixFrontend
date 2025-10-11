@@ -2,6 +2,7 @@ import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/staff/view_details.dart';
 import 'package:facilityfix/staff/workorder.dart';
+import 'package:facilityfix/staff/maintenance.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/staff/notification.dart';
@@ -38,6 +39,7 @@ class _HomeState extends State<HomePage> {
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
+    NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
     NavItem(icon: Icons.inventory),
     NavItem(icon: Icons.person),
@@ -312,16 +314,22 @@ class _HomeState extends State<HomePage> {
       case 2:
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const AnnouncementPage()),
+          MaterialPageRoute(builder: (_) => const MaintenancePage()),
         );
         break;
       case 3:
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const InventoryPage()),
+          MaterialPageRoute(builder: (_) => const AnnouncementPage()),
         );
         break;
       case 4:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const InventoryPage()),
+        );
+        break;
+      case 5:
         Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const ProfilePage()),

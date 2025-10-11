@@ -32,11 +32,10 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
   late TextEditingController lastNameController;
   late TextEditingController emailController;
   late TextEditingController phoneController;
-  late TextEditingController departmentController; // Legacy single department
+  late TextEditingController departmentController; // Single department only
   
-  // Multi-select departments
-  List<String> selectedDepartments = [];
-  final TextEditingController _departmentInputController = TextEditingController();
+  // Selected department (single selection)
+  String selectedDepartment = '';
   
   // Available department options
   final List<String> availableDepartments = [
@@ -76,43 +75,79 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
   @override
   void initState() {
     super.initState();
-    final rawUser = widget.user['_raw'] ?? {};
+    final rawUser = widget.user['_raw'] ?? widget.user;
+    
+    // Initialize controllers with proper fallback handling
     firstNameController = TextEditingController(
-      text: rawUser['first_name'] ?? '',
+      text: rawUser['first_name'] ?? _extractFirstName(),
     );
     lastNameController = TextEditingController(
-      text: rawUser['last_name'] ?? '',
+      text: rawUser['last_name'] ?? _extractLastName(),
     );
     emailController = TextEditingController(
       text: rawUser['email'] ?? widget.user['email'] ?? '',
     );
     phoneController = TextEditingController(
-      text: rawUser['phone_number'] ?? '',
+      text: rawUser['phone_number'] ?? rawUser['phone'] ?? '',
     );
     departmentController = TextEditingController(
       text: rawUser['department'] ?? widget.user['department'] ?? '',
     );
     
-    // Initialize selected departments from user data
-    final departments = rawUser['departments'] ?? 
-                       rawUser['staff_departments'] ?? 
-                       widget.user['departments'] ?? 
-                       widget.user['staff_departments'];
+    // Initialize selected departments from user data with better fallback
+    _initializeDepartments();
+  }
+
+  String _extractFirstName() {
+    final fullName = widget.user['name']?.toString() ?? '';
+    if (fullName.isNotEmpty) {
+      final nameParts = fullName.split(' ');
+      return nameParts.isNotEmpty ? nameParts[0] : '';
+    }
+    return '';
+  }
+
+  String _extractLastName() {
+    final fullName = widget.user['name']?.toString() ?? '';
+    if (fullName.isNotEmpty) {
+      final nameParts = fullName.split(' ');
+      return nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+    }
+    return '';
+  }
+
+  void _initializeDepartments() {
+    final rawUser = widget.user['_raw'] ?? widget.user;
     
-    if (departments != null && departments is List) {
-      selectedDepartments = List<String>.from(departments);
-    } else if (departments != null && departments is String && departments.isNotEmpty) {
-      selectedDepartments = [departments];
-    } else {
-      // Fallback to legacy single department
-      final singleDept = rawUser['department'] ?? 
-                        rawUser['staff_department'] ?? 
-                        widget.user['department'] ?? 
-                        widget.user['staff_department'];
-      if (singleDept != null && singleDept.toString().isNotEmpty) {
-        selectedDepartments = [singleDept.toString()];
+    // Get single department from various sources
+    String department = rawUser['department'] ?? 
+                       rawUser['staff_department'] ?? 
+                       widget.user['department'] ?? 
+                       widget.user['staff_department'] ?? '';
+    
+    // If no single department, try to get first from departments list
+    if (department.isEmpty) {
+      final departments = rawUser['departments'] ?? 
+                         rawUser['staff_departments'] ?? 
+                         widget.user['departments'] ?? 
+                         widget.user['staff_departments'];
+      
+      if (departments is List && departments.isNotEmpty) {
+        department = departments[0].toString();
+      } else if (departments is String && departments.isNotEmpty) {
+        department = departments;
       }
     }
+    
+    // Validate that the department exists in our available options
+    // If not, reset to empty string
+    if (department.isNotEmpty && !availableDepartments.contains(department)) {
+      print('[UserProfileDialog] Department "$department" not found in available options, resetting to empty');
+      department = '';
+    }
+    
+    selectedDepartment = department;
+    departmentController.text = department;
   }
 
   @override
@@ -123,7 +158,6 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     emailController.dispose();
     phoneController.dispose();
     departmentController.dispose();
-    _departmentInputController.dispose();
     super.dispose();
   }
 
@@ -384,7 +418,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
   }
 
   Widget _buildPersonalDetailsSection() {
-    final rawUser = widget.user['_raw'] ?? {};
+    final rawUser = widget.user['_raw'] ?? widget.user;
 
     return Container(
       width: double.infinity,
@@ -442,7 +476,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
           _buildDetailField(
             'Phone Number',
             phoneController,
-            rawUser['phone_number'] ?? 'Not specified',
+            rawUser['phone_number'] ?? rawUser['phone'] ?? 'Not specified',
             keyboardType: TextInputType.phone,
             isValid: isPhoneValid,
             onChanged: (val) {
@@ -453,8 +487,8 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
           ),
           const SizedBox(height: 20),
 
-          // Departments field (multi-select)
-          _buildDepartmentsField(),
+          // Department field (single select)
+          _buildDepartmentField(),
           const SizedBox(height: 20),
 
           // Role (read-only)
@@ -463,13 +497,68 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
 
           // Status (read-only)
           _buildReadOnlyField('Status', widget.user['status'] ?? 'Offline'),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
+
+          // Building ID (if available)
+          if (rawUser['building_id'] != null || rawUser['building_unit'] != null)
+            Column(
+              children: [
+                _buildReadOnlyField(
+                  'Building/Unit', 
+                  rawUser['building_id'] ?? rawUser['building_unit'] ?? 'Not specified'
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+
+          // Created date (if available)
+          if (rawUser['created_at'] != null)
+            Column(
+              children: [
+                _buildReadOnlyField(
+                  'Created', 
+                  _formatDate(rawUser['created_at'])
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+
+          // Last updated (if available)
+          if (rawUser['updated_at'] != null)
+            Column(
+              children: [
+                _buildReadOnlyField(
+                  'Last Updated', 
+                  _formatDate(rawUser['updated_at'])
+                ),
+                const SizedBox(height: 24),
+              ],
+            ),
 
           // Forgot Password link
           _buildForgotPasswordSection(),
         ],
       ),
     );
+  }
+
+  String _formatDate(dynamic dateValue) {
+    if (dateValue == null) return 'Unknown';
+    
+    try {
+      DateTime date;
+      if (dateValue is String) {
+        date = DateTime.parse(dateValue);
+      } else if (dateValue is DateTime) {
+        date = dateValue;
+      } else {
+        return 'Invalid date';
+      }
+      
+      return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} at ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return 'Invalid date';
+    }
   }
 
   Widget _buildDetailField(
@@ -557,12 +646,12 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     );
   }
 
-  Widget _buildDepartmentsField() {
+  Widget _buildDepartmentField() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Departments / Categories',
+          'Department / Category',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
@@ -572,101 +661,60 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
         ),
         const SizedBox(height: 8),
         if (isEditMode)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Selected departments as chips
-              if (selectedDepartments.isNotEmpty)
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: selectedDepartments.map((dept) {
-                    return Chip(
-                      label: Text(dept),
-                      deleteIcon: const Icon(Icons.close, size: 18),
-                      onDeleted: () {
-                        setState(() {
-                          selectedDepartments.remove(dept);
-                        });
-                      },
-                      backgroundColor: Colors.blue[50],
-                      labelStyle: TextStyle(
-                        color: Colors.blue[800],
-                        fontWeight: FontWeight.w500,
-                      ),
-                    );
-                  }).toList(),
-                ),
-              const SizedBox(height: 8),
-              // Dropdown to add departments
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  hintText: 'Add department...',
-                  border: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.grey[300]!),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.grey[300]!),
-                  ),
-                  focusedBorder: const OutlineInputBorder(
-                    borderSide: BorderSide(
-                      color: Color(0xFF1976D2),
-                      width: 2,
-                    ),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                ),
-                value: null,
-                items: availableDepartments
-                    .where((dept) => !selectedDepartments.contains(dept))
-                    .map((dept) {
-                  return DropdownMenuItem<String>(
-                    value: dept,
-                    child: Text(dept),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null && !selectedDepartments.contains(value)) {
-                    setState(() {
-                      selectedDepartments.add(value);
-                    });
-                  }
-                },
+          DropdownButtonFormField<String>(
+            value: selectedDepartment.isEmpty ? '' : selectedDepartment,
+            decoration: InputDecoration(
+              hintText: 'Select department...',
+              border: OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.grey[300]!),
               ),
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.grey[300]!),
+              ),
+              focusedBorder: const OutlineInputBorder(
+                borderSide: BorderSide(
+                  color: Color(0xFF1976D2),
+                  width: 2,
+                ),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+            ),
+            items: [
+              const DropdownMenuItem<String>(
+                value: '',
+                child: Text('No department'),
+              ),
+              ...availableDepartments.map((dept) {
+                return DropdownMenuItem<String>(
+                  value: dept,
+                  child: Text(dept),
+                );
+              }).toList(),
             ],
+            onChanged: (value) {
+              setState(() {
+                selectedDepartment = value ?? '';
+                departmentController.text = selectedDepartment;
+              });
+            },
           )
         else
-          // Display mode - show as chips or text
-          selectedDepartments.isEmpty
-              ? Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: const Text(
-                    'No departments assigned',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black54,
-                    ),
-                  ),
-                )
-              : Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: selectedDepartments.map((dept) {
-                    return Chip(
-                      label: Text(dept),
-                      backgroundColor: Colors.blue[50],
-                      labelStyle: TextStyle(
-                        color: Colors.blue[800],
-                        fontWeight: FontWeight.w500,
-                      ),
-                    );
-                  }).toList(),
-                ),
+          // Display mode
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text(
+              selectedDepartment.isEmpty ? 'No department assigned' : selectedDepartment,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -831,31 +879,35 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
       lastNameController.text = rawUser['last_name'] ?? '';
       emailController.text = rawUser['email'] ?? widget.user['email'] ?? '';
       phoneController.text = rawUser['phone_number'] ?? '';
-      departmentController.text =
-          rawUser['department'] ?? widget.user['department'] ?? '';
-
-      // Reset departments to original values
-      final departments = rawUser['departments'] ?? 
-                         rawUser['staff_departments'] ?? 
-                         widget.user['departments'] ?? 
-                         widget.user['staff_departments'];
       
-      if (departments != null && departments is List) {
-        selectedDepartments = List<String>.from(departments);
-      } else if (departments != null && departments is String && departments.isNotEmpty) {
-        selectedDepartments = [departments];
-      } else {
-        // Fallback to legacy single department
-        final singleDept = rawUser['department'] ?? 
-                          rawUser['staff_department'] ?? 
-                          widget.user['department'] ?? 
-                          widget.user['staff_department'];
-        if (singleDept != null && singleDept.toString().isNotEmpty) {
-          selectedDepartments = [singleDept.toString()];
-        } else {
-          selectedDepartments = [];
+      // Reset department to original value
+      String originalDepartment = rawUser['department'] ?? 
+                                 rawUser['staff_department'] ?? 
+                                 widget.user['department'] ?? 
+                                 widget.user['staff_department'] ?? '';
+      
+      // If no single department, try to get first from departments list
+      if (originalDepartment.isEmpty) {
+        final departments = rawUser['departments'] ?? 
+                           rawUser['staff_departments'] ?? 
+                           widget.user['departments'] ?? 
+                           widget.user['staff_departments'];
+        
+        if (departments is List && departments.isNotEmpty) {
+          originalDepartment = departments[0].toString();
+        } else if (departments is String && departments.isNotEmpty) {
+          originalDepartment = departments;
         }
       }
+      
+      // Validate that the department exists in our available options
+      if (originalDepartment.isNotEmpty && !availableDepartments.contains(originalDepartment)) {
+        print('[UserProfileDialog] Original department "$originalDepartment" not found in available options, resetting to empty');
+        originalDepartment = '';
+      }
+      
+      selectedDepartment = originalDepartment;
+      departmentController.text = originalDepartment;
 
       // Reset validation flags
       isFirstNameValid = true;
@@ -886,50 +938,47 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
         'last_name': lastNameController.text.trim(),
         'email': emailController.text.trim(),
         'phone_number': phoneController.text.trim(),
-        'departments': selectedDepartments,  // Multi-select departments
+        'department': selectedDepartment,  // Single department
       };
       
       // Add role-specific department fields for backward compatibility
       final role = widget.user['role']?.toString().toLowerCase() ?? 'tenant';
       if (role == 'staff') {
-        updateData['staff_departments'] = selectedDepartments;
-        // Also set legacy single field if there's at least one department
-        if (selectedDepartments.isNotEmpty) {
-          updateData['staff_department'] = selectedDepartments[0];
-          updateData['department'] = selectedDepartments[0];
-        }
+        updateData['staff_department'] = selectedDepartment;
+        // Also set departments array for backward compatibility
+        updateData['staff_departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
+        updateData['departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
       } else {
-        // For non-staff roles, also set legacy single field
-        if (selectedDepartments.isNotEmpty) {
-          updateData['department'] = selectedDepartments[0];
-        }
+        // For non-staff roles, also set departments array
+        updateData['departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
       }
 
       print('[UserProfileDialog] Updating user $userId');
       print('[UserProfileDialog] Update data: $updateData');
-      print('[UserProfileDialog] Selected departments: $selectedDepartments');
+      print('[UserProfileDialog] Selected department: $selectedDepartment');
 
       final response = await _apiService.updateUser(userId, updateData);
       print('[UserProfileDialog] Update response: $response');
 
-      // Update local user data
-      widget.user['name'] =
-          '${firstNameController.text.trim()} ${lastNameController.text.trim()}';
+      // Update local user data to reflect changes immediately
+      final newName = '${firstNameController.text.trim()} ${lastNameController.text.trim()}';
+      
+      widget.user['name'] = newName;
       widget.user['email'] = emailController.text.trim();
-      widget.user['departments'] = selectedDepartments;
-      widget.user['department'] = selectedDepartments.isNotEmpty ? selectedDepartments[0] : '';
+      widget.user['department'] = selectedDepartment;
+      widget.user['departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
 
       if (widget.user['_raw'] != null) {
         widget.user['_raw']['first_name'] = firstNameController.text.trim();
         widget.user['_raw']['last_name'] = lastNameController.text.trim();
         widget.user['_raw']['email'] = emailController.text.trim();
         widget.user['_raw']['phone_number'] = phoneController.text.trim();
-        widget.user['_raw']['departments'] = selectedDepartments;
-        widget.user['_raw']['department'] = selectedDepartments.isNotEmpty ? selectedDepartments[0] : '';
+        widget.user['_raw']['department'] = selectedDepartment;
+        widget.user['_raw']['departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
         
         if (role == 'staff') {
-          widget.user['_raw']['staff_departments'] = selectedDepartments;
-          widget.user['_raw']['staff_department'] = selectedDepartments.isNotEmpty ? selectedDepartments[0] : '';
+          widget.user['_raw']['staff_department'] = selectedDepartment;
+          widget.user['_raw']['staff_departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
         }
       }
 
@@ -945,8 +994,8 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
           ),
         );
 
-        // Close dialog and refresh parent page
-        Navigator.of(context).pop();
+        // Close dialog and pass back updated user data
+        Navigator.of(context).pop(widget.user);
       }
     } catch (e) {
       print('[v0] Error updating profile: $e');
@@ -989,7 +1038,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
 
     try {
       final userId = widget.user['id'];
-      print('[v0] Deleting user $userId');
+      print('[UserProfileDialog] Deleting user $userId');
 
       await _apiService.deleteUser(userId, permanent: false);
 
@@ -998,11 +1047,11 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
           SnackBar(content: Text("Deleted user: ${widget.user['name']}")),
         );
 
-        // Close dialog and refresh parent page
-        Navigator.of(context).pop();
+        // Close dialog and indicate the user was deleted
+        Navigator.of(context).pop({'deleted': true});
       }
     } catch (e) {
-      print('[v0] Error deleting user: $e');
+      print('[UserProfileDialog] Error deleting user: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/staff/view_details.dart';
+import 'package:facilityfix/staff/maintenance.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/chat.dart';
 import 'package:facilityfix/staff/notification.dart';
@@ -99,6 +100,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
+    NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
     NavItem(icon: Icons.person),
   ];
@@ -107,6 +109,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     final destinations = [
       const HomePage(),
       const WorkOrderPage(),
+      const MaintenancePage(),
       const AnnouncementPage(),
       const ProfilePage(),
     ];

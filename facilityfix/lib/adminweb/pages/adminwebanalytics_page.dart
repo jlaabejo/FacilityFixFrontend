@@ -293,25 +293,55 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
       String reportType = 'comprehensive';
       int days = _getDaysFromDateRange();
 
-      if (format == 'csv') {
-        final csvData = await _apiService.exportAnalyticsCSV(
-          reportType: reportType,
-          days: days,
-        );
-        _downloadFile(csvData, 'analytics_report.csv', 'text/csv');
-      } else if (format == 'json') {
-        final jsonData = await _apiService.exportAnalyticsJSON(
-          reportType: reportType,
-          days: days,
-        );
-        _downloadFile(jsonData, 'analytics_report.json', 'application/json');
+      String filename;
+      String mimeType;
+      String data;
+
+      switch (format) {
+        case 'csv':
+          data = await _apiService.exportAnalyticsCSV(
+            reportType: reportType,
+            days: days,
+          );
+          filename = 'facilityfix_analytics_${DateTime.now().millisecondsSinceEpoch}.csv';
+          mimeType = 'text/csv';
+          break;
+        case 'excel':
+          data = await _apiService.exportAnalyticsExcel(
+            reportType: reportType,
+            days: days,
+          );
+          filename = 'facilityfix_analytics_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+          mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+          break;
+        case 'json':
+          data = await _apiService.exportAnalyticsJSON(
+            reportType: reportType,
+            days: days,
+          );
+          filename = 'facilityfix_analytics_${DateTime.now().millisecondsSinceEpoch}.json';
+          mimeType = 'application/json';
+          break;
+        case 'dashboard':
+          data = await _apiService.exportDashboardSummary(
+            format: 'csv',
+            days: days,
+          );
+          filename = 'facilityfix_dashboard_summary_${DateTime.now().millisecondsSinceEpoch}.csv';
+          mimeType = 'text/csv';
+          break;
+        default:
+          throw Exception('Unsupported export format: $format');
       }
+
+      _downloadFile(data, filename, mimeType);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Analytics exported successfully'),
+          SnackBar(
+            content: Text('Analytics exported successfully as $format'),
             backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
           ),
         );
       }
@@ -322,6 +352,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
           SnackBar(
             content: Text('Failed to export data: $e'),
             backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
           ),
         );
       }
@@ -766,7 +797,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
             ),
             const SizedBox(width: 12),
 
-            // Export Button with Menu
+            // Export Button with Enhanced Menu
             PopupMenuButton<String>(
               onSelected: (String format) {
                 _exportData(format);
@@ -776,19 +807,31 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                   value: 'csv',
                   child: Row(
                     children: [
-                      Icon(Icons.table_chart, size: 18),
+                      Icon(Icons.table_chart, size: 18, color: Colors.green),
                       SizedBox(width: 8),
-                      Text('Export as CSV'),
+                      Text('📊 Enhanced CSV Report'),
                     ],
                   ),
                 ),
+              
                 const PopupMenuItem(
                   value: 'json',
                   child: Row(
                     children: [
-                      Icon(Icons.code, size: 18),
+                      Icon(Icons.code, size: 18, color: Colors.orange),
                       SizedBox(width: 8),
-                      Text('Export as JSON'),
+                      Text('⚡ JSON Data Export'),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                const PopupMenuItem(
+                  value: 'dashboard',
+                  child: Row(
+                    children: [
+                      Icon(Icons.dashboard, size: 18, color: Colors.purple),
+                      SizedBox(width: 8),
+                      Text('📋 Executive Summary'),
                     ],
                   ),
                 ),
@@ -805,13 +848,13 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.file_download, size: 18, color: Colors.white),
+                    Icon(Icons.analytics, size: 18, color: Colors.white),
                     SizedBox(width: 8),
                     Text(
-                      'Export',
+                      'Professional Export',
                       style: TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     SizedBox(width: 4),

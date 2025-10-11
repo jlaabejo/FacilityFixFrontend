@@ -16,8 +16,11 @@ import 'package:intl/intl.dart';
 class RequestForm extends StatefulWidget {
   /// Allowed: "Concern Slip", "Job Service", "Work Order"
   final String requestType;
+  
+  /// Optional concern slip ID for linking Job Service to existing concern slip
+  final String? concernSlipId;
 
-  const RequestForm({super.key, required this.requestType});
+  const RequestForm({super.key, required this.requestType, this.concernSlipId});
 
   @override
   State<RequestForm> createState() => _RequestFormState();
@@ -513,6 +516,7 @@ class _RequestFormState extends State<RequestForm> {
           location: unitController.text.trim(),
           unitId: unitController.text.trim(),
           scheduleAvailability: availabilityController.text.trim(),
+          concernSlipId: widget.concernSlipId,
         );
       } else if (type == 'Work Order') {
         print('[SUBMIT] Submitting work order to Firebase...');
@@ -962,8 +966,8 @@ class _RequestFormState extends State<RequestForm> {
                 isRequired: true,
                 onChanged: (contractorList) {
                   setState(() {
-                    _hasContractors = (contractorList.isNotEmpty ?? false);
-                    _contractors = contractorList ?? [];
+                    _hasContractors = contractorList.isNotEmpty;
+                    _contractors = contractorList;
                   });
                 },
               ),

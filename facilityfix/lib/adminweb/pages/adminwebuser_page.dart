@@ -64,46 +64,65 @@ class _AdminUserPageState extends State<AdminUserPage> {
     });
 
     try {
-      print('[v0] Fetching users from backend...');
+      print('[AdminUserPage] Fetching users from backend...');
       final users = await _apiService.getUsers();
 
-      print('[v0] Received ${users.length} users from backend');
+      print('[AdminUserPage] Received ${users.length} users from backend');
 
       // Map backend response to frontend format
-      final mappedUsers =
-          users.map((user) {
-            // Determine status display text
-            String statusDisplay = _mapStatus(user['status'] ?? 'active');
+      final mappedUsers = users.map((user) {
+        try {
+          // Determine status display text
+          String statusDisplay = _mapStatus(user['status'] ?? 'active');
 
-            // Build full name
-            String fullName =
-                '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'.trim();
-            if (fullName.isEmpty) {
-              fullName = user['email'] ?? 'Unknown User';
+          // Build full name
+          String fullName = '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'.trim();
+          if (fullName.isEmpty) {
+            fullName = user['email'] ?? user['user_id'] ?? 'Unknown User';
+          }
+
+          // Determine role display text
+          String roleDisplay = _capitalizeRole(user['role'] ?? 'tenant');
+
+          // Get department with better fallback handling
+          String department = user['department'] ?? 
+                             user['staff_department'] ?? 
+                             user['building_unit'] ?? '';
+          
+          // If no department but has departments list, use first one
+          if (department.isEmpty) {
+            final departments = user['departments'] ?? user['staff_departments'];
+            if (departments is List && departments.isNotEmpty) {
+              department = departments[0].toString();
             }
+          }
 
-            // Determine role display text
-            String roleDisplay = _capitalizeRole(user['role'] ?? 'tenant');
-
-            // Get department
-            String department =
-                user['department'] ??
-                user['staff_department'] ??
-                user['building_unit'] ??
-                '';
-
-            return {
-              'id': user['user_id'] ?? user['id'],
-              'name': fullName,
-              'role': roleDisplay,
-              'department': department,
-              'status': statusDisplay,
-              'email': user['email'] ?? '',
-              'lastActive': _formatLastActive(user['updated_at']),
-              // Store original data for detail view
-              '_raw': user,
-            };
-          }).toList();
+          return {
+            'id': user['user_id'] ?? user['id'] ?? 'unknown-${DateTime.now().millisecondsSinceEpoch}',
+            'name': fullName,
+            'role': roleDisplay,
+            'department': department,
+            'status': statusDisplay,
+            'email': user['email'] ?? '',
+            'lastActive': _formatLastActive(user['updated_at']),
+            // Store original data for detail view
+            '_raw': user,
+          };
+        } catch (e) {
+          print('[AdminUserPage] Error mapping user ${user['id'] ?? 'unknown'}: $e');
+          // Return a minimal user object to prevent crashes
+          return {
+            'id': user['user_id'] ?? user['id'] ?? 'error-${DateTime.now().millisecondsSinceEpoch}',
+            'name': user['email'] ?? 'Error Loading User',
+            'role': 'Tenant',
+            'department': '',
+            'status': 'Offline',
+            'email': user['email'] ?? '',
+            'lastActive': 'Unknown',
+            '_raw': user,
+          };
+        }
+      }).toList();
 
       setState(() {
         _allUsers = mappedUsers;
@@ -111,13 +130,72 @@ class _AdminUserPageState extends State<AdminUserPage> {
         _isLoading = false;
       });
 
-      print('[v0] Successfully loaded ${_allUsers.length} users');
+      print('[AdminUserPage] Successfully loaded ${_allUsers.length} users');
+      
+      // Show success feedback for user
+      if (mounted && _allUsers.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Loaded ${_allUsers.length} users successfully'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     } catch (e) {
-      print('[v0] Error fetching users: $e');
+      print('[AdminUserPage] Error fetching users: $e');
       setState(() {
-        _errorMessage = 'Failed to load users: $e';
+        _errorMessage = _getDetailedErrorMessage(e);
         _isLoading = false;
       });
+      
+      // Show error feedback to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load users: ${_getSimpleErrorMessage(e)}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: _fetchUsers,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  String _getDetailedErrorMessage(dynamic error) {
+    if (error.toString().contains('SocketException')) {
+      return 'Network connection error. Please check your internet connection and try again.';
+    } else if (error.toString().contains('TimeoutException')) {
+      return 'Request timed out. The server may be busy. Please try again.';
+    } else if (error.toString().contains('401')) {
+      return 'Authentication failed. Please log in again.';
+    } else if (error.toString().contains('403')) {
+      return 'Access denied. You may not have permission to view users.';
+    } else if (error.toString().contains('404')) {
+      return 'Users endpoint not found. The server may be misconfigured.';
+    } else if (error.toString().contains('500')) {
+      return 'Server error. Please try again later or contact support.';
+    } else {
+      return 'Failed to load users: ${error.toString()}';
+    }
+  }
+
+  String _getSimpleErrorMessage(dynamic error) {
+    if (error.toString().contains('SocketException')) {
+      return 'Network error';
+    } else if (error.toString().contains('TimeoutException')) {
+      return 'Request timed out';
+    } else if (error.toString().contains('401')) {
+      return 'Authentication failed';
+    } else if (error.toString().contains('403')) {
+      return 'Access denied';
+    } else {
+      return 'Server error';
     }
   }
 
@@ -451,7 +529,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
   void _handleActionSelection(String action, Map<String, dynamic> user) {
     switch (action) {
       case 'view':
-        UserProfileDialog.show(context, user);
+        _viewUser(user);
         break;
 
       case 'approve':
@@ -463,9 +541,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
         break;
 
       case 'edit':
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Editing user: ${user['name']}")),
-        );
+        _editUser(user);
         break;
 
       case 'delete':
@@ -474,33 +550,137 @@ class _AdminUserPageState extends State<AdminUserPage> {
     }
   }
 
+  Future<void> _viewUser(Map<String, dynamic> user) async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return UserProfileDialog(user: user);
+      },
+    );
+    
+    // If user was updated or deleted, refresh the list
+    if (result != null) {
+      if (result['deleted'] == true) {
+        // Show deletion confirmation
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('User deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      await _fetchUsers();
+    }
+  }
+
+  Future<void> _editUser(Map<String, dynamic> user) async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return UserProfileDialog(user: user);
+      },
+    );
+    
+    // If user was updated or deleted, refresh the list
+    if (result != null) {
+      if (result['deleted'] == true) {
+        // Show deletion confirmation
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('User deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      await _fetchUsers();
+    }
+  }
+
   Future<void> _updateUserStatus(
     Map<String, dynamic> user,
     String backendStatus,
     String displayStatus,
   ) async {
+    final userId = user['id'];
+    final originalStatus = user['status'];
+    
     try {
-      final userId = user['id'];
-      print('[v0] Updating user $userId status to $backendStatus');
+      print('[AdminUserPage] Updating user $userId status to $backendStatus');
 
-      await _apiService.updateUserStatus(userId, backendStatus);
-
+      // Optimistically update the UI
       setState(() {
         user['status'] = displayStatus;
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("${user['name']} status updated")),
-        );
-      }
-    } catch (e) {
-      print('[v0] Error updating user status: $e');
+      // Show loading feedback
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text("Updating ${user['name']} status..."),
+            ],
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      await _apiService.updateUserStatus(userId, backendStatus);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Failed to update user status: $e"),
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text("${user['name']} status updated to $displayStatus"),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      print('[AdminUserPage] Error updating user status: $e');
+      
+      // Revert the optimistic update
+      if (mounted) {
+        setState(() {
+          user['status'] = originalStatus; // Revert to original status
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error, color: Colors.white, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text("Failed to update user status: ${_getSimpleErrorMessage(e)}"),
+                ),
+              ],
+            ),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _updateUserStatus(user, backendStatus, displayStatus),
+            ),
           ),
         );
       }
@@ -513,8 +693,53 @@ class _AdminUserPageState extends State<AdminUserPage> {
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Confirm Delete'),
-          content: Text(
-            'Are you sure you want to delete ${user['name']}? This action cannot be undone.',
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Are you sure you want to delete the following user?',
+                style: TextStyle(color: Colors.grey[700]),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user['name'] ?? 'Unknown User',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      user['email'] ?? 'No email',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Role: ${user['role'] ?? 'Unknown'}',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'This action cannot be undone.',
+                style: TextStyle(
+                  color: Colors.red[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -524,7 +749,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
               style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Delete'),
+              child: const Text('Delete User'),
             ),
           ],
         );
@@ -536,29 +761,80 @@ class _AdminUserPageState extends State<AdminUserPage> {
 
     try {
       final userId = user['id'];
-      print('[v0] Deleting user $userId');
+      print('[AdminUserPage] Deleting user $userId');
+
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
 
       await _apiService.deleteUser(userId, permanent: false);
+
+      // Close loading indicator
+      Navigator.of(context).pop();
 
       // Refresh the user list
       await _fetchUsers();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Deleted user: ${user['name']}")),
+          SnackBar(
+            content: Text("Successfully deleted user: ${user['name']}"),
+            backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'Undo',
+              textColor: Colors.white,
+              onPressed: () {
+                // TODO: Implement undo functionality if needed
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Undo functionality not yet implemented'),
+                  ),
+                );
+              },
+            ),
+          ),
         );
       }
     } catch (e) {
-      print('[v0] Error deleting user: $e');
+      // Close loading indicator if still open
+      if (Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
+      
+      print('[AdminUserPage] Error deleting user: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Failed to delete user: $e"),
+            content: Text("Failed to delete user: ${e.toString()}"),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _deleteUser(user),
+            ),
           ),
         );
       }
     }
+  }
+
+  Future<void> _showCreateUserDialog() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('User creation functionality coming soon!'),
+        backgroundColor: Colors.blue,
+      ),
+    );
+    
+    // TODO: Implement user creation dialog
+    // This would involve creating a new dialog similar to UserProfileDialog
+    // but for creating new users with validation and API integration
   }
 
   @override
@@ -722,6 +998,22 @@ class _AdminUserPageState extends State<AdminUserPage> {
                   ),
                 ),
                 const SizedBox(width: 12),
+
+                // Add User Button
+                ElevatedButton.icon(
+                  onPressed: () => _showCreateUserDialog(),
+                  icon: const Icon(Icons.person_add, size: 18),
+                  label: const Text('Add User'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[600],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    elevation: 0,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 32),

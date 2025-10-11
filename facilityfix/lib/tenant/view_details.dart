@@ -49,7 +49,40 @@ class _TenantConcernSlipDetailPageState
 
     try {
       final apiService = APIService();
-      final data = await apiService.getConcernSlipById(widget.concernSlipId);
+      Map<String, dynamic> data;
+      
+      // Try to determine the request type and call appropriate endpoint
+      try {
+        // First try as concern slip
+        data = await apiService.getConcernSlipById(widget.concernSlipId);
+        print('[DEBUG] Successfully fetched as concern slip');
+      } catch (e) {
+        print('[DEBUG] Failed to fetch as concern slip, trying as job service: $e');
+        try {
+          // Then try as job service
+          data = await apiService.getJobServiceById(widget.concernSlipId);
+          // Ensure request_type is set for job services
+          if (!data.containsKey('request_type')) {
+            data['request_type'] = 'Job Service';
+          }
+          print('[DEBUG] Successfully fetched as job service');
+        } catch (e2) {
+          print('[DEBUG] Failed to fetch as job service, trying as work order: $e2');
+          try {
+            // Finally try as work order
+            data = await apiService.getWorkOrderById(widget.concernSlipId);
+            // Ensure request_type is set for work orders
+            if (!data.containsKey('request_type')) {
+              data['request_type'] = 'Work Order Permit';
+            }
+            print('[DEBUG] Successfully fetched as work order');
+          } catch (e3) {
+            // If all fail, throw the original concern slip error
+            print('[DEBUG] Failed to fetch as work order too: $e3');
+            throw e;
+          }
+        }
+      }
 
       if (mounted) {
         setState(() {
@@ -357,11 +390,24 @@ class _TenantConcernSlipDetailPageState
           staffRecommendation: data['staff_recommendation'],
           staffAttachments: (data['assessment_attachments'] as List?)?.cast<String>(),
         ),
-        // Show embedded form if resolution type is set
-        if (resolutionType != null && resolutionType.isNotEmpty && resolutionType != 'rejected')
+        // Show embedded form if resolution type is set and status allows it
+        if (resolutionType != null && 
+            resolutionType.isNotEmpty && 
+            resolutionType != 'rejected' &&
+            _shouldShowEmbeddedForm(data['status'], resolutionType))
           _buildEmbeddedForm(resolutionType, data),
       ],
     );
+  }
+
+  bool _shouldShowEmbeddedForm(String? status, String resolutionType) {
+    // Show embedded form if:
+    // 1. Status is 'sent', 'evaluated', or 'approved' (admin has processed it)
+    // 2. Resolution type is set to job_service or work_order
+    // 3. The concern slip hasn't been completed yet
+    final normalizedStatus = (status ?? '').toLowerCase();
+    return ['sent', 'evaluated', 'approved'].contains(normalizedStatus) &&
+           ['job_service', 'work_order', 'work_permit'].contains(resolutionType);
   }
 
   Widget _buildEmbeddedForm(String resolutionType, Map<String, dynamic> concernData) {
@@ -965,7 +1011,10 @@ class RequestFormWrapper extends StatelessWidget {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => RequestForm(requestType: requestType),
+            builder: (context) => RequestForm(
+              requestType: requestType,
+              concernSlipId: concernSlipId,
+            ),
           ),
         ).then((value) {
           // Return true to indicate submission success

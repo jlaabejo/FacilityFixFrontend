@@ -574,6 +574,7 @@ class APIService {
     String? unitId,
     List<String>? attachments,
     String? scheduleAvailability,
+    String? concernSlipId,
   }) async {
     try {
       await _refreshRoleLabelFromToken();
@@ -584,13 +585,19 @@ class APIService {
         'location': location,
         'schedule_availability': scheduleAvailability,
         if (unitId != null) 'unit_id': unitId,
+        if (concernSlipId != null) 'concern_slip_id': concernSlipId,
         'attachments': attachments ?? [],
       };
 
       print('[API] Submitting job service request...');
 
-      final response = await patch(
-        '/job-services/',
+      // If concernSlipId is provided, use the tenant job service endpoint
+      final endpoint = concernSlipId != null 
+          ? '/tenant-job-services/' 
+          : '/job-services/';
+
+      final response = await post(
+        endpoint,
         headers: _authHeaders(token),
         body: jsonEncode(body),
       );
@@ -903,6 +910,60 @@ class APIService {
     }
   }
 
+  Future<Map<String, dynamic>> getJobServiceById(String jobServiceId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+      final response = await get(
+        '/job-services/$jobServiceId',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        print('[API] getJobServiceById response:');
+        print('  Status: ${data['status']}');
+        print('  Full data keys: ${data.keys.toList()}');
+        return data;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get job service by ID: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting job service by ID: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> getWorkOrderById(String workOrderId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+      final response = await get(
+        '/work-orders/$workOrderId',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        print('[API] getWorkOrderById response:');
+        print('  Status: ${data['status']}');
+        print('  Full data keys: ${data.keys.toList()}');
+        return data;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get work order by ID: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting work order by ID: $e');
+      rethrow;
+    }
+  }
+
   Future<List<Map<String, dynamic>>> getAllConcernSlips() async {
     try {
       await _refreshRoleLabelFromToken();
@@ -933,12 +994,19 @@ class APIService {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
+      print('[API] getAllMaintenance - Token length: ${token.length}');
+      print('[API] getAllMaintenance - Making request to: $baseUrl/maintenance/');
+      
       final response = await get('/maintenance/', headers: _authHeaders(token));
+      print('[API] getAllMaintenance - Response status: ${response.statusCode}');
+      print('[API] getAllMaintenance - Response body length: ${response.body.length}');
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final List<dynamic> data = jsonDecode(response.body);
+        print('[API] getAllMaintenance - Parsed ${data.length} maintenance tasks');
         return data.cast<Map<String, dynamic>>();
       } else {
+        print('[API] getAllMaintenance - Error response: ${response.body}');
         final errorBody = _tryDecode(response.body);
         throw Exception(
           'Failed to get all maintenance: ${errorBody['detail'] ?? response.body}',
@@ -950,7 +1018,78 @@ class APIService {
     }
   }
 
+  Future<Map<String, dynamic>> getMaintenanceTaskById(String taskId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+      final response = await get('/maintenance/$taskId', headers: _authHeaders(token));
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get maintenance task: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting maintenance task: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> updateMaintenanceTask(String taskId, Map<String, dynamic> updateData) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+      final response = await put(
+        '/maintenance/$taskId',
+        headers: _authHeaders(token),
+        body: jsonEncode(updateData),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to update maintenance task: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error updating maintenance task: $e');
+      rethrow;
+    }
+  }
+
   // ===== Inventory =====
+
+  Future<Map<String, dynamic>> getAllInventoryItems({
+    bool includeInactive = false,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+      
+      final queryParams = includeInactive ? '?include_inactive=true' : '';
+      final response = await get(
+        '/inventory/items$queryParams',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get all inventory items: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting all inventory items: $e');
+      rethrow;
+    }
+  }
 
   Future<Map<String, dynamic>> getInventoryItems({
     required String buildingId,
@@ -1055,34 +1194,28 @@ class APIService {
     String? buildingId,
     String? status,
     String? requestedBy,
+    String? maintenanceTaskId,
   }) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      // Build query parameters
       final queryParams = <String>[];
-      if (buildingId != null && buildingId.isNotEmpty) {
-        queryParams.add('building_id=$buildingId');
-      }
-      if (status != null && status.isNotEmpty) {
-        queryParams.add('status=$status');
-      }
-      if (requestedBy != null && requestedBy.isNotEmpty) {
-        queryParams.add('requested_by=$requestedBy');
-      }
+      if (buildingId != null) queryParams.add('building_id=$buildingId');
+      if (status != null) queryParams.add('status=$status');
+      if (requestedBy != null) queryParams.add('requested_by=$requestedBy');
+      if (maintenanceTaskId != null) queryParams.add('maintenance_task_id=$maintenanceTaskId');
 
-      final queryString = queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
+      final query = queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
       final response = await get(
-        '/inventory/requests$queryString',
+        '/inventory/requests$query',
         headers: _authHeaders(token),
       );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        final decoded = jsonDecode(response.body);
-        final data = decoded['data'] as List<dynamic>?;
-        if (data != null) {
-          return data.map((e) => e as Map<String, dynamic>).toList();
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          return List<Map<String, dynamic>>.from(data['data']);
         }
         return [];
       } else {
@@ -1093,7 +1226,53 @@ class APIService {
       }
     } catch (e) {
       print('Error getting inventory requests: $e');
-      return [];
+      rethrow;
+    }
+  }
+
+  /// Get a specific inventory item by ID
+  Future<Map<String, dynamic>?> getInventoryItemById(String itemId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await get(
+        '/inventory/items/$itemId',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          return data['data'] as Map<String, dynamic>;
+        }
+        return null;
+      } else if (response.statusCode == 404) {
+        return null;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get inventory item: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting inventory item by ID: $e');
+      rethrow;
+    }
+  }
+
+  /// Get a specific inventory request by ID
+  Future<Map<String, dynamic>?> getInventoryRequestById(String requestId) async {
+    try {
+      // Get all requests and find the matching one
+      final requests = await getInventoryRequests();
+      final found = requests.where(
+        (req) => req['id'] == requestId || req['_doc_id'] == requestId,
+      ).toList();
+      return found.isNotEmpty ? found.first : null;
+    } catch (e) {
+      print('Error getting inventory request by ID: $e');
+      return null;
     }
   }
 

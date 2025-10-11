@@ -9,11 +9,20 @@ import 'package:facilityfix/widgets/view_details.dart';
 import 'package:facilityfix/widgets/modals.dart'; // <-- CustomPopup
 import 'package:facilityfix/widgets/buttons.dart'
     as custom_buttons; // <-- FilledButton lives here
+import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/config/env.dart';
 
 class InventoryDetails extends StatefulWidget {
   final String selectedTabLabel;
+  final String? itemId;  // For inventory items
+  final String? requestId;  // For inventory requests
 
-  const InventoryDetails({super.key, required this.selectedTabLabel});
+  const InventoryDetails({
+    super.key, 
+    required this.selectedTabLabel,
+    this.itemId,
+    this.requestId,
+  });
 
   @override
   State<InventoryDetails> createState() => _InventoryDetailsState();
@@ -21,6 +30,12 @@ class InventoryDetails extends StatefulWidget {
 
 class _InventoryDetailsState extends State<InventoryDetails> {
   final int _selectedIndex = 4;
+  late final APIService _apiService;
+  
+  bool _isLoading = true;
+  Map<String, dynamic>? _itemData;
+  Map<String, dynamic>? _requestData;
+  String? _errorMessage;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -29,6 +44,57 @@ class _InventoryDetailsState extends State<InventoryDetails> {
     NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _apiService = APIService(roleOverride: AppRole.staff);
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      if (widget.selectedTabLabel.toLowerCase() == 'inventory details' && widget.itemId != null) {
+        // Fetch inventory item
+        final data = await _apiService.getInventoryItemById(widget.itemId!);
+        if (mounted) {
+          setState(() {
+            _itemData = data;
+            _isLoading = false;
+          });
+        }
+      } else if (widget.selectedTabLabel.toLowerCase() == 'inventory request' && widget.requestId != null) {
+        // Fetch inventory request
+        final data = await _apiService.getInventoryRequestById(widget.requestId!);
+        if (mounted) {
+          setState(() {
+            _requestData = data;
+            _isLoading = false;
+          });
+        }
+      } else {
+        // No ID provided, use placeholder
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading inventory details: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   void _onTabTapped(int index) {
     final destinations = [

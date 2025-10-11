@@ -26,70 +26,72 @@ class StatusTabSelector extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
-      child: Row(
-        children: tabs.map((tab) {
-          final bool isSelected = selectedLabel == tab.label;
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: tabs.map((tab) {
+            final bool isSelected = selectedLabel == tab.label;
 
-          return Expanded(
-            child: GestureDetector(
+            return GestureDetector(
               onTap: () => onTabSelected(tab.label),
               child: Container(
-                height: 32,
-                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: isSelected ? const Color(0xFF0056F8) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(100),
+                  color: isSelected ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(6),
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 2,
+                            offset: const Offset(0, 1),
+                          ),
+                        ]
+                      : null,
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Flexible(
-                      child: Text(
-                        tab.label,
-                        textAlign: TextAlign.center,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: isSelected
-                              ? const Color(0xFFFEFEFE)
-                              : const Color(0xFF475467),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          height: 1.4,
-                        ),
+                    Text(
+                      tab.label,
+                      style: TextStyle(
+                        color: isSelected
+                            ? const Color(0xFF1F2937)
+                            : const Color(0xFF6B7280),
+                        fontSize: 13,
+                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                     Container(
-                      width: 16,
-                      height: 16,
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? const Color(0xFFF95555)
-                            : const Color(0xFFD0D5DD),
-                        shape: BoxShape.circle,
+                            ? const Color(0xFF3B82F6)
+                            : const Color(0xFFE5E7EB),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Center(
-                        child: Text(
-                          '${tab.count}',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFFFEFEFE),
-                            height: 1.4,
-                          ),
+                      child: Text(
+                        '${tab.count}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected ? Colors.white : const Color(0xFF6B7280),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-          );
-        }).toList(),
+            );
+          }).toList(),
+        ),
       ),
     );
   }

@@ -9,6 +9,9 @@ import 'package:facilityfix/widgets/buttons.dart'; // FilledButton
 import 'package:facilityfix/widgets/forms.dart' hide DropdownField;   // InputField + DropdownField
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/modals.dart'; // CustomPopup
+import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/services/auth_storage.dart';
+import 'package:facilityfix/config/env.dart';
 
 class InventoryFormSteps {
   static const basic = 'Basic Information';
@@ -53,6 +56,16 @@ class _InventoryFormState extends State<InventoryForm> {
   }
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+
+  // API Service
+  late final APIService _apiService;
+  
+  // Inventory items from API
+  List<Map<String, dynamic>> _inventoryItems = [];
+  bool _isLoadingItems = true;
+  String? _selectedInventoryId;
+  String? _buildingId;
+  String? _userId;
 
   // Basic Info controllers
   final TextEditingController itemNameController = TextEditingController();
@@ -134,11 +147,13 @@ class _InventoryFormState extends State<InventoryForm> {
         return;
       }
 
-      _showRequestDialog(context);
+      // Submit the request to API
+      _submitInventoryRequest();
     } else {
       setState(() => _submittedBasic = true);
 
       final hasBasicErrors =
+          _selectedInventoryId == null ||
           _errBasic('name')          != null ||
           _errBasic('code')          != null ||
           _errBasic('dateRequested') != null ||
@@ -148,7 +163,11 @@ class _InventoryFormState extends State<InventoryForm> {
 
       if (!formOk || hasBasicErrors) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please fix the highlighted fields.')),
+          SnackBar(content: Text(
+            _selectedInventoryId == null 
+              ? 'Please select an inventory item' 
+              : 'Please fix the highlighted fields.'
+          )),
         );
         return;
       }
@@ -264,6 +283,8 @@ class _InventoryFormState extends State<InventoryForm> {
   @override
   void initState() {
     super.initState();
+    _apiService = APIService(roleOverride: AppRole.staff);
+    
     final now = DateTime.now();
 
     dateRequestedController.text =
@@ -274,6 +295,75 @@ class _InventoryFormState extends State<InventoryForm> {
     departmentController.text  = 'Maintenance';
 
     _attachFieldListeners();
+    _loadUserDataAndInventory();
+  }
+
+  Future<void> _loadUserDataAndInventory() async {
+    try {
+      final profile = await AuthStorage.getProfile();
+      _buildingId = profile?['building_id']?.toString() ?? 'default_building';
+      _userId = profile?['user_id']?.toString() ?? '';
+
+      // Fetch inventory items
+      final response = await _apiService.getInventoryItems(
+        buildingId: _buildingId!,
+        includeInactive: false,
+      );
+
+      if (mounted) {
+        setState(() {
+          if (response['success'] == true && response['data'] is List) {
+            _inventoryItems = List<Map<String, dynamic>>.from(response['data']);
+          }
+          _isLoadingItems = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading inventory items: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingItems = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading inventory items: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _submitInventoryRequest() async {
+    try {
+      if (_selectedInventoryId == null) {
+        throw Exception('Please select an inventory item');
+      }
+
+      final quantity = int.parse(requestQuantityController.text.trim());
+      
+      final response = await _apiService.createInventoryRequest(
+        inventoryId: _selectedInventoryId!,
+        buildingId: _buildingId!,
+        quantityRequested: quantity,
+        purpose: notesController.text.trim().isEmpty 
+            ? 'Staff inventory request' 
+            : notesController.text.trim(),
+        requestedBy: _userId!,
+      );
+
+      if (response['success'] == true) {
+        if (mounted) {
+          _showRequestDialog(context);
+        }
+      } else {
+        throw Exception(response['message'] ?? 'Failed to create request');
+      }
+    } catch (e) {
+      print('Error submitting inventory request: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -299,6 +389,78 @@ class _InventoryFormState extends State<InventoryForm> {
         return [
           const Text('Basic Information', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
+          
+          // Inventory Item Selector
+          if (_isLoadingItems)
+            const Center(child: CircularProgressIndicator())
+          else if (_inventoryItems.isEmpty)
+            const Text('No inventory items available', style: TextStyle(color: Colors.red))
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Select Inventory Item',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF344054),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: _selectedInventoryId,
+                  decoration: InputDecoration(
+                    hintText: 'Choose an item from inventory',
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  items: _inventoryItems.map((item) {
+                    final id = item['id']?.toString() ?? item['_doc_id']?.toString() ?? '';
+                    final name = item['item_name']?.toString() ?? 'Unknown';
+                    final code = item['item_code']?.toString() ?? '';
+                    final stock = item['current_stock']?.toString() ?? '0';
+                    return DropdownMenuItem<String>(
+                      value: id,
+                      child: Text('$name ($code) - Stock: $stock'),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedInventoryId = value;
+                      // Auto-fill item name and code
+                      final selectedItem = _inventoryItems.firstWhere(
+                        (item) => (item['id']?.toString() ?? item['_doc_id']?.toString()) == value,
+                        orElse: () => {},
+                      );
+                      if (selectedItem.isNotEmpty) {
+                        itemNameController.text = selectedItem['item_name']?.toString() ?? '';
+                        itemCodeController.text = selectedItem['item_code']?.toString() ?? '';
+                        departmentController.text = selectedItem['department']?.toString() ?? 'Maintenance';
+                      }
+                    });
+                  },
+                  validator: (value) {
+                    if (_submittedBasic && (value == null || value.isEmpty)) {
+                      return 'Please select an inventory item';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          const SizedBox(height: 12),
+          
+          InputField(
+            label: 'Item Name',
+            controller: itemNameController,
+            readOnly: true,
+            isRequired: true,
+            errorText: _submittedBasic ? _errBasic('name') : null,
+          ),
+          const SizedBox(height: 12),
           InputField(
             label: 'Item Code',
             controller: itemCodeController,
@@ -313,14 +475,6 @@ class _InventoryFormState extends State<InventoryForm> {
             readOnly: true,
             isRequired: true,
             errorText: _submittedBasic ? _errBasic('dateRequested') : null,
-          ),
-          const SizedBox(height: 12),
-          InputField(
-            label: 'Item Name',
-            controller: itemNameController,
-            hintText: 'Enter item name',
-            isRequired: true,
-            errorText: _submittedBasic ? _errBasic('name') : null,
           ),
           const SizedBox(height: 12),
           InputField(

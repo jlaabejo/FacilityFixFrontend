@@ -1,9 +1,10 @@
 import 'dart:async';
 
-import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
+import 'package:facilityfix/staff/maintenance.dart';
 import 'package:facilityfix/staff/notification.dart';
+import 'package:facilityfix/staff/profile.dart';
 import 'package:facilityfix/staff/view_details/announcement_details.dart';
 import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/widgets/buttons.dart';
@@ -57,23 +58,25 @@ class AnnouncementPage extends StatefulWidget {
 }
 
 class _AnnouncementPageState extends State<AnnouncementPage> {
-  int _selectedIndex = 2;
+  int _selectedIndex = 3;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
+    NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
-    NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),
+    NavItem(icon: Icons.person),
   ];
 
   void _onTabTapped(int index) {
     final destinations = [
       const HomePage(),
       const WorkOrderPage(),
+      const MaintenancePage(),
       const AnnouncementPage(),
-      const CalendarPage(),
       const InventoryPage(),
+      const ProfilePage(),
     ];
     if (index != _selectedIndex) {
       Navigator.pushReplacement(
