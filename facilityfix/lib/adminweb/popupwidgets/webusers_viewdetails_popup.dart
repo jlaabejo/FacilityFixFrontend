@@ -32,7 +32,26 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
   late TextEditingController lastNameController;
   late TextEditingController emailController;
   late TextEditingController phoneController;
-  late TextEditingController departmentController;
+  late TextEditingController departmentController; // Legacy single department
+  
+  // Multi-select departments
+  List<String> selectedDepartments = [];
+  final TextEditingController _departmentInputController = TextEditingController();
+  
+  // Available department options
+  final List<String> availableDepartments = [
+    'Maintenance',
+    'Carpentry',
+    'Plumbing',
+    'Electrical',
+    'Masonry',
+    'HVAC',
+    'Fire Safety',
+    'Security',
+    'General',
+    'Janitorial',
+    'Landscaping',
+  ];
 
   bool isFirstNameValid = true;
   bool isLastNameValid = true;
@@ -73,6 +92,27 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     departmentController = TextEditingController(
       text: rawUser['department'] ?? widget.user['department'] ?? '',
     );
+    
+    // Initialize selected departments from user data
+    final departments = rawUser['departments'] ?? 
+                       rawUser['staff_departments'] ?? 
+                       widget.user['departments'] ?? 
+                       widget.user['staff_departments'];
+    
+    if (departments != null && departments is List) {
+      selectedDepartments = List<String>.from(departments);
+    } else if (departments != null && departments is String && departments.isNotEmpty) {
+      selectedDepartments = [departments];
+    } else {
+      // Fallback to legacy single department
+      final singleDept = rawUser['department'] ?? 
+                        rawUser['staff_department'] ?? 
+                        widget.user['department'] ?? 
+                        widget.user['staff_department'];
+      if (singleDept != null && singleDept.toString().isNotEmpty) {
+        selectedDepartments = [singleDept.toString()];
+      }
+    }
   }
 
   @override
@@ -83,6 +123,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     emailController.dispose();
     phoneController.dispose();
     departmentController.dispose();
+    _departmentInputController.dispose();
     super.dispose();
   }
 
@@ -412,15 +453,8 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
           ),
           const SizedBox(height: 20),
 
-          // Department field
-          _buildDetailField(
-            'Department',
-            departmentController,
-            rawUser['department'] ??
-                widget.user['department'] ??
-                'Not specified',
-            isValid: isDepartmentValid,
-          ),
+          // Departments field (multi-select)
+          _buildDepartmentsField(),
           const SizedBox(height: 20),
 
           // Role (read-only)
@@ -519,6 +553,120 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
               style: TextStyle(fontSize: 12, color: Colors.red[600]),
             ),
           ),
+      ],
+    );
+  }
+
+  Widget _buildDepartmentsField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Departments / Categories',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[600],
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (isEditMode)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Selected departments as chips
+              if (selectedDepartments.isNotEmpty)
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: selectedDepartments.map((dept) {
+                    return Chip(
+                      label: Text(dept),
+                      deleteIcon: const Icon(Icons.close, size: 18),
+                      onDeleted: () {
+                        setState(() {
+                          selectedDepartments.remove(dept);
+                        });
+                      },
+                      backgroundColor: Colors.blue[50],
+                      labelStyle: TextStyle(
+                        color: Colors.blue[800],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    );
+                  }).toList(),
+                ),
+              const SizedBox(height: 8),
+              // Dropdown to add departments
+              DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  hintText: 'Add department...',
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  focusedBorder: const OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: Color(0xFF1976D2),
+                      width: 2,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                ),
+                value: null,
+                items: availableDepartments
+                    .where((dept) => !selectedDepartments.contains(dept))
+                    .map((dept) {
+                  return DropdownMenuItem<String>(
+                    value: dept,
+                    child: Text(dept),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null && !selectedDepartments.contains(value)) {
+                    setState(() {
+                      selectedDepartments.add(value);
+                    });
+                  }
+                },
+              ),
+            ],
+          )
+        else
+          // Display mode - show as chips or text
+          selectedDepartments.isEmpty
+              ? Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: const Text(
+                    'No departments assigned',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black54,
+                    ),
+                  ),
+                )
+              : Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: selectedDepartments.map((dept) {
+                    return Chip(
+                      label: Text(dept),
+                      backgroundColor: Colors.blue[50],
+                      labelStyle: TextStyle(
+                        color: Colors.blue[800],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    );
+                  }).toList(),
+                ),
       ],
     );
   }
@@ -686,6 +834,29 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
       departmentController.text =
           rawUser['department'] ?? widget.user['department'] ?? '';
 
+      // Reset departments to original values
+      final departments = rawUser['departments'] ?? 
+                         rawUser['staff_departments'] ?? 
+                         widget.user['departments'] ?? 
+                         widget.user['staff_departments'];
+      
+      if (departments != null && departments is List) {
+        selectedDepartments = List<String>.from(departments);
+      } else if (departments != null && departments is String && departments.isNotEmpty) {
+        selectedDepartments = [departments];
+      } else {
+        // Fallback to legacy single department
+        final singleDept = rawUser['department'] ?? 
+                          rawUser['staff_department'] ?? 
+                          widget.user['department'] ?? 
+                          widget.user['staff_department'];
+        if (singleDept != null && singleDept.toString().isNotEmpty) {
+          selectedDepartments = [singleDept.toString()];
+        } else {
+          selectedDepartments = [];
+        }
+      }
+
       // Reset validation flags
       isFirstNameValid = true;
       isLastNameValid = true;
@@ -715,25 +886,51 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
         'last_name': lastNameController.text.trim(),
         'email': emailController.text.trim(),
         'phone_number': phoneController.text.trim(),
-        'department': departmentController.text.trim(),
+        'departments': selectedDepartments,  // Multi-select departments
       };
+      
+      // Add role-specific department fields for backward compatibility
+      final role = widget.user['role']?.toString().toLowerCase() ?? 'tenant';
+      if (role == 'staff') {
+        updateData['staff_departments'] = selectedDepartments;
+        // Also set legacy single field if there's at least one department
+        if (selectedDepartments.isNotEmpty) {
+          updateData['staff_department'] = selectedDepartments[0];
+          updateData['department'] = selectedDepartments[0];
+        }
+      } else {
+        // For non-staff roles, also set legacy single field
+        if (selectedDepartments.isNotEmpty) {
+          updateData['department'] = selectedDepartments[0];
+        }
+      }
 
-      print('[v0] Updating user $userId with data: $updateData');
+      print('[UserProfileDialog] Updating user $userId');
+      print('[UserProfileDialog] Update data: $updateData');
+      print('[UserProfileDialog] Selected departments: $selectedDepartments');
 
-      await _apiService.updateUser(userId, updateData);
+      final response = await _apiService.updateUser(userId, updateData);
+      print('[UserProfileDialog] Update response: $response');
 
       // Update local user data
       widget.user['name'] =
           '${firstNameController.text.trim()} ${lastNameController.text.trim()}';
       widget.user['email'] = emailController.text.trim();
-      widget.user['department'] = departmentController.text.trim();
+      widget.user['departments'] = selectedDepartments;
+      widget.user['department'] = selectedDepartments.isNotEmpty ? selectedDepartments[0] : '';
 
       if (widget.user['_raw'] != null) {
         widget.user['_raw']['first_name'] = firstNameController.text.trim();
         widget.user['_raw']['last_name'] = lastNameController.text.trim();
         widget.user['_raw']['email'] = emailController.text.trim();
         widget.user['_raw']['phone_number'] = phoneController.text.trim();
-        widget.user['_raw']['department'] = departmentController.text.trim();
+        widget.user['_raw']['departments'] = selectedDepartments;
+        widget.user['_raw']['department'] = selectedDepartments.isNotEmpty ? selectedDepartments[0] : '';
+        
+        if (role == 'staff') {
+          widget.user['_raw']['staff_departments'] = selectedDepartments;
+          widget.user['_raw']['staff_department'] = selectedDepartments.isNotEmpty ? selectedDepartments[0] : '';
+        }
       }
 
       setState(() {

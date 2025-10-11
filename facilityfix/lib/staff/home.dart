@@ -1,14 +1,16 @@
 import 'package:facilityfix/services/api_services.dart';
-import 'package:facilityfix/widgets/modals.dart';
+import 'package:facilityfix/config/env.dart';
+import 'package:facilityfix/staff/view_details.dart';
+import 'package:facilityfix/staff/workorder.dart';
+import 'package:facilityfix/staff/announcement.dart';
+import 'package:facilityfix/staff/inventory.dart';
+import 'package:facilityfix/staff/notification.dart';
+import 'package:facilityfix/staff/profile.dart';
 import 'package:flutter/material.dart';
-import 'package:facilityfix/tenant/announcement.dart';
-import 'package:facilityfix/tenant/notification.dart';
-import 'package:facilityfix/tenant/profile.dart';
-import 'package:facilityfix/tenant/workorder.dart';
 import 'package:facilityfix/widgets/cards.dart';
+import 'package:facilityfix/widgets/modals.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/services/auth_storage.dart';
-import 'package:facilityfix/tenant/view_details.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -28,25 +30,62 @@ class _HomeState extends State<HomePage> {
   List<Map<String, dynamic>> _allRequests = [];
   int _activeRequestsCount = 0;
   int _doneRequestsCount = 0;
+  List<Map<String, dynamic>> _latestAnnouncements = [];
+  List<Map<String, dynamic>> _inventoryRequests = [];
+  int _pendingInventoryCount = 0;
+  int _approvedInventoryCount = 0;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
     NavItem(icon: Icons.announcement_rounded),
+    NavItem(icon: Icons.inventory),
     NavItem(icon: Icons.person),
   ];
 
   @override
   void initState() {
     super.initState();
+    _verifyRoleAndLoad();
+  }
+
+  Future<void> _verifyRoleAndLoad() async {
+    // Verify user role matches staff
+    final profile = await AuthStorage.getProfile();
+    final role = profile?['role']?.toString().toLowerCase() ?? '';
+    
+    if (role.isEmpty) {
+      print('[Staff Home] No role found in profile');
+      // Continue loading anyway
+    } else if (role != 'staff') {
+      print('[Staff Home] Invalid role: $role (expected: staff)');
+      // Role mismatch - redirect to appropriate home
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Access denied. This page is for staff only.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        // Don't load data, stay in loading state or redirect
+        return;
+      }
+    } else {
+      print('[Staff Home] Role verified: staff');
+    }
+    
+    // Load data
     _loadUserData();
     _loadAllRequests();
+    _loadLatestAnnouncements();
+    _loadInventoryRequests();
   }
 
   Future<void> _loadAllRequests() async {
     try {
-      final apiService = APIService();
-      final allRequests = await apiService.getAllTenantRequests();
+      // Use staff role for API service
+      final apiService = APIService(roleOverride: AppRole.staff);
+      final allRequests = await apiService.getAllTenantRequests("");
 
       if (allRequests.isNotEmpty && mounted) {
         setState(() {
@@ -84,6 +123,77 @@ class _HomeState extends State<HomePage> {
     }
   }
 
+  Future<void> _loadLatestAnnouncements() async {
+    try {
+      // Get user profile to determine building
+      final profile = await AuthStorage.getProfile();
+      final buildingId = profile?['building_id']?.toString() ?? 'default_building';
+      
+      // Use staff role for API service
+      final apiService = APIService(roleOverride: AppRole.staff);
+      
+      // Fetch announcements with limit of 3
+      final announcements = await apiService.getAllAnnouncements(
+        buildingId: buildingId,
+        audience: 'all', // Staff can see all announcements
+        activeOnly: true,
+        limit: 3,
+      );
+
+      if (mounted) {
+        setState(() {
+          _latestAnnouncements = announcements;
+        });
+      }
+    } catch (e) {
+      print('Error loading latest announcements: $e');
+      // Don't show error to user, just keep empty list
+    }
+  }
+
+  Future<void> _loadInventoryRequests() async {
+    try {
+      // Use staff role for API service
+      final apiService = APIService(roleOverride: AppRole.staff);
+      
+      // Get user profile for building context
+      final profile = await AuthStorage.getProfile();
+      final buildingId = profile?['building_id']?.toString() ?? 'default_building';
+      
+      // Fetch all inventory requests for the building
+      final requests = await apiService.getInventoryRequests(
+        buildingId: buildingId,
+      );
+
+      if (mounted && requests.isNotEmpty) {
+        // Count by status
+        int pendingCount = 0;
+        int approvedCount = 0;
+
+        for (final req in requests) {
+          final status = (req['status'] ?? '').toString().toLowerCase();
+          if (status == 'pending') {
+            pendingCount++;
+          } else if (status == 'approved' || status == 'fulfilled') {
+            approvedCount++;
+          }
+        }
+
+        setState(() {
+          _inventoryRequests = requests;
+          _pendingInventoryCount = pendingCount;
+          _approvedInventoryCount = approvedCount;
+        });
+
+        print('[Staff Home] Loaded ${requests.length} inventory requests');
+        print('[Staff Home] Pending: $pendingCount, Approved: $approvedCount');
+      }
+    } catch (e) {
+      print('Error loading inventory requests: $e');
+      // Don't show error to user, just keep empty list
+    }
+  }
+
   // Capitalize first name only
   String _titleCaseFirstOnly(String input) {
     final s = input.trim();
@@ -97,8 +207,22 @@ class _HomeState extends State<HomePage> {
     setState(() => _isLoading = true);
 
     try {
-      // Try to fetch from backend first
-      final apiService = APIService();
+      // Verify role is persisted
+      final localProfile = await AuthStorage.getProfile();
+      final storedRole = localProfile?['role']?.toString().toLowerCase() ?? '';
+      
+      // If role mismatch, redirect to tenant (security measure)
+      if (storedRole.isNotEmpty && storedRole != 'staff') {
+        print('[Staff Home] Role mismatch detected: $storedRole, expected staff');
+        // This shouldn't happen, but if it does, don't continue loading
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+        return;
+      }
+
+      // Try to fetch from backend first with staff role
+      final apiService = APIService(roleOverride: AppRole.staff);
       final profileData = await apiService.getUserProfile();
 
       if (profileData != null) {
@@ -137,15 +261,33 @@ class _HomeState extends State<HomePage> {
       }
     }
 
-    // ---- Building Unit (snake_case only, no formatting) ----
-    final buildingUnit = (profile['building_unit'] ?? '').toString().trim();
-    final formattedUnit = buildingUnit.isNotEmpty ? buildingUnit : '—';
+    // ---- Staff Department (instead of building_unit for staff) ----
+    final staffDept = (profile['staff_department'] ?? '').toString().trim();
+    final formattedDept = staffDept.isNotEmpty ? _formatDepartment(staffDept) : 'Staff';
 
     if (mounted) {
       setState(() {
         _userName = firstName.isNotEmpty ? firstName : 'User';
-        _unitLabel = formattedUnit; // ✅ show raw building_unit only
+        _unitLabel = formattedDept; // Show department for staff
       });
+    }
+  }
+
+  String _formatDepartment(String dept) {
+    // Format department name for display
+    switch (dept.toLowerCase()) {
+      case 'maintenance':
+        return 'Maintenance';
+      case 'carpentry':
+        return 'Carpentry';
+      case 'plumbing':
+        return 'Plumbing';
+      case 'electrical':
+        return 'Electrical';
+      case 'masonry':
+        return 'Masonry';
+      default:
+        return dept.isEmpty ? 'Staff' : dept;
     }
   }
 
@@ -174,6 +316,12 @@ class _HomeState extends State<HomePage> {
         );
         break;
       case 3:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const InventoryPage()),
+        );
+        break;
+      case 4:
         Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const ProfilePage()),
@@ -189,6 +337,8 @@ class _HomeState extends State<HomePage> {
   Future<void> _refresh() async {
     await _loadUserData();
     await _loadAllRequests();
+    await _loadLatestAnnouncements();
+    await _loadInventoryRequests();
   }
 
   Widget _buildRequestCard(Map<String, dynamic> request) {
@@ -232,16 +382,32 @@ class _HomeState extends State<HomePage> {
       ),
       child: InkWell(
         onTap: () {
+          // Extract the concern slip ID from the request data
+          // Use the raw ID (not formatted_id) for API calls
+          final concernSlipId = request['id']?.toString() ?? '';
+          
+          if (concernSlipId.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Error: Invalid request ID'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+            return;
+          }
+          
+          // Navigate to the staff detail page with the concern slip ID
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder:
-                  (_) => ViewDetailsPage(
-                    selectedTabLabel: requestType.toLowerCase(),
-                    requestTypeTag: requestType,
-                  ),
+              builder: (_) => StaffConcernSlipDetailPage(
+                concernSlipId: concernSlipId,
+              ),
             ),
-          );
+          ).then((_) {
+            // Refresh data when returning from detail page
+            _loadAllRequests();
+          });
         },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -440,6 +606,230 @@ class _HomeState extends State<HomePage> {
     }
   }
 
+  Widget _buildAnnouncementCard(Map<String, dynamic> announcement) {
+    final title = announcement['title'] ?? 'Untitled Announcement';
+    final content = announcement['content'] ?? '';
+    final announcementType = announcement['type'] ?? 'general';
+    final priorityLevel = announcement['priority_level'] ?? 'normal';
+    final createdAt = announcement['date_added'] ?? announcement['created_at'] ?? '';
+    final formattedId = announcement['formatted_id'] ?? 'ANN-${announcement['id'] ?? ''}';
+
+    // Truncate content for preview
+    String contentPreview = content;
+    if (content.length > 120) {
+      contentPreview = '${content.substring(0, 120)}...';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: InkWell(
+        onTap: () {
+          // Navigate to announcements page or show detail modal
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AnnouncementPage()),
+          );
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _getAnnouncementTypeColor(announcementType).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    _getAnnouncementTypeIcon(announcementType),
+                    size: 20,
+                    color: _getAnnouncementTypeColor(announcementType),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1B1D21),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        formattedId,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF667085),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (priorityLevel != 'normal')
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _getPriorityColor(priorityLevel).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      _formatPriority(priorityLevel),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: _getPriorityColor(priorityLevel),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              contentPreview,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF374151),
+                height: 1.4,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(
+                  Icons.access_time,
+                  size: 14,
+                  color: const Color(0xFF9CA3AF),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  _formatAnnouncementDate(createdAt),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF667085),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  _formatAnnouncementType(announcementType),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: _getAnnouncementTypeColor(announcementType),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getAnnouncementTypeIcon(String type) {
+    switch (type.toLowerCase()) {
+      case 'maintenance':
+        return Icons.build_outlined;
+      case 'reminder':
+        return Icons.notifications_outlined;
+      case 'event':
+        return Icons.event_outlined;
+      case 'policy':
+        return Icons.policy_outlined;
+      case 'emergency':
+        return Icons.warning_amber_outlined;
+      default:
+        return Icons.announcement_outlined;
+    }
+  }
+
+  Color _getAnnouncementTypeColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'maintenance':
+        return const Color(0xFF0891B2);
+      case 'reminder':
+        return const Color(0xFFF59E0B);
+      case 'event':
+        return const Color(0xFF7C3AED);
+      case 'policy':
+        return const Color(0xFF2563EB);
+      case 'emergency':
+        return const Color(0xFFDC2626);
+      default:
+        return const Color(0xFF667085);
+    }
+  }
+
+  String _formatAnnouncementType(String type) {
+    switch (type.toLowerCase()) {
+      case 'maintenance':
+        return 'Maintenance';
+      case 'reminder':
+        return 'Reminder';
+      case 'event':
+        return 'Event';
+      case 'policy':
+        return 'Policy';
+      case 'emergency':
+        return 'Emergency';
+      case 'general':
+        return 'General';
+      default:
+        return type;
+    }
+  }
+
+  String _formatAnnouncementDate(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      final now = DateTime.now();
+      final difference = now.difference(date);
+
+      if (difference.inDays == 0) {
+        if (difference.inHours == 0) {
+          if (difference.inMinutes == 0) {
+            return 'Just now';
+          }
+          return '${difference.inMinutes}m ago';
+        }
+        return '${difference.inHours}h ago';
+      } else if (difference.inDays == 1) {
+        return 'Yesterday';
+      } else if (difference.inDays < 7) {
+        return '${difference.inDays}d ago';
+      } else {
+        return '${date.day}/${date.month}/${date.year}';
+      }
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final displayName = _userName.isNotEmpty ? _userName : 'User';
@@ -481,7 +871,7 @@ class _HomeState extends State<HomePage> {
                           children: [
                             Text.rich(
                               TextSpan(
-                                text: 'Hello, ',
+                                text: 'Hola, ',
                                 style: const TextStyle(
                                   color: Color(0xFF1B1D21),
                                   fontSize: 22,
@@ -601,9 +991,49 @@ class _HomeState extends State<HomePage> {
                             ),
                         const SizedBox(height: 24),
 
+                        // Inventory Requests
+                        SectionHeader(
+                          title: 'Inventory Requests',
+                          actionLabel: 'View all',
+                          onActionTap:
+                              () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const InventoryPage(),
+                                ),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        Row(
+                          children: [
+                            Expanded(
+                              child: StatusCard(
+                                title: 'Pending',
+                                count: '$_pendingInventoryCount',
+                                icon: Icons.hourglass_empty,
+                                iconColor: const Color(0xFFF79009),
+                                backgroundColor: const Color(0xFFFFFAEB),
+                                borderColor: const Color(0xFFF79009),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: StatusCard(
+                                title: 'Approved',
+                                count: '$_approvedInventoryCount',
+                                icon: Icons.check_circle_outline,
+                                iconColor: const Color(0xFF24D164),
+                                backgroundColor: const Color(0xFFF0FDF4),
+                                borderColor: const Color(0xFF24D164),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+
                         // Latest Announcement
                         SectionHeader(
-                          title: 'Latest Announcement',
+                          title: 'Latest',
                           actionLabel: 'View all',
                           onActionTap:
                               () => Navigator.of(context).push(
@@ -613,42 +1043,52 @@ class _HomeState extends State<HomePage> {
                               ),
                         ),
                         const SizedBox(height: 12),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF9FAFB),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFE5E7EB)),
-                          ),
-                          child: const Column(
-                            children: [
-                              Icon(
-                                Icons.announcement_outlined,
-                                size: 48,
-                                color: Color(0xFF9CA3AF),
+                        _latestAnnouncements.isEmpty
+                            ? Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF9FAFB),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFE5E7EB)),
                               ),
-                              SizedBox(height: 12),
-                              Text(
-                                'No announcements',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF374151),
-                                ),
+                              child: const Column(
+                                children: [
+                                  Icon(
+                                    Icons.announcement_outlined,
+                                    size: 48,
+                                    color: Color(0xFF9CA3AF),
+                                  ),
+                                  SizedBox(height: 12),
+                                  Text(
+                                    'No announcements',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF374151),
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    'Building announcements will appear here',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Color(0xFF6B7280),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
                               ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Building announcements will appear here',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Color(0xFF6B7280),
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
+                            )
+                            : Column(
+                              children:
+                                  _latestAnnouncements
+                                      .map(
+                                        (announcement) =>
+                                            _buildAnnouncementCard(announcement),
+                                      )
+                                      .toList(),
+                            ),
                         const SizedBox(height: 24),
                       ],
                     ),

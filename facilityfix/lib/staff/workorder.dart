@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'package:facilityfix/services/api_services.dart';
-import 'package:facilityfix/tenant/announcement.dart';
-import 'package:facilityfix/tenant/chat.dart';
-import 'package:facilityfix/tenant/home.dart';
-import 'package:facilityfix/tenant/notification.dart';
-import 'package:facilityfix/tenant/profile.dart';
-import 'package:facilityfix/tenant/request_forms.dart';
-import 'package:facilityfix/tenant/view_details.dart';
+import 'package:facilityfix/config/env.dart';
+import 'package:facilityfix/staff/view_details.dart';
+import 'package:facilityfix/staff/announcement.dart';
+import 'package:facilityfix/staff/chat.dart';
+import 'package:facilityfix/staff/notification.dart';
+import 'package:facilityfix/staff/home.dart';
+import 'package:facilityfix/staff/profile.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:facilityfix/widgets/cards.dart';
@@ -43,7 +43,8 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     setState(() => _isLoading = true);
 
     try {
-      final apiService = APIService();
+      // Use staff role for API service
+      final apiService = APIService(roleOverride: AppRole.staff);
       final allRequests = await apiService.getAllTenantRequests();
 
       if (mounted) {
@@ -53,6 +54,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                 // Convert API response to WorkOrder-like structure
                 return {
                   'id': request['formatted_id'] ?? request['id'] ?? '',
+                  'raw_id': request['id'] ?? '', // Store the raw ID for API calls
                   'title': request['title'] ?? 'Untitled Request',
                   'created_at':
                       request['created_at'] ?? DateTime.now().toIso8601String(),
@@ -117,98 +119,18 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   }
 
   // ===== Popup to create request ============================================
+  // Note: Staff members respond to requests rather than creating them
   void _showRequestDialog(BuildContext context) {
     showDialog(
       context: context,
       builder:
           (_) => CustomPopup(
-            title: 'Create a Request',
-            message: 'Would you like to create a new request?',
-            primaryText: 'Yes, Continue',
+            title: 'Staff Access',
+            message: 'Staff members can view and respond to requests. Only tenants can create new requests.',
+            primaryText: 'OK',
             onPrimaryPressed: () {
               Navigator.of(context).pop();
-              showDialog(
-                context: context,
-                builder:
-                    (_) => Dialog(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 20,
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text(
-                              'What type of request would you like to create?',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 16),
-                            ListTile(
-                              leading: const Icon(Icons.assignment_outlined),
-                              title: const Text('Concern Slip'),
-                              onTap: () {
-                                Navigator.of(context).pop();
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder:
-                                        (_) => const RequestForm(
-                                          requestType: 'Concern Slip',
-                                        ),
-                                  ),
-                                );
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(
-                                Icons.design_services_outlined,
-                              ),
-                              title: const Text('Job Service Request'),
-                              onTap: () {
-                                Navigator.of(context).pop();
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder:
-                                        (_) => const RequestForm(
-                                          requestType: 'Job Service',
-                                        ),
-                                  ),
-                                );
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.build_outlined),
-                              title: const Text('Work Order Permit'),
-                              onTap: () {
-                                Navigator.of(context).pop();
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder:
-                                        (_) => const RequestForm(
-                                          requestType: 'Work Order',
-                                        ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-              );
             },
-            secondaryText: 'Cancel',
-            onSecondaryPressed: () => Navigator.of(context).pop(),
           ),
     );
   }
@@ -354,28 +276,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     ];
   }
 
-  String _routeLabelFor(Map<String, dynamic> w) {
-    final type = _norm(w['request_type']);
-    final status = _norm(w['status']);
-
-    switch (type) {
-      case 'concern slip':
-        if (status == 'pending') return 'concern slip';
-        if (status == 'assigned') return 'concern slip assigned';
-        if (status == 'assessed') return 'concern slip assessed';
-        return 'concern slip';
-      case 'job service':
-        if (status == 'done' || status == 'assessed' || status == 'closed') {
-          return 'job service assessed';
-        }
-        return 'job service assigned';
-      case 'work order':
-        return 'work order';
-      default:
-        return type.isEmpty ? 'concern slip' : type;
-    }
-  }
-
   Widget buildCard(Map<String, dynamic> r) {
     final createdAt =
         DateTime.tryParse(r['created_at'] ?? '') ?? DateTime.now();
@@ -392,17 +292,30 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       assignedStaff: r['assigned_staff'],
       staffDepartment: r['staff_department'],
       onTap: () {
-        final routeLabel = _routeLabelFor(r);
+        // Extract the raw ID from the formatted ID or use the ID directly
+        final concernSlipId = r['raw_id'] ?? r['id'] ?? '';
+        
+        if (concernSlipId.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Error: Invalid request ID'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+        
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder:
-                (_) => ViewDetailsPage(
-                  selectedTabLabel: routeLabel,
-                  requestTypeTag: r['request_type'] ?? 'Concern Slip',
-                ),
+            builder: (_) => StaffConcernSlipDetailPage(
+              concernSlipId: concernSlipId,
+            ),
           ),
-        );
+        ).then((_) {
+          // Refresh data when returning
+          _loadAllRequests();
+        });
       },
       onChatTap: () {
         Navigator.push(

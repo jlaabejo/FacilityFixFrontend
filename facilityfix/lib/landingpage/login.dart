@@ -12,13 +12,12 @@ import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/services/auth_storage.dart';
 
 AppRole _toAppRole(String role) {
+  
   switch (role.toLowerCase()) {
     case 'tenant':
       return AppRole.tenant;
     case 'staff':
       return AppRole.staff;
-    case 'admin':
-      return AppRole.admin;
     default:
       return AppRole.tenant;
   }

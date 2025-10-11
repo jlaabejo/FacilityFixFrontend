@@ -33,6 +33,7 @@ class ConcernSlipDetails extends StatelessWidget {
   final String? staffDepartment;
   final DateTime? assessedAt; // assessment timestamp
   final String? assessment; // staff assessment text
+  final String? staffRecommendation; // staff recommendation text
   final List<String>? staffAttachments; // staff-side attachments (list)
 
   const ConcernSlipDetails({
@@ -63,6 +64,7 @@ class ConcernSlipDetails extends StatelessWidget {
     this.staffPhotoUrl,
     this.assessedAt,
     this.assessment,
+    this.staffRecommendation,
     this.staffAttachments,
   });
 
@@ -102,6 +104,7 @@ class ConcernSlipDetails extends StatelessWidget {
         (staffDepartment?.trim().isNotEmpty ?? false) ||
         (assessedAt != null) ||
         (assessment?.trim().isNotEmpty ?? false) ||
+        (staffRecommendation?.trim().isNotEmpty ?? false) ||
         ((staffAttachments ?? const []).isNotEmpty);
 
     final String displayType = _effectiverequestTypeTag();
@@ -211,17 +214,12 @@ class ConcernSlipDetails extends StatelessWidget {
           const _SectionTitle('Requester Details'),
           SizedBox(height: 8 * s),
           KeyValueRow.text(label: 'Requested By', valueText: requestedBy),
-          SizedBox(height: 4 * s),
-          KeyValueRow.text(label: 'Unit ID', valueText: unitId),
-          if (_fmtScheduleAvail(scheduleAvailability) != null) ...[
-            SizedBox(height: 10 * s),
-            KeyValueRow.text(
-              label: 'Schedule Availability',
-              valueText: _fmtScheduleAvail(scheduleAvailability!)!,
-              labelWidth: 160 * s,
-            ),
+          if ((unitId ?? '').isNotEmpty) ...[
+            SizedBox(height: 4 * s),
+            KeyValueRow.text(label: 'Unit ID', valueText: unitId!),
           ],
 
+          // ----- Divider -----
           SizedBox(height: 14 * s),
           ffDivider(),
           SizedBox(height: 12 * s),
@@ -233,7 +231,12 @@ class ConcernSlipDetails extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (showDetailsCard)
-                  _SectionCard(title: 'Description', content: detailsBody),
+                  _SectionCard(
+                    title: 'Description',
+                    content: detailsBody,
+                    padding: EdgeInsets.all(14 * s),
+                    hideIfEmpty: false,
+                  ),
 
                 if ((attachments?.isNotEmpty ?? false)) ...[
                   SizedBox(height: 12 * s),
@@ -308,6 +311,19 @@ class ConcernSlipDetails extends StatelessWidget {
                     _SectionCard(
                       title: 'Assessment',
                       content: assessment!.trim(),
+                      padding: EdgeInsets.all(14 * s),
+                      hideIfEmpty: false,
+                    ),
+                    SizedBox(height: 8 * s),
+                  ],
+
+                  // Staff recommendation
+                  if ((staffRecommendation?.trim().isNotEmpty ?? false)) ...[
+                    _SectionCard(
+                      title: 'Recommendation',
+                      content: staffRecommendation!.trim(),
+                      padding: EdgeInsets.all(14 * s),
+                      hideIfEmpty: false,
                     ),
                     SizedBox(height: 8 * s),
                   ],
@@ -574,8 +590,10 @@ class JobServiceDetails extends StatelessWidget {
           const _SectionTitle('Requester Details'),
           SizedBox(height: 8 * s),
           KeyValueRow.text(label: 'Requested By', valueText: requestedBy),
-          SizedBox(height: 4 * s),
-          KeyValueRow.text(label: 'Unit ID', valueText: unitId),
+          if ((unitId ?? '').isNotEmpty) ...[
+            SizedBox(height: 4 * s),
+            KeyValueRow.text(label: 'Unit ID', valueText: unitId!),
+          ],
 
           // ----- Divider -----
           SizedBox(height: 14 * s),
@@ -697,6 +715,8 @@ class JobServiceDetails extends StatelessWidget {
                     _SectionCard(
                       title: 'Assessment',
                       content: assessment!.trim(),
+                      padding: EdgeInsets.all(14 * s),
+                      hideIfEmpty: false,
                     ),
                   ],
                   if ((staffAttachments?.isNotEmpty ?? false)) ...[
@@ -897,6 +917,12 @@ class WorkOrderPermitDetails extends StatelessWidget {
         (denialReason?.trim().isNotEmpty ?? false) ||
         (adminNotes?.trim().isNotEmpty ?? false);
 
+    // Format helpers using UiDateUtils
+    String _fmtDate(DateTime? d) {
+      if (d == null) return '—';
+      return UiDateUtils.fullDate(d);
+    }
+
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 20 * s),
       decoration: ShapeDecoration(
@@ -965,22 +991,21 @@ class WorkOrderPermitDetails extends StatelessWidget {
 
           SizedBox(height: 12 * s),
 
-          // ===== Basic Information =====
+          // ===== Basic Information (grouped) =====
           _Section(
             title: 'Basic Information',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (createdAt != null)
-                  KeyValueRow.text(
-                    label: 'Date Created',
-                    valueText: UiDateUtils.fullDate(createdAt!),
-                  ),
+                KeyValueRow.text(
+                  label: 'Date Created',
+                  valueText: _fmtDate(createdAt),
+                ),
                 if (updatedAt != null) ...[
                   SizedBox(height: 6 * s),
                   KeyValueRow.text(
                     label: 'Last Updated',
-                    valueText: UiDateUtils.fullDate(updatedAt!),
+                    valueText: _fmtDate(updatedAt!),
                   ),
                 ],
                 SizedBox(height: 6 * s),
@@ -1001,7 +1026,6 @@ class WorkOrderPermitDetails extends StatelessWidget {
                     labelWidth: 120 * s,
                   ),
                 ],
-                // NOTE: no Resolution row — reflected in displayType/_displayStatus
               ],
             ),
           ),
@@ -1050,6 +1074,8 @@ class WorkOrderPermitDetails extends StatelessWidget {
 
           // ----- Divider -----
           SizedBox(height: 14 * s),
+          ffDivider(),
+          SizedBox(height: 12 * s),
 
           // ===== Work Schedule =====
           _Section(
@@ -1079,11 +1105,15 @@ class WorkOrderPermitDetails extends StatelessWidget {
                   _SectionCard(
                     title: 'Entry Equipment',
                     content: entryEquipments!.trim(),
+                    padding: EdgeInsets.all(14 * s),
+                    hideIfEmpty: false,
                   ),
                   if ((adminNotes?.trim().isNotEmpty ?? false))
                     _SectionCard(
                       title: 'Admin Notes',
                       content: adminNotes!.trim(),
+                      padding: EdgeInsets.all(14 * s),
+                      hideIfEmpty: false,
                     ),
                 ],
               ],
@@ -1120,6 +1150,8 @@ class WorkOrderPermitDetails extends StatelessWidget {
                     _SectionCard(
                       title: 'Denial Reason',
                       content: denialReason!.trim(),
+                      padding: EdgeInsets.all(14 * s),
+                      hideIfEmpty: false,
                     ),
                     SizedBox(height: 8 * s),
                   ],
@@ -1130,6 +1162,20 @@ class WorkOrderPermitDetails extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // ------------------------------------------------------------
+  // FORMAT SCHEDULE AVAILABILITY (moved from ConcernSlipDetails)
+  // ------------------------------------------------------------
+
+  /// Format schedule availability string to human-readable form.
+  ///
+  /// - Input: "2025-08-12 13:30:00" or "Aug 12, 1:30 PM"
+  /// - Output: "Aug 12, 1:30 PM" (or similar, based on current date/time)
+  String? _fmtScheduleAvail(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    final dt = DateTime.tryParse(raw) ?? UiDateUtils.parse(raw);
+    return UiDateUtils.humanDateTime(dt);
   }
 }
 
@@ -1374,6 +1420,8 @@ class _MaintenanceState extends State<MaintenanceDetails> {
             _SectionCard(
               title: "Task Description",
               content: widget.description!.trim(),
+              padding: const EdgeInsets.all(14),
+              hideIfEmpty: false,
             ),
           ],
 
@@ -2071,7 +2119,12 @@ class InventoryDetailsScreen extends StatelessWidget {
 
     // ===== Notes =====
     if (_isNotEmpty(notes)) {
-      sections.add(_SectionCard(title: 'Notes / Purpose', content: notes!));
+      sections.add(_SectionCard(
+        title: 'Notes / Purpose',
+        content: notes!,
+        padding: const EdgeInsets.all(14),
+        hideIfEmpty: false,
+      ));
     }
 
     // Interleave with dividers
@@ -2419,6 +2472,7 @@ class KeyValueRow extends StatelessWidget {
 
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 4 * s),
+
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2474,6 +2528,8 @@ class _ValueText extends StatelessWidget {
     );
   }
 }
+
+
 
 /// ------------------------------------------------------------
 /// Section Title (already responsive; tightened weights/colors)
@@ -2546,6 +2602,10 @@ class _SectionCard extends StatelessWidget {
   const _SectionCard({
     this.title,
     this.content,
+    this.child,
+    required this.padding,
+    this.margin,
+    required this.hideIfEmpty,
   });
 
   double _scale(BuildContext context) => uiScale(context);

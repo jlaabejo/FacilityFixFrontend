@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
 import '../../services/auth_storage.dart';
+import '../../services/api_services.dart' as main_api;
 
 class InternalMaintenanceFormPage extends StatefulWidget {
   const InternalMaintenanceFormPage({super.key});
@@ -70,7 +71,10 @@ class _InternalMaintenanceFormPageState
   final List<Map<String, dynamic>> _checklistItems = [];
 
   List<Map<String, dynamic>> _staffMembers = [];
+  List<Map<String, dynamic>> _availableInventoryItems = [];
+  List<Map<String, dynamic>> _selectedInventoryItems = [];
   final _apiService = ApiService();
+  final _mainApiService = main_api.APIService();
 
   // -------------------- NAV --------------------
   String? _getRoutePath(String routeKey) {
@@ -172,6 +176,27 @@ class _InternalMaintenanceFormPageState
 
     // Load staff members
     await _loadStaffMembers();
+    
+    // Load inventory items
+    await _loadInventoryItems();
+  }
+
+  Future<void> _loadInventoryItems() async {
+    try {
+      // TODO: Replace with actual building ID from user session
+      const buildingId = 'default_building_id';
+      
+      final response = await _mainApiService.getInventoryItems(buildingId: buildingId);
+      
+      if (response['success'] == true && response['data'] != null) {
+        setState(() {
+          _availableInventoryItems = List<Map<String, dynamic>>.from(response['data']);
+        });
+      }
+    } catch (e) {
+      print('[v0] Error loading inventory items: $e');
+      // Don't fail the whole form if inventory loading fails
+    }
   }
 
   Future<void> _loadStaffMembers() async {
@@ -218,6 +243,60 @@ class _InternalMaintenanceFormPageState
     setState(() {
       _checklistItems.removeWhere((item) => item['id'] == id);
     });
+  }
+
+  void _addInventoryItem() {
+    if (_availableInventoryItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No inventory items available')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => _InventorySelectionDialog(
+        availableItems: _availableInventoryItems,
+        onItemSelected: (item, quantity) {
+          setState(() {
+            _selectedInventoryItems.add({
+              'inventory_id': item['id'] ?? item['_doc_id'],
+              'item_name': item['item_name'],
+              'item_code': item['item_code'],
+              'quantity': quantity,
+              'available_stock': item['current_stock'],
+            });
+          });
+        },
+      ),
+    );
+  }
+
+  void _removeInventoryItem(int index) {
+    setState(() {
+      _selectedInventoryItems.removeAt(index);
+    });
+  }
+
+  Future<void> _createInventoryRequests(String taskId) async {
+    if (_selectedInventoryItems.isEmpty) return;
+
+    try {
+      for (final item in _selectedInventoryItems) {
+        await _mainApiService.createInventoryRequest(
+          inventoryId: item['inventory_id'],
+          buildingId: 'default_building_id', // TODO: Use actual building ID
+          quantityRequested: item['quantity'],
+          purpose: 'Maintenance Task: $taskId',
+          requestedBy: _assignedStaffController.text.isNotEmpty ? _assignedStaffController.text : 'system',
+          maintenanceTaskId: taskId, // Link to maintenance task
+        );
+      }
+      print('[v0] Created ${_selectedInventoryItems.length} inventory requests linked to task $taskId');
+    } catch (e) {
+      print('[v0] Error creating inventory requests: $e');
+      throw Exception('Failed to create inventory requests: $e');
+    }
   }
 
   DateTime _calculateNextDueDate(DateTime base, String frequency) {
@@ -445,13 +524,24 @@ class _InternalMaintenanceFormPageState
 
     try {
       print('[v0] Saving maintenance task to backend...');
-      await _apiService.createMaintenanceTask(maintenance);
+      final result = await _apiService.createMaintenanceTask(maintenance);
       print('[v0] Maintenance task saved successfully');
+      print('[v0] Backend response: $result');
+
+      // Extract the actual task ID from the response
+      String actualTaskId = id;
+      if (result['task'] != null) {
+        actualTaskId = result['task']['id'] ?? result['task']['formatted_id'] ?? id;
+      }
+      print('[v0] Using task ID for inventory requests: $actualTaskId');
+
+      // Create inventory requests for selected items with the correct task ID
+      await _createInventoryRequests(actualTaskId);
 
       // Navigate to view page with the data
       if (mounted) {
         context.push(
-          '/work/maintenance/$id/internal?edit=1',
+          '/work/maintenance/$actualTaskId/internal?edit=1',
           extra: maintenance,
         );
       }
@@ -1043,6 +1133,149 @@ class _InternalMaintenanceFormPageState
                         ],
                       ),
                       const SizedBox(height: 40),
+                      
+                      // ===== Inventory Items =====
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            "Inventory Items",
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: _addInventoryItem,
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text("Add Item"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF2E7D32),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      
+                      if (_selectedInventoryItems.isEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey[200]!),
+                          ),
+                          child: Text(
+                            'No inventory items added yet. Click "Add Item" to request inventory.',
+                            style: TextStyle(color: Colors.grey[600]),
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      else
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _selectedInventoryItems.length,
+                            separatorBuilder: (context, index) =>
+                                Divider(height: 1, color: Colors.grey[300]),
+                            itemBuilder: (context, index) {
+                              final item = _selectedInventoryItems[index];
+                              return ListTile(
+                                dense: true,
+                                leading: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE8F5E8),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(
+                                    Icons.inventory_2,
+                                    color: Color(0xFF2E7D32),
+                                    size: 20,
+                                  ),
+                                ),
+                                title: Text(
+                                  item['item_name'] ?? 'Unknown Item',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Code: ${item['item_code'] ?? 'N/A'}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFE8F5E8),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            'Qty: ${item['quantity']}',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w500,
+                                              color: Color(0xFF2E7D32),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Available: ${item['available_stock']}',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                trailing: IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 20,
+                                  ),
+                                  color: Colors.red[400],
+                                  onPressed: () => _removeInventoryItem(index),
+                                  tooltip: 'Remove',
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+
+                      const SizedBox(height: 40),
                       const Text(
                         "Attachments",
                         style: TextStyle(
@@ -1277,4 +1510,255 @@ class _InternalMaintenanceFormPageState
   // Wrap inputs to enforce consistent heights
   Widget _fieldBox({required Widget child}) =>
       SizedBox(height: _kFieldHeight, child: child);
+}
+
+// Inventory Selection Dialog
+class _InventorySelectionDialog extends StatefulWidget {
+  final List<Map<String, dynamic>> availableItems;
+  final Function(Map<String, dynamic> item, int quantity) onItemSelected;
+
+  const _InventorySelectionDialog({
+    required this.availableItems,
+    required this.onItemSelected,
+  });
+
+  @override
+  State<_InventorySelectionDialog> createState() => _InventorySelectionDialogState();
+}
+
+class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
+  Map<String, dynamic>? _selectedItem;
+  final _quantityController = TextEditingController(text: '1');
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> get _filteredItems {
+    if (_searchQuery.isEmpty) return widget.availableItems;
+    
+    final query = _searchQuery.toLowerCase();
+    return widget.availableItems.where((item) {
+      final name = (item['item_name'] ?? '').toString().toLowerCase();
+      final code = (item['item_code'] ?? '').toString().toLowerCase();
+      return name.contains(query) || code.contains(query);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: 600,
+        constraints: const BoxConstraints(maxHeight: 700),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Select Inventory Item',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Search field
+            TextField(
+              decoration: InputDecoration(
+                hintText: 'Search by name or code...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+
+            // Items list
+            Expanded(
+              child: _filteredItems.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No items found',
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _filteredItems.length,
+                      itemBuilder: (context, index) {
+                        final item = _filteredItems[index];
+                        final isSelected = _selectedItem == item;
+                        final currentStock = item['current_stock'] ?? 0;
+                        final isLowStock = currentStock <= (item['reorder_level'] ?? 0);
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: isSelected ? const Color(0xFFE8F5E8) : Colors.grey[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isSelected ? const Color(0xFF2E7D32) : Colors.grey[200]!,
+                              width: isSelected ? 2 : 1,
+                            ),
+                          ),
+                          child: ListTile(
+                            onTap: () {
+                              setState(() {
+                                _selectedItem = item;
+                              });
+                            },
+                            title: Text(
+                              item['item_name'] ?? 'Unknown Item',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Code: ${item['item_code'] ?? 'N/A'}',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                ),
+                                Text(
+                                  'Department: ${item['department'] ?? 'N/A'}',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isLowStock ? Colors.orange[100] : Colors.green[100],
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        'Stock: $currentStock',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w500,
+                                          color: isLowStock ? Colors.orange[900] : Colors.green[900],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            trailing: isSelected
+                                ? const Icon(Icons.check_circle, color: Color(0xFF2E7D32))
+                                : null,
+                          ),
+                        );
+                      },
+                    ),
+            ),
+
+            if (_selectedItem != null) ...[
+              const Divider(height: 32),
+              
+              // Quantity input
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _quantityController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: 'Quantity Needed',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    'Available: ${_selectedItem!['current_stock'] ?? 0}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[700],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
+            const SizedBox(height: 24),
+
+            // Actions
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: _selectedItem == null
+                      ? null
+                      : () {
+                          final quantity = int.tryParse(_quantityController.text) ?? 1;
+                          if (quantity <= 0) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Quantity must be greater than 0'),
+                              ),
+                            );
+                            return;
+                          }
+                          widget.onItemSelected(_selectedItem!, quantity);
+                          Navigator.pop(context);
+                        },
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add Item'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2E7D32),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

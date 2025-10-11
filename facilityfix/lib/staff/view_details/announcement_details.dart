@@ -6,9 +6,16 @@ import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/widgets/view_details.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
+import 'package:facilityfix/services/api_services.dart';
+import 'package:intl/intl.dart';
 
 class AnnouncementDetailsPage extends StatefulWidget {
-  const AnnouncementDetailsPage({super.key});
+  final String announcementId;
+  
+  const AnnouncementDetailsPage({
+    super.key,
+    required this.announcementId,
+  });
 
   @override
   State<AnnouncementDetailsPage> createState() => _AnnouncementDetailsState();
@@ -25,6 +32,39 @@ class _AnnouncementDetailsState extends State<AnnouncementDetailsPage> {
     NavItem(icon: Icons.inventory),
   ];
 
+  late final APIService _apiService;
+  bool _isLoading = true;
+  String? _errorMessage;
+  Map<String, dynamic>? _announcement;
+
+  @override
+  void initState() {
+    super.initState();
+    _apiService = APIService();
+    _fetchAnnouncementDetails();
+  }
+
+  Future<void> _fetchAnnouncementDetails() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final data = await _apiService.getAnnouncementById(widget.announcementId);
+      setState(() {
+        _announcement = data;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to load announcement details: $e';
+        _isLoading = false;
+      });
+      print('[AnnouncementDetails] Error: $e');
+    }
+  }
+
   void _onTabTapped(int index) {
     final destinations = [
       const HomePage(),
@@ -39,6 +79,26 @@ class _AnnouncementDetailsState extends State<AnnouncementDetailsPage> {
         context,
         MaterialPageRoute(builder: (_) => destinations[index]),
       );
+    }
+  }
+
+  String _formatDate(String? dateString) {
+    if (dateString == null) return 'N/A';
+    try {
+      final date = DateTime.parse(dateString);
+      return DateFormat('MMMM d, yyyy - h:mm a').format(date);
+    } catch (e) {
+      return dateString;
+    }
+  }
+
+  String _formatDateOnly(String? dateString) {
+    if (dateString == null) return 'N/A';
+    try {
+      final date = DateTime.parse(dateString);
+      return DateFormat('MMMM d, yyyy').format(date);
+    } catch (e) {
+      return dateString;
     }
   }
 
@@ -58,26 +118,45 @@ class _AnnouncementDetailsState extends State<AnnouncementDetailsPage> {
         ),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              // Use the *card* widget here (your Stateless one)
-              AnnouncementDetails(
-                id: 'ANN-2025-0011',
-                title: 'Water Interruption Notice',
-                createdAt: 'August 6, 2025',
-                announcementType: 'Utility Interruption',
-                description: 'Water supply will be interrupted due to mainline repair.',
-                locationAffected: 'Building A & B',
-                scheduleStart: 'August 7, 2025 - 8:00 AM',
-                scheduleEnd: 'August 7, 2025 - 5:00 PM',
-                contactNumber: '0917 123 4567',
-                contactEmail: 'support@condoadmin.ph',
-              ),
-            ],
-          ),
-        ),
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _errorMessage != null
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                        const SizedBox(height: 16),
+                        Text(_errorMessage!, textAlign: TextAlign.center),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: _fetchAnnouncementDetails,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  )
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        AnnouncementDetails(
+                          id: _announcement?['formatted_id'] ?? 
+                              _announcement?['id'] ?? 
+                              'N/A',
+                          title: _announcement?['title'] ?? 'Untitled',
+                          createdAt: _formatDateOnly(_announcement?['created_at']),
+                          announcementType: _announcement?['type'] ?? 'general',
+                          description: _announcement?['content'] ?? 'No description available',
+                          locationAffected: _announcement?['location_affected'] ?? 'N/A',
+                          scheduleStart: _formatDate(_announcement?['scheduled_publish_date']),
+                          scheduleEnd: _formatDate(_announcement?['expiry_date']),
+                          contactNumber: _announcement?['contact_number'] ?? 'N/A',
+                          contactEmail: _announcement?['contact_email'] ?? 'N/A',
+                        ),
+                      ],
+                    ),
+                  ),
       ),
       bottomNavigationBar: NavBar(
         items: _navItems,

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../layout/facilityfix_layout.dart';
 import '../popupwidgets/announcement_viewdetails_popup.dart';
 import '../services/api_service.dart';
@@ -291,42 +290,19 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
   // Auth initialization method
   Future<void> _initializeAuth() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        try {
-          // Use getIdToken with force refresh = false to avoid type issues
-          final token = await user.getIdToken(false);
-          if (token != null) {
-            // Save to AuthStorage for new auth system
-            await AuthStorage.saveToken(token);
-            // Also set for backward compatibility
-            _apiService.setAuthToken(token);
-            print('[v0] Auth token saved for user: ${user.email}');
-            print('[v0] Token preview: ${token.substring(0, 20)}...');
-          } else {
-            print('[v0] ERROR: Token is null for user: ${user.email}');
-          }
-        } catch (tokenError) {
-          print('[v0] Error getting token: $tokenError');
-          // Try to get token without forcing refresh as fallback
-          try {
-            final token = await user.getIdToken();
-            if (token != null) {
-              await AuthStorage.saveToken(token);
-              _apiService.setAuthToken(token);
-              print('[v0] Auth token saved (fallback) for user: ${user.email}');
-            }
-          } catch (fallbackError) {
-            print('[v0] Fallback token retrieval failed: $fallbackError');
-            throw Exception('Failed to retrieve authentication token');
-          }
-        }
+      // Check if user has a valid token in AuthStorage
+      final token = await AuthStorage.getToken();
+      if (token != null && token.isNotEmpty) {
+        // Token exists, API service will use it automatically via _getAuthHeaders()
+        print('[v0] Auth token found in storage');
+        await _fetchAnnouncements();
       } else {
-        print('[v0] ERROR: No current user found');
-        throw Exception('No authenticated user found');
+        print('[v0] ERROR: No authentication token found');
+        setState(() {
+          _errorMessage = 'Authentication token not available. Please log in.';
+          _isLoading = false;
+        });
       }
-      // Fetch announcements after auth is set
-      await _fetchAnnouncements();
     } catch (e) {
       print('[v0] Error initializing auth: $e');
       setState(() {

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../popupwidgets/cs_viewdetails_popup.dart';
 import '../popupwidgets/assignstaff_popup.dart';
+import '../popupwidgets/set_resolution_type_popup.dart';
 import '../services/api_service.dart';
 
 class AdminRepairPage extends StatefulWidget {
@@ -123,6 +124,8 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
         return 'In Progress';
       case 'assessed':
         return 'Assessed';
+      case 'sent':
+        return 'Sent';
       case 'approved':
         return 'Approved';
       case 'rejected':
@@ -237,6 +240,12 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     return status == 'pending' || status == 'evaluated';
   }
 
+  // Check if resolution type can be set (status is assessed)
+  bool _canSetResolutionType(Map<String, dynamic> task) {
+    final status = task['status']?.toString().toLowerCase();
+    return status == 'assessed';
+  }
+
   // Check if action buttons should be disabled
   bool _areActionButtonsDisabled(Map<String, dynamic> task) {
     final status = task['status']?.toString().toLowerCase();
@@ -253,6 +262,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
         Overlay.of(context).context.findRenderObject() as RenderBox;
 
     final canAssign = _canAssignStaff(task);
+    final canSetResolution = _canSetResolutionType(task);
     final actionsDisabled = _areActionButtonsDisabled(task);
 
     showMenu(
@@ -293,6 +303,24 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                 Text(
                   'Assign Staff',
                   style: TextStyle(color: Colors.blue[600], fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+        if (canSetResolution)
+          PopupMenuItem(
+            value: 'set_resolution',
+            child: Row(
+              children: [
+                Icon(
+                  Icons.task_alt,
+                  color: Colors.purple[600],
+                  size: 18,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Set Resolution Type',
+                  style: TextStyle(color: Colors.purple[600], fontSize: 14),
                 ),
               ],
             ),
@@ -358,6 +386,9 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       case 'assign':
         _assignStaff(task);
         break;
+      case 'set_resolution':
+        _setResolutionType(task);
+        break;
       case 'edit':
         _editTask(task);
         break;
@@ -379,6 +410,18 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       task,
       onAssignmentComplete: () {
         // Refresh the concern slips list after assignment
+        _loadConcernSlips();
+      },
+    );
+  }
+
+  // Set resolution type method
+  void _setResolutionType(Map<String, dynamic> task) {
+    SetResolutionTypeDialog.show(
+      context,
+      task,
+      onSuccess: () {
+        // Refresh the concern slips list after setting resolution type
         _loadConcernSlips();
       },
     );
@@ -1120,6 +1163,10 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       case 'Assessed':
         bgColor = const Color(0xFFF3E5F5);
         textColor = const Color(0xFF7B1FA2);
+        break;
+      case 'Sent':
+        bgColor = const Color(0xFFE0F2F1);
+        textColor = const Color(0xFF00695C);
         break;
       case 'Approved':
         bgColor = const Color(0xFFE8F5E8);

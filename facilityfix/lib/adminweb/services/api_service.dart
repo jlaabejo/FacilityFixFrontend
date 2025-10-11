@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../config/env.dart';
-import '../../services/auth_storage.dart';
+import '../../services/api_services.dart' as api_services;
 
 class ApiService {
   // Base URL for the backend API
@@ -13,36 +13,20 @@ class ApiService {
   factory ApiService() => _instance;
   ApiService._internal();
 
-  // Store auth token (deprecated - use AuthStorage instead)
-  String? _authToken;
-
-  @Deprecated('Use AuthStorage.saveToken() instead')
+  @Deprecated('Use AuthStorage.saveToken() instead. This method now does nothing.')
   void setAuthToken(String token) {
-    _authToken = token;
+    // No-op - kept for backward compatibility
+    // Token is now retrieved dynamically from AuthStorage via _getAuthHeaders()
   }
 
-  // Get auth headers with token from AuthStorage
   Future<Map<String, String>> _getAuthHeaders() async {
-    final token = await AuthStorage.getToken();
-    
-    if (token == null) {
-      print('[API] WARNING: No token found in AuthStorage!');
-    } else {
-      print('[API] Token found, length: ${token.length}');
-      print('[API] Token preview: ${token.substring(0, token.length > 20 ? 20 : token.length)}...');
-    }
-    
+    final token = await api_services.APIService.requireToken();
+
     return {
       'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
+       'Authorization': 'Bearer $token',
     }; 
   }
-
-  // Legacy getter for backward compatibility
-  Map<String, String> get _headers => {
-    'Content-Type': 'application/json',
-    if (_authToken != null) 'Authorization': 'Bearer $_authToken',
-  };
 
   // ============================================
   // DASHBOARD ANALYTICS ENDPOINTS
@@ -50,9 +34,10 @@ class ApiService {
 
   Future<Map<String, dynamic>> getDashboardStats() async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/analytics/dashboard-stats'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -70,9 +55,10 @@ class ApiService {
 
   Future<Map<String, dynamic>> getWorkOrderTrends({int days = 7}) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/analytics/work-order-trends?days=$days'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -90,9 +76,10 @@ class ApiService {
 
   Future<Map<String, dynamic>> getCategoryBreakdown() async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/analytics/category-breakdown'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -110,9 +97,10 @@ class ApiService {
 
   Future<Map<String, dynamic>> getHeatMapData({int days = 30}) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/analytics/heat-map?days=$days'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -130,9 +118,10 @@ class ApiService {
     int days = 30,
   }) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/analytics/staff-performance?days=$days'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -150,9 +139,10 @@ class ApiService {
 
   Future<Map<String, dynamic>> getEquipmentInsights({int days = 90}) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/analytics/equipment-insights?days=$days'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -172,9 +162,10 @@ class ApiService {
     int days = 30,
   }) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/analytics/comprehensive-report?days=$days'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -196,11 +187,12 @@ class ApiService {
     int days = 30,
   }) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse(
           '$baseUrl/analytics/export/csv?report_type=$reportType&days=$days',
         ),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -222,11 +214,12 @@ class ApiService {
     int days = 30,
   }) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse(
           '$baseUrl/analytics/export/json?report_type=$reportType&days=$days',
         ),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -249,11 +242,12 @@ class ApiService {
     String interval = 'daily',
   }) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse(
           '$baseUrl/analytics/time-series?metric=$metric&days=$days&interval=$interval',
         ),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -275,11 +269,12 @@ class ApiService {
     int period2Days = 30,
   }) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse(
           '$baseUrl/analytics/comparison?period1_days=$period1Days&period2_days=$period2Days',
         ),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -298,9 +293,10 @@ class ApiService {
   /// Get predictive insights
   Future<Map<String, dynamic>> getPredictiveInsights() async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/analytics/predictive-insights'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -332,7 +328,8 @@ class ApiService {
       final uri = Uri.parse(
         '$baseUrl/users/staff',
       ).replace(queryParameters: queryParams);
-      final response = await http.get(uri, headers: _headers);
+      final headers = await _getAuthHeaders();
+      final response = await http.get(uri, headers: headers);
 
       if (response.statusCode == 200) {
         return json.decode(response.body) as List;
@@ -350,9 +347,10 @@ class ApiService {
     String staffUserId,
   ) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.patch(
         Uri.parse('$baseUrl/concern-slips/$concernSlipId/assign-staff'),
-        headers: _headers,
+        headers: headers,
         body: json.encode({'assigned_to': staffUserId}),
       );
 
@@ -369,15 +367,51 @@ class ApiService {
     }
   }
 
+  /// Set resolution type for an assessed concern slip (Admin only)
+  Future<Map<String, dynamic>> setResolutionType(
+    String concernSlipId, {
+    required String resolutionType, // 'job_service' or 'work_order'
+    String? adminNotes,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'resolution_type': resolutionType,
+      };
+      if (adminNotes != null && adminNotes.isNotEmpty) {
+        body['admin_notes'] = adminNotes;
+      }
+
+      final headers = await _getAuthHeaders();
+      final response = await http.patch(
+        Uri.parse('$baseUrl/concern-slips/$concernSlipId/set-resolution-type'),
+        headers: headers,
+        body: json.encode(body),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        final errorBody = json.decode(response.body);
+        throw Exception(
+          errorBody['detail'] ?? 'Failed to set resolution type: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error setting resolution type: $e');
+      rethrow;
+    }
+  }
+
   // ============================================
   // CONCERN SLIPS ENDPOINTS
   // ============================================
 
   Future<List<dynamic>> getAllConcernSlips() async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/concern-slips/'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -393,9 +427,10 @@ class ApiService {
 
   Future<List<dynamic>> getPendingConcernSlips() async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/concern-slips/pending/all'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -413,9 +448,10 @@ class ApiService {
 
   Future<List<dynamic>> getConcernSlipsByStatus(String status) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/concern-slips/status/$status'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -437,9 +473,10 @@ class ApiService {
 
   Future<List<dynamic>> getAllJobServices() async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/job-services/'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -455,9 +492,10 @@ class ApiService {
 
   Future<List<dynamic>> getJobServicesByStatus(String status) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/job-services/status/$status'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -475,9 +513,10 @@ class ApiService {
 
   Future<Map<String, dynamic>> getJobService(String jobServiceId) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/job-services/$jobServiceId'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -497,9 +536,10 @@ class ApiService {
 
   Future<List<dynamic>> getAllWorkOrderPermits() async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/work-order-permits/'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -517,9 +557,10 @@ class ApiService {
 
   Future<List<dynamic>> getWorkOrderPermitsByStatus(String status) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/work-order-permits/status/$status'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -537,9 +578,10 @@ class ApiService {
 
   Future<List<dynamic>> getPendingWorkOrderPermits() async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/work-order-permits/pending/all'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -557,9 +599,10 @@ class ApiService {
 
   Future<Map<String, dynamic>> getWorkOrderPermit(String permitId) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/work-order-permits/$permitId'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -602,7 +645,8 @@ class ApiService {
           ? baseUri
           : baseUri.replace(queryParameters: queryParams);
 
-      final response = await http.get(uri, headers: _headers);
+      final headers = await _getAuthHeaders();
+      final response = await http.get(uri, headers: headers);
 
       if (response.statusCode == 200) {
         final decoded = json.decode(response.body);
@@ -633,9 +677,10 @@ class ApiService {
     try {
       print('[v0] Fetching maintenance task: $taskId');
 
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/maintenance/$taskId'),
-        headers: _headers,
+        headers: headers,
       );
 
       print('[v0] Response status: ${response.statusCode}');
@@ -659,9 +704,10 @@ class ApiService {
     try {
       print('[v0] Creating maintenance task: ${json.encode(taskData)}');
 
+      final headers = await _getAuthHeaders();
       final response = await http.post(
         Uri.parse('$baseUrl/maintenance/'),
-        headers: _headers,
+        headers: headers,
         body: json.encode(taskData),
       );
 
@@ -686,9 +732,10 @@ class ApiService {
     Map<String, dynamic> updateData,
   ) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.put(
         Uri.parse('$baseUrl/maintenance/$taskId'),
-        headers: _headers,
+        headers: headers,
         body: json.encode(updateData),
       );
 
@@ -707,9 +754,10 @@ class ApiService {
 
   Future<Map<String, dynamic>> deleteMaintenanceTask(String taskId) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.delete(
         Uri.parse('$baseUrl/maintenance/$taskId'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -734,7 +782,8 @@ class ApiService {
         '$baseUrl/maintenance-calendar/calendar/summary',
       ).replace(queryParameters: {'building_id': buildingId, 'period': period});
 
-      final response = await http.get(uri, headers: _headers);
+      final headers = await _getAuthHeaders();
+      final response = await http.get(uri, headers: headers);
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
@@ -752,9 +801,10 @@ class ApiService {
   /// Get the next sequential IPM code for Internal Preventive Maintenance
   Future<String> getNextIPMCode() async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/maintenance-calendar/next-ipm-code'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -772,9 +822,10 @@ class ApiService {
   /// Get the next sequential EPM code for External Preventive Maintenance
   Future<String> getNextEPMCode() async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/maintenance-calendar/next-epm-code'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -793,9 +844,10 @@ class ApiService {
   /// [maintenanceType] should be 'IPM', 'EPM', or other supported types
   Future<String> getNextMaintenanceCode(String maintenanceType) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/maintenance-calendar/next-code/$maintenanceType'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -845,9 +897,10 @@ class ApiService {
 
   Future<Map<String, dynamic>> healthCheck() async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/health'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -885,7 +938,8 @@ class ApiService {
         '$baseUrl/users/',
       ).replace(queryParameters: queryParams);
 
-      final response = await http.get(uri, headers: _headers);
+      final headers = await _getAuthHeaders();
+      final response = await http.get(uri, headers: headers);
 
       if (response.statusCode == 200) {
         return json.decode(response.body) as List;
@@ -901,9 +955,10 @@ class ApiService {
   /// Get a specific user by user_id (e.g., T-0001, S-0001, A-0001)
   Future<Map<String, dynamic>> getUser(String userId) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/users/$userId'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -923,19 +978,31 @@ class ApiService {
     Map<String, dynamic> updateData,
   ) async {
     try {
+      final headers = await _getAuthHeaders();
+      final url = '$baseUrl/users/$userId';
+      final body = json.encode(updateData);
+      
+      print('[ApiService] PUT $url');
+      print('[ApiService] Headers: $headers');
+      print('[ApiService] Body: $body');
+      
       final response = await http.put(
-        Uri.parse('$baseUrl/users/$userId'),
-        headers: _headers,
-        body: json.encode(updateData),
+        Uri.parse(url),
+        headers: headers,
+        body: body,
       );
+
+      print('[ApiService] Response status: ${response.statusCode}');
+      print('[ApiService] Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        throw Exception('Failed to update user: ${response.statusCode}');
+        final errorBody = response.body.isNotEmpty ? response.body : 'No error details';
+        throw Exception('Failed to update user: ${response.statusCode} - $errorBody');
       }
     } catch (e) {
-      print('[v0] Error updating user: $e');
+      print('[ApiService] Error updating user: $e');
       rethrow;
     }
   }
@@ -946,9 +1013,10 @@ class ApiService {
     String status,
   ) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.patch(
         Uri.parse('$baseUrl/users/$userId/status'),
-        headers: _headers,
+        headers: headers,
         body: json.encode({'status': status}),
       );
 
@@ -973,7 +1041,8 @@ class ApiService {
         '$baseUrl/users/$userId',
       ).replace(queryParameters: {'permanent': permanent.toString()});
 
-      final response = await http.delete(uri, headers: _headers);
+      final headers = await _getAuthHeaders();
+      final response = await http.delete(uri, headers: headers);
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
@@ -992,9 +1061,10 @@ class ApiService {
     String newStatus,
   ) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.post(
         Uri.parse('$baseUrl/users/bulk/status'),
-        headers: _headers,
+        headers: headers,
         body: json.encode({'user_ids': userIds, 'new_status': newStatus}),
       );
 
@@ -1037,9 +1107,10 @@ class ApiService {
 
       print('[v0] Sending inventory item data: ${json.encode(backendData)}');
 
+      final headers = await _getAuthHeaders();
       final response = await http.post(
         Uri.parse('$baseUrl/inventory/items'),
-        headers: _headers,
+        headers: headers,
         body: json.encode(backendData),
       );
 
@@ -1072,7 +1143,8 @@ class ApiService {
         '$baseUrl/inventory/buildings/$buildingId/items',
       ).replace(queryParameters: queryParams);
 
-      final response = await http.get(uri, headers: _headers);
+      final headers = await _getAuthHeaders();
+      final response = await http.get(uri, headers: headers);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -1092,9 +1164,10 @@ class ApiService {
   /// Get a specific inventory item by ID
   Future<Map<String, dynamic>> getInventoryItem(String itemId) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/inventory/items/$itemId'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -1157,9 +1230,10 @@ class ApiService {
         '[v0] Updating inventory item $itemId: ${json.encode(backendData)}',
       );
 
+      final headers = await _getAuthHeaders();
       final response = await http.put(
         Uri.parse('$baseUrl/inventory/items/$itemId'),
-        headers: _headers,
+        headers: headers,
         body: json.encode(backendData),
       );
 
@@ -1182,9 +1256,10 @@ class ApiService {
   /// Delete an inventory item
   Future<Map<String, dynamic>> deleteInventoryItem(String itemId) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.delete(
         Uri.parse('$baseUrl/inventory/items/$itemId'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -1205,9 +1280,10 @@ class ApiService {
     required String buildingId,
   }) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/inventory/buildings/$buildingId/low-stock'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -1240,7 +1316,8 @@ class ApiService {
         '$baseUrl/inventory/requests',
       ).replace(queryParameters: queryParams);
 
-      final response = await http.get(uri, headers: _headers);
+      final headers = await _getAuthHeaders();
+      final response = await http.get(uri, headers: headers);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -1279,7 +1356,8 @@ class ApiService {
         '$baseUrl/inventory/requests/$requestId/approve',
       ).replace(queryParameters: queryParams);
 
-      final response = await http.post(uri, headers: _headers);
+      final headers = await _getAuthHeaders();
+      final response = await http.post(uri, headers: headers);
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
@@ -1304,7 +1382,8 @@ class ApiService {
         '$baseUrl/inventory/requests/$requestId/deny',
       ).replace(queryParameters: {'admin_notes': adminNotes});
 
-      final response = await http.post(uri, headers: _headers);
+      final headers = await _getAuthHeaders();
+      final response = await http.post(uri, headers: headers);
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
@@ -1322,9 +1401,10 @@ class ApiService {
   /// Fulfill an approved inventory request
   Future<Map<String, dynamic>> fulfillInventoryRequest(String requestId) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.post(
         Uri.parse('$baseUrl/inventory/requests/$requestId/fulfill'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -1336,6 +1416,30 @@ class ApiService {
       }
     } catch (e) {
       print('[v0] Error fulfilling inventory request: $e');
+      rethrow;
+    }
+  }
+
+  /// Get inventory requests linked to a maintenance task
+  Future<Map<String, dynamic>> getInventoryRequestsByMaintenanceTask(
+    String maintenanceTaskId,
+  ) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/inventory/maintenance-task/$maintenanceTaskId/requests'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to load inventory requests for maintenance task: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error fetching inventory requests for maintenance task: $e');
       rethrow;
     }
   }
@@ -1663,7 +1767,8 @@ class ApiService {
         '$baseUrl/notifications/',
       ).replace(queryParameters: queryParams);
 
-      final response = await http.get(uri, headers: _headers);
+      final headers = await _getAuthHeaders();
+      final response = await http.get(uri, headers: headers);
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
@@ -1683,9 +1788,10 @@ class ApiService {
     try {
       print('[v0] Marking notifications as read: $notificationIds');
 
+      final headers = await _getAuthHeaders();
       final response = await http.post(
         Uri.parse('$baseUrl/notifications/mark-read'),
-        headers: _headers,
+        headers: headers,
         body: json.encode({'notification_ids': notificationIds}),
       );
 
@@ -1709,9 +1815,10 @@ class ApiService {
     try {
       print('[v0] Deleting notification: $notificationId');
 
+      final headers = await _getAuthHeaders();
       final response = await http.delete(
         Uri.parse('$baseUrl/notifications/$notificationId'),
-        headers: _headers,
+        headers: headers,
       );
 
       print('[v0] Response status: ${response.statusCode}');
@@ -1732,9 +1839,10 @@ class ApiService {
   /// Get unread notification count
   Future<int> getUnreadNotificationCount() async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/notifications/unread/count'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -1758,9 +1866,10 @@ class ApiService {
   /// Get all buildings
   Future<List<dynamic>> getAllBuildings() async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/buildings/'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -1777,9 +1886,10 @@ class ApiService {
   /// Get a specific building by ID
   Future<Map<String, dynamic>> getBuilding(String buildingId) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/buildings/$buildingId'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -1800,9 +1910,10 @@ class ApiService {
     try {
       print('[v0] Creating building: ${json.encode(buildingData)}');
 
+      final headers = await _getAuthHeaders();
       final response = await http.post(
         Uri.parse('$baseUrl/buildings/'),
-        headers: _headers,
+        headers: headers,
         body: json.encode(buildingData),
       );
 
@@ -1830,9 +1941,10 @@ class ApiService {
     try {
       print('[v0] Updating building $buildingId: ${json.encode(updateData)}');
 
+      final headers = await _getAuthHeaders();
       final response = await http.put(
         Uri.parse('$baseUrl/buildings/$buildingId'),
-        headers: _headers,
+        headers: headers,
         body: json.encode(updateData),
       );
 
@@ -1855,9 +1967,10 @@ class ApiService {
   /// Delete a building
   Future<Map<String, dynamic>> deleteBuilding(String buildingId) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.delete(
         Uri.parse('$baseUrl/buildings/$buildingId'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
@@ -1874,9 +1987,10 @@ class ApiService {
   /// Get building statistics
   Future<Map<String, dynamic>> getBuildingStatistics(String buildingId) async {
     try {
+      final headers = await _getAuthHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/buildings/$buildingId/stats'),
-        headers: _headers,
+        headers: headers,
       );
 
       if (response.statusCode == 200) {

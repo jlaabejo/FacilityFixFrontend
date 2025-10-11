@@ -246,19 +246,35 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
 
   // View request method
   void _viewRequest(Map<String, dynamic> item) {
-    final requestId = item['id'];
-    context.go('/inventory/request/$requestId');
+    // Use _doc_id as the primary ID from Firestore
+    final requestId = item['_doc_id'] ?? item['id'];
+    if (requestId != null) {
+      context.go('/inventory/request/$requestId');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Request ID not found'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _approveRequest(Map<String, dynamic> item) async {
     try {
-      await _apiService.approveInventoryRequest(item['id']);
+      // Use _doc_id as the primary ID from Firestore
+      final requestId = item['_doc_id'] ?? item['id'];
+      if (requestId == null) {
+        throw Exception('Request ID not found');
+      }
+      
+      await _apiService.approveInventoryRequest(requestId);
       // Reload the list
       _loadInventoryRequests();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Request ${item['id']} approved'),
+            content: Text('Request $requestId approved'),
             backgroundColor: Colors.green,
           ),
         );
@@ -277,6 +293,9 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
   }
 
   void _rejectRequest(Map<String, dynamic> item) {
+    // Use _doc_id as the primary ID from Firestore
+    final requestId = item['_doc_id'] ?? item['id'];
+    
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -287,7 +306,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Are you sure you want to reject request ${item['id']}?'),
+              Text('Are you sure you want to reject request $requestId?'),
               const SizedBox(height: 16),
               TextField(
                 controller: reasonController,
@@ -308,8 +327,12 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
               onPressed: () async {
                 Navigator.of(context).pop();
                 try {
+                  if (requestId == null) {
+                    throw Exception('Request ID not found');
+                  }
+                  
                   await _apiService.denyInventoryRequest(
-                    item['id'],
+                    requestId,
                     reasonController.text.isEmpty
                         ? 'Request rejected by admin'
                         : reasonController.text,
@@ -319,7 +342,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Request ${item['id']} rejected'),
+                        content: Text('Request $requestId rejected'),
                         backgroundColor: Colors.orange,
                       ),
                     );
@@ -346,13 +369,16 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
   }
 
   void _deleteRequest(Map<String, dynamic> item) {
+    // Use _doc_id as the primary ID from Firestore
+    final requestId = item['_doc_id'] ?? item['id'];
+    
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Delete Request'),
           content: Text(
-            'Are you sure you want to delete request ${item['id']}?',
+            'Are you sure you want to delete request $requestId?',
           ),
           actions: [
             TextButton(
@@ -363,8 +389,12 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
               onPressed: () async {
                 Navigator.of(context).pop();
                 try {
+                  if (requestId == null) {
+                    throw Exception('Request ID not found');
+                  }
+                  
                   await _apiService.denyInventoryRequest(
-                    item['id'],
+                    requestId,
                     'Request deleted by admin',
                   );
                   // Reload the list
@@ -372,7 +402,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Request ${item['id']} deleted'),
+                        content: Text('Request $requestId deleted'),
                         backgroundColor: Colors.red,
                       ),
                     );
@@ -677,7 +707,8 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                         ],
                         rows:
                             _requestItems.map((item) {
-                              final requestId = item['id'] ?? 'N/A';
+                              // Use _doc_id as the primary ID from Firestore
+                              final requestId = item['_doc_id'] ?? item['id'] ?? 'N/A';
                               final itemName =
                                   item['item_name'] ??
                                   'Item ${item['inventory_id'] ?? 'Unknown'}';

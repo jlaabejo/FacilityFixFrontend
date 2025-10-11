@@ -605,7 +605,7 @@ class _HomeState extends State<HomePage> {
 
                         // Latest Announcement
                         SectionHeader(
-                          title: 'Latest Announcement',
+                          title: 'Latest',
                           actionLabel: 'View all',
                           onActionTap:
                               () => Navigator.of(context).push(

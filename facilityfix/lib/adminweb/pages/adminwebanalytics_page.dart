@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:go_router/go_router.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:universal_html/html.dart' as html;
 import 'dart:convert';
 import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
+import '../../services/auth_storage.dart';
 
 class AdminWebAnalyticsPage extends StatefulWidget {
   const AdminWebAnalyticsPage({super.key});
@@ -52,22 +52,14 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
 
   Future<void> _initializeAuth() async {
     try {
-      // Get current user's token
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        final token = await user.getIdToken();
-        if (token != null) {
-          _apiService.setAuthToken(token);
-          await _fetchAnalyticsData();
-        } else {
-          setState(() {
-            _errorMessage = 'Authentication token not available';
-            _isLoading = false;
-          });
-        }
+      // Check if user has a valid token in AuthStorage
+      final token = await AuthStorage.getToken();
+      if (token != null && token.isNotEmpty) {
+        // Token exists, API service will use it automatically via _getAuthHeaders()
+        await _fetchAnalyticsData();
       } else {
         setState(() {
-          _errorMessage = 'User not logged in';
+          _errorMessage = 'Authentication token not available. Please log in.';
           _isLoading = false;
         });
       }

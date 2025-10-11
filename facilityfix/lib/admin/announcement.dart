@@ -11,6 +11,8 @@ import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/helper_models.dart';
 import 'package:flutter/material.dart';
 
+import '../services/api_services.dart';
+
 /// Simple data model for the list (avoids mixing widgets & data).
 class AnnouncementItem {
   final String id;
@@ -112,37 +114,13 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
     }
   }
 
-  // ===== Demo data (replace with backend) =====
-  final List<AnnouncementItem> _all = [
-    AnnouncementItem(
-      id: 'ANN-2025-0011',
-      title: 'Utility Interruption',
-      announcementType: 'utility interruption',
-      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-      isRead: false, 
-    ),
-    AnnouncementItem(
-      id: 'ANN-2025-0012',
-      title: 'Power Outage',
-      announcementType: 'power outage',
-      createdAt: DateTime.now().subtract(const Duration(hours: 27)),
-      isRead: true,
-    ),
-    AnnouncementItem(
-      id: 'ANN-2025-0013',
-      title: 'General Maintenance',
-      announcementType: 'general maintenance',
-      createdAt: DateTime.now().subtract(const Duration(days: 3)),
-      isRead: false,
-    ),
-    AnnouncementItem(
-      id: 'ANN-2025-0014',
-      title: 'Pest Control',
-      announcementType: 'pest control',
-      createdAt: DateTime.now().subtract(const Duration(days: 11)),
-      isRead: true,
-    ),
-  ];
+  // API Service
+  late final APIService _apiService;
+  bool _isLoading = true;
+  String? _errorMessage;
+  
+  // Announcements list from API
+  List<AnnouncementItem> _all = [];
 
   // ===== Debounce for search =====
   Timer? _debounce;
@@ -156,7 +134,57 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
   @override
   void initState() {
     super.initState();
+    _apiService = APIService();
     _searchController.addListener(() => _onSearchChanged(_searchController.text));
+    _fetchAnnouncements();
+  }
+
+  Future<void> _fetchAnnouncements() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Get user profile to fetch building_id
+      final profile = await _apiService.getUserProfile();
+      final buildingId = profile?['building_id'] as String? ?? 
+                         profile?['buildingId'] as String? ?? 
+                         'default_building';
+
+      print('[Admin Announcements] Fetching with building_id: $buildingId');
+
+      // Admin can see all announcements including drafts
+      final announcements = await _apiService.getAllAnnouncements(
+        buildingId: buildingId,
+        audience: 'all',
+        activeOnly: false,
+        limit: 100,
+      );
+
+      print('[Admin Announcements] Fetched ${announcements.length} announcements');
+
+      // Convert API response to AnnouncementItem objects
+      setState(() {
+        _all = announcements.map((ann) {
+          // Backend now ensures 'id' field always contains the correct document ID
+          return AnnouncementItem(
+            id: ann['id'] ?? ann['formatted_id'] ?? '',
+            title: ann['title'] ?? 'Untitled',
+            announcementType: ann['type'] ?? 'general',
+            createdAt: DateTime.tryParse(ann['created_at'] ?? '') ?? DateTime.now(),
+            isRead: false,
+          );
+        }).toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to load announcements: $e';
+        _isLoading = false;
+      });
+      print('[Admin Announcements] Error fetching announcements: $e');
+    }
   }
 
   @override
@@ -204,10 +232,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
   }
 
   Future<void> _refresh() async {
-    // TODO: replace with backend fetch
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-    setState(() {});
+    await _fetchAnnouncements();
   }
 
   String headerTitle() {
@@ -281,9 +306,27 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
 
                 // ======================== LIST ================================
                 Expanded(
-                  child: items.isEmpty
-                      ? const EmptyState()
-                      : ListView.separated(
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _errorMessage != null
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                                  const SizedBox(height: 16),
+                                  Text(_errorMessage!, textAlign: TextAlign.center),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton(
+                                    onPressed: _refresh,
+                                    child: const Text('Retry'),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : items.isEmpty
+                              ? const EmptyState()
+                              : ListView.separated(
                           physics: const AlwaysScrollableScrollPhysics(),
                           itemCount: items.length,
                           separatorBuilder: (_, __) => const SizedBox(height: 12),
@@ -300,7 +343,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                                     announcementType: a.announcementType,
                                     createdAt: a.createdAt, // DateTime ✅
                                     isRead: a.isRead,
-                                    onTap: () {
+                                    onTap: () async {
                                       // mark as read on view
                                       final idx = _all.indexWhere((x) => x.id == a.id);
                                       if (idx != -1 && !_all[idx].isRead) {
@@ -308,12 +351,25 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                                             _all[idx].copyWith(isRead: true));
                                       }
 
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => const AnnouncementDetailsPage(),
-                                        ),
-                                      );
+                                      // Mark as viewed in the backend (non-blocking, fire and forget)
+                                      _apiService.markAnnouncementViewed(a.id).catchError((e) {
+                                        print('[Admin Announcements] Warning: Failed to mark as viewed: $e');
+                                        return <String, dynamic>{}; // Return empty map on error
+                                      });
+
+                                      // Navigate to details page
+                                      try {
+                                        await Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => AnnouncementDetailsPage(
+                                              announcementId: a.id,
+                                            ),
+                                          ),
+                                        );
+                                      } catch (e) {
+                                        print('[Admin Announcements] Error navigating to details: $e');
+                                      }
                                     },
                                   ),
                                 ],

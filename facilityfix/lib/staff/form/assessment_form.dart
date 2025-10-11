@@ -1,3 +1,4 @@
+import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
@@ -10,10 +11,21 @@ import 'package:facilityfix/widgets/modals.dart';  // <-- CustomPopup
 import 'package:flutter/material.dart' hide FilledButton;
 
 class AssessmentForm extends StatefulWidget {
+  /// The concern slip ID to submit assessment for
+  final String? concernSlipId;
+  
+  /// The concern slip data to pre-fill form fields
+  final Map<String, dynamic>? concernSlipData;
+  
   /// Optional context string for where the assessment is coming from (e.g., a WO title or id)
   final String? requestType;
 
-  const AssessmentForm({super.key, this.requestType});
+  const AssessmentForm({
+    super.key,
+    this.concernSlipId,
+    this.concernSlipData,
+    this.requestType,
+  });
 
   @override
   State<AssessmentForm> createState() => _AssessmentFormState();
@@ -57,12 +69,32 @@ class _AssessmentFormState extends State<AssessmentForm> {
   // -------- Error states --------
   String? _assessmentError;
   String? _recommendationError;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
     super.initState();
-    // Prefill (replace with authed user + server time as needed)
-    nameController.text = 'Juan Dela Cruz';
+    _loadUserDataAndInitialize();
+  }
+
+  Future<void> _loadUserDataAndInitialize() async {
+    // Load user profile data
+    final apiService = APIService();
+    final profile = await apiService.getUserProfile();
+    
+    if (profile != null) {
+      final firstName = profile['first_name'] ?? '';
+      final lastName = profile['last_name'] ?? '';
+      final fullName = '$firstName $lastName'.trim();
+      
+      if (mounted) {
+        setState(() {
+          nameController.text = fullName.isNotEmpty ? fullName : 'Staff Member';
+        });
+      }
+    }
+    
+    // Set current date/time
     final now = DateTime.now();
     dateAssessedController.text =
         "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} "
@@ -117,16 +149,63 @@ class _AssessmentFormState extends State<AssessmentForm> {
     return assessErr == null && recErr == null;
   }
 
-  void _submit() {
-    if (_validateFields()) {
-      _showSuccessDialog(context); // ✅ Show dialog instead of snackbar
-    } else {
+  Future<void> _submit() async {
+    if (!_validateFields()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please fix the highlighted fields.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
+      return;
+    }
+
+    // Check if we have a concern slip ID
+    if (widget.concernSlipId == null || widget.concernSlipId!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error: No concern slip ID provided'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final apiService = APIService();
+      
+      // Submit assessment to backend
+      await apiService.patch(
+        '/concern-slips/${widget.concernSlipId}/submit-assessment',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: {
+          'assessment': assessmentController.text.trim(),
+          'recommendation': recommendationController.text.trim(),
+          'attachments': [], // TODO: Add file attachments if available
+        },
+      );
+      
+
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        _showSuccessDialog(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to submit assessment: ${e.toString()}'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -134,7 +213,9 @@ class _AssessmentFormState extends State<AssessmentForm> {
   Widget build(BuildContext context) {
     final subtitle = (widget.requestType != null && widget.requestType!.trim().isNotEmpty)
         ? 'for ${widget.requestType}'
-        : '';
+        : widget.concernSlipData != null
+            ? 'for ${widget.concernSlipData!['formatted_id'] ?? widget.concernSlipData!['id'] ?? ''}'
+            : '';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -153,6 +234,46 @@ class _AssessmentFormState extends State<AssessmentForm> {
                 const Text('Detail Information', style: TextStyle(fontSize: 20)),
                 Text('Enter Detail Information $subtitle', style: const TextStyle(fontSize: 14)),
                 const SizedBox(height: 16),
+
+                // Show concern slip context if available
+                if (widget.concernSlipData != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9FAFB),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Concern Slip Information',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'ID: ${widget.concernSlipData!['formatted_id'] ?? widget.concernSlipData!['id'] ?? 'N/A'}',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF667085)),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Title: ${widget.concernSlipData!['title'] ?? 'N/A'}',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF667085)),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Location: ${widget.concernSlipData!['location'] ?? 'N/A'}',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF667085)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
 
                 const Text('Basic Information',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
@@ -221,13 +342,26 @@ class _AssessmentFormState extends State<AssessmentForm> {
               child: SizedBox(
                 width: double.infinity,
                 height: 48,
-                child: FilledButton(
-                  label: 'Submit Assessment',
-                  backgroundColor: const Color(0xFF005CE7),
-                  textColor: Colors.white,
-                  withOuterBorder: false,
-                  onPressed: _submit,
-                ),
+                child: _isSubmitting
+                    ? const Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Color(0xFF005CE7),
+                            ),
+                          ),
+                        ),
+                      )
+                    : FilledButton(
+                        label: 'Submit Assessment',
+                        backgroundColor: const Color(0xFF005CE7),
+                        textColor: Colors.white,
+                        withOuterBorder: false,
+                        onPressed: _submit,
+                      ),
               ),
             ),
           ),

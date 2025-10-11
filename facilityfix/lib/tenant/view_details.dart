@@ -2,6 +2,7 @@ import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/tenant/announcement.dart';
 import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/profile.dart';
+import 'package:facilityfix/tenant/request_forms.dart';
 import 'package:facilityfix/tenant/workorder.dart';
 import 'package:facilityfix/widgets/view_details.dart';
 import 'package:flutter/material.dart';
@@ -315,32 +316,158 @@ class _TenantConcernSlipDetailPageState
     if (_concernSlipData == null) return const SizedBox();
 
     final data = _concernSlipData!;
+    final resolutionType = data['resolution_type']?.toString().toLowerCase();
+    
+    // Debug logging
+    print('[DEBUG] Concern Slip Data:');
+    print('  Status: ${data['status']}');
+    print('  Resolution Type: ${data['resolution_type']}');
+    print('  Resolution Type (lowercase): $resolutionType');
+    print('  Resolution Set By: ${data['resolution_set_by']}');
+    print('  Resolution Set At: ${data['resolution_set_at']}');
+    print('  Should Show Form: ${resolutionType != null && resolutionType.isNotEmpty && resolutionType != 'rejected'}');
 
-    return ConcernSlipDetails(
-      id: data['formatted_id'] ?? data['id'] ?? '',
-      title: data['title'] ?? 'Untitled Request',
-      createdAt: DateTime.tryParse(data['created_at'] ?? '') ?? DateTime.now(),
-      updatedAt:
-          data['updated_at'] != null
-              ? DateTime.tryParse(data['updated_at'])
-              : null,
-      requestTypeTag: 'Concern Slip',
-      statusTag: data['status'] ?? 'pending',
-      priority: data['priority'] ?? 'medium',
-      departmentTag: data['category'],
-      requestedBy: data['reported_by_name'] ?? data['reported_by'] ?? '',
-      unitId: data['unit_id'] ?? '',
-      scheduleAvailability: data['schedule_availability'],
-      description: data['description'] ?? '',
-      attachments: (data['attachments'] as List?)?.cast<String>(),
-      assignedStaff: data['assigned_to_name'] ?? data['assigned_to'],
-      staffDepartment: data['staff_department'],
-      assessedAt:
-          data['assessed_at'] != null
-              ? DateTime.tryParse(data['assessed_at'])
-              : null,
-      assessment: data['assessment'],
-      staffAttachments: (data['staff_attachments'] as List?)?.cast<String>(),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ConcernSlipDetails(
+          id: data['formatted_id'] ?? data['id'] ?? '',
+          title: data['title'] ?? 'Untitled Request',
+          createdAt: DateTime.tryParse(data['created_at'] ?? '') ?? DateTime.now(),
+          updatedAt:
+              data['updated_at'] != null
+                  ? DateTime.tryParse(data['updated_at'])
+                  : null,
+          requestTypeTag: 'Concern Slip',
+          statusTag: data['status'] ?? 'pending',
+          priority: data['priority'] ?? 'medium',
+          departmentTag: data['category'],
+          requestedBy: data['reported_by_name'] ?? data['reported_by'] ?? '',
+          unitId: data['unit_id'] ?? '',
+          scheduleAvailability: data['schedule_availability'],
+          description: data['description'] ?? '',
+          attachments: (data['attachments'] as List?)?.cast<String>(),
+          assignedStaff: data['assigned_to_name'] ?? data['assigned_to'],
+          staffDepartment: data['staff_department'],
+          assessedAt:
+              data['assessed_at'] != null
+                  ? DateTime.tryParse(data['assessed_at'])
+                  : null,
+          assessment: data['staff_assessment'],
+          staffRecommendation: data['staff_recommendation'],
+          staffAttachments: (data['assessment_attachments'] as List?)?.cast<String>(),
+        ),
+        // Show embedded form if resolution type is set
+        if (resolutionType != null && resolutionType.isNotEmpty && resolutionType != 'rejected')
+          _buildEmbeddedForm(resolutionType, data),
+      ],
+    );
+  }
+
+  Widget _buildEmbeddedForm(String resolutionType, Map<String, dynamic> concernData) {
+    final String formType;
+    
+    // Map resolution_type to form type
+    if (resolutionType == 'job_service') {
+      formType = 'Job Service';
+    } else if (resolutionType == 'work_order' || resolutionType == 'work_permit') {
+      formType = 'Work Order';
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 24),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.assignment,
+                  color: Color(0xFF3B82F6),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Proceed with $formType',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Complete the form below to proceed with your request',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => EmbeddedRequestFormPage(
+                    requestType: formType,
+                    concernSlipId: concernData['id'] ?? '',
+                    concernSlipData: concernData,
+                  ),
+                ),
+              ).then((submitted) {
+                if (submitted == true) {
+                  // Refresh the concern slip data after form submission
+                  _loadConcernSlipData();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('$formType submitted successfully'),
+                      backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              });
+            },
+            icon: const Icon(Icons.edit_document),
+            label: Text('Fill $formType Form'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3B82F6),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -518,7 +645,7 @@ class _EditConcernSlipPageState extends State<EditConcernSlipPage> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  initialValue: _selectedCategory,
+                  value: _selectedCategory,
                   decoration: const InputDecoration(
                     labelText: 'Category',
                     border: OutlineInputBorder(),
@@ -538,7 +665,7 @@ class _EditConcernSlipPageState extends State<EditConcernSlipPage> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  initialValue: _selectedPriority,
+                  value: _selectedPriority,
                   decoration: const InputDecoration(
                     labelText: 'Priority',
                     border: OutlineInputBorder(),
@@ -710,6 +837,160 @@ class ConcernSlipHistorySheet extends StatelessWidget {
   String _capitalizeFirst(String text) {
     if (text.isEmpty) return text;
     return text[0].toUpperCase() + text.substring(1).toLowerCase();
+  }
+}
+
+// Embedded Request Form Page
+class EmbeddedRequestFormPage extends StatelessWidget {
+  final String requestType; // "Job Service" or "Work Order"
+  final String concernSlipId;
+  final Map<String, dynamic> concernSlipData;
+
+  const EmbeddedRequestFormPage({
+    super.key,
+    required this.requestType,
+    required this.concernSlipId,
+    required this.concernSlipData,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: Text('Submit $requestType'),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Info card showing this is related to a concern slip
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0F9FF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.info_outline,
+                      color: Color(0xFF3B82F6),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Related to Concern Slip',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            concernSlipData['formatted_id'] ?? concernSlipId,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              // Import the actual form from RequestForm
+              Text(
+                'Complete $requestType Form',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Fill in the details below to proceed with your request',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 24),
+              // Show the appropriate form based on request type
+              RequestFormWrapper(
+                requestType: requestType,
+                concernSlipId: concernSlipId,
+                concernSlipData: concernSlipData,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Wrapper to display the request form inline
+class RequestFormWrapper extends StatelessWidget {
+  final String requestType;
+  final String concernSlipId;
+  final Map<String, dynamic> concernSlipData;
+
+  const RequestFormWrapper({
+    super.key,
+    required this.requestType,
+    required this.concernSlipId,
+    required this.concernSlipData,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Navigate to the actual RequestForm page
+    return ElevatedButton(
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => RequestForm(requestType: requestType),
+          ),
+        ).then((value) {
+          // Return true to indicate submission success
+          if (value == true) {
+            Navigator.pop(context, true);
+          }
+        });
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF3B82F6),
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        minimumSize: const Size(double.infinity, 48),
+      ),
+      child: Text(
+        'Open $requestType Form',
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
   }
 }
 
@@ -1221,6 +1502,8 @@ class _DetailsPayload {
 
   const _DetailsPayload({
     required this.child,
+    this.ctaLabel,
+    this.onCtaPressed,
   });
 
   bool get hasCta => ctaLabel != null && onCtaPressed != null;

@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart'
 enum AppRole { tenant, staff, admin }
 
 class AppEnv {
-  static AppRole role = AppRole.tenant;
 
   /// When testing on a physical device, set this to your laptop’s LAN IP.
   static String? lanIp = '192.168.1.63';

@@ -20,24 +20,27 @@ class APIService {
   // ===== Constructors =====
 
   APIService({AppRole? roleOverride, Map<String, String>? headers})
-    : role = roleOverride ?? AppEnv.role,
-      baseUrl = AppEnv.baseUrlWithLan(roleOverride ?? AppEnv.role),
+    : role = roleOverride ?? AppRole.tenant,
+      baseUrl = AppEnv.baseUrlWithLan(roleOverride ?? AppRole.tenant),
       defaultHeaders = {
         'Content-Type': 'application/json',
         if (headers != null) ...headers,
       },
-      _currentRoleLabel = (roleOverride ?? AppEnv.role).name;
+      _currentRoleLabel = (roleOverride ?? AppRole.tenant).name;
 
-  APIService.fromBaseUrl(this.baseUrl, {Map<String, String>? headers})
-    : role = AppEnv.role,
+  APIService.fromBaseUrl(this.baseUrl, {Map<String, String>? headers, AppRole? roleOverride})
+    : role = roleOverride ?? AppRole.tenant,
       defaultHeaders = {
         'Content-Type': 'application/json',
         if (headers != null) ...headers,
       },
-      _currentRoleLabel = AppEnv.role.name;
+      _currentRoleLabel = (roleOverride ?? AppRole.tenant).name;
 
   // ===== Low-level helpers =====
-
+  Map<String, String> _authHeaders(String token) => {
+    'Authorization': 'Bearer $token',
+    'Content-Type': 'application/json',
+  };
   Map<String, String> _mergeHeaders(Map<String, String>? headers) {
     if (headers == null || headers.isEmpty) return Map.of(defaultHeaders);
     return {...defaultHeaders, ...headers};
@@ -63,6 +66,19 @@ class APIService {
     _logReq('POST', path);
     return http.post(_u(path), headers: _mergeHeaders(headers), body: body);
   }
+  
+
+    Future<http.Response> patch(
+    String path, {
+    Map<String, String>? headers,
+    Object? body,
+  }) async {
+    _logReq('PATCH', path);
+    final resolvedToken = await _requireToken();
+
+    return http.patch(_u(path), headers: _mergeHeaders(_authHeaders(resolvedToken)), body: body);
+  }
+
 
   Future<http.Response> put(
     String path, {
@@ -124,10 +140,15 @@ class APIService {
     return t;
   }
 
-  Map<String, String> _authHeaders(String token) => {
-    'Authorization': 'Bearer $token',
-    'Content-Type': 'application/json',
-  };
+  /// Static method to get the authentication token
+  /// Used by other services that need to access the token
+  static Future<String> requireToken() async {
+    final t = await AuthStorage.getToken();
+    if (t == null || t.isEmpty) {
+      throw Exception('Authentication token not found. Please login again.');
+    }
+    return t;
+  }
 
   // Decode JWT payload safely
   Map<String, dynamic> _decodeJwtPayload(String token) {
@@ -355,7 +376,7 @@ class APIService {
       final token = await _requireToken();
 
       final response = await get(
-        '/work-orders/next-id',
+        '/work-order-permits/next-id',
         headers: _authHeaders(token),
       );
 
@@ -558,25 +579,17 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      // Get user profile for additional context
-      final profile = await getUserProfile();
-      final userId = profile?['id'] ?? profile?['user_id'];
-
       final body = {
         'notes': notes,
         'location': location,
         'schedule_availability': scheduleAvailability,
         if (unitId != null) 'unit_id': unitId,
-        if (userId != null) 'user_id': userId,
         'attachments': attachments ?? [],
-        'request_type': 'Job Service',
-        'status': 'pending',
-        'submitted_at': DateTime.now().toIso8601String(),
       };
 
-      print('[API] Submitting job service directly to Firebase...');
+      print('[API] Submitting job service request...');
 
-      final response = await post(
+      final response = await patch(
         '/job-services/',
         headers: _authHeaders(token),
         body: jsonEncode(body),
@@ -667,10 +680,6 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      // Get user profile for additional context
-      final profile = await getUserProfile();
-      final userId = profile?['id'] ?? profile?['user_id'];
-
       final body = {
         'request_type_detail': requestType,
         'location': location,
@@ -678,17 +687,13 @@ class APIService {
         'valid_to': validTo,
         'contractors': contractors,
         if (unitId != null) 'unit_id': unitId,
-        if (userId != null) 'user_id': userId,
         'attachments': attachments ?? [],
-        'request_type': 'Work Order Permit',
-        'status': 'pending',
-        'submitted_at': DateTime.now().toIso8601String(),
       };
 
-      print('[API] Submitting work order directly to Firebase...');
+      print('[API] Submitting work order permit request...');
 
       final response = await post(
-        '/work-orders/',
+        '/work-order-permits/',
         headers: _authHeaders(token),
         body: jsonEncode(body),
       );
@@ -880,7 +885,12 @@ class APIService {
       );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        print('[API] getConcernSlipById response:');
+        print('  Status: ${data['status']}');
+        print('  Resolution Type: ${data['resolution_type']}');
+        print('  Full data keys: ${data.keys.toList()}');
+        return data;
       } else {
         final errorBody = _tryDecode(response.body);
         throw Exception(
@@ -940,10 +950,157 @@ class APIService {
     }
   }
 
+  // ===== Inventory =====
+
+  Future<Map<String, dynamic>> getInventoryItems({
+    required String buildingId,
+    bool includeInactive = false,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+      
+      final queryParams = includeInactive ? '?include_inactive=true' : '';
+      final response = await get(
+        '/inventory/buildings/$buildingId/items$queryParams',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get inventory items: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting inventory items: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> createInventoryRequest({
+    required String inventoryId,
+    required String buildingId,
+    required int quantityRequested,
+    required String purpose,
+    required String requestedBy,
+    String? maintenanceTaskId,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = jsonEncode({
+        'inventory_id': inventoryId,
+        'building_id': buildingId,
+        'quantity_requested': quantityRequested,
+        'purpose': purpose,
+        'requested_by': requestedBy,
+        'status': 'pending',
+        if (maintenanceTaskId != null) 'maintenance_task_id': maintenanceTaskId,
+        if (maintenanceTaskId != null) 'reference_type': 'maintenance_task',
+        if (maintenanceTaskId != null) 'reference_id': maintenanceTaskId,
+      });
+
+      final response = await post(
+        '/inventory/requests',
+        headers: _authHeaders(token),
+        body: body,
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to create inventory request: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error creating inventory request: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> getInventoryRequestsByMaintenanceTask(
+    String maintenanceTaskId,
+  ) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await get(
+        '/inventory/maintenance-task/$maintenanceTaskId/requests',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to load inventory requests for maintenance task: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error fetching inventory requests for maintenance task: $e');
+      rethrow;
+    }
+  }
+
+  /// Get all inventory requests with optional filters
+  Future<List<Map<String, dynamic>>> getInventoryRequests({
+    String? buildingId,
+    String? status,
+    String? requestedBy,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      // Build query parameters
+      final queryParams = <String>[];
+      if (buildingId != null && buildingId.isNotEmpty) {
+        queryParams.add('building_id=$buildingId');
+      }
+      if (status != null && status.isNotEmpty) {
+        queryParams.add('status=$status');
+      }
+      if (requestedBy != null && requestedBy.isNotEmpty) {
+        queryParams.add('requested_by=$requestedBy');
+      }
+
+      final queryString = queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
+      final response = await get(
+        '/inventory/requests$queryString',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = jsonDecode(response.body);
+        final data = decoded['data'] as List<dynamic>?;
+        if (data != null) {
+          return data.map((e) => e as Map<String, dynamic>).toList();
+        }
+        return [];
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get inventory requests: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting inventory requests: $e');
+      return [];
+    }
+  }
+
   // ===== Announcements =====
 
   Future<List<Map<String, dynamic>>> getAllAnnouncements({
-    required String buildingId,
+    String buildingId = 'default_building',
     String audience = 'all',
     bool activeOnly = true,
     int limit = 50,
@@ -956,12 +1113,33 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
+      print('[API] Fetching announcements with building_id: $buildingId');
 
-   
+      // Build query parameters
+      final queryParams = <String, String>{
+        'building_id': buildingId,
+        'audience': audience,
+        'active_only': activeOnly.toString(),
+        'limit': limit.toString(),
+        'published_only': 'true',
+      };
+      
+      if (announcementType != null) {
+        queryParams['announcement_type'] = announcementType;
+      }
+      if (priorityLevel != null) {
+        queryParams['priority_level'] = priorityLevel;
+      }
+      if (tags != null) {
+        queryParams['tags'] = tags;
+      }
 
+      final queryString = queryParams.entries
+          .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
+          .join('&');
 
       final response = await get(
-        '/announcements',
+        '/announcements?$queryString',
         headers: _authHeaders(token),
       );
 
@@ -1306,14 +1484,14 @@ class APIService {
 
   // ===== Tenant Requests =====
 
-  Future<List<Map<String, dynamic>>> getAllTenantRequests() async {
+  Future<List<Map<String, dynamic>>> getAllTenantRequests([String user_id = ""]) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      // Fetch all requests from the concern-slips endpoint (which contains all request types)
+      // Fetch all requests from the unified tenant-requests endpoint
       final response = await get(
-        '/concern-slips/',
+        '/tenant-requests/?user_id=' + user_id,
         headers: _authHeaders(token),
       );
 
@@ -1492,6 +1670,299 @@ class APIService {
     } catch (e) {
       print('[API] Error assigning staff to concern slip: $e');
       rethrow;
+    }
+  }
+
+  /// Set resolution type for an assessed concern slip (Admin only)
+  Future<Map<String, dynamic>> setResolutionType(
+    String concernSlipId, {
+    required String resolutionType, // 'job_service' or 'work_order'
+    String? adminNotes,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = <String, dynamic>{
+        'resolution_type': resolutionType,
+      };
+      if (adminNotes != null && adminNotes.isNotEmpty) {
+        body['admin_notes'] = adminNotes;
+      }
+
+      print(
+        '[API] Setting resolution type to $resolutionType for concern slip $concernSlipId',
+      );
+
+      final response = await http.patch(
+        _u('/concern-slips/$concernSlipId/set-resolution-type'),
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        print('[API] Resolution type set successfully');
+        return data;
+      } else {
+        print(
+          '[API] Error setting resolution type: ${response.statusCode} ${response.body}',
+        );
+        final err = _tryDecode(response.body);
+        throw Exception(
+          err['detail'] ?? 'Failed to set resolution type: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error setting resolution type: $e');
+      rethrow;
+    }
+  }
+
+  // ===== Chat =====
+
+  /// Create or get a chat room
+  Future<Map<String, dynamic>> createOrGetChatRoom({
+    required List<String> participants,
+    String roomType = 'direct',
+    String? concernSlipId,
+    String? jobServiceId,
+    String? workPermitId,
+    String? roomName,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = {
+        'participants': participants,
+        'room_type': roomType,
+        if (concernSlipId != null) 'concern_slip_id': concernSlipId,
+        if (jobServiceId != null) 'job_service_id': jobServiceId,
+        if (workPermitId != null) 'work_permit_id': workPermitId,
+        if (roomName != null) 'room_name': roomName,
+      };
+
+      final response = await post(
+        '/chat/rooms',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return data['data'] as Map<String, dynamic>;
+      } else {
+        throw Exception('Failed to create/get chat room: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error creating/getting chat room: $e');
+      rethrow;
+    }
+  }
+
+  /// Get all chat rooms for current user
+  Future<List<Map<String, dynamic>>> getUserChatRooms({int limit = 50}) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await get(
+        '/chat/rooms?limit=$limit',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return List<Map<String, dynamic>>.from(data['data'] ?? []);
+      } else {
+        throw Exception('Failed to get chat rooms: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error getting chat rooms: $e');
+      return [];
+    }
+  }
+
+  /// Get a specific chat room by ID
+  Future<Map<String, dynamic>?> getChatRoom(String roomId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await get(
+        '/chat/rooms/$roomId',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return data['data'] as Map<String, dynamic>?;
+      } else if (response.statusCode == 404) {
+        return null;
+      } else {
+        throw Exception('Failed to get chat room: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error getting chat room: $e');
+      return null;
+    }
+  }
+
+  /// Get chat room by reference (concern slip, job service, work permit)
+  Future<Map<String, dynamic>?> getChatRoomByReference({
+    required String referenceType,  // 'concern_slip', 'job_service', 'work_permit'
+    required String referenceId,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await get(
+        '/chat/rooms/by-reference/$referenceType/$referenceId',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return data['data'] as Map<String, dynamic>?;
+      } else if (response.statusCode == 404) {
+        return null;
+      } else {
+        throw Exception('Failed to get chat room by reference: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error getting chat room by reference: $e');
+      return null;
+    }
+  }
+
+  /// Send a message to a chat room
+  Future<Map<String, dynamic>> sendChatMessage({
+    required String roomId,
+    required String messageText,
+    String messageType = 'text',
+    List<String>? attachments,
+    String? replyTo,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = {
+        'room_id': roomId,
+        'message_text': messageText,
+        'message_type': messageType,
+        if (attachments != null) 'attachments': attachments,
+        if (replyTo != null) 'reply_to': replyTo,
+      };
+
+      final response = await post(
+        '/chat/messages',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return data['data'] as Map<String, dynamic>;
+      } else {
+        throw Exception('Failed to send message: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error sending message: $e');
+      rethrow;
+    }
+  }
+
+  /// Get messages for a chat room
+  Future<List<Map<String, dynamic>>> getChatMessages({
+    required String roomId,
+    int limit = 100,
+    String? before,  // ISO timestamp
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      String url = '/chat/rooms/$roomId/messages?limit=$limit';
+      if (before != null) {
+        url += '&before=$before';
+      }
+
+      final response = await get(url, headers: _authHeaders(token));
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return List<Map<String, dynamic>>.from(data['data'] ?? []);
+      } else {
+        throw Exception('Failed to get messages: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error getting messages: $e');
+      return [];
+    }
+  }
+
+  /// Mark all messages in a room as read
+  Future<bool> markMessagesAsRead(String roomId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = {'room_id': roomId};
+
+      final response = await post(
+        '/chat/messages/mark-read',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (e) {
+      print('Error marking messages as read: $e');
+      return false;
+    }
+  }
+
+  /// Delete a message
+  Future<bool> deleteChatMessage(String messageId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await delete(
+        '/chat/messages/$messageId',
+        headers: _authHeaders(token),
+      );
+
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (e) {
+      print('Error deleting message: $e');
+      return false;
+    }
+  }
+
+  /// Get unread message count
+  Future<int> getUnreadChatCount() async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await get(
+        '/chat/unread-count',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final dataMap = data['data'] as Map<String, dynamic>?;
+        return dataMap?['unread_count'] as int? ?? 0;
+      }
+      return 0;
+    } catch (e) {
+      print('Error getting unread count: $e');
+      return 0;
     }
   }
 }

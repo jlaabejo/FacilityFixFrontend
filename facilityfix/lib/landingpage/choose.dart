@@ -13,8 +13,7 @@ AppRole _toAppRole(String role) {
       return AppRole.tenant;
     case 'staff':
       return AppRole.staff;
-    case 'admin':
-      return AppRole.admin;
+    
     default:
       return AppRole.tenant;
   }
@@ -107,9 +106,8 @@ class ChooseRole extends StatelessWidget {
                               // Role buttons (open as modal bottom sheets)
                               _buildRoleButton(context, 'Tenant', 'tenant', brandBlue, isLogin),
                               const SizedBox(height: 12),
-                              _buildRoleButton(context, 'Staff', 'staff', brandBlue, isLogin),
-                              const SizedBox(height: 12),
-                              _buildRoleButton(context, 'Admin', 'admin', brandBlue, isLogin),
+                              _buildRoleButton(context, 'Staff', 'staff', brandBlue, isLogin), 
+                  
 
                               const SizedBox(height: 20),
 

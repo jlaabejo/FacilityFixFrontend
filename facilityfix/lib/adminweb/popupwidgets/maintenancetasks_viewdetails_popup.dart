@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../popupwidgets/assignstaff_popup.dart';
+import '../services/api_service.dart';
 
 enum DetailMode { view, edit }
 
@@ -42,6 +43,13 @@ class _MaintenanceTaskDetailDialogState extends State<MaintenanceTaskDetailDialo
   // --- Form + validity state
   final _formKey = GlobalKey<FormState>();
   bool _formValid = false;
+
+  // --- API Service
+  final _apiService = ApiService();
+
+  // --- Inventory Requests State
+  List<Map<String, dynamic>> _inventoryRequests = [];
+  bool _loadingInventoryRequests = false;
 
   // --- Controllers
   late final TextEditingController _titleCtrl;
@@ -104,7 +112,32 @@ class _MaintenanceTaskDetailDialogState extends State<MaintenanceTaskDetailDialo
     }
 
     // Initial validation pass after first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) => _revalidate());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _revalidate();
+      _loadInventoryRequests();
+    });
+  }
+
+  Future<void> _loadInventoryRequests() async {
+    final taskId = widget.task['id'];
+    if (taskId == null || taskId.toString().isEmpty) return;
+
+    setState(() => _loadingInventoryRequests = true);
+
+    try {
+      final response = await _apiService.getInventoryRequestsByMaintenanceTask(taskId.toString());
+      if (response['success'] == true && mounted) {
+        setState(() {
+          _inventoryRequests = List<Map<String, dynamic>>.from(response['data'] ?? []);
+          _loadingInventoryRequests = false;
+        });
+      }
+    } catch (e) {
+      print('[v0] Error loading inventory requests: $e');
+      if (mounted) {
+        setState(() => _loadingInventoryRequests = false);
+      }
+    }
   }
 
   @override
@@ -285,6 +318,8 @@ class _MaintenanceTaskDetailDialogState extends State<MaintenanceTaskDetailDialo
                       Divider(color: Colors.grey[300], height: 1),
                       const SizedBox(height: 16),
                       _workDescription(),
+                      const SizedBox(height: 24),
+                      _inventoryRequestsSection(),
                     ],
                   ),
                 ),
@@ -716,6 +751,171 @@ class _MaintenanceTaskDetailDialogState extends State<MaintenanceTaskDetailDialo
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(16)),
       child: Text(status, style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w500)),
+    );
+  }
+
+  Widget _inventoryRequestsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Divider(color: Colors.grey[300], height: 1),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Icon(Icons.inventory_2_outlined, color: Colors.grey[700], size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'Inventory Requests',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[800],
+              ),
+            ),
+            const Spacer(),
+            if (_loadingInventoryRequests)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_inventoryRequests.isEmpty && !_loadingInventoryRequests)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.grey[400], size: 20),
+                const SizedBox(width: 12),
+                Text(
+                  'No inventory requests linked to this maintenance task',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                ),
+              ],
+            ),
+          )
+        else if (_inventoryRequests.isNotEmpty)
+          ...List.generate(_inventoryRequests.length, (index) {
+            final request = _inventoryRequests[index];
+            return _inventoryRequestCard(request);
+          }),
+      ],
+    );
+  }
+
+  Widget _inventoryRequestCard(Map<String, dynamic> request) {
+    final itemName = request['item_name'] ?? 'Unknown Item';
+    final quantity = request['quantity_requested'] ?? request['quantity'] ?? 0;
+    final status = request['status'] ?? 'pending';
+    final purpose = request['purpose'] ?? '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      itemName,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    if (purpose.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        purpose,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              _buildInventoryStatusChip(status),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(Icons.numbers, size: 14, color: Colors.grey[600]),
+              const SizedBox(width: 4),
+              Text(
+                'Quantity: $quantity',
+                style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInventoryStatusChip(String status) {
+    Color bgColor;
+    Color textColor;
+
+    switch (status.toLowerCase()) {
+      case 'pending':
+        bgColor = const Color(0xFFFFF3E0);
+        textColor = const Color(0xFFE65100);
+        break;
+      case 'approved':
+        bgColor = const Color(0xFFE8F5E8);
+        textColor = const Color(0xFF2E7D32);
+        break;
+      case 'denied':
+      case 'rejected':
+        bgColor = const Color(0xFFFFEBEE);
+        textColor = const Color(0xFFD32F2F);
+        break;
+      case 'fulfilled':
+      case 'completed':
+        bgColor = const Color(0xFFE3F2FD);
+        textColor = const Color(0xFF1976D2);
+        break;
+      default:
+        bgColor = Colors.grey[100]!;
+        textColor = Colors.grey[700]!;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        status[0].toUpperCase() + status.substring(1),
+        style: TextStyle(
+          color: textColor,
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     );
   }
 }

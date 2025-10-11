@@ -166,6 +166,39 @@ class ConcernSlipDetailDialog extends StatelessWidget {
         ),
         const SizedBox(height: 32),
 
+        // Resolution Type Row (if set)
+        if (task['rawData']?['resolution_type'] != null) ...[
+          const SizedBox(height: 32),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'RESOLUTION TYPE',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[600],
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildResolutionTypeChip(
+                      task['rawData']['resolution_type'],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 48),
+              const Expanded(child: SizedBox()),
+            ],
+          ),
+        ],
+        const SizedBox(height: 32),
+
         // Second Row
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -363,6 +396,56 @@ class ConcernSlipDetailDialog extends StatelessWidget {
           fontSize: 12,
           fontWeight: FontWeight.w500,
         ),
+      ),
+    );
+  }
+
+  Widget _buildResolutionTypeChip(String resolutionType) {
+    Color bgColor;
+    Color textColor;
+    IconData icon;
+    String displayText;
+    
+    switch (resolutionType.toLowerCase()) {
+      case 'job_service':
+        bgColor = const Color(0xFFE3F2FD);
+        textColor = const Color(0xFF1976D2);
+        icon = Icons.engineering;
+        displayText = 'Job Service';
+        break;
+      case 'work_order':
+        bgColor = const Color(0xFFFFF3E0);
+        textColor = const Color(0xFFFF8F00);
+        icon = Icons.assignment;
+        displayText = 'Work Order';
+        break;
+      default:
+        bgColor = Colors.grey[100]!;
+        textColor = Colors.grey[700]!;
+        icon = Icons.help_outline;
+        displayText = resolutionType;
+    }
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: textColor),
+          const SizedBox(width: 6),
+          Text(
+            displayText,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }
