@@ -3,7 +3,7 @@ import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/staff/maintenance_detail.dart';
 import 'package:facilityfix/staff/announcement.dart';
-import 'package:facilityfix/staff/chat.dart';
+import 'package:facilityfix/services/chat_helper.dart';
 import 'package:facilityfix/staff/notification.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/workorder.dart';
@@ -348,6 +348,41 @@ class _MaintenancePageState extends State<MaintenancePage> {
     ];
   }
 
+  // ===== Chat Navigation =====================================================
+  Future<void> _handleMaintenanceChatNavigation(Map<String, dynamic> task) async {
+    try {
+      final taskId = task['id'] ?? '';
+      
+      if (taskId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error: Unable to start chat - Invalid task ID'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      // Navigate to maintenance chat - filtered by maintenance ID
+      await ChatHelper.navigateToMaintenanceChat(
+        context: context,
+        maintenanceId: taskId,
+        isStaff: true,
+      );
+    } catch (e) {
+      print('Error navigating to maintenance chat: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error starting chat: ${e.toString()}'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Widget buildMaintenanceCard(Map<String, dynamic> task) {
     final scheduledDate = DateTime.tryParse(task['scheduled_date'] ?? '') ?? DateTime.now();
     final taskId = task['formatted_id'] ?? task['id'] ?? '';
@@ -395,10 +430,7 @@ class _MaintenancePageState extends State<MaintenancePage> {
         });
       },
       onChatTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const ChatPage()),
-        );
+        _handleMaintenanceChatNavigation(task);
       },
     );
   }

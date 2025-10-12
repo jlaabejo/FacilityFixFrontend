@@ -76,7 +76,60 @@ class _RequestFormState extends State<RequestForm> {
     'Others',
   ];
 
-  // Date/Time picking
+  // Date/Time picking for availability range
+  Future<void> _pickAvailabilityRange(TextEditingController controller) async {
+    final now = DateTime.now();
+
+    // Pick the date first
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (pickedDate == null) return;
+
+    // Pick start time
+    final TimeOfDay? startTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(now),
+      helpText: 'Select start time',
+    );
+    if (startTime == null) return;
+
+    // Pick end time
+    final TimeOfDay? endTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(
+        hour: (startTime.hour + 2) % 24, // Default to 2 hours later
+        minute: startTime.minute,
+      ),
+      helpText: 'Select end time',
+    );
+    if (endTime == null) return;
+
+    // Validate that end time is after start time
+    final startMinutes = startTime.hour * 60 + startTime.minute;
+    final endMinutes = endTime.hour * 60 + endTime.minute;
+    
+    if (endMinutes <= startMinutes) {
+      _showSnack('End time must be after start time');
+      return;
+    }
+
+    // Format the range
+    final dateStr = DateFormat('MMM d, yyyy').format(pickedDate);
+    final startTimeStr = _formatTimeOfDay(startTime);
+    final endTimeStr = _formatTimeOfDay(endTime);
+
+    setState(() {
+      controller.text = '$dateStr $startTimeStr - $endTimeStr';
+      // Recompute inline errors after picking a date
+      _formKey.currentState?.validate();
+    });
+  }
+
+  // Date/Time picking for single date/time (for other forms)
   Future<void> _pickDateTimeInto(TextEditingController controller) async {
     final now = DateTime.now();
 
@@ -107,6 +160,15 @@ class _RequestFormState extends State<RequestForm> {
       // Recompute inline errors after picking a date
       _formKey.currentState?.validate();
     });
+  }
+
+  // Helper method to format TimeOfDay
+  String _formatTimeOfDay(TimeOfDay time) {
+    final hour = time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    final displayHour = hour == 0 ? 12 : hour;
+    return '$displayHour:$minute $period';
   }
 
   // Controllers
@@ -157,7 +219,7 @@ class _RequestFormState extends State<RequestForm> {
 
     try {
       final combinedText =
-          '${titleController.text.trim()} ${descriptionController.text.trim()}';
+          '${descriptionController.text.trim()}';
       if (combinedText.trim().isEmpty) return;
 
       print('[AI] Analyzing: $combinedText');
@@ -171,81 +233,18 @@ class _RequestFormState extends State<RequestForm> {
 
       if (mounted) {
         setState(() {
-          _aiCategory = result['category'] ?? 'General';
-          _aiPriority = result['priority'] ?? 'Medium';
+          _aiCategory = result['cat_argmax'] ?? 'General';
+          _aiPriority = result['urg_argmax'] ?? 'Medium';
         });
         print('[AI] Category: $_aiCategory, Priority: $_aiPriority');
       }
     } catch (e) {
       print('[AI] Analysis error: $e');
       // Fallback to local analysis
-      _performLocalAnalysis();
     } finally {
       if (mounted) {
         setState(() => _isAnalyzing = false);
       }
-    }
-  }
-
-  void _performLocalAnalysis() {
-    final combinedText =
-        '${titleController.text.trim()} ${descriptionController.text.trim()}'
-            .toLowerCase();
-
-    String category = 'General';
-    String priority = 'Medium';
-
-    // Category detection
-    if (combinedText.contains('water') ||
-        combinedText.contains('leak') ||
-        combinedText.contains('pipe') ||
-        combinedText.contains('drain')) {
-      category = 'Plumbing';
-    } else if (combinedText.contains('electric') ||
-        combinedText.contains('power') ||
-        combinedText.contains('light') ||
-        combinedText.contains('outlet')) {
-      category = 'Electrical';
-    } else if (combinedText.contains('air') ||
-        combinedText.contains('ac') ||
-        combinedText.contains('cooling') ||
-        combinedText.contains('heating')) {
-      category = 'HVAC';
-    } else if (combinedText.contains('door') ||
-        combinedText.contains('window') ||
-        combinedText.contains('wood') ||
-        combinedText.contains('cabinet')) {
-      category = 'Carpentry';
-    } else if (combinedText.contains('wall') ||
-        combinedText.contains('cement') ||
-        combinedText.contains('concrete') ||
-        combinedText.contains('tile')) {
-      category = 'Masonry';
-    }
-
-    // Priority detection
-    if (combinedText.contains('urgent') ||
-        combinedText.contains('emergency') ||
-        combinedText.contains('critical') ||
-        combinedText.contains('dangerous')) {
-      priority = 'Critical';
-    } else if (combinedText.contains('important') ||
-        combinedText.contains('high') ||
-        combinedText.contains('asap') ||
-        combinedText.contains('quickly')) {
-      priority = 'High';
-    } else if (combinedText.contains('low') ||
-        combinedText.contains('minor') ||
-        combinedText.contains('small') ||
-        combinedText.contains('whenever')) {
-      priority = 'Low';
-    }
-
-    if (mounted) {
-      setState(() {
-        _aiCategory = category;
-        _aiPriority = priority;
-      });
     }
   }
 
@@ -384,6 +383,89 @@ class _RequestFormState extends State<RequestForm> {
     }
   }
 
+  // Parse and validate availability time range
+  bool _isValidAvailabilityRange(String value) {
+    if (value.trim().isEmpty) return false;
+    
+    try {
+      // Expected format: "MMM d, yyyy h:mm AM - h:mm PM"
+      // Example: "Oct 12, 2025 9:00 AM - 11:00 AM"
+      
+      final parts = value.split(' - ');
+      if (parts.length != 2) return false;
+      
+      final startPart = parts[0].trim();
+      final endPart = parts[1].trim();
+      
+      // Extract date from start part
+      final dateMatch = RegExp(r'^([A-Za-z]+ \d{1,2}, \d{4})').firstMatch(startPart);
+      if (dateMatch == null) return false;
+      
+      final dateStr = dateMatch.group(1)!;
+      
+      // Extract time from start part
+      final startTimeStr = startPart.substring(dateStr.length).trim();
+      final endTimeStr = endPart.trim();
+      
+      // Validate time format (h:mm AM/PM)
+      final timeRegex = RegExp(r'^\d{1,2}:\d{2}\s?(AM|PM)$', caseSensitive: false);
+      if (!timeRegex.hasMatch(startTimeStr) || !timeRegex.hasMatch(endTimeStr)) {
+        return false;
+      }
+      
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Parse availability range into start and end DateTime objects
+  Map<String, DateTime?> _parseAvailabilityRange(String value) {
+    try {
+      final parts = value.split(' - ');
+      if (parts.length != 2) return {'start': null, 'end': null};
+      
+      final startPart = parts[0].trim();
+      final endPart = parts[1].trim();
+      
+      // Extract date from start part
+      final dateMatch = RegExp(r'^([A-Za-z]+ \d{1,2}, \d{4})').firstMatch(startPart);
+      if (dateMatch == null) return {'start': null, 'end': null};
+      
+      final dateStr = dateMatch.group(1)!;
+      final startTimeStr = startPart.substring(dateStr.length).trim();
+      final endTimeStr = endPart.trim();
+      
+      // Parse the date
+      final date = DateFormat('MMM d, yyyy').parse(dateStr);
+      
+      // Parse start time
+      final startTime = DateFormat('h:mm a').parse(startTimeStr);
+      final startDateTime = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        startTime.hour,
+        startTime.minute,
+      );
+      
+      // Parse end time (same date)
+      final endTime = DateFormat('h:mm a').parse(endTimeStr);
+      final endDateTime = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        endTime.hour,
+        endTime.minute,
+      );
+      
+      return {'start': startDateTime, 'end': endDateTime};
+    } catch (e) {
+      print('Error parsing availability range: $e');
+      return {'start': null, 'end': null};
+    }
+  }
+
   // Concern Slip errors
   String? _errCS(String key) {
     if (!_submitted) return null;
@@ -399,8 +481,8 @@ class _RequestFormState extends State<RequestForm> {
       case 'avail':
         if (availabilityController.text.trim().isEmpty)
           return 'Availability is required.';
-        return _parseDT(availabilityController.text.trim()) == null
-            ? 'Invalid date & time.'
+        return !_isValidAvailabilityRange(availabilityController.text.trim())
+            ? 'Invalid time range format. Use: Date StartTime - EndTime'
             : null;
       default:
         return null;
@@ -412,14 +494,13 @@ class _RequestFormState extends State<RequestForm> {
     if (!_submitted) return null;
     switch (key) {
       case 'notes':
-        return descriptionController.text.trim().isEmpty
-            ? 'Notes are required.'
-            : null;
+        // Notes are optional for Job Service
+        return null;
       case 'avail':
         if (availabilityController.text.trim().isEmpty)
           return 'Availability is required.';
-        return _parseDT(availabilityController.text.trim()) == null
-            ? 'Invalid date & time.'
+        return !_isValidAvailabilityRange(availabilityController.text.trim())
+            ? 'Invalid time range format. Use: Date StartTime - EndTime'
             : null;
       default:
         return null;
@@ -464,7 +545,8 @@ class _RequestFormState extends State<RequestForm> {
             _errCS('desc') != null ||
             _errCS('avail') != null;
       case 'Job Service':
-        return _errJS('notes') != null || _errJS('avail') != null;
+        // Only availability is required; notes are optional
+        return _errJS('avail') != null;
       case 'Work Order':
         return _errWO('type') != null ||
             _errWO('from') != null ||
@@ -511,11 +593,19 @@ class _RequestFormState extends State<RequestForm> {
       } else if (type == 'Job Service') {
         print('[SUBMIT] Submitting job service to Firebase...');
 
+        // Parse the availability range to get structured start/end times
+        final availabilityText = availabilityController.text.trim();
+        final parsedTimes = _parseAvailabilityRange(availabilityText);
+
         result = await apiService.submitJobService(
-          notes: descriptionController.text.trim(),
+          notes: descriptionController.text.trim().isNotEmpty 
+              ? descriptionController.text.trim() 
+              : null,
           location: unitController.text.trim(),
           unitId: unitController.text.trim(),
-          scheduleAvailability: availabilityController.text.trim(),
+          scheduleAvailability: availabilityText,
+          startTime: parsedTimes['start'],
+          endTime: parsedTimes['end'],
           concernSlipId: widget.concernSlipId,
         );
       } else if (type == 'Work Order') {
@@ -703,7 +793,7 @@ class _RequestFormState extends State<RequestForm> {
               InputField(
                 label: 'Description',
                 controller: descriptionController,
-                hintText: 'Enter task description',
+                hintText: 'Enter task description (will be analyzed by our AI)',
                 isRequired: true,
                 maxLines: 4,
                 errorText: _errCS('desc'),
@@ -712,10 +802,10 @@ class _RequestFormState extends State<RequestForm> {
               InputField(
                 label: 'Availability',
                 controller: availabilityController,
-                hintText: 'Select preferred date & time',
+                hintText: 'Select date and time range (e.g., 9:00 AM - 11:00 AM)',
                 isRequired: true,
                 readOnly: true,
-                onTap: () => _pickDateTimeInto(availabilityController),
+                onTap: () => _pickAvailabilityRange(availabilityController),
                 errorText: _errCS('avail'),
                 prefixIcon: const Padding(
                   padding: EdgeInsets.all(8.0),
@@ -797,17 +887,17 @@ class _RequestFormState extends State<RequestForm> {
                 label: 'Notes',
                 controller: descriptionController,
                 hintText: 'Enter additional notes',
-                isRequired: true,
+                // Notes are optional for Job Service
+                isRequired: false,
                 maxLines: 4,
-                errorText: _errJS('notes'),
               ),
               InputField(
                 label: 'Availability',
                 controller: availabilityController,
-                hintText: 'Select preferred date & time',
+                hintText: 'Select date and time range (e.g., 9:00 AM - 11:00 AM)',
                 isRequired: true,
                 readOnly: true,
-                onTap: () => _pickDateTimeInto(availabilityController),
+                onTap: () => _pickAvailabilityRange(availabilityController),
                 errorText: _errJS('avail'),
                 prefixIcon: const Padding(
                   padding: EdgeInsets.all(8.0),

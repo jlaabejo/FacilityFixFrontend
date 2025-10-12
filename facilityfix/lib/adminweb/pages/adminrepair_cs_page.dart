@@ -155,6 +155,9 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
         return 'Security';
       case 'fire_safety':
         return 'Fire Safety';
+      case 'pest control':
+        return 'Pest Control';
+
       default:
         return 'General';
     }
@@ -1118,16 +1121,47 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
 
   // Department Chip Widget
   Widget _buildDepartmentChip(String department) {
+    final departmentLower = department.toLowerCase();
+    Color bg = Colors.grey[200]!;
+    Color fg = Colors.grey[800]!;
+
+    switch (departmentLower) {
+      case 'maintenance':
+        bg = const Color(0xFF19B36E);
+        fg = Colors.white;
+        break;
+      case 'carpentry':
+        bg = const Color(0xFFF79009);
+        fg = Colors.white;
+        break;
+      case 'plumbing':
+        bg = const Color(0xFF005CE7);
+        fg = Colors.white;
+        break;
+      case 'electrical':
+        bg = const Color(0xFFF95555);
+        fg = Colors.white;
+        break;
+      case 'masonry':
+        bg = const Color(0xFF666666);
+        fg = Colors.white;
+        break;
+      default:
+        bg = Colors.grey[200]!;
+        fg = Colors.grey[800]!;
+        break;
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8F5E8),
+        color: bg,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
         department,
-        style: const TextStyle(
-          color: Color(0xFF2E7D32),
+        style: TextStyle(
+          color: fg,
           fontSize: 12,
           fontWeight: FontWeight.w500,
         ),

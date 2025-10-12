@@ -457,13 +457,13 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
             ),
             const SizedBox(height: 32),
 
-            // Summary cards
+            // Summary cards - using dynamic data instead of hardcoded values
             Row(
               children: [
                 _buildSummaryCard(
                   "FIRE SAFETY",
-                  "3/5 Passed",
-                  "Next: July 2025",
+                  "Data Loading...", // This should be calculated from actual maintenance tasks
+                  "Loading...", // This should show actual next scheduled date
                   Colors.white,
                   onTap: () {
                     FireSafetyDialog.show(context, {
@@ -474,8 +474,8 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                 const SizedBox(width: 16),
                 _buildSummaryCard(
                   "EARTHQUAKE",
-                  "1/2 Passed",
-                  "Next: Sept 2025",
+                  "Data Loading...", // This should be calculated from actual maintenance tasks
+                  "Loading...", // This should show actual next scheduled date
                   Colors.white,
                   onTap: () {
                     EarthquakeDialog.show(context, {
@@ -487,8 +487,8 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                 const SizedBox(width: 16),
                 _buildSummaryCard(
                   "TYPHOON/FLOOD",
-                  "2/3 Passed",
-                  "Next: Jan 2026",
+                  "Data Loading...", // This should be calculated from actual maintenance tasks
+                  "Loading...", // This should show actual next scheduled date
                   Colors.white,
                   onTap: () {
                     TyphoonFloodDialog.show(context, {

@@ -297,31 +297,148 @@ class APIService {
     return getJson('/auth/me', headers: _authHeaders(idToken));
   }
 
-  /// Local-first profile fetch.
-  Future<Map<String, dynamic>?> getUserProfile() async {
+  /// Fetch current user's complete profile from server
+  Future<Map<String, dynamic>?> fetchCurrentUserProfile() async {
     try {
-      final local = await AuthStorage.getProfile();
-      if (local != null) return local;
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
 
-      final token = await AuthStorage.getToken();
-      if (token == null) return null;
+      print('[API] Fetching current user profile from server...');
 
-      for (final endpoint in const ['/auth/me', '/profiles/me/complete']) {
-        try {
-          final response = await get(endpoint, headers: _authHeaders(token));
-          if (response.statusCode == 200) {
-            final jsonResponse = json.decode(response.body);
-            return Map<String, dynamic>.from(jsonResponse as Map);
-          }
-        } catch (_) {
-          continue;
-        }
+      // Try the complete profile endpoint first
+      final response = await get('/profiles/me/complete', headers: _authHeaders(token));
+      
+      if (response.statusCode == 200) {
+        final profileData = jsonDecode(response.body) as Map<String, dynamic>;
+        print('[API] Profile fetched successfully from /profiles/me/complete');
+        
+        // Save to local storage for offline access
+        await AuthStorage.saveProfile(profileData);
+        return profileData;
+      }
+      
+      // Fallback to /auth/me if complete profile is not available
+      final fallbackResponse = await get('/auth/me', headers: _authHeaders(token));
+      if (fallbackResponse.statusCode == 200) {
+        final profileData = jsonDecode(fallbackResponse.body) as Map<String, dynamic>;
+        print('[API] Profile fetched successfully from /auth/me fallback');
+        
+        // Save to local storage
+        await AuthStorage.saveProfile(profileData);
+        return profileData;
+      }
+      
+      print('[API] Failed to fetch profile from server: ${response.statusCode}');
+      return null;
+      
+    } catch (e) {
+      print('[API] Error fetching current user profile: $e');
+      return null;
+    }
+  }
+
+  /// Update current user's profile
+  Future<Map<String, dynamic>> updateCurrentUserProfile({
+    String? firstName,
+    String? lastName,
+    String? phoneNumber,
+    String? birthDate,
+    String? department,
+    String? staffDepartment,
+    List<String>? departments,
+    List<String>? staffDepartments,
+    String? buildingId,
+    String? unitId,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      // Get current user info to determine which endpoint to use
+      final currentProfile = await fetchCurrentUserProfile();
+      if (currentProfile == null) {
+        throw Exception('Could not fetch current user profile');
+      }
+
+      final userId = currentProfile['user_id'] ?? currentProfile['uid'];
+      if (userId == null) {
+        throw Exception('Could not determine user ID for profile update');
+      }
+
+      print('[API] Updating profile for user: $userId');
+
+      final updateData = <String, dynamic>{};
+      if (firstName != null) updateData['first_name'] = firstName;
+      if (lastName != null) updateData['last_name'] = lastName;
+      if (phoneNumber != null) updateData['phone_number'] = phoneNumber;
+      if (birthDate != null) updateData['birth_date'] = birthDate;
+      if (department != null) updateData['department'] = department;
+      if (staffDepartment != null) updateData['staff_department'] = staffDepartment;
+      if (departments != null) updateData['departments'] = departments;
+      if (staffDepartments != null) updateData['staff_departments'] = staffDepartments;
+      if (buildingId != null) updateData['building_id'] = buildingId;
+      if (unitId != null) updateData['unit_id'] = unitId;
+
+      if (updateData.isEmpty) {
+        throw Exception('No fields provided to update');
+      }
+
+      print('[API] Update data: $updateData');
+
+      final response = await put(
+        '/users/$userId',
+        headers: _authHeaders(token),
+        body: jsonEncode(updateData),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final result = jsonDecode(response.body) as Map<String, dynamic>;
+        print('[API] Profile updated successfully');
+        
+        // Refresh the cached profile
+        await fetchCurrentUserProfile();
+        
+        return result;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to update profile: ${errorBody['detail'] ?? response.body}',
+        );
       }
     } catch (e) {
-      // ignore: avoid_print
-      print('Error fetching user profile: $e');
+      print('[API] Error updating profile: $e');
+      rethrow;
     }
-    return await AuthStorage.getProfile();
+  }
+
+  /// Get user profile with local-first approach (for backward compatibility)
+  Future<Map<String, dynamic>?> getUserProfile() async {
+    try {
+      // Try to get from local storage first
+      final local = await AuthStorage.getProfile();
+      
+      // If we have local data and it's recent (less than 1 hour old), use it
+      if (local != null) {
+        final updatedAt = local['updated_at'] as String?;
+        if (updatedAt != null) {
+          final lastUpdate = DateTime.tryParse(updatedAt);
+          if (lastUpdate != null && 
+              DateTime.now().difference(lastUpdate).inHours < 1) {
+            print('[API] Using cached profile data');
+            return local;
+          }
+        }
+      }
+
+      // Otherwise fetch from server
+      print('[API] Fetching fresh profile data from server');
+      return await fetchCurrentUserProfile();
+      
+    } catch (e) {
+      print('[API] Error in getUserProfile: $e');
+      // Fallback to local storage if server fetch fails
+      return await AuthStorage.getProfile();
+    }
   }
 
   // ===== ID Generation =====
@@ -409,10 +526,10 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      final body = {'title': title, 'description': description};
+      final body = {'title': title, 'text': description};
 
       final response = await post(
-        '/ai/analyze-concern',
+        '/_debug_logits?force_translate=true',
         headers: _authHeaders(token),
         body: jsonEncode(body),
       );
@@ -569,11 +686,13 @@ class APIService {
   // ===== Job Services =====
 
   Future<Map<String, dynamic>> submitJobService({
-    required String notes,
+    String? notes, // Made optional
     required String location,
     String? unitId,
     List<String>? attachments,
     String? scheduleAvailability,
+    DateTime? startTime, // Added structured times
+    DateTime? endTime,   // Added structured times
     String? concernSlipId,
   }) async {
     try {
@@ -581,9 +700,11 @@ class APIService {
       final token = await _requireToken();
 
       final body = {
-        'notes': notes,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
         'location': location,
         'schedule_availability': scheduleAvailability,
+        if (startTime != null) 'start_time': startTime.toIso8601String(),
+        if (endTime != null) 'end_time': endTime.toIso8601String(),
         if (unitId != null) 'unit_id': unitId,
         if (concernSlipId != null) 'concern_slip_id': concernSlipId,
         'attachments': attachments ?? [],
@@ -933,6 +1054,109 @@ class APIService {
       }
     } catch (e) {
       print('Error getting job service by ID: $e');
+      rethrow;
+    }
+  }
+
+  /// Update job service status (for assigned staff and admins)
+  Future<Map<String, dynamic>> updateJobServiceStatus({
+    required String jobServiceId,
+    required String status,
+    String? notes,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+      
+      final body = {
+        'status': status,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+      };
+      
+      final response = await patch(
+        '/job-services/$jobServiceId/status',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        print('[API] updateJobServiceStatus response:');
+        print('  Status: ${data['status']}');
+        return data;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to update job service status: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error updating job service status: $e');
+      rethrow;
+    }
+  }
+
+  /// Complete a job service request
+  Future<Map<String, dynamic>> completeJobService(String jobServiceId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+      
+      final response = await patch(
+        '/job-services/$jobServiceId/complete',
+        headers: _authHeaders(token),
+        body: '{}',
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        print('[API] completeJobService response:');
+        print('  Success: ${data['success']}');
+        return data;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to complete job service: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error completing job service: $e');
+      rethrow;
+    }
+  }
+
+  /// Add work notes to job service
+  Future<Map<String, dynamic>> addJobServiceNotes({
+    required String jobServiceId,
+    required String notes,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+      
+      final body = {
+        'notes': notes,
+      };
+      
+      final response = await post(
+        '/job-services/$jobServiceId/notes',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        print('[API] addJobServiceNotes response:');
+        print('  Success: completed');
+        return data;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to add job service notes: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error adding job service notes: $e');
       rethrow;
     }
   }

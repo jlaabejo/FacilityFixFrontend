@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/services/chat_helper.dart';
 import 'package:facilityfix/tenant/announcement.dart';
-import 'package:facilityfix/tenant/chat.dart';
 import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/notification.dart';
 import 'package:facilityfix/tenant/profile.dart';
@@ -123,8 +123,8 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       context: context,
       builder:
           (_) => CustomPopup(
-            title: 'Create a Request',
-            message: 'Would you like to create a new request?',
+            title: 'Create a Concern Slip',
+            message: 'Would you like to create a new concern slip?',
             primaryText: 'Yes, Continue',
             onPrimaryPressed: () {
               Navigator.of(context).pop();
@@ -144,7 +144,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             const Text(
-                              'What type of request would you like to create?',
+                              'Create a new Concern Slip?',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
@@ -168,40 +168,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                                 );
                               },
                             ),
-                            ListTile(
-                              leading: const Icon(
-                                Icons.design_services_outlined,
-                              ),
-                              title: const Text('Job Service Request'),
-                              onTap: () {
-                                Navigator.of(context).pop();
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder:
-                                        (_) => const RequestForm(
-                                          requestType: 'Job Service',
-                                        ),
-                                  ),
-                                );
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.build_outlined),
-                              title: const Text('Work Order Permit'),
-                              onTap: () {
-                                Navigator.of(context).pop();
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder:
-                                        (_) => const RequestForm(
-                                          requestType: 'Work Order',
-                                        ),
-                                  ),
-                                );
-                              },
-                            ),
                           ],
                         ),
                       ),
@@ -212,6 +178,57 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
             onSecondaryPressed: () => Navigator.of(context).pop(),
           ),
     );
+  }
+
+  // ===== Chat Navigation =====================================================
+  Future<void> _handleChatNavigation(Map<String, dynamic> request) async {
+    try {
+      final requestId = request['id'] ?? '';
+      final requestType = (request['request_type'] ?? '').toLowerCase();
+      
+      if (requestId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error: Unable to start chat - Invalid request ID'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      // Navigate to appropriate chat based on request type
+      if (requestType.contains('job service')) {
+        await ChatHelper.navigateToJobServiceChat(
+          context: context,
+          jobServiceId: requestId,
+          isStaff: false,
+        );
+      } else if (requestType.contains('maintenance')) {
+        await ChatHelper.navigateToMaintenanceChat(
+          context: context,
+          maintenanceId: requestId,
+          isStaff: false,
+        );
+      } else {
+        // Default to work order/concern slip chat
+        await ChatHelper.navigateToWorkOrderChat(
+          context: context,
+          workOrderId: requestId,
+          isStaff: false,
+        );
+      }
+    } catch (e) {
+      print('Error navigating to chat: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error starting chat: ${e.toString()}'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   // ===== Filtering logic =====================================================
@@ -355,29 +372,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     ];
   }
 
-  String _routeLabelFor(Map<String, dynamic> w) {
-    final type = _norm(w['request_type']);
-    final status = _norm(w['status']);
-
-    switch (type) {
-      case 'concern slip':
-        if (status == 'pending') return 'concern slip';
-        if (status == 'assigned') return 'concern slip assigned';
-        if (status == 'assessed') return 'concern slip assessed';
-        return 'concern slip';
-      case 'job service':
-        if (status == 'done' || status == 'assessed' || status == 'closed') {
-          return 'job service assessed';
-        }
-        return 'job service assigned';
-      case 'work order':
-      case 'work order permit':
-        return 'work order';
-      default:
-        return type.isEmpty ? 'concern slip' : type;
-    }
-  }
-
   Widget buildCard(Map<String, dynamic> r) {
     final createdAt =
         DateTime.tryParse(r['created_at'] ?? '') ?? DateTime.now();
@@ -408,10 +402,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
         }
       },
       onChatTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const ChatPage()),
-        );
+        _handleChatNavigation(r);
       },
     );
   }

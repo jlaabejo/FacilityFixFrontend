@@ -13,8 +13,9 @@ import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/modals.dart';
 import 'package:facilityfix/widgets/forgotPassword.dart';
 
-// NEW: auth storage
+// NEW: auth storage and profile service
 import 'package:facilityfix/services/auth_storage.dart';
+import 'package:facilityfix/services/profile_service.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -44,7 +45,13 @@ class _ProfilePageState extends State<ProfilePage> {
   final ImagePicker _picker = ImagePicker();
   File? _profileImageFile;
 
-  // Keep an in-memory profile map so we can persist updates
+  // Profile service and loading state
+  final ProfileService _profileService = ProfileService();
+  Map<String, dynamic>? _profileData;
+  bool _isLoadingProfile = true;
+  String _errorMessage = '';
+
+  // Keep an in-memory profile map so we can persist updates (legacy support)
   Map<String, dynamic>? _profileMap;
 
   // Tenant id (user_id) to display as Tenant ID
@@ -52,7 +59,19 @@ class _ProfilePageState extends State<ProfilePage> {
 
   ImageProvider get _profileImageProvider {
     if (_profileImageFile != null) return FileImage(_profileImageFile!);
-    // If profile map has a network photo_url, attempt NetworkImage fallback:
+    
+    // Use new profile data first
+    if (_profileData != null &&
+        _profileData!['photo_url'] != null &&
+        _profileData!['photo_url'].toString().isNotEmpty) {
+      try {
+        return NetworkImage(_profileData!['photo_url'].toString());
+      } catch (_) {
+        // fallthrough to asset
+      }
+    }
+    
+    // Fallback to legacy profile map
     if (_profileMap != null &&
         _profileMap!['photo_url'] != null &&
         _profileMap!['photo_url'].toString().isNotEmpty) {
@@ -68,7 +87,90 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
-    _loadSavedProfile();
+    _loadUserProfile();
+  }
+
+  /// Load user profile using the new ProfileService
+  Future<void> _loadUserProfile() async {
+    setState(() {
+      _isLoadingProfile = true;
+      _errorMessage = '';
+    });
+
+    try {
+      print('[TenantProfile] Loading user profile...');
+      
+      // Fetch profile using ProfileService
+      final profile = await _profileService.getCurrentUserProfile();
+      
+      if (profile != null) {
+        setState(() {
+          _profileData = profile;
+          _isLoadingProfile = false;
+        });
+        
+        // Update controllers with new data
+        _updateControllersFromProfile(profile);
+        
+        // Also save to legacy profile map for backward compatibility
+        _profileMap = Map<String, dynamic>.from(profile);
+        
+        print('[TenantProfile] Profile loaded successfully');
+      } else {
+        // Try loading from legacy storage as fallback
+        await _loadSavedProfile();
+      }
+    } catch (e) {
+      print('[TenantProfile] Error loading profile: $e');
+      setState(() {
+        _errorMessage = 'Failed to load profile: $e';
+        _isLoadingProfile = false;
+      });
+      
+      // Try legacy fallback
+      await _loadSavedProfile();
+    }
+  }
+
+  /// Update text controllers from profile data
+  void _updateControllersFromProfile(Map<String, dynamic> profile) {
+    // Get display name using ProfileService
+    final displayName = _profileService.getDisplayName(profile);
+    nameController.text = displayName;
+
+    // Get user ID
+    _tenantId = _profileService.getUserId(profile);
+
+    // Email
+    final contactInfo = _profileService.getContactInfo(profile);
+    emailController.text = contactInfo['email'] ?? '';
+
+    // Phone number (formatted)
+    final phone = contactInfo['phone_number'] ?? contactInfo['phone'] ?? '';
+    phoneNumberController.text = _profileService.formatPhoneNumber(phone);
+
+    // Birth date
+    final birthDate = profile['birth_date'] ?? profile['birthdate'] ?? '';
+    birthDateController.text = _profileService.formatBirthDate(birthDate);
+
+    // Building info
+    final buildingInfo = _profileService.getBuildingInfo(profile);
+    final buildingUnit = buildingInfo['building_unit'] ?? 
+                        '${buildingInfo['building_id'] ?? ''} ${buildingInfo['unit_id'] ?? ''}'.trim();
+    buildingUnitNoController.text = buildingUnit;
+
+    // Handle profile image from local storage
+    if (profile['photo_path'] != null && profile['photo_path'].toString().isNotEmpty) {
+      final candidate = profile['photo_path'].toString();
+      try {
+        final f = File(candidate);
+        if (f.existsSync()) {
+          setState(() {
+            _profileImageFile = f;
+          });
+        }
+      } catch (_) {}
+    }
   }
 
   // Title-case just the first name (preserve DB last_name exactly)
@@ -348,91 +450,93 @@ class _ProfilePageState extends State<ProfilePage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder:
-          (_) => EditProfileModal(
-            role: UserRole.tenant,
-            initialFullName: nameController.text,
-            initialBirthDate: birthDateController.text,
-            initialUserEmail: emailController.text,
-            initialContactNumber: phoneNumberController.text,
-            initialBuildingUnitNo: buildingUnitNoController.text, // optional
-          ),
+      builder: (_) => EditProfileModal(
+        role: UserRole.tenant,
+        initialFullName: nameController.text,
+        initialBirthDate: birthDateController.text,
+        initialUserEmail: emailController.text,
+        initialContactNumber: phoneNumberController.text,
+        initialBuildingUnitNo: buildingUnitNoController.text, // optional
+      ),
     );
 
     if (updated == null || !mounted) return;
 
-    // If the user typed a full name in the modal, we will try to preserve the last name exactly as entered.
-    // Title-case the first name only.
-    final entered = updated.fullName.trim();
-    String firstPart = '';
-    String lastPart = '';
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
 
-    if (entered.isNotEmpty) {
-      final parts = entered.split(RegExp(r'\s+'));
-      if (parts.isNotEmpty) {
-        firstPart = _titleCaseFirstOnly(parts.first);
-        if (parts.length > 1) {
-          lastPart =
-              parts
-                  .sublist(1)
-                  .join(' ')
-                  .trim(); // preserve exact last name casing/spacing user entered
+    try {
+      // Process the full name to preserve last name exactly
+      final entered = updated.fullName.trim();
+      String firstPart = '';
+      String lastPart = '';
+
+      if (entered.isNotEmpty) {
+        final parts = entered.split(RegExp(r'\s+'));
+        if (parts.isNotEmpty) {
+          firstPart = _titleCaseFirstOnly(parts.first);
+          if (parts.length > 1) {
+            lastPart = parts.sublist(1).join(' ').trim();
+          }
         }
       }
+
+      // Parse building unit info
+      Map<String, String>? buildingInfo;
+      if (updated.buildingUnitNo?.isNotEmpty == true) {
+        buildingInfo = _parseBuildingUnit(updated.buildingUnitNo!);
+      }
+
+      // Update profile using ProfileService
+      final success = await _profileService.updateCurrentUserProfile(
+        firstName: firstPart.isNotEmpty ? firstPart : null,
+        lastName: lastPart.isNotEmpty ? lastPart : null,
+        phoneNumber: updated.contactNumber.isNotEmpty ? updated.contactNumber : null,
+        birthDate: updated.birthDate.isNotEmpty ? _normalizeBirthDateForSave(updated.birthDate) : null,
+        buildingId: buildingInfo?['building_id'],
+        unitId: buildingInfo?['unit_id'],
+      );
+
+      // Hide loading indicator
+      if (mounted) Navigator.of(context).pop();
+
+      if (success) {
+        // Reload profile data
+        await _loadUserProfile();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile updated successfully')),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to update profile. Please try again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Hide loading indicator
+      if (mounted) Navigator.of(context).pop();
+      
+      print('[TenantProfile] Error updating profile: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating profile: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
-
-    final titleCasedFull =
-        [
-          if (firstPart.isNotEmpty) firstPart,
-          if (lastPart.isNotEmpty) lastPart,
-        ].join(' ').trim();
-
-    setState(() {
-      nameController.text = titleCasedFull;
-      birthDateController.text = formatPrettyFromString(updated.birthDate);
-      buildingUnitNoController.text = updated.buildingUnitNo ?? '';
-      emailController.text = updated.userEmail;
-      phoneNumberController.text = updated.contactNumber;
-    });
-
-    // Merge updated fields into persisted profile map and save
-    _profileMap = {
-      ...?_profileMap,
-      'first_name': firstPart,
-      'last_name': lastPart,
-      'email': updated.userEmail,
-      'phone_number': updated.contactNumber,
-      // save raw birthdate (store as YYYY-MM-DD if modal returns that)
-      'birthdate': _normalizeBirthDateForSave(updated.birthDate),
-      // store building/unit as a single string (preserve what modal returns)
-      'building_unit':
-          updated.buildingUnitNo ?? _profileMap?['building_unit'] ?? '',
-      // ensure we don't clobber user_id if present
-      'user_id': _profileMap?['user_id'] ?? _tenantId,
-    };
-
-    // Try to also extract building_id and unit_id if modal returned a parsable string like
-    // "Building A • Unit 1001" or "Bldg A • Unit 1001" or "A 1001" or "A • 1001"
-    final parsed = _parseBuildingUnit(updated.buildingUnitNo ?? '');
-    if (parsed != null) {
-      _profileMap = {
-        ...?_profileMap,
-        'building_id': parsed['building_id'],
-        'unit_id': parsed['unit_id'],
-      };
-    }
-
-    // Save tenant id if not already present
-    if ((_profileMap?['user_id'] ?? '').toString().isEmpty &&
-        _tenantId.isNotEmpty) {
-      _profileMap = {...?_profileMap, 'user_id': _tenantId};
-    }
-
-    await AuthStorage.saveProfile(_profileMap ?? {});
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Profile updated')));
   }
 
   Map<String, String>? _parseBuildingUnit(String raw) {
@@ -504,134 +608,258 @@ class _ProfilePageState extends State<ProfilePage> {
               );
             },
           ),
+          // Add refresh button
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadUserProfile,
+            tooltip: 'Refresh Profile',
+          ),
         ],
-        leading: Row(),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ProfileInfoWidget(
-                profileImage: _profileImageProvider,
-                fullName: nameController.text,
-                staffId:
-                    _tenantId.isNotEmpty
-                        ? 'Tenant ID: #$_tenantId'
-                        : 'Tenant ID: —',
-                onTap: () => _openPhotoPickerSheet(context),
-              ),
-              const SizedBox(height: 24),
-
-              // PERSONAL DETAILS — display-only
-              SectionCard(
-                title: 'Personal Details',
-                trailing: IconButton(
-                  icon: const Icon(
-                    Icons.edit,
-                    size: 20,
-                    color: Colors.blueGrey,
-                  ),
-                  tooltip: 'Edit personal details',
-                  onPressed: _openEditAllDetailsSheet,
-                ),
+        child: _isLoadingProfile
+            ? const Center(
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    DetailRow(
-                      label: 'Birth Date',
-                      value: formatPrettyFromString(birthDateController.text),
-                    ),
-                    const SizedBox(height: 10),
-                    DetailRow(
-                      label: 'Building Unit No',
-                      value:
-                          buildingUnitNoController.text.isEmpty
-                              ? '—'
-                              : buildingUnitNoController.text,
-                    ),
-                    const SizedBox(height: 10),
-                    DetailRow(label: 'Email', value: emailController.text),
-                    const SizedBox(height: 10),
-                    DetailRow(
-                      label: 'Contact Number',
-                      value: phoneNumberController.text,
-                    ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton(
-                        onPressed: _openForgotPasswordEmail,
-                        child: const Text(
-                          'Forgot password?',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF005CE7),
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Loading profile...'),
+                  ],
+                ),
+              )
+            : _errorMessage.isNotEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          size: 64,
+                          color: Colors.red,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Error loading profile',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 32),
+                          child: Text(
+                            _errorMessage,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ),
-                      ),
+                        const SizedBox(height: 24),
+                        ElevatedButton(
+                          onPressed: _loadUserProfile,
+                          child: const Text('Retry'),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
+                  )
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ProfileInfoWidget(
+                          profileImage: _profileImageProvider,
+                          fullName: nameController.text.isNotEmpty
+                              ? nameController.text
+                              : 'User',
+                          staffId: _tenantId.isNotEmpty
+                              ? 'Tenant ID: #$_tenantId'
+                              : 'Tenant ID: —',
+                          onTap: () => _openPhotoPickerSheet(context),
+                        ),
+                        const SizedBox(height: 24),
 
-              const SizedBox(height: 18),
-              SectionCard(
-                title: 'Settings',
-                child: Column(
-                  children: [
-                    SettingsOption(
-                      text: 'Notifications',
-                      icon: Icons.notifications,
-                      onTap: () {},
-                    ),
-                    const SizedBox(height: 8),
-                    SettingsOption(
-                      text: 'Privacy & Security',
-                      icon: Icons.lock,
-                      onTap: () {},
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              LogoutButton(
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder:
-                        (_) => CustomPopup(
-                          title: 'Confirm Logout',
-                          message: 'Are you sure you want to logout?',
-                          primaryText: 'Yes',
-                          onPrimaryPressed: () async {
-                            Navigator.of(context).pop();
-                            // Clear saved auth/profile
-                            await AuthStorage.clear();
-                            // Navigate to welcome (clears nav stack)
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const WelcomePage(),
+                        // Profile completion indicator
+                        if (_profileData != null) ...[
+                          _buildProfileCompletionCard(),
+                          const SizedBox(height: 24),
+                        ],
+
+                        // PERSONAL DETAILS — display-only
+                        SectionCard(
+                          title: 'Personal Details',
+                          trailing: IconButton(
+                            icon: const Icon(
+                              Icons.edit,
+                              size: 20,
+                              color: Colors.blueGrey,
+                            ),
+                            tooltip: 'Edit personal details',
+                            onPressed: _openEditAllDetailsSheet,
+                          ),
+                          child: Column(
+                            children: [
+                              DetailRow(
+                                label: 'Birth Date',
+                                value: birthDateController.text.isNotEmpty
+                                    ? formatPrettyFromString(
+                                        birthDateController.text)
+                                    : '—',
                               ),
-                              (route) => false,
+                              const SizedBox(height: 10),
+                              DetailRow(
+                                label: 'Building Unit No',
+                                value: buildingUnitNoController.text.isEmpty
+                                    ? '—'
+                                    : buildingUnitNoController.text,
+                              ),
+                              const SizedBox(height: 10),
+                              DetailRow(
+                                label: 'Email',
+                                value: emailController.text.isNotEmpty
+                                    ? emailController.text
+                                    : '—',
+                              ),
+                              const SizedBox(height: 10),
+                              DetailRow(
+                                label: 'Contact Number',
+                                value: phoneNumberController.text.isNotEmpty
+                                    ? phoneNumberController.text
+                                    : '—',
+                              ),
+                              const SizedBox(height: 8),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton(
+                                  onPressed: _openForgotPasswordEmail,
+                                  child: const Text(
+                                    'Forgot password?',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF005CE7),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 18),
+                        SectionCard(
+                          title: 'Settings',
+                          child: Column(
+                            children: [
+                              SettingsOption(
+                                text: 'Notifications',
+                                icon: Icons.notifications,
+                                onTap: () {},
+                              ),
+                              const SizedBox(height: 8),
+                              SettingsOption(
+                                text: 'Privacy & Security',
+                                icon: Icons.lock,
+                                onTap: () {},
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        LogoutButton(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (_) => CustomPopup(
+                                title: 'Confirm Logout',
+                                message: 'Are you sure you want to logout?',
+                                primaryText: 'Yes',
+                                onPrimaryPressed: () async {
+                                  Navigator.of(context).pop();
+                                  // Clear ProfileService cache
+                                  _profileService.clearCache();
+                                  // Clear saved auth/profile
+                                  await AuthStorage.clear();
+                                  // Navigate to welcome (clears nav stack)
+                                  Navigator.pushAndRemoveUntil(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const WelcomePage(),
+                                    ),
+                                    (route) => false,
+                                  );
+                                },
+                                secondaryText: 'No',
+                                onSecondaryPressed: () =>
+                                    Navigator.of(context).pop(),
+                              ),
                             );
                           },
-                          secondaryText: 'No',
-                          onSecondaryPressed: () => Navigator.of(context).pop(),
                         ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
+                      ],
+                    ),
+                  ),
       ),
       bottomNavigationBar: NavBar(
         items: _navItems,
         currentIndex: _selectedIndex,
         onTap: _onTabTapped,
+      ),
+    );
+  }
+
+  /// Build profile completion indicator card
+  Widget _buildProfileCompletionCard() {
+    final completionPercentage =
+        _profileService.getProfileCompletionPercentage(_profileData);
+    final isComplete = _profileService.isProfileComplete(_profileData);
+
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  isComplete ? Icons.check_circle : Icons.info_outline,
+                  color: isComplete ? Colors.green : Colors.orange,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Profile Completion',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const Spacer(),
+                Text(
+                  '${completionPercentage.toInt()}%',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: isComplete ? Colors.green : Colors.orange,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            LinearProgressIndicator(
+              value: completionPercentage / 100,
+              backgroundColor: Colors.grey[300],
+              valueColor: AlwaysStoppedAnimation<Color>(
+                isComplete ? Colors.green : Colors.orange,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isComplete
+                  ? 'Your profile is complete!'
+                  : 'Complete your profile to access all features',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
       ),
     );
   }

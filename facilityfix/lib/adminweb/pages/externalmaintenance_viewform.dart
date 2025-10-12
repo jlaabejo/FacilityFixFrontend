@@ -68,8 +68,7 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
   bool _isEditMode = false;
 
   // Basic Information
-  final _maintenanceTypeCtrl =
-      TextEditingController(); // typically "External / 3rd-Party"
+  final _maintenanceTypeCtrl = TextEditingController();
   final _serviceCategoryCtrl = TextEditingController();
   final _createdByCtrl = TextEditingController();
   final _dateCreatedCtrl = TextEditingController();
@@ -90,6 +89,8 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
   String _assessmentReceived = 'Yes'; // dropdown
   final _loggedByCtrl = TextEditingController();
   final _loggedDateCtrl = TextEditingController();
+  final _assessmentNotesCtrl = TextEditingController();
+  final _recommendationsCtrl = TextEditingController();
 
   // Contractor
   final _contractorNameCtrl = TextEditingController();
@@ -104,109 +105,44 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
   late Map<String, String> _original;
 
   final ApiService _apiService = ApiService();
+  bool _isLoading = false;
+  Map<String, dynamic> _currentTaskData = {};
 
   // ---------------- Init / Dispose ----------------
   @override
   void initState() {
     super.initState();
-
-    final Map<String, dynamic> seed = widget.initialTask ?? {};
-
-    if (widget.initialTask == null) {
-      _fetchTaskData();
-    }
-
-    void setText(TextEditingController c, String key) {
-      final value = seed[key] ?? seed[_mapBackendKey(key)] ?? '';
-      c.text = value.toString();
-    }
-
-    // Assign values from the actual task data
-    setText(_maintenanceTypeCtrl, 'maintenanceType');
-    setText(_serviceCategoryCtrl, 'serviceCategory');
-    setText(_createdByCtrl, 'createdBy');
-    setText(_dateCreatedCtrl, 'dateCreated');
-
-    setText(_recurrenceCtrl, 'recurrence');
-    setText(_startDateCtrl, 'startDate');
-    setText(_nextDueCtrl, 'nextDueDate');
-
-    if (seed['serviceWindowStart'] != null &&
-        seed['serviceWindowEnd'] != null) {
-      _serviceWindowCtrl.text =
-          '${seed['serviceWindowStart']} to ${seed['serviceWindowEnd']}';
-    } else {
-      setText(_serviceWindowCtrl, 'serviceWindow');
-    }
-
-    setText(_locationCtrl, 'location');
-    setText(_descriptionCtrl, 'description');
-
-    setText(_serviceDateActualCtrl, 'serviceDateActual');
-    _assessmentReceived =
-        (seed['assessmentReceived']?.toString() ??
-            seed['assessment_received']?.toString() ??
-            'Yes');
-    setText(_loggedByCtrl, 'loggedBy');
-    setText(_loggedDateCtrl, 'loggedDate');
-
-    setText(_contractorNameCtrl, 'contractorName');
-    setText(_contractPersonCtrl, 'contractPerson');
-    setText(_contractPhoneCtrl, 'contractPhone');
-    setText(_contractEmailCtrl, 'contractEmail');
-
-    setText(_adminNotifyCtrl, 'adminNotify');
-
-    _original = _takeSnapshot();
+    
+    // Always fetch the latest data from the API
+    _fetchTaskData();
+    
+    // Set initial edit mode
     _isEditMode = widget.startInEditMode;
   }
 
   Future<void> _fetchTaskData() async {
     try {
-      final taskData = await _apiService.getMaintenanceTaskById(widget.taskId);
-      if (taskData != null && mounted) {
+      // Set loading state
+      if (mounted) {
         setState(() {
-          // Update controllers with fetched data
-          _maintenanceTypeCtrl.text =
-              taskData['maintenance_type']?.toString() ??
-              'External / 3rd-Party';
-          _serviceCategoryCtrl.text =
-              taskData['service_category']?.toString() ?? '';
-          _createdByCtrl.text = taskData['created_by']?.toString() ?? '';
-          _dateCreatedCtrl.text = taskData['date_created']?.toString() ?? '';
+          _error = null;
+          _isLoading = true;
+        });
+      }
 
-          _recurrenceCtrl.text = taskData['recurrence']?.toString() ?? '';
-          _startDateCtrl.text = taskData['start_date']?.toString() ?? '';
-          _nextDueCtrl.text = taskData['next_due_date']?.toString() ?? '';
-
-          if (taskData['service_window_start'] != null &&
-              taskData['service_window_end'] != null) {
-            _serviceWindowCtrl.text =
-                '${taskData['service_window_start']} to ${taskData['service_window_end']}';
-          }
-
-          _locationCtrl.text = taskData['location']?.toString() ?? '';
-          _descriptionCtrl.text = taskData['description']?.toString() ?? '';
-
-          _serviceDateActualCtrl.text =
-              taskData['service_date_actual']?.toString() ?? '';
-          _assessmentReceived =
-              taskData['assessment_received']?.toString() ?? 'Yes';
-          _loggedByCtrl.text = taskData['logged_by']?.toString() ?? '';
-          _loggedDateCtrl.text = taskData['logged_date']?.toString() ?? '';
-
-          _contractorNameCtrl.text =
-              taskData['contractor_name']?.toString() ?? '';
-          _contractPersonCtrl.text =
-              taskData['contact_person']?.toString() ?? '';
-          _contractPhoneCtrl.text =
-              taskData['contact_number']?.toString() ?? '';
-          _contractEmailCtrl.text = taskData['email']?.toString() ?? '';
-
-          _adminNotifyCtrl.text =
-              taskData['admin_notification']?.toString() ?? '';
-
+      final taskData = await _apiService.getMaintenanceTaskById(widget.taskId);
+      
+      if (mounted) {
+        setState(() {
+          // Store the current task data
+          _currentTaskData = taskData;
+          
+          // Update controllers with fetched data using comprehensive mapping
+          _populateFormWithTaskData(taskData);
+          
+          // Take snapshot for cancel functionality
           _original = _takeSnapshot();
+          _isLoading = false;
         });
       }
     } catch (e) {
@@ -214,34 +150,113 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
       if (mounted) {
         setState(() {
           _error = 'Failed to load task data: $e';
+          _isLoading = false;
         });
       }
     }
   }
   
+  void _populateFormWithTaskData(Map<String, dynamic> taskData) {
+    // Basic Information
+    _maintenanceTypeCtrl.text =
+        taskData['maintenance_type']?.toString() ??
+        taskData['maintenanceType']?.toString() ??
+        'External';
+    _serviceCategoryCtrl.text =
+        taskData['service_category']?.toString() ??
+        taskData['serviceCategory']?.toString() ?? '';
+    _createdByCtrl.text = 
+        taskData['created_by']?.toString() ??
+        taskData['createdBy']?.toString() ?? '';
+    _dateCreatedCtrl.text = 
+        _formatDate(taskData['date_created'] ?? taskData['dateCreated']);
+
+    // Recurrence & Schedule
+    _recurrenceCtrl.text = 
+        taskData['recurrence']?.toString() ??
+        taskData['recurrence_type']?.toString() ?? '';
+    _startDateCtrl.text = 
+        _formatDate(taskData['start_date'] ?? taskData['startDate']);
+    _nextDueCtrl.text = 
+        _formatDate(taskData['next_due_date'] ?? taskData['nextDueDate']);
+
+    // Service Window
+    if (taskData['service_window_start'] != null &&
+        taskData['service_window_end'] != null) {
+      _serviceWindowCtrl.text =
+          '${_formatDate(taskData['service_window_start'])} to ${_formatDate(taskData['service_window_end'])}';
+    } else if (taskData['serviceWindowStart'] != null &&
+               taskData['serviceWindowEnd'] != null) {
+      _serviceWindowCtrl.text =
+          '${_formatDate(taskData['serviceWindowStart'])} to ${_formatDate(taskData['serviceWindowEnd'])}';
+    } else {
+      _serviceWindowCtrl.text = '';
+    }
+
+    // Task Scope & Description
+    _locationCtrl.text = taskData['location']?.toString() ?? '';
+    _descriptionCtrl.text = 
+        taskData['description']?.toString() ??
+        taskData['task_description']?.toString() ?? '';
+
+    // Assessment Tracking
+    _serviceDateActualCtrl.text =
+        _formatDate(taskData['service_date_actual'] ?? taskData['serviceDateActual']);
+    _assessmentReceived =
+        taskData['assessment_received']?.toString() ??
+        taskData['assessmentReceived']?.toString() ?? 'Yes';
+    _loggedByCtrl.text = 
+        taskData['logged_by']?.toString() ??
+        taskData['loggedBy']?.toString() ?? '';
+    _loggedDateCtrl.text = 
+        _formatDate(taskData['logged_date'] ?? taskData['loggedDate']);
+
+    // Contractor Information
+    _contractorNameCtrl.text =
+        taskData['contractor_name']?.toString() ??
+        taskData['contractorName']?.toString() ?? '';
+    _contractPersonCtrl.text =
+        taskData['contact_person']?.toString() ??
+        taskData['contractPerson']?.toString() ?? '';
+    _contractPhoneCtrl.text =
+        taskData['contact_number']?.toString() ??
+        taskData['contractPhone']?.toString() ?? '';
+    _contractEmailCtrl.text = 
+        taskData['email']?.toString() ??
+        taskData['contractEmail']?.toString() ?? '';
+
+    // Notifications
+    _adminNotifyCtrl.text =
+        taskData['admin_notification']?.toString() ??
+        taskData['adminNotify']?.toString() ?? '';
+
+    // Assessment Notes & Recommendations
+    _assessmentNotesCtrl.text =
+        taskData['assessment_notes']?.toString() ??
+        taskData['assessmentNotes']?.toString() ?? '';
+    _recommendationsCtrl.text =
+        taskData['recommendations']?.toString() ??
+        taskData['recommendation']?.toString() ?? '';
+  }
+  
   String? _error;
 
-  String _mapBackendKey(String frontendKey) {
-    const mapping = {
-      'maintenanceType': 'maintenance_type',
-      'serviceCategory': 'service_category',
-      'createdBy': 'created_by',
-      'dateCreated': 'date_created',
-      'startDate': 'start_date',
-      'nextDueDate': 'next_due_date',
-      'serviceWindowStart': 'service_window_start',
-      'serviceWindowEnd': 'service_window_end',
-      'serviceDateActual': 'service_date_actual',
-      'assessmentReceived': 'assessment_received',
-      'loggedBy': 'logged_by',
-      'loggedDate': 'logged_date',
-      'contractorName': 'contractor_name',
-      'contractPerson': 'contact_person',
-      'contractPhone': 'contact_number',
-      'contractEmail': 'email',
-      'adminNotify': 'admin_notification',
-    };
-    return mapping[frontendKey] ?? frontendKey;
+  // Helper method to format dates consistently
+  String _formatDate(dynamic date) {
+    if (date == null) return '';
+    try {
+      if (date is String) {
+        if (date.isEmpty) return '';
+        final dt = DateTime.parse(date);
+        return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+      }
+      if (date is DateTime) {
+        return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      }
+      return date.toString();
+    } catch (e) {
+      return '';
+    }
   }
 
   @override
@@ -269,60 +284,66 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     _contractEmailCtrl.dispose();
 
     _adminNotifyCtrl.dispose();
+    _assessmentNotesCtrl.dispose();
+    _recommendationsCtrl.dispose();
     super.dispose();
   }
 
   // ---------------- Snapshot / Edit handlers ----------------
   Map<String, String> _takeSnapshot() => {
-    'maintenanceType': _maintenanceTypeCtrl.text,
-    'serviceCategory': _serviceCategoryCtrl.text,
-    'createdBy': _createdByCtrl.text,
-    'dateCreated': _dateCreatedCtrl.text,
-    'recurrence': _recurrenceCtrl.text,
-    'startDate': _startDateCtrl.text,
-    'nextDueDate': _nextDueCtrl.text,
-    'serviceWindow': _serviceWindowCtrl.text,
+    'maintenance_type': _maintenanceTypeCtrl.text,
+    'service_category': _serviceCategoryCtrl.text,
+    'created_by': _createdByCtrl.text,
+    'date_created': _dateCreatedCtrl.text,
+    'recurrence_type': _recurrenceCtrl.text,
+    'start_date': _startDateCtrl.text,
+    'next_due_date': _nextDueCtrl.text,
+    'service_window': _serviceWindowCtrl.text,
     'location': _locationCtrl.text,
-    'description': _descriptionCtrl.text,
-    'serviceDateActual': _serviceDateActualCtrl.text,
-    'assessmentReceived': _assessmentReceived,
-    'loggedBy': _loggedByCtrl.text,
-    'loggedDate': _loggedDateCtrl.text,
-    'contractorName': _contractorNameCtrl.text,
-    'contractPerson': _contractPersonCtrl.text,
-    'contractPhone': _contractPhoneCtrl.text,
-    'contractEmail': _contractEmailCtrl.text,
-    'adminNotify': _adminNotifyCtrl.text,
+    'task_description': _descriptionCtrl.text,
+    'service_date_actual': _serviceDateActualCtrl.text,
+    'assessment_received': _assessmentReceived,
+    'logged_by': _loggedByCtrl.text,
+    'logged_date': _loggedDateCtrl.text,
+    'contractor_name': _contractorNameCtrl.text,
+    'contact_person': _contractPersonCtrl.text,
+    'contact_number': _contractPhoneCtrl.text,
+    'email': _contractEmailCtrl.text,
+    'admin_notification': _adminNotifyCtrl.text,
+    'assessment_notes': _assessmentNotesCtrl.text,
+    'recommendations': _recommendationsCtrl.text,
   };
 
   void _enterEditMode() => setState(() => _isEditMode = true);
 
   void _cancelEdit() {
     final s = _original;
-    _maintenanceTypeCtrl.text = s['maintenanceType']!;
-    _serviceCategoryCtrl.text = s['serviceCategory']!;
-    _createdByCtrl.text = s['createdBy']!;
-    _dateCreatedCtrl.text = s['dateCreated']!;
+    _maintenanceTypeCtrl.text = s['maintenance_type']!;
+    _serviceCategoryCtrl.text = s['service_category']!;
+    _createdByCtrl.text = s['created_by']!;
+    _dateCreatedCtrl.text = s['date_created']!;
 
-    _recurrenceCtrl.text = s['recurrence']!;
-    _startDateCtrl.text = s['startDate']!;
-    _nextDueCtrl.text = s['nextDueDate']!;
-    _serviceWindowCtrl.text = s['serviceWindow']!;
+    _recurrenceCtrl.text = s['recurrence_type']!;
+    _startDateCtrl.text = s['start_date']!;
+    _nextDueCtrl.text = s['next_due_date']!;
+    _serviceWindowCtrl.text = s['service_window']!;
 
     _locationCtrl.text = s['location']!;
-    _descriptionCtrl.text = s['description']!;
+    _descriptionCtrl.text = s['task_description']!;
 
-    _serviceDateActualCtrl.text = s['serviceDateActual']!;
-    _assessmentReceived = s['assessmentReceived']!;
-    _loggedByCtrl.text = s['loggedBy']!;
-    _loggedDateCtrl.text = s['loggedDate']!;
+    _serviceDateActualCtrl.text = s['service_date_actual']!;
+    _assessmentReceived = s['assessment_received']!;
+    _loggedByCtrl.text = s['logged_by']!;
+    _loggedDateCtrl.text = s['logged_date']!;
 
-    _contractorNameCtrl.text = s['contractorName']!;
-    _contractPersonCtrl.text = s['contractPerson']!;
-    _contractPhoneCtrl.text = s['contractPhone']!;
-    _contractEmailCtrl.text = s['contractEmail']!;
+    _contractorNameCtrl.text = s['contractor_name']!;
+    _contractPersonCtrl.text = s['contact_person']!;
+    _contractPhoneCtrl.text = s['contact_number']!;
+    _contractEmailCtrl.text = s['email']!;
 
-    _adminNotifyCtrl.text = s['adminNotify']!;
+    _adminNotifyCtrl.text = s['admin_notification']!;
+    _assessmentNotesCtrl.text = s['assessment_notes']!;
+    _recommendationsCtrl.text = s['recommendations']!;
 
     setState(() => _isEditMode = false);
   }
@@ -339,7 +360,9 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
       final updateData = _takeSnapshot();
       await _apiService.updateMaintenanceTask(widget.taskId, updateData);
 
-      _original = _takeSnapshot();
+      // Refetch the latest data to ensure form is synchronized
+      await _fetchTaskData();
+      
       setState(() => _isEditMode = false);
 
       if (mounted) {
@@ -445,7 +468,18 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
                 ],
               ),
             )
-          : Padding(
+          : _isLoading
+              ? const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('Loading maintenance task...'),
+                    ],
+                  ),
+                )
+              : Padding(
               padding: const EdgeInsets.all(24.0),
               child: Form(
                 key: _formKey,
@@ -618,10 +652,15 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
   // -------- Task header + status badges --------
   Widget _buildTaskHeader() {
     final taskTitle =
-        widget.initialTask?['taskTitle']?.toString() ??
-        widget.initialTask?['task_title']?.toString() ??
-        widget.initialTask?['title']?.toString() ??
+        _currentTaskData['taskTitle']?.toString() ??
+        _currentTaskData['task_title']?.toString() ??
+        _currentTaskData['title']?.toString() ??
         'External Maintenance Task';
+
+    final assignedTo = 
+        _currentTaskData['assigned_to']?.toString() ??
+        _currentTaskData['assignedTo']?.toString() ??
+        (_contractorNameCtrl.text.isNotEmpty ? _contractorNameCtrl.text : 'External');
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -644,25 +683,25 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
               style: TextStyle(fontSize: 16, color: Colors.grey[600]),
             ),
             const SizedBox(height: 4),
-            const Text(
-              "Assigned To: External / 3rd-Party",
-              style: TextStyle(fontSize: 14, color: Colors.grey),
+            Text(
+              "Assigned To: $assignedTo",
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
             ),
           ],
         ),
         Row(
           children: [
-            if (widget.initialTask?['priority'] == 'High' ||
-                widget.initialTask?['priority'] == 'Critical')
+            if (_currentTaskData['priority'] == 'High' ||
+                _currentTaskData['priority'] == 'Critical')
               _buildStatusBadge(
                 "High Priority",
                 const Color(0xFFFFEBEE),
                 const Color(0xFFD32F2F),
               ),
             const SizedBox(width: 12),
-            if (widget.initialTask?['status'] != null)
+            if (_currentTaskData['status'] != null)
               _buildStatusBadge(
-                widget.initialTask!['status'].toString(),
+                _currentTaskData['status'].toString(),
                 Colors.grey[200]!,
                 Colors.grey[700]!,
               ),
@@ -897,7 +936,7 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
         ),
         const SizedBox(height: 24),
 
-        // Assessment (outside card) – view-only content
+        // Assessment (outside card) – editable content
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(24),
@@ -908,8 +947,8 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text(
+            children: [
+              const Text(
                 "Assessment",
                 style: TextStyle(
                   fontSize: 16,
@@ -917,18 +956,43 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
                   color: Colors.black87,
                 ),
               ),
-              SizedBox(height: 16),
-              // keep static sample text
-              _StaticGreyPanel(
-                text:
-                    "Elevator cables passed inspection; slight vibration in motor.",
-              ),
+              const SizedBox(height: 16),
+              _isEditMode
+                  ? TextFormField(
+                      controller: _assessmentNotesCtrl,
+                      minLines: 3,
+                      maxLines: 6,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                        hintText: 'Enter assessment notes...',
+                      ),
+                    )
+                  : Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[200]!),
+                      ),
+                      child: Text(
+                        _assessmentNotesCtrl.text.isNotEmpty 
+                            ? _assessmentNotesCtrl.text
+                            : 'No assessment notes available.',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black87,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
             ],
           ),
         ),
         const SizedBox(height: 24),
 
-        // Recommend (outside card) – view-only content
+        // Recommend (outside card) – editable content
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(24),
@@ -939,20 +1003,46 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text(
-                "Recommend",
+            children: [
+              const Text(
+                "Recommendations",
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: Colors.black87,
                 ),
               ),
-              SizedBox(height: 16),
-              _StaticGreyPanel(
-                text:
-                    "Recommend motor re-alignment in next quarter; monitor panel errors.",
-              ),
+              const SizedBox(height: 16),
+              _isEditMode
+                  ? TextFormField(
+                      controller: _recommendationsCtrl,
+                      minLines: 3,
+                      maxLines: 6,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                        hintText: 'Enter recommendations...',
+                      ),
+                    )
+                  : Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[200]!),
+                      ),
+                      child: Text(
+                        _recommendationsCtrl.text.isNotEmpty 
+                            ? _recommendationsCtrl.text
+                            : 'No recommendations available.',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black87,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
             ],
           ),
         ),
@@ -1012,30 +1102,81 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     );
   }
 
-  // Attachments
+  // Attachments - placeholder for future dynamic implementation
   Widget _buildAttachmentsCard() {
+    // Get attachments from current task data
+    final attachments = _currentTaskData['attachments'] as List<dynamic>? ?? [];
+    
     return _buildCard(
       icon: Icons.attach_file_outlined,
       iconColor: Colors.orange,
       title: "Attachments",
-      child: Column(
-        children: [
-          _buildAttachmentItem(
-            "towerA_elevator_check_july2025.pdf",
-            Icons.picture_as_pdf,
-            Colors.red,
-            "PDF",
-          ),
-          const SizedBox(height: 12),
-          _buildAttachmentItem(
-            "door-sensor-before.jpg",
-            Icons.image,
-            Colors.green,
-            "IMG",
-          ),
-        ],
-      ),
+      child: attachments.isEmpty
+          ? Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: const Center(
+                child: Text(
+                  'No attachments available',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                ),
+              ),
+            )
+          : Column(
+              children: attachments.map<Widget>((attachment) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _buildAttachmentItem(
+                    attachment['filename']?.toString() ?? 'Unknown file',
+                    _getFileIcon(attachment['type']?.toString() ?? ''),
+                    _getFileColor(attachment['type']?.toString() ?? ''),
+                    attachment['type']?.toString() ?? 'FILE',
+                  ),
+                );
+              }).toList(),
+            ),
     );
+  }
+
+  IconData _getFileIcon(String fileType) {
+    switch (fileType.toLowerCase()) {
+      case 'pdf':
+        return Icons.picture_as_pdf;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+        return Icons.image;
+      case 'doc':
+      case 'docx':
+        return Icons.description;
+      default:
+        return Icons.attach_file;
+    }
+  }
+
+  Color _getFileColor(String fileType) {
+    switch (fileType.toLowerCase()) {
+      case 'pdf':
+        return Colors.red;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+        return Colors.green;
+      case 'doc':
+      case 'docx':
+        return Colors.blue;
+      default:
+        return Colors.grey;
+    }
   }
 
   Widget _buildAttachmentItem(
@@ -1299,33 +1440,6 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
           ),
         ),
       ],
-    );
-  }
-}
-
-// Small helper for your static grey panels
-class _StaticGreyPanel extends StatelessWidget {
-  final String text;
-  const _StaticGreyPanel({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 14,
-          color: Colors.black87,
-          height: 1.4,
-        ),
-      ),
     );
   }
 }

@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/services/auth_storage.dart';
 import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/staff/view_details.dart';
+import 'package:facilityfix/staff/job_service_detail.dart';
 import 'package:facilityfix/staff/maintenance.dart';
 import 'package:facilityfix/staff/announcement.dart';
-import 'package:facilityfix/staff/chat.dart';
+import 'package:facilityfix/services/chat_helper.dart';
 import 'package:facilityfix/staff/notification.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/profile.dart';
@@ -34,6 +36,10 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   // ─────────────── Dynamic data from API ───────────────
   List<Map<String, dynamic>> _allRequests = [];
   bool _isLoading = true;
+
+  // ─────────────── Current user info ───────────────
+  String? _currentUserId;
+  bool _showOnlyMyAssignments = false; // Toggle for assigned tasks
 
   // ===== Refresh =============================================================
   Future<void> _refresh() async {
@@ -93,7 +99,21 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   void initState() {
     super.initState();
     _searchController.addListener(() => setState(() {}));
+    _loadCurrentUser();
     _loadAllRequests();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    try {
+      final profile = await AuthStorage.getProfile();
+      if (profile != null && mounted) {
+        setState(() {
+          _currentUserId = profile['uid'] ?? profile['user_id'];
+        });
+      }
+    } catch (e) {
+      print('Error loading current user: $e');
+    }
   }
 
   // ===== Bottom nav ==========================================================
@@ -118,6 +138,58 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
         context,
         MaterialPageRoute(builder: (_) => destinations[index]),
       );
+    }
+  }
+
+  // ===== Chat Navigation =====================================================
+  Future<void> _handleChatNavigation(Map<String, dynamic> request) async {
+    try {
+      final requestId = request['raw_id'] ?? request['id'] ?? '';
+      final requestType = (request['request_type'] ?? '').toLowerCase();
+      
+      if (requestId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error: Unable to start chat - Invalid request ID'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      // Navigate to appropriate chat based on request type
+      // No need to extract tenant ID - chat will be filtered by reference ID
+      if (requestType.contains('job service')) {
+        await ChatHelper.navigateToJobServiceChat(
+          context: context,
+          jobServiceId: requestId,
+          isStaff: true,
+        );
+      } else if (requestType.contains('maintenance')) {
+        await ChatHelper.navigateToMaintenanceChat(
+          context: context,
+          maintenanceId: requestId,
+          isStaff: true,
+        );
+      } else {
+        // Default to work order/concern slip chat
+        await ChatHelper.navigateToWorkOrderChat(
+          context: context,
+          workOrderId: requestId,
+          isStaff: true,
+        );
+      }
+    } catch (e) {
+      print('Error navigating to chat: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error starting chat: ${e.toString()}'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -183,6 +255,12 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     return _norm(w['category']) == _norm(_selectedDepartment);
   }
 
+  bool _assignmentMatches(Map<String, dynamic> w) {
+    if (!_showOnlyMyAssignments || _currentUserId == null) return true;
+    final assignedStaff = w['assigned_staff'] ?? w['assigned_to'];
+    return assignedStaff == _currentUserId;
+  }
+
   bool _searchMatches(Map<String, dynamic> w) {
     final q = _norm(_searchController.text);
     if (q.isEmpty) return true;
@@ -208,6 +286,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
           .where(_statusMatches)
           .where(_departmentMatches)
           .where(_searchMatches)
+          .where(_assignmentMatches)
           .toList();
 
   List<Map<String, dynamic>> get _filteredSorted {
@@ -296,9 +375,10 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       staffDepartment: r['staff_department'],
       onTap: () {
         // Extract the raw ID from the formatted ID or use the ID directly
-        final concernSlipId = r['raw_id'] ?? r['id'] ?? '';
+        final requestId = r['raw_id'] ?? r['id'] ?? '';
+        final requestType = (r['request_type'] ?? '').toLowerCase();
         
-        if (concernSlipId.isEmpty) {
+        if (requestId.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Error: Invalid request ID'),
@@ -308,23 +388,36 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
           return;
         }
         
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => StaffConcernSlipDetailPage(
-              concernSlipId: concernSlipId,
+        // Navigate to appropriate detail page based on request type
+        if (requestType.contains('job service')) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => StaffJobServiceDetailPage(
+                jobServiceId: requestId,
+              ),
             ),
-          ),
-        ).then((_) {
-          // Refresh data when returning
-          _loadAllRequests();
-        });
+          ).then((_) {
+            // Refresh data when returning
+            _loadAllRequests();
+          });
+        } else {
+          // Default to concern slip detail page for other types
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => StaffConcernSlipDetailPage(
+                concernSlipId: requestId,
+              ),
+            ),
+          ).then((_) {
+            // Refresh data when returning
+            _loadAllRequests();
+          });
+        }
       },
       onChatTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const ChatPage()),
-        );
+        _handleChatNavigation(r);
       },
     );
   }
@@ -388,6 +481,46 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                           onSearchChanged: (_) {
                             setState(() {});
                           },
+                        ),
+                        const SizedBox(height: 16),
+
+                        // My Assignments Toggle
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.person_outline,
+                                size: 20,
+                                color: Color(0xFF64748B),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Show only my assignments',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF475569),
+                                ),
+                              ),
+                              const Spacer(),
+                              Switch(
+                                value: _showOnlyMyAssignments,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _showOnlyMyAssignments = value;
+                                  });
+                                },
+                                activeColor: const Color(0xFF005CE7),
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 16),
 

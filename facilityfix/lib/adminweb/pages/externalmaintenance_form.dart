@@ -1049,16 +1049,20 @@ class _ExternalMaintenanceFormPageState
     'maintenance_type': 'external',
     'service_category': _selectedServiceCategory,
     'created_by': _createdByController.text.trim(),
-    'date_created': formatDate(_dateCreated!),
     'priority': _selectedPriority ?? 'medium',
     'status': _selectedStatus ?? 'scheduled',
     'location': _selectedLocation ?? '',
-    'description': _descriptionController.text.trim(),
+    
+    // Contractor Information
     'contractor_name': _contractorNameController.text.trim(),
     'contact_person': _contactPersonController.text.trim(),
     'contact_number': _contactNumberController.text.trim(),
     'email': _emailController.text.trim(),
-    'recurrence': _selectedRecurrence,
+    
+    // Scheduling Information
+    'recurrence_type': _selectedRecurrence != null
+        ? _selectedRecurrence!.toLowerCase()
+        : 'none',
     'start_date': formatDate(_startDate!),
     'scheduled_date': scheduledDateIso,
     'next_due_date': formatDate(_nextDueDate!),
@@ -1066,21 +1070,25 @@ class _ExternalMaintenanceFormPageState
       _serviceWindowStart != null ? formatDate(_serviceWindowStart!) : null,
     'service_window_end':
       _serviceWindowEnd != null ? formatDate(_serviceWindowEnd!) : null,
+    
+    // Assessment and Tracking
     'assessment_received': _selectedAssessmentReceived,
     'logged_by': _selectedLoggedBy,
     'logged_date': _loggedDate != null ? formatDate(_loggedDate!) : null,
     'assessment': _assessmentController.text.trim(),
     'recommendation': _recommendationController.text.trim(),
+    
+    // Department and Admin
     'department': _departmentController.text.trim(),
     'admin_notification': _selectedAdminNotifications,
+    
+    // System Fields
     'building_id': 'default_building',
     'task_type': 'external',
     'category': _selectedServiceCategory ?? 'maintenance',
-    'recurrence_type':
-      _selectedRecurrence != null
-        ? _selectedRecurrence!.toLowerCase()
-        : 'none',
     'assigned_to': _contractorNameController.text.trim(),
+    
+    // Required Arrays
     'checklist_completed': <Map<String, dynamic>>[],
     'parts_used': <Map<String, dynamic>>[],
     'tools_used': <String>[],

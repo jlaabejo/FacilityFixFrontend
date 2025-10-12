@@ -41,48 +41,48 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBDH_3YyGzT6XwQx1VGJjMQn4_yKJb1234', // Replace with your actual API key
-    authDomain: 'facilityfix-project.firebaseapp.com', // Replace with your auth domain
-    projectId: 'facilityfix-project', // Replace with your project ID
-    storageBucket: 'facilityfix-project.appspot.com', // Replace with your storage bucket
-    messagingSenderId: '123456789012', // Replace with your sender ID
-    appId: '1:123456789012:web:abcdef1234567890', // Replace with your app ID
-    measurementId: 'G-XXXXXXXXXX', // Optional: Replace with your measurement ID
+    apiKey: 'AIzaSyCBIQwgUZlxDSHV8-v78VJ6UOASBx0l6OU',
+    authDomain: 'facilityfix-6d27a.firebaseapp.com',
+    projectId: 'facilityfix-6d27a',
+    storageBucket: 'facilityfix-6d27a.firebasestorage.app',
+    messagingSenderId: '495669461131',
+    appId: '1:495669461131:web:4468207a00c965a2a7548e',
+    measurementId: 'G-CTYHR31S0Q',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBDH_3YyGzT6XwQx1VGJjMQn4_yKJb1234',
-    appId: '1:123456789012:android:abcdef1234567890',
-    messagingSenderId: '123456789012',
-    projectId: 'facilityfix-project',
-    storageBucket: 'facilityfix-project.appspot.com',
+    apiKey: 'AIzaSyCBIQwgUZlxDSHV8-v78VJ6UOASBx0l6OU',
+    appId: '1:495669461131:android:7e8a9b6c5d4e3f2a1b9c8d',
+    messagingSenderId: '495669461131',
+    projectId: 'facilityfix-6d27a',
+    storageBucket: 'facilityfix-6d27a.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyBDH_3YyGzT6XwQx1VGJjMQn4_yKJb1234',
-    appId: '1:123456789012:ios:abcdef1234567890',
-    messagingSenderId: '123456789012',
-    projectId: 'facilityfix-project',
-    storageBucket: 'facilityfix-project.appspot.com',
+    apiKey: 'AIzaSyCBIQwgUZlxDSHV8-v78VJ6UOASBx0l6OU',
+    appId: '1:495669461131:ios:7e8a9b6c5d4e3f2a1b9c8d',
+    messagingSenderId: '495669461131',
+    projectId: 'facilityfix-6d27a',
+    storageBucket: 'facilityfix-6d27a.firebasestorage.app',
     iosBundleId: 'com.example.facilityfix',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyBDH_3YyGzT6XwQx1VGJjMQn4_yKJb1234',
-    appId: '1:123456789012:macos:abcdef1234567890',
-    messagingSenderId: '123456789012',
-    projectId: 'facilityfix-project',
-    storageBucket: 'facilityfix-project.appspot.com',
+    apiKey: 'AIzaSyCBIQwgUZlxDSHV8-v78VJ6UOASBx0l6OU',
+    appId: '1:495669461131:macos:7e8a9b6c5d4e3f2a1b9c8d',
+    messagingSenderId: '495669461131',
+    projectId: 'facilityfix-6d27a',
+    storageBucket: 'facilityfix-6d27a.firebasestorage.app',
     iosBundleId: 'com.example.facilityfix',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyBDH_3YyGzT6XwQx1VGJjMQn4_yKJb1234',
-    appId: '1:123456789012:windows:abcdef1234567890',
-    messagingSenderId: '123456789012',
-    projectId: 'facilityfix-project',
-    authDomain: 'facilityfix-project.firebaseapp.com',
-    storageBucket: 'facilityfix-project.appspot.com',
-    measurementId: 'G-XXXXXXXXXX',
+    apiKey: 'AIzaSyCBIQwgUZlxDSHV8-v78VJ6UOASBx0l6OU',
+    appId: '1:495669461131:windows:7e8a9b6c5d4e3f2a1b9c8d',
+    messagingSenderId: '495669461131',
+    projectId: 'facilityfix-6d27a',
+    authDomain: 'facilityfix-6d27a.firebaseapp.com',
+    storageBucket: 'facilityfix-6d27a.firebasestorage.app',
+    measurementId: 'G-CTYHR31S0Q',
   );
 }
