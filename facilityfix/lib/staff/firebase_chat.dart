@@ -361,15 +361,22 @@ class _StaffChatDetailPageState extends State<StaffChatDetailPage> {
   }
 
   String _getRoomTitle() {
+    String baseTitle;
     if (widget.room.concernSlipId != null) {
-      return 'Concern Slip Chat';
+      baseTitle = 'Concern Slip Chat';
     } else if (widget.room.maintenanceId != null) {
-      return 'Maintenance Chat';
+      baseTitle = 'Maintenance Chat';
     } else if (widget.room.jobServiceId != null) {
-      return 'Job Service Chat';
+      baseTitle = 'Job Service Chat';
     } else {
-      return 'General Chat';
+      baseTitle = 'General Chat';
     }
+    
+    // Append room code to title if available
+    if (widget.room.roomCode.isNotEmpty) {
+      return '$baseTitle (${widget.room.roomCode})';
+    }
+    return baseTitle;
   }
 
   void _copyRoomCode() {
@@ -512,47 +519,6 @@ class _StaffChatDetailPageState extends State<StaffChatDetailPage> {
       ),
       body: Column(
         children: [
-          // Room Code Banner (if available)
-          if (widget.room.roomCode.isNotEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF213ED7).withOpacity(0.1),
-                border: const Border(
-                  bottom: BorderSide(color: Color(0xFFF6F7F9)),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.vpn_key,
-                    size: 16,
-                    color: Color(0xFF213ED7),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Room Code: ${widget.room.roomCode}',
-                    style: const TextStyle(
-                      color: Color(0xFF213ED7),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: _copyRoomCode,
-                    child: const Icon(
-                      Icons.copy,
-                      size: 16,
-                      color: Color(0xFF213ED7),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
           // Messages List
           Expanded(
             child: StreamBuilder<List<ChatMessage>>(
