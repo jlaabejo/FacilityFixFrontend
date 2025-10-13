@@ -2368,4 +2368,150 @@ class APIService {
       return 0;
     }
   }
+
+  // ===== NOTIFICATION ENDPOINTS =====
+
+  /// Get notifications for the current user
+  Future<List<Map<String, dynamic>>> getNotifications({
+    bool unreadOnly = false,
+    int limit = 50,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final queryParams = {
+        'unread_only': unreadOnly.toString(),
+        'limit': limit.toString(),
+      };
+
+      final uri = Uri.parse('$baseUrl/notifications/').replace(
+        queryParameters: queryParams,
+      );
+
+      final response = await http.get(
+        uri,
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data is Map<String, dynamic> && data.containsKey('notifications')) {
+          return List<Map<String, dynamic>>.from(data['notifications']);
+        } else if (data is List) {
+          return List<Map<String, dynamic>>.from(data);
+        } else {
+          return [];
+        }
+      } else {
+        throw Exception('Failed to load notifications: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error fetching notifications: $e');
+      return [];
+    }
+  }
+
+  /// Mark notifications as read
+  Future<bool> markNotificationsAsRead(List<String> notificationIds) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = {'notification_ids': notificationIds};
+
+      final response = await post(
+        '/notifications/mark-read',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (e) {
+      print('Error marking notifications as read: $e');
+      return false;
+    }
+  }
+
+  /// Mark a single notification as read
+  Future<bool> markNotificationAsRead(String notificationId) async {
+    return await markNotificationsAsRead([notificationId]);
+  }
+
+  /// Delete a notification
+  Future<bool> deleteNotification(String notificationId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await delete(
+        '/notifications/$notificationId',
+        headers: _authHeaders(token),
+      );
+
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (e) {
+      print('Error deleting notification: $e');
+      return false;
+    }
+  }
+
+  /// Get unread notification count
+  Future<int> getUnreadNotificationCount() async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await get(
+        '/notifications/unread-count',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        // Backend returns {"unread_count": count}
+        final count = data['unread_count'];
+        if (count is int) {
+          return count;
+        } else if (count is String) {
+          return int.tryParse(count) ?? 0;
+        } else {
+          return 0;
+        }
+      }
+      return 0;
+    } catch (e) {
+      print('Error getting unread notification count: $e');
+      return 0; // Return 0 on error instead of throwing
+    }
+  }
+
+  /// Test notification creation (for development/testing)
+  Future<bool> createTestNotification({
+    required String title,
+    required String message,
+    String notificationType = 'test_notification',
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = {
+        'title': title,
+        'message': message,
+        'notification_type': notificationType,
+      };
+
+      final response = await post(
+        '/notifications/test',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (e) {
+      print('Error creating test notification: $e');
+      return false;
+    }
+  }
 }

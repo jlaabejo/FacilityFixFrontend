@@ -1833,7 +1833,7 @@ class ApiService {
   // ============================================
 
   /// Get notifications for the current user
-  Future<Map<String, dynamic>> getNotifications({
+  Future<dynamic> getNotifications({
     bool unreadOnly = false,
     int limit = 50,
   }) async {
@@ -1921,13 +1921,21 @@ class ApiService {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.get(
-        Uri.parse('$baseUrl/notifications/unread/count'),
+        Uri.parse('$baseUrl/notifications/unread-count'),
         headers: headers,
       );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        return data['count'] as int;
+        // Backend returns {"unread_count": count}
+        final count = data['unread_count'];
+        if (count is int) {
+          return count;
+        } else if (count is String) {
+          return int.tryParse(count) ?? 0;
+        } else {
+          return 0;
+        }
       } else {
         throw Exception(
           'Failed to get unread notification count: ${response.statusCode}',

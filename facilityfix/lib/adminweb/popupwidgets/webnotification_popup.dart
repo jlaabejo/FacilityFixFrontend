@@ -35,6 +35,73 @@ class NotificationDialog extends StatefulWidget {
 }
 
 class _NotificationDialogState extends State<NotificationDialog> {
+  bool _isLoading = false;
+  bool _isRefreshing = false;
+  List<Map<String, dynamic>> _localNotifications = [];
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _localNotifications = List.from(widget.notifications);
+    _refreshNotifications();
+  }
+
+  Future<void> _refreshNotifications() async {
+    if (_isLoading || _isRefreshing) return;
+
+    setState(() {
+      _isRefreshing = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final response = await ApiService().getNotifications(limit: 50);
+      
+      // The backend returns a List directly
+      List<dynamic> notificationsList;
+      if (response is List) {
+        notificationsList = response;
+      } else {
+        // Fallback for unexpected response format
+        notificationsList = [];
+        print('[NotificationDialog] Unexpected response format: ${response.runtimeType}');
+      }
+
+      final transformedNotifications = notificationsList.map((notif) {
+        return {
+          'id': notif['id'],
+          'type': notif['notification_type'] ?? 'system',
+          'title': notif['title'] ?? 'Notification',
+          'message': notif['message'] ?? '',
+          'timestamp': notif['created_at'] ?? DateTime.now().toIso8601String(),
+          'isRead': notif['is_read'] ?? false,
+          'relatedId': notif['related_entity_id'],
+          'priority': notif['priority'] ?? 'normal',
+          'isUrgent': notif['is_urgent'] ?? false,
+          'notificationType': notif['notification_type'] ?? 'system',
+          'department': notif['department'],
+          'buildingId': notif['building_id'],
+        };
+      }).toList();
+
+      setState(() {
+        _localNotifications = transformedNotifications;
+        _isRefreshing = false;
+      });
+
+      // Trigger parent refresh
+      if (widget.onRefresh != null) {
+        widget.onRefresh!();
+      }
+    } catch (e) {
+      setState(() {
+        _isRefreshing = false;
+        _errorMessage = 'Failed to load notifications: ${e.toString()}';
+      });
+      print('[NotificationDialog] Error refreshing notifications: $e');
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -63,10 +130,14 @@ class _NotificationDialogState extends State<NotificationDialog> {
             // Header Section
             _buildHeader(context),
 
+            // Error message display
+            if (_errorMessage != null) _buildErrorMessage(),
+
             // Notifications List
             Flexible(
-              child:
-                  widget.notifications.isEmpty
+              child: _isRefreshing
+                  ? _buildLoadingState()
+                  : _localNotifications.isEmpty
                       ? _buildEmptyState()
                       : _buildNotificationsList(),
             ),
@@ -97,12 +168,28 @@ class _NotificationDialogState extends State<NotificationDialog> {
             ),
           ),
           const Spacer(),
+          // Refresh button
+          IconButton(
+            onPressed: _isRefreshing ? null : _refreshNotifications,
+            icon: _isRefreshing
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(Icons.refresh, color: Colors.grey[600], size: 20),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            tooltip: 'Refresh notifications',
+          ),
+          const SizedBox(width: 8),
           // Settings button (optional)
           IconButton(
             onPressed: () => _openNotificationSettings(),
             icon: Icon(Icons.settings, color: Colors.grey[600], size: 20),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
+            tooltip: 'Notification settings',
           ),
           const SizedBox(width: 8),
           // Close button
@@ -111,6 +198,62 @@ class _NotificationDialogState extends State<NotificationDialog> {
             icon: Icon(Icons.close, color: Colors.grey[600], size: 20),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
+            tooltip: 'Close',
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Error message display
+  Widget _buildErrorMessage() {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.red[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.red[200]!),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, color: Colors.red[700], size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _errorMessage!,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.red[700],
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: () => setState(() => _errorMessage = null),
+            icon: Icon(Icons.close, size: 16, color: Colors.red[700]),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Loading state
+  Widget _buildLoadingState() {
+    return Container(
+      padding: const EdgeInsets.all(40),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircularProgressIndicator(),
+          const SizedBox(height: 16),
+          Text(
+            'Loading notifications...',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
           ),
         ],
       ),
@@ -123,7 +266,7 @@ class _NotificationDialogState extends State<NotificationDialog> {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
         children:
-            widget.notifications.map((notification) {
+            _localNotifications.map((notification) {
               return _buildNotificationItem(notification);
             }).toList(),
       ),
@@ -236,6 +379,26 @@ class _NotificationDialogState extends State<NotificationDialog> {
     IconData icon;
 
     switch (type?.toLowerCase()) {
+      case 'concern_slip_submitted':
+        bgColor = Colors.blue[100]!;
+        iconColor = Colors.blue[700]!;
+        icon = Icons.assignment_turned_in;
+        break;
+      case 'concern_slip_assigned':
+        bgColor = Colors.orange[100]!;
+        iconColor = Colors.orange[700]!;
+        icon = Icons.assignment_ind;
+        break;
+      case 'concern_slip_completed':
+        bgColor = Colors.green[100]!;
+        iconColor = Colors.green[700]!;
+        icon = Icons.check_circle_outline;
+        break;
+      case 'concern_slip_resolved':
+        bgColor = Colors.green[100]!;
+        iconColor = Colors.green[700]!;
+        icon = Icons.check_circle;
+        break;
       case 'maintenance':
         bgColor = Colors.orange[100]!;
         iconColor = Colors.orange[700]!;
@@ -256,10 +419,45 @@ class _NotificationDialogState extends State<NotificationDialog> {
         iconColor = Colors.green[700]!;
         icon = Icons.campaign;
         break;
+      case 'user_registered':
+        bgColor = Colors.indigo[100]!;
+        iconColor = Colors.indigo[700]!;
+        icon = Icons.person_add;
+        break;
+      case 'work_order_created':
+        bgColor = Colors.cyan[100]!;
+        iconColor = Colors.cyan[700]!;
+        icon = Icons.work_outline;
+        break;
+      case 'work_order_assigned':
+        bgColor = Colors.amber[100]!;
+        iconColor = Colors.amber[700]!;
+        icon = Icons.engineering;
+        break;
+      case 'work_order_completed':
+        bgColor = Colors.teal[100]!;
+        iconColor = Colors.teal[700]!;
+        icon = Icons.task_alt;
+        break;
+      case 'inventory_low_stock':
+        bgColor = Colors.orange[100]!;
+        iconColor = Colors.orange[700]!;
+        icon = Icons.inventory_2_outlined;
+        break;
+      case 'inventory_out_of_stock':
+        bgColor = Colors.red[100]!;
+        iconColor = Colors.red[700]!;
+        icon = Icons.warning_amber;
+        break;
       case 'system':
         bgColor = Colors.purple[100]!;
         iconColor = Colors.purple[700]!;
         icon = Icons.settings;
+        break;
+      case 'urgent':
+        bgColor = Colors.red[100]!;
+        iconColor = Colors.red[700]!;
+        icon = Icons.priority_high;
         break;
       default:
         bgColor = Colors.grey[100]!;
@@ -307,7 +505,7 @@ class _NotificationDialogState extends State<NotificationDialog> {
 
   // Footer section with actions
   Widget _buildFooter(BuildContext context) {
-    if (widget.notifications.isEmpty) return const SizedBox.shrink();
+    if (_localNotifications.isEmpty) return const SizedBox.shrink();
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -411,7 +609,7 @@ class _NotificationDialogState extends State<NotificationDialog> {
   // Mark all notifications as read
   void _markAllAsRead() async {
     final unreadIds =
-        widget.notifications
+        _localNotifications
             .where((n) => n['isRead'] == false)
             .map((n) => n['id'] as String)
             .toList();
@@ -422,7 +620,7 @@ class _NotificationDialogState extends State<NotificationDialog> {
       await ApiService().markNotificationsAsRead(unreadIds);
 
       setState(() {
-        for (var notification in widget.notifications) {
+        for (var notification in _localNotifications) {
           notification['isRead'] = true;
         }
       });
@@ -441,6 +639,9 @@ class _NotificationDialogState extends State<NotificationDialog> {
       }
     } catch (e) {
       print('[v0] Error marking all as read: $e');
+      setState(() {
+        _errorMessage = 'Failed to mark notifications as read: $e';
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -454,16 +655,16 @@ class _NotificationDialogState extends State<NotificationDialog> {
 
   // Clear all notifications
   void _clearAllNotifications() async {
-    if (widget.notifications.isEmpty) return;
+    if (_localNotifications.isEmpty) return;
 
     try {
       // Delete all notifications via API
-      for (var notification in widget.notifications) {
+      for (var notification in _localNotifications) {
         await ApiService().deleteNotification(notification['id']);
       }
 
       setState(() {
-        widget.notifications.clear();
+        _localNotifications.clear();
       });
 
       if (widget.onRefresh != null) {
@@ -480,6 +681,9 @@ class _NotificationDialogState extends State<NotificationDialog> {
       }
     } catch (e) {
       print('[v0] Error clearing notifications: $e');
+      setState(() {
+        _errorMessage = 'Failed to clear notifications: $e';
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -531,7 +735,7 @@ class _NotificationDialogState extends State<NotificationDialog> {
       await ApiService().deleteNotification(id);
 
       setState(() {
-        widget.notifications.removeWhere((notif) => notif['id'] == id);
+        _localNotifications.removeWhere((notif) => notif['id'] == id);
       });
 
       if (widget.onRefresh != null) {
@@ -539,6 +743,9 @@ class _NotificationDialogState extends State<NotificationDialog> {
       }
     } catch (e) {
       print('[v0] Error deleting notification: $e');
+      setState(() {
+        _errorMessage = 'Failed to delete notification: $e';
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -52,6 +53,28 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
       'initState -> currentRoute=${widget.currentRoute}, expanded=$_expanded',
     );
     _initializeAuth();
+    
+    // Set up periodic notification refresh (every 30 seconds)
+    _startNotificationRefreshTimer();
+  }
+
+  @override
+  void dispose() {
+    _notificationRefreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Timer? _notificationRefreshTimer;
+
+  void _startNotificationRefreshTimer() {
+    _notificationRefreshTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (timer) {
+        if (mounted && !_isLoadingNotifications) {
+          _fetchNotifications();
+        }
+      },
+    );
   }
 
   // Automatically expand parent dropdown if child route is active
@@ -100,39 +123,60 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
     try {
       final response = await ApiService().getNotifications();
 
-      // Extract the notifications list from the response
-      final notificationsList = response['notifications'] as List? ?? [];
+      // The backend returns a List directly, not a Map
+      List<dynamic> notificationsList;
+      if (response is List) {
+        notificationsList = response;
+      } else {
+        // Fallback for unexpected response format
+        notificationsList = [];
+        print('[AdminLayout] Unexpected response format: ${response.runtimeType}');
+      }
 
-      // Transform backend data to match popup format
-      final transformedNotifications =
-          notificationsList.map((notif) {
-            return {
-              'id': notif['id'],
-              'type': notif['notification_type'] ?? 'system',
-              'title': notif['title'] ?? 'Notification',
-              'message': notif['message'] ?? '',
-              'timestamp':
-                  notif['created_at'] ?? DateTime.now().toIso8601String(),
-              'isRead': notif['is_read'] ?? false,
-              'relatedId': notif['related_id'],
-            };
-          }).toList();
+      // Transform backend data to match popup format with enhanced fields
+      final transformedNotifications = notificationsList.map((notif) {
+        return {
+          'id': notif['id'],
+          'type': notif['notification_type'] ?? 'system',
+          'title': notif['title'] ?? 'Notification',
+          'message': notif['message'] ?? '',
+          'timestamp': notif['created_at'] ?? DateTime.now().toIso8601String(),
+          'isRead': notif['is_read'] ?? false,
+          'relatedId': notif['related_entity_id'],
+          'priority': notif['priority'] ?? 'normal',
+          'isUrgent': notif['is_urgent'] ?? false,
+          'notificationType': notif['notification_type'] ?? 'system',
+        };
+      }).toList();
+
+      // Get accurate unread count from the enhanced notifications
+      final unreadCount = await ApiService().getUnreadNotificationCount();
 
       setState(() {
         _notifications = transformedNotifications;
-        _unreadCount =
-            transformedNotifications.where((n) => n['isRead'] == false).length;
+        _unreadCount = unreadCount;
         _isLoadingNotifications = false;
       });
 
       print(
-        '[v0] Loaded ${_notifications.length} notifications, $_unreadCount unread',
+        '[AdminLayout] Loaded ${_notifications.length} notifications, $_unreadCount unread',
       );
     } catch (e) {
-      print('[v0] Error fetching notifications: $e');
+      print('[AdminLayout] Error fetching notifications: $e');
       setState(() {
         _isLoadingNotifications = false;
       });
+      
+      // Show error to user only if this is not a background refresh
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load notifications: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -349,8 +393,20 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                           Stack(
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.notifications_outlined),
-                                onPressed: () async {
+                                icon: Icon(
+                                  _isLoadingNotifications 
+                                      ? Icons.hourglass_empty 
+                                      : Icons.notifications_outlined,
+                                  color: _isLoadingNotifications 
+                                      ? Colors.grey 
+                                      : null,
+                                ),
+                                tooltip: _isLoadingNotifications 
+                                    ? 'Loading notifications...' 
+                                    : 'View notifications',
+                                onPressed: _isLoadingNotifications 
+                                    ? null 
+                                    : () {
                                   NotificationDialog.show(
                                     context,
                                     _notifications,
