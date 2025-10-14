@@ -698,6 +698,96 @@ class ApiService {
     }
   }
 
+  /// Approve a work order permit (Admin only)
+  Future<Map<String, dynamic>> approveWorkOrderPermit(
+    String permitId, {
+    String? conditions,
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final body = json.encode({
+        if (conditions != null) 'conditions': conditions,
+      });
+      
+      final response = await http.patch(
+        Uri.parse('$baseUrl/work-order-permits/$permitId/approve'),
+        headers: headers,
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to approve work order permit: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error approving work order permit: $e');
+      rethrow;
+    }
+  }
+
+  /// Deny a work order permit (Admin only)
+  Future<Map<String, dynamic>> denyWorkOrderPermit(
+    String permitId,
+    String reason,
+  ) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final body = json.encode({
+        'reason': reason,
+      });
+      
+      final response = await http.patch(
+        Uri.parse('$baseUrl/work-order-permits/$permitId/deny'),
+        headers: headers,
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to deny work order permit: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error denying work order permit: $e');
+      rethrow;
+    }
+  }
+
+  /// Mark a work order permit as completed
+  Future<Map<String, dynamic>> completeWorkOrderPermit(
+    String permitId, {
+    String? completionNotes,
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final body = json.encode({
+        if (completionNotes != null) 'completion_notes': completionNotes,
+      });
+      
+      final response = await http.patch(
+        Uri.parse('$baseUrl/work-order-permits/$permitId/complete'),
+        headers: headers,
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to complete work order permit: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error completing work order permit: $e');
+      rethrow;
+    }
+  }
+
   // ============================================
   // MAINTENANCE CALENDAR ENDPOINTS
   // ============================================

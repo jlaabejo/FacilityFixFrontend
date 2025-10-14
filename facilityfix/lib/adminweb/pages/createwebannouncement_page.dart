@@ -72,12 +72,15 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
 
   // Sample location options - replace with actual data from backend
   final List<String> _locationOptions = [
-    'Tower A, Floors 1-5',
-    'Tower B, Floors 1-10',
-    'Building C, Lobby',
-    'Parking Area',
-    'Common Areas',
-    'All Buildings',
+    'Swimming pool',
+    'Basketball Court',
+    'Gym',
+    'Parking area',
+    'Lobby',
+    'Elevators',
+    'Halls',
+    'Garden',
+    'Corridors',
   ];
 
   // Route mapping helper function

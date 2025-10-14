@@ -764,7 +764,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
           ),
           const SizedBox(width: 300),
 
-          // Filter Button
+          // Refresh Button
           Container(
             height: 40,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -773,21 +773,27 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
               border: Border.all(color: Colors.grey[300]!),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.tune, color: Colors.grey[600], size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  "Filter",
-                  style: TextStyle(
-                    color: Colors.grey[700],
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+            child: InkWell(
+              onTap: _loadJobServices,
+              borderRadius: BorderRadius.circular(20),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.refresh_rounded, size: 20, color: Colors.blue[600]),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Refresh',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.blue[600],
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
+            
+            
           ),
         ],
       ),
@@ -797,7 +803,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   // Table Section Widget
   Widget _buildTableSection() {
     return Container(
-      height: 400, // Fixed height to avoid unbounded constraints
+      height: 650, // Fixed height to avoid unbounded constraints
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -900,12 +906,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                             color: Colors.grey[500],
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        ElevatedButton.icon(
-                          onPressed: _loadJobServices,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Refresh'),
-                        ),
+                        
                       ],
                     ),
                   )

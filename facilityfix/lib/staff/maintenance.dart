@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/config/env.dart';
-import 'package:facilityfix/staff/maintenance_detail.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/services/chat_helper.dart';
 import 'package:facilityfix/staff/notification.dart';
@@ -13,6 +12,7 @@ import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/helper_models.dart';
+import 'package:facilityfix/widgets/view_details.dart';
 import 'package:facilityfix/services/auth_storage.dart';
 import 'package:flutter/material.dart';
 
@@ -104,6 +104,7 @@ class _MaintenancePageState extends State<MaintenancePage> {
               'created_at': task['created_at'] ?? DateTime.now().toIso8601String(),
               'assigned_to': task['assigned_to'] ?? task['assigned_staff'] ?? '',
               'assigned_staff': task['assigned_to'] ?? task['assigned_staff'] ?? '',
+              'assigned_staff_name': task['assigned_staff_name'] ?? task['assigned_staff'] ?? task['assigned_to'] ?? '',
               'maintenance_type': task['maintenance_type'] ?? task['maintenanceType'] ?? 'internal',
               'maintenanceType': task['maintenanceType'] ?? task['maintenance_type'] ?? 'internal',
               'task_type': task['task_type'] ?? 'internal',
@@ -117,6 +118,10 @@ class _MaintenancePageState extends State<MaintenancePage> {
               'tools_used': task['tools_used'] ?? [],
               'photos': task['photos'] ?? [],
               'recurrence_type': task['recurrence_type'] ?? 'none',
+              'checklist_completed': task['checklist_completed'] ?? [],
+              'department': task['department'] ?? task['category'] ?? '',
+              'updated_at': task['updated_at'] ?? task['created_at'] ?? DateTime.now().toIso8601String(),
+              'created_by': task['created_by'] ?? task['assigned_to'] ?? '',
             };
             return mappedTask;
           }).toList();
@@ -155,7 +160,6 @@ class _MaintenancePageState extends State<MaintenancePage> {
     NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
     NavItem(icon: Icons.inventory),
-    NavItem(icon: Icons.person),
   ];
 
   void _onTabTapped(int index) {
@@ -420,9 +424,7 @@ class _MaintenancePageState extends State<MaintenancePage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => MaintenanceDetailPage(
-              maintenanceTaskId: maintenanceTaskId,
-            ),
+            builder: (_) => _MaintenanceDetailScreen(task: task),
           ),
         ).then((_) {
           // Refresh data when returning
@@ -640,6 +642,391 @@ class MobileTabSelector extends StatelessWidget {
               ),
             );
           }).toList(),
+        ),
+      ),
+    );
+  }
+}
+
+// Maintenance Detail Screen using MaintenanceDetails widget
+class _MaintenanceDetailScreen extends StatefulWidget {
+  final Map<String, dynamic> task;
+
+  const _MaintenanceDetailScreen({required this.task});
+
+  @override
+  State<_MaintenanceDetailScreen> createState() => _MaintenanceDetailScreenState();
+}
+
+class _MaintenanceDetailScreenState extends State<_MaintenanceDetailScreen> {
+  late List<Map<String, dynamic>> _checklistItems;
+  bool _isUpdating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    print('DEBUG: MaintenanceDetailScreen initState called');
+    print('DEBUG: Task data keys: ${widget.task.keys.toList()}');
+    print('DEBUG: Raw checklist_completed value: ${widget.task['checklist_completed']}');
+    print('DEBUG: Raw checklist_completed type: ${widget.task['checklist_completed'].runtimeType}');
+    _checklistItems = _convertChecklistToMap(widget.task['checklist_completed']);
+    print('DEBUG: Converted checklist items: $_checklistItems');
+    print('DEBUG: Checklist items count: ${_checklistItems.length}');
+  }
+  
+  // Computed properties for checklist progress
+  int get completedCount => _checklistItems.where((item) => item['completed'] == true).length;
+  int get totalCount => _checklistItems.length;
+
+  DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
+  String _formatTimestamp(dynamic timestamp) {
+    if (timestamp == null) return '';
+    
+    DateTime? date;
+    if (timestamp is DateTime) {
+      date = timestamp;
+    } else if (timestamp is String) {
+      date = DateTime.tryParse(timestamp);
+    } else if (timestamp.runtimeType.toString().contains('Timestamp')) {
+      // Handle Firestore Timestamp
+      try {
+        date = (timestamp as dynamic).toDate();
+      } catch (e) {
+        print('Error converting Timestamp: $e');
+      }
+    }
+    
+    return date?.toIso8601String() ?? '';
+  }
+
+  List<Map<String, dynamic>> _convertChecklistToMap(dynamic checklist) {
+    print('DEBUG _convertChecklistToMap: Input checklist: $checklist');
+    print('DEBUG _convertChecklistToMap: Input type: ${checklist.runtimeType}');
+    
+    if (checklist == null) {
+      print('DEBUG _convertChecklistToMap: checklist is null, returning empty list');
+      return [];
+    }
+    
+    if (checklist is! List) {
+      print('DEBUG _convertChecklistToMap: checklist is not a List (is ${checklist.runtimeType}), returning empty list');
+      return [];
+    }
+    
+    print('DEBUG _convertChecklistToMap: checklist is a List with ${checklist.length} items');
+    
+    final result = checklist
+        .where((item) {
+          final isMap = item is Map;
+          print('DEBUG _convertChecklistToMap: Item is Map? $isMap, item: $item');
+          return isMap;
+        })
+        .map<Map<String, dynamic>>((item) {
+          final converted = {
+            'id': item['id']?.toString() ?? '',
+            'task': item['task']?.toString() ?? '',
+            'completed': item['completed'] == true,
+          };
+          print('DEBUG _convertChecklistToMap: Converted item: $converted');
+          return converted;
+        })
+        .where((item) {
+          final hasId = item['id'].toString().isNotEmpty;
+          print('DEBUG _convertChecklistToMap: Item has ID? $hasId');
+          return hasId;
+        })
+        .toList();
+    
+    print('DEBUG _convertChecklistToMap: Final result count: ${result.length}');
+    return result;
+  }
+
+  Future<void> _toggleChecklistItem(int index) async {
+    if (_isUpdating) return;
+
+    setState(() => _isUpdating = true);
+
+    try {
+      final item = _checklistItems[index];
+      final newCompletedStatus = !item['completed'];
+
+      // Optimistically update UI
+      setState(() {
+        _checklistItems[index]['completed'] = newCompletedStatus;
+      });
+
+      // Update via API
+      final apiService = APIService(roleOverride: AppRole.staff);
+      await apiService.updateChecklistItem(
+        taskId: widget.task['id'],
+        itemId: item['id'],
+        completed: newCompletedStatus,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              newCompletedStatus 
+                ? 'Task marked as completed' 
+                : 'Task marked as incomplete'
+            ),
+            duration: const Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error updating checklist item: $e');
+      
+      // Revert optimistic update on error
+      setState(() {
+        _checklistItems[index]['completed'] = !_checklistItems[index]['completed'];
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating checklist: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdating = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: CustomAppBar(
+        title: 'Maintenance Details',
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Checklist Progress Banner
+              if (_checklistItems.isNotEmpty) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: completedCount == totalCount 
+                        ? const Color(0xFFECFDF5)
+                        : const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: completedCount == totalCount
+                          ? const Color(0xFF10B981)
+                          : const Color(0xFFE5E7EB),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        completedCount == totalCount
+                            ? Icons.check_circle
+                            : Icons.pending_actions,
+                        size: 20,
+                        color: completedCount == totalCount
+                            ? const Color(0xFF10B981)
+                            : const Color(0xFF6B7280),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        completedCount == totalCount
+                            ? 'All tasks completed! 🎉'
+                            : 'Checklist Progress: $completedCount of $totalCount completed',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: completedCount == totalCount
+                              ? const Color(0xFF047857)
+                              : const Color(0xFF374151),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              
+              // Basic task information (non-checklist fields)
+              MaintenanceDetails(
+                // Basic Information
+                id: widget.task['id'] ?? '',
+                createdAt: _parseDate(widget.task['created_at']) ?? DateTime.now(),
+                updatedAt: _parseDate(widget.task['updated_at']),
+                departmentTag: widget.task['category'] ?? widget.task['department'],
+                requestTypeTag: widget.task['maintenance_type'] ?? widget.task['maintenanceType'] ?? 'internal',
+                priority: widget.task['priority'],
+                statusTag: widget.task['status'] ?? 'scheduled',
+                resolutionType: null,
+                
+                // Tenant / Requester
+                requestedBy: widget.task['created_by'] ?? widget.task['assigned_to'] ?? '',
+                scheduleDate: _formatTimestamp(widget.task['scheduled_date']),
+                
+                // Request Details
+                title: widget.task['task_title'] ?? widget.task['title'] ?? 'Maintenance Task',
+                startedAt: _parseDate(widget.task['started_at']),
+                completedAt: _parseDate(widget.task['completed_at']),
+                location: widget.task['location'],
+                description: widget.task['task_description'] ?? widget.task['description'],
+                checklist_complete: null, // We'll render checklist separately
+                attachments: widget.task['photos'] is List 
+                    ? (widget.task['photos'] as List).map((e) => e.toString()).toList()
+                    : null,
+                adminNote: widget.task['completion_notes'],
+                
+                // Staff
+                assignedStaff: widget.task['assigned_staff_name'] ?? widget.task['assigned_to'],
+                staffDepartment: widget.task['department'],
+                staffPhotoUrl: null,
+                assessedAt: _parseDate(widget.task['updated_at']),
+                assessment: widget.task['completion_notes'],
+                staffAttachments: widget.task['photos'] is List 
+                    ? (widget.task['photos'] as List).map((e) => e.toString()).toList()
+                    : null,
+                
+                // Tracking
+                materialsUsed: widget.task['parts_used'] is List 
+                    ? (widget.task['parts_used'] as List).map((e) => e.toString()).toList()
+                    : null,
+              ),
+              
+              // Interactive Checklist Section
+              if (_checklistItems.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(color: Color(0xFFE5E7EB)),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.checklist,
+                              size: 20,
+                              color: Color(0xFF6B7280),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Task Checklist',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1F2937),
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              '$completedCount of $totalCount completed',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF6B7280),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      // Checklist Items
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _checklistItems.length,
+                        separatorBuilder: (_, __) => const Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: Color(0xFFE5E7EB),
+                        ),
+                        itemBuilder: (context, index) {
+                          final item = _checklistItems[index];
+                          final isCompleted = item['completed'] == true;
+                          
+                          return InkWell(
+                            onTap: _isUpdating ? null : () => _toggleChecklistItem(index),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    isCompleted
+                                        ? Icons.check_box
+                                        : Icons.check_box_outline_blank,
+                                    size: 24,
+                                    color: isCompleted
+                                        ? Colors.green
+                                        : const Color(0xFF9CA3AF),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      item['task'] ?? '',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: isCompleted
+                                            ? const Color(0xFF6B7280)
+                                            : const Color(0xFF1F2937),
+                                        decoration: isCompleted
+                                            ? TextDecoration.lineThrough
+                                            : TextDecoration.none,
+                                        fontWeight: isCompleted
+                                            ? FontWeight.w400
+                                            : FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  if (_isUpdating)
+                                    const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

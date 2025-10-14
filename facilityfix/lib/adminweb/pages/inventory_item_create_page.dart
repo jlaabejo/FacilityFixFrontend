@@ -16,6 +16,28 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
   final _formKey = GlobalKey<FormState>();
   final ApiService _apiService = ApiService();
 
+  // Common input decoration
+  InputDecoration _getInputDecoration(String label, {String? hint}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      labelStyle: TextStyle(color: Colors.grey[700]),
+      hintStyle: TextStyle(color: Colors.grey[400]),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.grey[300]!),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.grey[300]!),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.grey[400]!),
+      ),
+    );
+  }
+
   // Form controllers
   final TextEditingController _itemNameController = TextEditingController();
   final TextEditingController _itemCodeController = TextEditingController();
@@ -49,8 +71,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
   final List<String> _departments = [
     'electrical',
     'plumbing',
-    'hvac',
-    'general',
+    'masonry',
     'carpentry',
     'maintenance',
   ];
@@ -204,29 +225,54 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
             // Header Section
             Row(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => context.go('/inventory/items'),
-                ),
-                const SizedBox(width: 16),
-                const Text(
-                  'Create New Inventory Item',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF2D3748),
+                Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Create New Item",
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      // Breadcrumb navigation
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: () => context.go('/dashboard'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                            ),
+                            child: const Text('Dashboard'),
+                          ),
+                          const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                          TextButton(
+                            onPressed: () => context.go('/inventory/items'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                            ),
+                            child: const Text('Inventory Management'),
+                          ),
+                          const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                          TextButton(
+                            onPressed: null,
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                            ),
+                            child: const Text('Create Item'),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ),
               ],
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'Add a new item to your inventory',
-              style: TextStyle(
-                fontSize: 16,
-                color: Color(0xFF718096),
-              ),
-            ),
+            
             const SizedBox(height: 32),
 
             // Error message
@@ -286,10 +332,23 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                     // Item Name
                     TextFormField(
                       controller: _itemNameController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Item Name *',
                         hintText: 'Enter item name',
-                        border: OutlineInputBorder(),
+                        labelStyle: TextStyle(color: Colors.grey[700]),
+                        hintStyle: TextStyle(color: Colors.grey[400]),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[400]!),
+                        ),
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
@@ -306,10 +365,23 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                         Expanded(
                           child: TextFormField(
                             controller: _itemCodeController,
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'Item Code *',
                               hintText: 'SKU or barcode',
-                              border: OutlineInputBorder(),
+                              labelStyle: TextStyle(color: Colors.grey[700]),
+                              hintStyle: TextStyle(color: Colors.grey[400]),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey[300]!),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey[300]!),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey[400]!),
+                              ),
                             ),
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
@@ -323,10 +395,23 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                         Expanded(
                           child: TextFormField(
                             controller: _brandNameController,
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'Brand Name',
                               hintText: 'Enter brand name',
-                              border: OutlineInputBorder(),
+                              labelStyle: TextStyle(color: Colors.grey[700]),
+                              hintStyle: TextStyle(color: Colors.grey[400]),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey[300]!),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey[300]!),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey[400]!),
+                              ),
                             ),
                           ),
                         ),
@@ -340,9 +425,21 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                         Expanded(
                           child: DropdownButtonFormField<String>(
                             value: _selectedClassification,
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'Classification *',
-                              border: OutlineInputBorder(),
+                              labelStyle: TextStyle(color: Colors.grey[700]),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey[300]!),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey[300]!),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey[400]!),
+                              ),
                             ),
                             items: _classifications.map((classification) {
                               return DropdownMenuItem(
@@ -367,10 +464,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                         Expanded(
                           child: DropdownButtonFormField<String>(
                             value: _selectedDepartment,
-                            decoration: const InputDecoration(
-                              labelText: 'Department *',
-                              border: OutlineInputBorder(),
-                            ),
+                            decoration: _getInputDecoration('Department *'),
                             items: _departments.map((department) {
                               return DropdownMenuItem(
                                 value: department,
@@ -413,11 +507,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                         Expanded(
                           child: TextFormField(
                             controller: _currentStockController,
-                            decoration: const InputDecoration(
-                              labelText: 'Current Stock *',
-                              hintText: '0',
-                              border: OutlineInputBorder(),
-                            ),
+                            decoration: _getInputDecoration('Current Stock *', hint: '0'),
                             keyboardType: TextInputType.number,
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
@@ -434,11 +524,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                         Expanded(
                           child: TextFormField(
                             controller: _reorderLevelController,
-                            decoration: const InputDecoration(
-                              labelText: 'Reorder Level *',
-                              hintText: '0',
-                              border: OutlineInputBorder(),
-                            ),
+                            decoration: _getInputDecoration('Reorder Level *', hint: '0'),
                             keyboardType: TextInputType.number,
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
@@ -455,10 +541,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                         Expanded(
                           child: DropdownButtonFormField<String>(
                             value: _selectedUnit,
-                            decoration: const InputDecoration(
-                              labelText: 'Unit *',
-                              border: OutlineInputBorder(),
-                            ),
+                            decoration: _getInputDecoration('Unit *'),
                             items: _units.map((unit) {
                               return DropdownMenuItem(
                                 value: unit,
@@ -498,22 +581,14 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                     // Supplier
                     TextFormField(
                       controller: _supplierController,
-                      decoration: const InputDecoration(
-                        labelText: 'Supplier',
-                        hintText: 'Enter supplier name',
-                        border: OutlineInputBorder(),
-                      ),
+                      decoration: _getInputDecoration('Supplier', hint: 'Enter supplier name'),
                     ),
                     const SizedBox(height: 16),
 
                     // Description
                     TextFormField(
                       controller: _descriptionController,
-                      decoration: const InputDecoration(
-                        labelText: 'Description',
-                        hintText: 'Enter item description',
-                        border: OutlineInputBorder(),
-                      ),
+                      decoration: _getInputDecoration('Description', hint: 'Enter item description'),
                       maxLines: 3,
                     ),
                     const SizedBox(height: 16),
@@ -554,7 +629,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                         ElevatedButton(
                           onPressed: _isLoading ? null : _submitForm,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF4F46E5),
+                            backgroundColor: const Color(0xFF1976D2),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 32,
                               vertical: 16,

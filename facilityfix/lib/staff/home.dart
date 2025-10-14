@@ -1,6 +1,7 @@
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/staff/view_details.dart';
+import 'package:facilityfix/staff/job_service_detail.dart';
 import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/staff/maintenance.dart';
 import 'package:facilityfix/staff/announcement.dart';
@@ -42,7 +43,6 @@ class _HomeState extends State<HomePage> {
     NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
     NavItem(icon: Icons.inventory),
-    NavItem(icon: Icons.person),
   ];
 
   @override
@@ -363,13 +363,13 @@ class _HomeState extends State<HomePage> {
           displayId = 'CS-${request['id'] ?? ''}';
           break;
         case 'job service':
-          displayId = 'JS-${request['id'] ?? ''}';
+            displayId = 'JS-${(request['id'] ?? '').toString().padLeft(5, '0').substring(0, 5)}';
           break;
         case 'work order':
           displayId = 'WO-${request['id'] ?? ''}';
           break;
         default:
-          displayId = request['id'] ?? '';
+            displayId = (request['id'] ?? '').toString().padLeft(11, '0').substring(0, 11);
       }
     }
 
@@ -390,11 +390,11 @@ class _HomeState extends State<HomePage> {
       ),
       child: InkWell(
         onTap: () {
-          // Extract the concern slip ID from the request data
+          // Extract the raw ID from the request data
           // Use the raw ID (not formatted_id) for API calls
-          final concernSlipId = request['id']?.toString() ?? '';
+          final requestId = request['id']?.toString() ?? '';
           
-          if (concernSlipId.isEmpty) {
+          if (requestId.isEmpty) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Error: Invalid request ID'),
@@ -404,18 +404,33 @@ class _HomeState extends State<HomePage> {
             return;
           }
           
-          // Navigate to the staff detail page with the concern slip ID
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => StaffConcernSlipDetailPage(
-                concernSlipId: concernSlipId,
+          // Navigate to appropriate detail page based on request type
+          if (request['title'].contains('Job Service for:')) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => StaffJobServiceDetailPage(
+                  jobServiceId: requestId,
+                ),
               ),
-            ),
-          ).then((_) {
-            // Refresh data when returning from detail page
-            _loadAllRequests();
-          });
+            ).then((_) {
+              // Refresh data when returning from detail page
+              _loadAllRequests();
+            });
+          } else {
+            // Default to concern slip detail page for other types
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => StaffConcernSlipDetailPage(
+                  concernSlipId: requestId,
+                ),
+              ),
+            ).then((_) {
+              // Refresh data when returning from detail page
+              _loadAllRequests();
+            });
+          }
         },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -849,6 +864,18 @@ class _HomeState extends State<HomePage> {
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
         title: 'Home',
+        leading: IconButton(
+          icon: const CircleAvatar(
+            backgroundImage: AssetImage('assets/images/profile.png'),
+            radius: 16,
+          ),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfilePage()),
+            );
+          },
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined),

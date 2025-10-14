@@ -3,7 +3,7 @@ import 'package:facilityfix/admin/announcement.dart';
 import 'package:facilityfix/admin/home.dart';
 import 'package:facilityfix/admin/notification.dart';
 import 'package:facilityfix/admin/workorder.dart';
-import 'package:facilityfix/landingpage/welcomepage.dart';
+import 'package:facilityfix/landingpage/splash_screen.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -749,7 +749,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                   Navigator.pushAndRemoveUntil(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) => const WelcomePage(),
+                                      builder: (_) => const SplashScreen(),
                                     ),
                                     (route) => false,
                                   );

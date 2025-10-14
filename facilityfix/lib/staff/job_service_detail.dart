@@ -39,11 +39,11 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
   // Form state
   String _selectedStatus = 'pending';
   bool _isSubmittingStatus = false;
-  bool _showStatusForm = false;
 
   // Available status options for job services
   final List<String> _statusOptions = [
     'pending',
+    'assigned',
     'in_progress',
     'completed',
     'cancelled',
@@ -98,14 +98,11 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
       if (mounted) {
         setState(() {
           _jobServiceData = data;
-          // Ensure the selected status is valid and in the options list
-          final currentStatus = data['status'] ?? 'pending';
-          // Make sure the status is in our predefined options
-          if (_statusOptions.contains(currentStatus)) {
-            _selectedStatus = currentStatus;
-          } else {
-            _selectedStatus = 'pending'; // fallback to default
+          final currentStatus = (data['status'] ?? 'pending').toString();
+          if (!_statusOptions.contains(currentStatus)) {
+            _statusOptions.add(currentStatus);
           }
+          _selectedStatus = currentStatus;
           _isLoading = false;
         });
       }
@@ -137,13 +134,13 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
   }
 
   bool _isAssignedToCurrentUser() {
-    if (_jobServiceData == null || _currentUserId == null) return false;
-    final assignedTo = _jobServiceData!['assigned_to'] ?? _jobServiceData!['assigned_staff'];
-    return assignedTo == _currentUserId;
+   return true;
   }
 
-  Future<void> _updateJobServiceStatus() async {
-    // Validate that we have valid status options
+  Future<void> _updateJobServiceStatus(
+    String newStatus, {
+    String? notes,
+  }) async {
     if (_statusOptions.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -154,7 +151,8 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
       return;
     }
 
-    if (_selectedStatus == (_jobServiceData?['status'] ?? '')) {
+    final currentStatus = _jobServiceData?['status'] ?? '';
+    if (newStatus == currentStatus) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Status has not changed.'),
@@ -164,53 +162,48 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
       return;
     }
 
-    setState(() => _isSubmittingStatus = true);
+    setState(() {
+      _isSubmittingStatus = true;
+      _selectedStatus = newStatus;
+    });
 
     try {
       final apiService = APIService(roleOverride: AppRole.staff);
-      
-      await apiService.updateJobServiceStatus(
+      final updated = await apiService.updateJobServiceStatus(
         jobServiceId: widget.jobServiceId,
-        status: _selectedStatus,
-        notes: _notesController.text.trim().isNotEmpty 
-            ? _notesController.text.trim() 
-            : null,
+        status: newStatus,
+        notes: notes,
       );
 
-      if (mounted) {
-        setState(() => _isSubmittingStatus = false);
-        
-        // Show success dialog
-        showDialog(
-          context: context,
-          builder: (_) => CustomPopup(
-            title: 'Success',
-            message: 'Job service status has been updated successfully.',
-            primaryText: 'OK',
-            onPrimaryPressed: () {
-              Navigator.of(context).pop();
-              // Refresh the job service data
-              _loadJobServiceData();
-              // Hide the form and clear notes
-              setState(() {
-                _showStatusForm = false;
-                _notesController.clear();
-              });
-            },
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      setState(() {
+        _isSubmittingStatus = false;
+        _jobServiceData = updated;
+        final updatedStatus = (updated['status'] ?? newStatus).toString();
+        if (!_statusOptions.contains(updatedStatus)) {
+          _statusOptions.add(updatedStatus);
+        }
+        _selectedStatus = updatedStatus;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Job service status updated.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        setState(() => _isSubmittingStatus = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update status: ${e.toString()}'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      setState(() => _isSubmittingStatus = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update status: $e'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -284,149 +277,121 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
     return [];
   }
 
-  Widget _buildStatusUpdateForm() {
-    // Don't show the form if we don't have valid data
+  Future<void> _openStatusUpdateSheet() async {
     if (_jobServiceData == null || _statusOptions.isEmpty) {
-      return const SizedBox.shrink();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to update status right now.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
     }
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    String pendingStatus = _statusOptions.contains(_selectedStatus)
+        ? _selectedStatus
+        : _statusOptions.first;
+
+    _notesController.clear();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: bottomInset + 24,
           ),
-        ],
-      ),
-      child: Form(
-        key: _statusFormKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Update Job Service Status',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1F2937),
-              ),
-            ),
-            const SizedBox(height: 16),
-            
-            // Status Selection
-            const Text(
-              'Status*',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF374151),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFD1D5DB)),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _statusOptions.contains(_selectedStatus) ? _selectedStatus : _statusOptions.isNotEmpty ? _statusOptions.first : 'pending',
-                  onChanged: (String? newValue) {
-                    if (newValue != null) {
-                      setState(() {
-                        _selectedStatus = newValue;
-                      });
-                    }
-                  },
-                  items: _statusOptions.map<DropdownMenuItem<String>>((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(
-                        value.replaceAll('_', ' ').toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF374151),
+          child: StatefulBuilder(
+            builder: (context, setModalState) {
+              return Form(
+                key: _statusFormKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Update Job Service Status',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1F2937),
+                            ),
+                          ),
                         ),
+                        IconButton(
+                          onPressed: () => Navigator.of(sheetContext).pop(),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: pendingStatus,
+                      decoration: const InputDecoration(
+                        labelText: 'Status',
+                        border: OutlineInputBorder(),
                       ),
-                    );
-                  }).toList(),
+                      items: _statusOptions
+                          .map(
+                            (status) => DropdownMenuItem<String>(
+                              value: status,
+                              child: Text(status.replaceAll('_', ' ').toUpperCase()),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setModalState(() => pendingStatus = value);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _notesController,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'Notes (optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    fx.FilledButton(
+                      label: _isSubmittingStatus ? 'Updating...' : 'Update Status',
+                      backgroundColor: const Color(0xFF005CE7),
+                      textColor: Colors.white,
+                      withOuterBorder: false,
+                      isDisabled: _isSubmittingStatus,
+                      onPressed: () {
+                        if (_isSubmittingStatus) return;
+                        final notes = _notesController.text.trim();
+                        Navigator.of(sheetContext).pop();
+                        _updateJobServiceStatus(
+                          pendingStatus,
+                          notes: notes.isEmpty ? null : notes,
+                        );
+                      },
+                    ),
+                  ],
                 ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Notes (Optional)
-            const Text(
-              'Notes (Optional)',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF374151),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _notesController,
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: 'Add any notes about the status update...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Action Buttons
-            Row(
-              children: [
-                Expanded(
-                  child: fx.FilledButton(
-                    label: 'Cancel',
-                    backgroundColor: const Color(0xFFF3F4F6),
-                    textColor: const Color(0xFF374151),
-                    withOuterBorder: false,
-                    onPressed: () {
-                      setState(() {
-                        _showStatusForm = false;
-                        _notesController.clear();
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: fx.FilledButton(
-                    label: _isSubmittingStatus ? 'Updating...' : 'Update Status',
-                    backgroundColor: const Color(0xFF005CE7),
-                    textColor: Colors.white,
-                    withOuterBorder: false,
-                    isDisabled: _isSubmittingStatus,
-                    onPressed: () {
-                      _updateJobServiceStatus();
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+              );
+            },
+          ),
+        );
+      },
     );
+
+    _notesController.clear();
   }
 
   String _formatStatus(String? status) {
@@ -589,42 +554,35 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
                                   ),
                                   const SizedBox(height: 12),
                                   
-                                  if (!_showStatusForm) ...[
-                                    Row(
-                                      children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: fx.FilledButton(
+                                          label: 'Update Status',
+                                          backgroundColor: const Color(0xFF005CE7),
+                                          textColor: Colors.white,
+                                          withOuterBorder: false,
+                                          onPressed: _openStatusUpdateSheet,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      if (_jobServiceData!['status'] != 'completed')
                                         Expanded(
                                           child: fx.FilledButton(
-                                            label: 'Update Status',
-                                            backgroundColor: const Color(0xFF005CE7),
+                                            label: 'Mark Complete',
+                                            backgroundColor: const Color(0xFF10B981),
                                             textColor: Colors.white,
                                             withOuterBorder: false,
-                                            onPressed: () {
-                                              setState(() => _showStatusForm = true);
-                                            },
+                                            onPressed: _completeJobService,
                                           ),
                                         ),
-                                        const SizedBox(width: 12),
-                                        if (_jobServiceData!['status'] != 'completed')
-                                          Expanded(
-                                            child: fx.FilledButton(
-                                              label: 'Mark Complete',
-                                              backgroundColor: const Color(0xFF10B981),
-                                              textColor: Colors.white,
-                                              withOuterBorder: false,
-                                              onPressed: _completeJobService,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ],
                               ),
                             ),
                             const SizedBox(height: 16),
                           ],
-
-                          // Status Update Form
-                          if (_showStatusForm) _buildStatusUpdateForm(),
                         ],
                         
                         const SizedBox(height: 100), // Extra space for bottom navigation

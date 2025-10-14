@@ -71,6 +71,28 @@ class ConcernSlipDetails extends StatelessWidget {
   // Map resolution -> what we show as "Request Type"
   String _effectiverequestTypeTag() {
     final res = resolutionType?.trim().toLowerCase();
+
+
+    if (this.title.contains("Job Service")){
+      return "Job Service";
+    }
+
+
+    if (this.title.contains("Work Order")){
+      return "Work Order";
+    }
+
+     if (this.title.contains("Rejected")){
+      return "Concern Slip";
+    }
+
+     if (this.title.contains("Rejected")){
+      return "Concern Slip";
+    }
+
+
+
+
     switch (res) {
       case 'job_service':
         return 'Job Service';
@@ -517,15 +539,17 @@ class JobServiceDetails extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  id,
+                  id.length > 8 ? id.substring(0, 8) : id,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 12 * s,
-                    color: const Color(0xFF475467),
-                    fontWeight: FontWeight.w500,
-                    height: 1.2,
+                  fontFamily: 'Inter',
+                  fontSize: 12 * s,
+                  color: const Color(0xFF475467),
+                  fontWeight: FontWeight.w500,
+                  height: 1.2,
                   ),
                 ),
+                 
               ),
               SizedBox(width: 8 * s),
               Text(
@@ -816,6 +840,12 @@ class WorkOrderPermitDetails extends StatelessWidget {
   final DateTime? approvalDate;
   final String? denialReason;
   final String? adminNotes; // (moved from additionalNotes)
+  
+  // Completion Notes
+  final String? completionNotes;
+
+  // Callbacks
+  final Future<void> Function(String permitId, String? completionNotes)? onComplete;
 
   const WorkOrderPermitDetails({
     super.key,
@@ -849,6 +879,10 @@ class WorkOrderPermitDetails extends StatelessWidget {
     this.approvalDate,
     this.denialReason,
     this.adminNotes,
+    this.completionNotes,
+    
+    // Callbacks
+    this.onComplete,
   });
 
   // ---- Behavior derived from resolutionType ---------------------------------
@@ -1155,12 +1189,125 @@ class WorkOrderPermitDetails extends StatelessWidget {
                     ),
                     SizedBox(height: 8 * s),
                   ],
+                  if ((completionNotes?.trim().isNotEmpty ?? false)) ...[
+                    _SectionCard(
+                      title: 'Completion Notes',
+                      content: completionNotes!.trim(),
+                      padding: EdgeInsets.all(14 * s),
+                      hideIfEmpty: false,
+                    ),
+                    SizedBox(height: 8 * s),
+                  ],
                 ],
+              ),
+            ),
+          ],
+          
+          // ===== Complete Button (only show if approved/in-progress and onComplete callback exists) =====
+          if (_canBeCompleted() && onComplete != null && id != null) ...[
+            SizedBox(height: 20 * s),
+            SizedBox(
+              width: double.infinity,
+              child: fx.FilledButton(
+                onPressed: () => _showCompleteDialog(context),
+                label: 'Mark as Completed',
               ),
             ),
           ],
         ],
       ),
+    );
+  }
+  
+  // Check if work order can be completed
+  bool _canBeCompleted() {
+    final status = statusTag.toLowerCase().trim();
+    final displayStatus = _displayStatus.toLowerCase().trim();
+    
+    // Debug output
+    print('[WorkOrderPermit] Checking completion eligibility:');
+    print('  statusTag: "$statusTag" (normalized: "$status")');
+    print('  _displayStatus: "$_displayStatus" (normalized: "$displayStatus")');
+    print('  onComplete: ${onComplete != null}');
+    print('  id: $id');
+    
+    // Can complete if:
+    // 1. Status is approved or in progress
+    // 2. Not already completed
+    // 3. Not rejected
+    final canComplete = (status == 'approved' || 
+            status == 'in progress' || 
+            displayStatus == 'approved' ||
+            displayStatus == 'in progress') &&
+           status != 'completed' &&
+           status != 'rejected' &&
+           displayStatus != 'completed' &&
+           displayStatus != 'rejected';
+    
+    print('  canComplete: $canComplete');
+    return canComplete;
+  }
+  
+  // Show completion dialog
+  void _showCompleteDialog(BuildContext context) {
+    final notesController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Complete Work Order'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Mark this work order permit as completed?'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: notesController,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Completion Notes (Optional)',
+                  hintText: 'Enter any notes about the completion...',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                
+                if (id != null && onComplete != null) {
+                  try {
+                    await onComplete!(
+                      id!,
+                      notesController.text.isNotEmpty 
+                          ? notesController.text 
+                          : null,
+                    );
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error completing work order: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                }
+              },
+              child: const Text('Complete'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1203,7 +1350,7 @@ class MaintenanceDetails extends StatefulWidget {
   final DateTime? completedAt;
   final String? location;
   final String? description;
-  final List<String>? checklist;
+  final List<String>? checklist_complete;
   final List<String>? attachments;
   final String? adminNote;
 
@@ -1238,7 +1385,7 @@ class MaintenanceDetails extends StatefulWidget {
     this.completedAt,
     this.location,
     this.description,
-    this.checklist,
+    this.checklist_complete,
     this.attachments,
     this.adminNote,
     // Staff
@@ -1263,7 +1410,7 @@ class _MaintenanceState extends State<MaintenanceDetails> {
   void initState() {
     super.initState();
     _checklistState =
-        (widget.checklist ?? const <String>[])
+        (widget.checklist_complete ?? const <String>[])
             .map((item) => {"text": item, "checked": false})
             .toList();
   }
@@ -1428,7 +1575,7 @@ class _MaintenanceState extends State<MaintenanceDetails> {
           const SizedBox(height: 10),
 
           // Checklist (interactive)
-          if ((widget.checklist ?? const <String>[]).isNotEmpty)
+          if ((widget.checklist_complete ?? const <String>[]).isNotEmpty)
             _Section(
               title: "Checklist / Task Steps",
               child: Column(

@@ -633,11 +633,6 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                       _taskData?['taskTitle'] ?? 
                       _taskData?['title'] ?? 
                       'Maintenance Task';
-    final assignedTo =
-        _assigneeNameCtrl.text.isNotEmpty
-            ? _assigneeNameCtrl.text
-            : 'Unassigned';
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -647,22 +642,6 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
             fontSize: 28,
             fontWeight: FontWeight.bold,
             color: Colors.black87,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Task: $taskTitle',
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
-          ),
-        ),
-        Text(
-          'Assigned to: $assignedTo',
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.grey[700],
           ),
         ),
         const SizedBox(height: 8),

@@ -778,7 +778,7 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
           // SINGLE-SELECT
           if (!widget.isMultiSelect)
             DropdownButtonFormField<T>(
-              initialValue: widget.value,
+              value: widget.value,
               isExpanded: true,
               isDense: widget.isDense ?? false, // optional
               alignment: AlignmentDirectional.centerStart,

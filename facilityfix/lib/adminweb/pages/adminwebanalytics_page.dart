@@ -580,7 +580,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                             children: [
                               _buildBuildingHeatMap(),
                               const SizedBox(height: 20),
-                              _buildTopIssueChart(),
+                              // Temporarily hidden: _buildTopIssueChart(),
                             ],
                           );
                         } else {
@@ -588,9 +588,10 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                           return Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(flex: 2, child: _buildBuildingHeatMap()),
-                              const SizedBox(width: 20),
-                              Expanded(flex: 1, child: _buildTopIssueChart()),
+                              Expanded(flex: 1, child: _buildBuildingHeatMap()),
+                              // Temporarily hidden:
+                              // const SizedBox(width: 20),
+                              // Expanded(flex: 1, child: _buildTopIssueChart()),
                             ],
                           );
                         }
@@ -1005,8 +1006,11 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
   }
 
   // ============================================
-  // TOP ISSUE BY CATEGORY PIE CHART WIDGET
+  // TOP ISSUE BY CATEGORY PIE CHART WIDGET - TEMPORARILY DISABLED
   // ============================================
+  // TOP ISSUE BY CATEGORY PIE CHART WIDGET - TEMPORARILY DISABLED
+  // ============================================
+  /*
   Widget _buildTopIssueChart() {
     final categoryData =
         _categoryData.isNotEmpty
@@ -1153,6 +1157,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
       ),
     );
   }
+  */ // End of _buildTopIssueChart()
 
   // ============================================
   // REQUEST TRENDS CHART WIDGET

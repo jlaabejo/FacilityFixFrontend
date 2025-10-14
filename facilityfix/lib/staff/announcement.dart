@@ -66,7 +66,6 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
     NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
     NavItem(icon: Icons.inventory),
-    NavItem(icon: Icons.person),
   ];
 
   void _onTabTapped(int index) {

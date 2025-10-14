@@ -618,6 +618,7 @@ class _RequestFormState extends State<RequestForm> {
           contractors: _contractors,
           location: unitController.text.trim(),
           unitId: unitController.text.trim(),
+          concernSlipId: widget.concernSlipId,  // Pass the concern slip ID if available
         );
       } else {
         throw Exception('Unknown request type: $type');

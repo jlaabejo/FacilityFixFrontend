@@ -88,7 +88,10 @@ class _CalendarPageState extends State<CalendarPage> {
             context,
             MaterialPageRoute(
               builder: (_) =>
-                  WorkOrderDetailsPage(selectedTabLabel: 'concern slip assigned'),
+                  WorkOrderDetailsPage(
+                    workOrderId: w.id, 
+                    selectedTabLabel: 'concern slip assigned',
+                  ),
             ),
           ),
         ),

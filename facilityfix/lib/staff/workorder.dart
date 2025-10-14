@@ -122,7 +122,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     NavItem(icon: Icons.work),
     NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
-    NavItem(icon: Icons.person),
+    NavItem(icon: Icons.inventory),
   ];
 
   void _onTabTapped(int index) {
@@ -435,7 +435,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        title: 'Work Order Management',
+        title: 'Repair Tasks',
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
@@ -485,45 +485,44 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                         const SizedBox(height: 16),
 
                         // My Assignments Toggle
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.person_outline,
-                                size: 20,
-                                color: Color(0xFF64748B),
-                              ),
-                              const SizedBox(width: 8),
-                              const Text(
-                                'Show only my assignments',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: Color(0xFF475569),
-                                ),
-                              ),
-                              const Spacer(),
-                              Switch(
-                                value: _showOnlyMyAssignments,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _showOnlyMyAssignments = value;
-                                  });
-                                },
-                                activeColor: const Color(0xFF005CE7),
-                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
+                        // Container(
+                        //   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        //   decoration: BoxDecoration(
+                        //     color: const Color(0xFFF8FAFC),
+                        //     borderRadius: BorderRadius.circular(8),
+                        //     border: Border.all(color: const Color(0xFFE2E8F0)),
+                        //   ),
+                        //   child: Row(
+                        //     children: [
+                        //       const Icon(
+                        //         Icons.person_outline,
+                        //         size: 20,
+                        //         color: Color(0xFF64748B),
+                        //       ),
+                        //       const SizedBox(width: 8),
+                        //       const Text(
+                        //         'Show only my assignments',
+                        //         style: TextStyle(
+                        //           fontSize: 14,
+                        //           fontWeight: FontWeight.w500,
+                        //           color: Color(0xFF475569),
+                        //         ),
+                        //       ),
+                        //       const Spacer(),
+                        //       Switch(
+                        //         value: _showOnlyMyAssignments,
+                        //         onChanged: (value) {
+                        //           setState(() {
+                        //             _showOnlyMyAssignments = value;
+                        //           });
+                        //         },
+                        //         activeColor: const Color(0xFF005CE7),
+                        //         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        //       ),
+                        //     ],
+                        //   ),
+                        // ),
+                        // const SizedBox(height: 16),
                         StatusTabSelector(
                           tabs: _tabs,
                           selectedLabel: _selectedTabLabel,
@@ -581,11 +580,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                       ],
                     ),
                   ),
-              Positioned(
-                bottom: 24,
-                right: 24,
-                child: AddButton(onPressed: () => _showRequestDialog(context)),
-              ),
             ],
           ),
         ),

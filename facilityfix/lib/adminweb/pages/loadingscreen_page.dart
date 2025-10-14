@@ -25,11 +25,10 @@ class _LoadingScreenPageState extends State<LoadingScreenPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white, 
-      body: Center(
+      body: SizedBox.expand(
         child: Image.asset(
           'assets/images/loadingscreen1.gif',
-          width: 1600,   // adjust size 
-          fit: BoxFit.contain,
+          fit: BoxFit.cover,
         ),
       ),
     );

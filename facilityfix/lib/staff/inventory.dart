@@ -133,7 +133,6 @@ class _InventoryPageState extends State<InventoryPage> {
     NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
     NavItem(icon: Icons.inventory),
-    NavItem(icon: Icons.person),
   ];
 
   void _onTabTapped(int index) {
@@ -398,10 +397,10 @@ class _InventoryPageState extends State<InventoryPage> {
               );
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => _loadInitialData(),
-          ),
+          // IconButton(
+          //   icon: const Icon(Icons.refresh),
+          //   onPressed: () => _loadInitialData(),
+          // ),
         ],
       ),
       body: SafeArea(

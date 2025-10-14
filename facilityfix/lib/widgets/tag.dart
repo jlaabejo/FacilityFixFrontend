@@ -431,7 +431,7 @@ class RequestTypeTag extends StatelessWidget {
       child: text,
     );
 
-    return width == null ? pill : SizedBox(width: width, child: pill);
+    return SizedBox(width: 100, child: pill);
   }
 }
 

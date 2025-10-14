@@ -550,7 +550,7 @@ class WorkOrderPermitDialog extends StatelessWidget {
             Expanded(
               child: _buildDetailItem(
                 'WORK ORDER ID',
-                task['workOrderId'] ?? 'WO-2025-00060',
+                task['serviceId'] ?? task['workOrderId'] ?? 'WO-2025-00060',
               ),
             ),
             const SizedBox(width: 48),
@@ -570,16 +570,18 @@ class WorkOrderPermitDialog extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // Urgency Section
+        // Priority and Status Section
         Row(
           children: [
-            _buildUrgencyChip(task['urgency'] ?? 'Medium'),
+            _buildUrgencyChip(task['priority'] ?? 'Medium'),
+            const SizedBox(width: 16),
+            _buildStatusChip(task['status'] ?? 'Pending'),
             const Spacer(),
           ],
         ),
         const SizedBox(height: 24),
 
-        // Second Row - Requested By and Account Type
+        // Second Row - Requested By and Department
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -592,8 +594,8 @@ class WorkOrderPermitDialog extends StatelessWidget {
             const SizedBox(width: 48),
             Expanded(
               child: _buildDetailItem(
-                'ACCOUNT TYPE',
-                task['accountType'] ?? 'Air Conditioning',
+                'DEPARTMENT',
+                task['department'] ?? task['accountType'] ?? 'General',
               ),
             ),
           ],
@@ -606,7 +608,7 @@ class WorkOrderPermitDialog extends StatelessWidget {
           children: [
             Expanded(
               child: _buildDetailItem(
-                'BLDG & UNIT NO.',
+                'LOCATION',
                 task['buildingUnit'] ?? 'A - 1010',
               ),
             ),
@@ -683,6 +685,11 @@ class WorkOrderPermitDialog extends StatelessWidget {
   }
 
   Widget _buildPermitValidation() {
+    // Get schedule from task data (already formatted as "Oct 15, 2025 4:02 AM - Oct 24, 2025 4:02 AM")
+    final schedule = task['schedule'] ?? 
+                    task['scheduleVisibility'] ?? 
+                    'July 21, 2025 – From 9:00 AM to 11:30 AM';
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -697,7 +704,7 @@ class WorkOrderPermitDialog extends StatelessWidget {
         const SizedBox(height: 16),
         _buildDetailItem(
           'SCHEDULE VISIBILITY',
-          task['scheduleVisibility'] ?? 'July 21, 2025 – From 9:00 AM to 11:30 AM',
+          schedule,
         ),
         const SizedBox(height: 16),
         Divider(
@@ -710,6 +717,24 @@ class WorkOrderPermitDialog extends StatelessWidget {
   }
 
   Widget _buildContractorSide() {
+    // Extract contractor information from contractors list or task data
+    String contractorName = 'N/A';
+    String companyName = 'N/A';
+    String phoneNumber = 'N/A';
+    
+    final contractors = task['contractors'];
+    if (contractors != null && contractors is List && contractors.isNotEmpty) {
+      final contractor = contractors[0];
+      contractorName = contractor['name'] ?? contractor['contractor_name'] ?? 'N/A';
+      companyName = contractor['company'] ?? contractor['contractor_company'] ?? 'N/A';
+      phoneNumber = contractor['contact'] ?? contractor['contractor_contact'] ?? 'N/A';
+    } else {
+      // Fallback to direct task fields
+      contractorName = task['contractorName'] ?? 'Leo Fernandez';
+      companyName = task['companyName'] ?? task['contractorCompany'] ?? 'AC Pro Services';
+      phoneNumber = task['phoneNumber'] ?? task['contractorContact'] ?? '0917-456-7890';
+    }
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -730,21 +755,21 @@ class WorkOrderPermitDialog extends StatelessWidget {
             Expanded(
               child: _buildDetailItem(
                 'NAME',
-                task['contractorName'] ?? 'Leo Fernandez',
+                contractorName,
               ),
             ),
             const SizedBox(width: 32),
             Expanded(
               child: _buildDetailItem(
                 'COMPANY NAME',
-                task['companyName'] ?? 'AC Pro Services',
+                companyName,
               ),
             ),
             const SizedBox(width: 32),
             Expanded(
               child: _buildDetailItem(
                 'PHONE NUMBER',
-                task['phoneNumber'] ?? '0917-456-7890',
+                phoneNumber,
               ),
             ),
           ],
@@ -841,22 +866,34 @@ class WorkOrderPermitDialog extends StatelessWidget {
   Widget _buildUrgencyChip(String urgency) {
     Color bgColor;
     Color textColor;
-    switch (urgency.toLowerCase()) {
+    String displayText = urgency;
+    
+    // Handle both priority and urgency labels
+    final cleanUrgency = urgency.toLowerCase().replaceAll(' priority', '').replaceAll(' urgency', '');
+    
+    switch (cleanUrgency) {
       case 'high':
+      case 'pending review':
         bgColor = const Color(0xFFFFEBEE);
         textColor = const Color(0xFFD32F2F);
+        displayText = 'High Priority';
         break;
       case 'medium':
         bgColor = const Color(0xFFFFF3E0);
         textColor = const Color(0xFFFF8F00);
+        displayText = 'Medium Priority';
         break;
       case 'low':
         bgColor = const Color(0xFFE8F5E8);
         textColor = const Color(0xFF2E7D32);
+        displayText = 'Low Priority';
         break;
       default:
         bgColor = const Color(0xFFFFF3E0);
         textColor = const Color(0xFFFF8F00);
+        displayText = urgency.contains('Priority') || urgency.contains('Urgency') 
+            ? urgency 
+            : '$urgency Priority';
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -865,7 +902,50 @@ class WorkOrderPermitDialog extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
-        '${urgency} Urgency',
+        displayText,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(String status) {
+    Color bgColor;
+    Color textColor;
+    switch (status.toLowerCase()) {
+      case 'in progress':
+      case 'approved':
+        bgColor = const Color.fromARGB(49, 82, 131, 205);
+        textColor = const Color.fromARGB(255, 0, 93, 232);
+        break;
+      case 'pending':
+        bgColor = const Color(0xFFFFEBEE);
+        textColor = const Color(0xFFD32F2F);
+        break;
+      case 'completed':
+        bgColor = const Color(0xFFE8F5E8);
+        textColor = const Color(0xFF2E7D32);
+        break;
+      case 'cancelled':
+      case 'denied':
+        bgColor = Colors.grey[100]!;
+        textColor = Colors.grey[700]!;
+        break;
+      default:
+        bgColor = Colors.grey[100]!;
+        textColor = Colors.grey[700]!;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        status,
         style: TextStyle(
           color: textColor,
           fontSize: 12,

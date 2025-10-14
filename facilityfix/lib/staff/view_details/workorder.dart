@@ -3,13 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:facilityfix/models/work_orders.dart'; // <-- unified WorkOrderDetails class only
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
-import 'package:facilityfix/staff/form/assessment_form.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/staff/workorder.dart'; // WorkOrderPage (list)
 
 import 'package:facilityfix/widgets/app&nav_bar.dart';
-import 'package:facilityfix/widgets/modals.dart';
 import 'package:facilityfix/widgets/buttons.dart' as custom_buttons;
 
 // Your detail widgets should be exported by this file:
@@ -20,16 +18,22 @@ import 'package:facilityfix/widgets/view_details.dart';
 // - MaintenanceDetails
 // - WorkOrderPermitDetails
 
+// Import API services
+import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/adminweb/services/api_service.dart' as admin_api;
+
 class WorkOrderDetailsPage extends StatefulWidget {
   final String selectedTabLabel;
   final bool startInAssessment; // kept for compatibility
   final WorkOrderDetails? workOrder; // unified data model instance
+  final String workOrderId; // ID to fetch if workOrder is null
 
   const WorkOrderDetailsPage({
     super.key,
     required this.selectedTabLabel,
     this.startInAssessment = false,
     this.workOrder,
+    required this.workOrderId,
   });
 
   @override
@@ -40,11 +44,12 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
   final int _selectedIndex = 1;
   late String _detailsLabel;
 
-  // Hold metadata for the sticky bar
-  HoldResult? holdMeta;
+  // Fetched work order data
+  WorkOrderDetails? _fetchedWorkOrder;
+  bool _isLoading = false;
+  String? _errorMessage;
 
-  // ---- SAMPLE DATA lives INSIDE this page ----
-  late final List<WorkOrderDetails> _samples;
+  final APIService _apiService = APIService();
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -60,148 +65,184 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
 
     _detailsLabel = widget.selectedTabLabel.toLowerCase().trim();
 
-    // Build samples now (used only when widget.workOrder == null)
-    _samples = _makeSamples();
-
-    // Remap generic labels using actual data (unified model)
-    if (widget.workOrder != null &&
-        (_detailsLabel == 'repair detail' || _detailsLabel == 'maintenance detail')) {
-      _detailsLabel = _autoLabelFromWorkOrder(widget.workOrder!);
-      debugPrint('[Details] remapped to: $_detailsLabel');
+    // If no workOrder is passed, fetch it using the workOrderId
+    if (widget.workOrder == null) {
+      _fetchWorkOrderData();
+    } else {
+      // Remap generic labels using actual data (unified model)
+      if (_detailsLabel == 'repair detail' || _detailsLabel == 'maintenance detail') {
+        _detailsLabel = _autoLabelFromWorkOrder(widget.workOrder!);
+        debugPrint('[Details] remapped to: $_detailsLabel');
+      }
     }
 
     debugPrint('DETAILS label="${widget.selectedTabLabel}" '
         'stored="$_detailsLabel" hasWorkOrder=${widget.workOrder != null}');
   }
 
-  // ---------------- SAMPLE DATA (only used when no workOrder is passed) ----------------
-  List<WorkOrderDetails> _makeSamples() {
-    final now = DateTime.now();
-    return [
-      // Concern Slip
-      WorkOrderDetails(
-        id: 'CS-2025-001',
-        createdAt: now.subtract(const Duration(days: 10)),
-        updatedAt: now.subtract(const Duration(days: 9)),
-        requestTypeTag: 'Concern Slip',
-        departmentTag: 'Plumbing',
-        priority: 'High',
-        statusTag: 'Assigned',
-        requestedBy: 'Erika De Guzman',
-        unitId: 'A 1001',
-        scheduleAvailability: '2025-08-19T14:30:00',
-        title: 'Leaking Faucet',
-        description: 'Clogged drainage in the bathroom. Water backs up after 2–3 minutes.',
-        attachments: const ['assets/images/upload1.png', 'assets/images/upload2.png'],
-        assignedStaff: 'Juan Dela Cruz',
-        staffDepartment: 'Plumbing',
-        assignedPhotoUrl: 'assets/images/avatar.png',
-      ),
+  Future<void> _fetchWorkOrderData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
-      // Job Service (from slip)
-      WorkOrderDetails(
-        id: 'JS-2025-031',
-        createdAt: now.subtract(const Duration(days: 8)),
-        updatedAt: now.subtract(const Duration(days: 6)),
-        requestTypeTag: 'Job Service',
-        departmentTag: 'Plumbing',
-        priority: 'High',
-        statusTag: 'Assigned',
-        resolutionType: 'job_service',
-        requestedBy: 'Erika De Guzman',
-        concernSlipId: 'CS-2025-001',
-        unitId: 'A 1001',
-        scheduleAvailability: '2025-08-20T09:00:00',
-        additionalNotes: 'Recurring issue, please expedite.',
-        title: 'Fix Faucet & Clear Drain',
-        description: 'Replace worn gasket and clear debris clog.',
-        assignedStaff: 'Juan Dela Cruz',
-        staffDepartment: 'Plumbing',
-        assignedPhotoUrl: 'assets/images/avatar.png',
-        startedAt: now.subtract(const Duration(days: 7, hours: 3)),
-        materialsUsed: const ['PTFE tape', 'Gasket #12'],
-      ),
+    try {
+      final workOrderId = widget.workOrderId;
+      Map<String, dynamic> data;
 
-      // Work Order (Permit)
-      WorkOrderDetails(
-        id: 'WO-2025-015',
-        createdAt: now.subtract(const Duration(days: 12)),
-        updatedAt: now.subtract(const Duration(days: 11)),
-        requestTypeTag: 'Work Order',
-        departmentTag: 'Carpentry',
-        priority: 'Medium',
-        statusTag: 'Approved',
-        resolutionType: 'work_permit',
-        requestedBy: 'Admin Jane',
-        unitId: 'B 703',
-        title: 'Ceiling Repair Permit',
-        description: 'Permit for ceiling panel replacement due to moisture damage.',
-        location: 'Tower B – Unit 703',
-        additionalNotes: 'Coordinate with security for elevator padding.',
-        contractorName: 'XYZ Builders',
-        contractorNumber: '+63 912 345 6789',
-        contractorCompany: 'XYZ Builders Inc.',
-        workScheduleFrom: now.add(const Duration(days: 3, hours: 9)),
-        workScheduleTo: now.add(const Duration(days: 3, hours: 14)),
-        entryEquipments: 'Ladder, cordless drill, safety harness',
-        approvedBy: 'Admin Jane',
-        approvalDate: now.subtract(const Duration(days: 10)),
-        adminNotes: 'Work window strictly observed.',
-        materialsUsed: const ['Ceiling panel 60x60', 'Wood screws'],
-      ),
+      // Determine the type of work order based on ID prefix
+      if (workOrderId.toUpperCase().startsWith('CS-')) {
+        data = await _apiService.getConcernSlipById(workOrderId);
+        final concernSlip = ConcernSlip.fromJson(data);
+        _fetchedWorkOrder = _concernSlipToWorkOrderDetails(concernSlip);
+      } else if (workOrderId.toUpperCase().startsWith('JS-')) {
+        data = await _apiService.getJobServiceById(workOrderId);
+        final jobService = JobService.fromJson(data);
+        _fetchedWorkOrder = _jobServiceToWorkOrderDetails(jobService);
+      } else if (workOrderId.toUpperCase().startsWith('WO-')) {
+        data = await _apiService.getWorkOrderById(workOrderId);
+        final workOrderPermit = WorkOrderPermit.fromJson(data);
+        _fetchedWorkOrder = _workOrderPermitToWorkOrderDetails(workOrderPermit);
+      } else if (workOrderId.toUpperCase().startsWith('MT-')) {
+        data = await _apiService.getMaintenanceTaskById(workOrderId);
+        final maintenance = Maintenance.fromJson(data);
+        _fetchedWorkOrder = _maintenanceToWorkOrderDetails(maintenance);
+      } else {
+        // Default to work order if prefix is unknown
+        data = await _apiService.getWorkOrderById(workOrderId);
+        final workOrderPermit = WorkOrderPermit.fromJson(data);
+        _fetchedWorkOrder = _workOrderPermitToWorkOrderDetails(workOrderPermit);
+      }
 
-      // Maintenance
-      WorkOrderDetails(
-        id: 'MT-2025-011',
-        createdAt: now.subtract(const Duration(days: 5)),
-        updatedAt: now.subtract(const Duration(days: 5)),
-        requestTypeTag: 'Maintenance',
-        departmentTag: 'Plumbing',
-        priority: 'High',
-        statusTag: 'Scheduled',
-        requestedBy: 'System – Planned PM',
-        scheduleAvailability: '2025-08-30T09:00:00',
-        title: 'Quarterly Pipe Inspection',
-        description: 'Check main and branch lines for leaks, corrosion, and pressure stability.',
-        location: 'Tower A – 5th Floor',
-        checklist: [
-          'Notify tenants on the affected floor',
-          'Shut off water supply safely',
-          'Inspect risers and branch lines for leaks/corrosion',
-          'Check pressure and flow at endpoints',
-          'Restore supply and monitor for 15 minutes',
-          'Log findings and anomalies',
-        ].join('\n'),
-        assignedStaff: 'Juan Dela Cruz',
-        staffDepartment: 'Plumbing',
-        assignedPhotoUrl: 'assets/images/avatar.png',
-        attachments: const ['assets/images/upload3.png'],
-      ),
-    ];
+      // Remap labels if needed
+      if (_detailsLabel == 'repair detail' || _detailsLabel == 'maintenance detail') {
+        _detailsLabel = _autoLabelFromWorkOrder(_fetchedWorkOrder!);
+        debugPrint('[Details] remapped to: $_detailsLabel');
+      }
+
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('[Details] Error fetching work order: $e');
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Failed to load work order details: $e';
+      });
+    }
   }
 
-  // pick a sample matching the label (used if no workOrder is provided)
-  WorkOrderDetails _sampleForLabel() {
-    switch (_detailsLabel) {
-      case 'concern slip assigned':
-      case 'concern slip assessed':
-        return _samples.firstWhere((e) => e.requestTypeTag == 'Concern Slip',
-            orElse: () => _samples.first);
-      case 'job service assigned':
-      case 'job service assessed':
-        return _samples.firstWhere((e) => e.requestTypeTag == 'Job Service',
-            orElse: () => _samples.first);
-      case 'work order assigned':
-      case 'work order assessed':
-        return _samples.firstWhere((e) => e.requestTypeTag == 'Work Order',
-            orElse: () => _samples.first);
-      case 'maintenance task scheduled':
-      case 'maintenance task assessed':
-        return _samples.firstWhere((e) => e.requestTypeTag == 'Maintenance',
-            orElse: () => _samples.first);
-      default:
-        return _samples.first;
-    }
+  // Helper methods to convert specific types to WorkOrderDetails
+  WorkOrderDetails _concernSlipToWorkOrderDetails(ConcernSlip cs) {
+    return WorkOrderDetails(
+      id: cs.id,
+      createdAt: cs.createdAt,
+      updatedAt: cs.updatedAt,
+      requestTypeTag: cs.requestTypeTag,
+      departmentTag: cs.departmentTag,
+      priority: cs.priority,
+      statusTag: cs.statusTag,
+      resolutionType: cs.resolutionType,
+      requestedBy: cs.requestedBy,
+      unitId: cs.unitId,
+      scheduleAvailability: cs.scheduleAvailability,
+      title: cs.title,
+      description: cs.description,
+      attachments: cs.attachments,
+      assignedStaff: cs.assignedStaff,
+      staffDepartment: cs.staffDepartment,
+      assignedPhotoUrl: cs.assignedPhotoUrl,
+      assessedAt: cs.assessedAt,
+      assessment: cs.assessment,
+      staffAttachments: cs.staffAttachments,
+    );
+  }
+
+  WorkOrderDetails _jobServiceToWorkOrderDetails(JobService js) {
+    return WorkOrderDetails(
+      id: js.id,
+      createdAt: js.createdAt,
+      updatedAt: js.updatedAt,
+      requestTypeTag: js.requestTypeTag,
+      departmentTag: js.departmentTag,
+      priority: js.priority,
+      statusTag: js.statusTag,
+      resolutionType: js.resolutionType,
+      requestedBy: js.requestedBy,
+      concernSlipId: js.concernSlipId,
+      unitId: js.unitId,
+      scheduleAvailability: js.scheduleAvailability,
+      title: js.title,
+      additionalNotes: js.additionalNotes,
+      assignedStaff: js.assignedStaff,
+      staffDepartment: js.staffDepartment,
+      assignedPhotoUrl: js.assignedPhotoUrl,
+      startedAt: js.startedAt,
+      completedAt: js.completedAt,
+      assessedAt: js.assessedAt,
+      assessment: js.assessment,
+      attachments: js.attachments,
+      staffAttachments: js.staffAttachments,
+      materialsUsed: js.materialsUsed,
+    );
+  }
+
+  WorkOrderDetails _workOrderPermitToWorkOrderDetails(WorkOrderPermit wop) {
+    return WorkOrderDetails(
+      id: wop.id,
+      createdAt: wop.createdAt,
+      updatedAt: wop.updatedAt,
+      requestTypeTag: wop.requestTypeTag,
+      departmentTag: wop.departmentTag,
+      priority: wop.priority,
+      statusTag: wop.statusTag,
+      resolutionType: wop.resolutionType,
+      requestedBy: wop.requestedBy,
+      concernSlipId: wop.concernSlipId,
+      unitId: wop.unitId,
+      title: wop.title,
+      assignedStaff: wop.assignedStaff,
+      staffDepartment: wop.staffDepartment,
+      assignedPhotoUrl: wop.assignedPhotoUrl,
+      contractorName: wop.contractorName,
+      contractorNumber: wop.contractorNumber,
+      contractorCompany: wop.contractorCompany,
+      workScheduleFrom: wop.workScheduleFrom,
+      workScheduleTo: wop.workScheduleTo,
+      entryEquipments: wop.entryEquipments,
+      approvedBy: wop.approvedBy,
+      approvalDate: wop.approvalDate,
+      denialReason: wop.denialReason,
+      adminNotes: wop.adminNotes,
+      attachments: wop.attachments,
+      staffAttachments: wop.staffAttachments,
+    );
+  }
+
+  WorkOrderDetails _maintenanceToWorkOrderDetails(Maintenance mt) {
+    return WorkOrderDetails(
+      id: mt.id,
+      createdAt: mt.createdAt,
+      updatedAt: mt.updatedAt,
+      requestTypeTag: mt.requestTypeTag,
+      departmentTag: mt.departmentTag,
+      priority: mt.priority,
+      statusTag: mt.statusTag,
+      resolutionType: mt.resolutionType,
+      requestedBy: mt.requestedBy,
+      title: mt.title,
+      description: mt.description,
+      location: mt.location,
+      checklist: mt.checklist,
+      adminNotes: mt.adminNote,
+      assignedStaff: mt.assignedStaff,
+      staffDepartment: mt.staffDepartment,
+      assignedPhotoUrl: mt.assignedPhotoUrl,
+      assessedAt: mt.assessedAt,
+      assessment: mt.assessment,
+      attachments: mt.attachments,
+      staffAttachments: mt.staffAttachments,
+    );
   }
 
   void _onTabTapped(int index) {
@@ -220,23 +261,150 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     }
   }
 
-  String get _assessedFullDetailsLabel {
-    if (_detailsLabel.contains('maintenance')) return 'assessed maintenance detail';
-    return 'assessed repair detail';
-  }
-
-  Future<void> _onHoldPressed() async {
-    final res = await showHoldSheet(context, initial: holdMeta);
-    if (!mounted || res == null) return;
-    setState(() => holdMeta = res);
-
-    final until = res.resumeAt != null ? ' — until ${formatDateTime(res.resumeAt!)}' : '';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Set to On Hold: ${res.reason}$until'),
-        behavior: SnackBarBehavior.floating,
-      ),
+  Future<void> _showMarkAsCompleteDialog() async {
+    debugPrint('[Details] _showMarkAsCompleteDialog called');
+    final completionNotesController = TextEditingController();
+    
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Mark as Complete'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Are you sure you want to mark this work order as completed?'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: completionNotesController,
+                decoration: const InputDecoration(
+                  labelText: 'Completion Notes (Optional)',
+                  hintText: 'Add any final notes about the work completed...',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 4,
+                minLines: 3,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                debugPrint('[Details] Cancel button pressed');
+                Navigator.of(dialogContext).pop(false);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                debugPrint('[Details] Complete button pressed');
+                Navigator.of(dialogContext).pop(true);
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+              ),
+              child: const Text('Complete'),
+            ),
+          ],
+        );
+      },
     );
+
+    debugPrint('[Details] Dialog confirmed: $confirmed, mounted: $mounted');
+    
+    if (confirmed == true && mounted) {
+      debugPrint('[Details] Proceeding with completion...');
+      // Get the work order data
+      final workOrder = widget.workOrder ?? _fetchedWorkOrder;
+      
+      debugPrint('[Details] Work order data: ${workOrder?.id}');
+      
+      if (workOrder != null) {
+        try {
+          // Update the work order status to completed
+          final completionNotes = completionNotesController.text.trim();
+          
+          debugPrint('[Details] Completing work order: ${workOrder.id}');
+          debugPrint('[Details] Work order type: ${workOrder.requestTypeTag}');
+          debugPrint('[Details] Completion notes: $completionNotes');
+          
+          // Call the appropriate API endpoint based on work order type
+          final workOrderId = workOrder.id;
+          debugPrint('[Details] Work order ID uppercase: ${workOrderId.toUpperCase()}');
+          
+          if (workOrderId.toUpperCase().startsWith('JS-')) {
+            debugPrint('[Details] Executing Job Service completion');
+            // Complete Job Service
+            await _apiService.completeJobService(workOrderId);
+            
+            // Add completion notes if provided
+            if (completionNotes.isNotEmpty) {
+              await _apiService.addJobServiceNotes(
+                jobServiceId: workOrderId,
+                notes: completionNotes,
+              );
+            }
+          } else if (workOrderId.toUpperCase().startsWith('WO_') || 
+                     workOrderId.toUpperCase().startsWith('WP_')) {
+            debugPrint('[Details] Executing Work Order Permit completion');
+            debugPrint('[Details] Creating admin API service instance');
+            // Complete Work Order Permit (using admin API service)
+            final adminApiService = admin_api.ApiService();
+            debugPrint('[Details] Calling completeWorkOrderPermit with ID: $workOrderId');
+            debugPrint('[Details] Completion notes: ${completionNotes.isNotEmpty ? completionNotes : "null"}');
+            await adminApiService.completeWorkOrderPermit(
+              workOrderId,
+              completionNotes: completionNotes.isNotEmpty ? completionNotes : null,
+            );
+            debugPrint('[Details] completeWorkOrderPermit call completed successfully');
+            // Reload the work order data to reflect changes
+            await _fetchWorkOrderData();
+          } else if (workOrderId.toUpperCase().startsWith('CS-')) {
+            debugPrint('[Details] Executing Concern Slip completion');
+
+            // Concern Slips don't have a direct complete endpoint
+            // Update status through updateConcernSlip
+            await _apiService.updateConcernSlip(
+              concernSlipId: workOrderId,
+              // Note: You may need to add a status field to the update method
+            );
+          } else if (workOrderId.toUpperCase().startsWith('MT-')) {
+            // Complete Maintenance Task
+            await _apiService.updateMaintenanceTask(
+              workOrderId,
+              {'status': 'completed', 'completion_notes': completionNotes},
+            );
+          }
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Work order marked as complete'),
+                backgroundColor: Color(0xFF10B981),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+            
+            // Navigate back to work order list
+            Navigator.of(context).pop();
+          }
+        } catch (e) {
+          debugPrint('[Details] Error completing work order: $e');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to complete work order: ${e.toString()}'),
+                backgroundColor: Colors.red,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      }
+    }
+    
+    completionNotesController.dispose();
   }
 
   // ---------- Builders: map unified model -> concrete details widgets ----------
@@ -331,7 +499,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       completedAt: w.completedAt,
       location: w.location ?? w.unitId, // prefer location, fallback to unit
       description: w.description,
-      checklist: (w.checklist ?? '')
+      checklist_complete: (w.checklist ?? '')
           .split('\n')
           .map((s) => s.trim())
           .where((s) => s.isNotEmpty)
@@ -422,15 +590,59 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
 
   // -------------------- main tab content --------------------
   Widget _buildTabContent() {
-    // use the passed work order; otherwise pick a suitable sample
-    final w = widget.workOrder ?? _sampleForLabel();
-    final children = <Widget>[];
-
-    if (holdMeta != null) {
-      children.add(const SizedBox(height: 8));
-      children.add(OnHoldBanner(hold: holdMeta!));
-      children.add(const SizedBox(height: 12));
+    // Show loading indicator while fetching data
+    if (_isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
     }
+
+    // Show error message if fetch failed
+    if (_errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const SizedBox(height: 16),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _fetchWorkOrderData,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Use the passed work order or the fetched one
+    final w = widget.workOrder ?? _fetchedWorkOrder;
+    
+    // If still no data, show error
+    if (w == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32.0),
+          child: Text(
+            'No work order data available',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    final children = <Widget>[];
 
     switch (_detailsLabel) {
       case 'concern slip assigned':
@@ -490,8 +702,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final w = widget.workOrder;
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
@@ -523,49 +733,16 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
                   color: Colors.white,
                   border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: custom_buttons.OutlinedPillButton(
-                        icon: holdMeta != null
-                            ? Icons.play_circle_outline
-                            : Icons.pause_circle_outline,
-                        label: holdMeta != null ? 'Resume Task' : 'On Hold',
-                        onPressed: () {
-                          if (holdMeta != null) {
-                            setState(() => holdMeta = null);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Task resumed'),
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                          } else {
-                            _onHoldPressed();
-                          }
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: custom_buttons.FilledButton(
-                        label: 'Create Assessment',
-                        withOuterBorder: false,
-                        backgroundColor: const Color(0xFF005CE7),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => AssessmentForm(
-                                // Use unified fields
-                                requestType: w?.requestTypeTag ?? 'Work Order',
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+                child: custom_buttons.FilledButton(
+                  label: 'Mark as Complete',
+                  withOuterBorder: false,
+                  backgroundColor: const Color(0xFF10B981),
+                  icon: Icons.check_circle_outline,
+                  onPressed: () async {
+                    debugPrint('[Details] Mark as Complete button pressed');
+                    await _showMarkAsCompleteDialog();
+                    debugPrint('[Details] Mark as Complete dialog finished');
+                  },
                 ),
               ),
             ),

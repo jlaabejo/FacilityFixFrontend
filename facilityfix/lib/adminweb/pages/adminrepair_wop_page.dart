@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../popupwidgets/wop_viewdetails_popup.dart';
+import '../services/api_service.dart';
 
 class RepairWorkOrderPermitPage extends StatefulWidget {
   const RepairWorkOrderPermitPage({super.key});
@@ -12,6 +13,10 @@ class RepairWorkOrderPermitPage extends StatefulWidget {
 }
 
 class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
+  final ApiService _apiService = ApiService();
+  bool _isLoading = false;
+  List<Map<String, dynamic>> _repairTasks = [];
+  String _errorMessage = '';
   // Helper function to convert routeKey to actual route path
   String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
@@ -56,26 +61,145 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     );
   }
 
-  // Sample data for repair tasks (work order permit)
-  final List<Map<String, dynamic>> _repairTasks = [
-    {
-      'serviceId': 'JS-2025-00045',
-      'id': 'CS-2025-00321',
-      'title': 'Leaking Aircon',
-      'buildingUnit': 'Bldg A - 1010',
-      'schedule': '2025-05-21',
-      'priority': 'Pending Review',
-      'status': 'In Progress',
+  @override
+  void initState() {
+    super.initState();
+    _fetchWorkOrderPermits();
+  }
 
-      //aditional taskdata
-      'dateRequested': '2025-07-19',
-      'requestedBy': 'Erika De Guzman',
-      'department': 'Plumbing',
-      //'description': 'The kitchen faucet has been continuously leaking...',
-      'assessment': 'Inspected faucet valve. Leak due to worn-out cartridge.',
-      'recommendation': 'Replace faucet cartridge.',
-    },
-  ];
+  Future<void> _fetchWorkOrderPermits() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final permits = await _apiService.getAllWorkOrderPermits();
+      
+      setState(() {
+        _repairTasks = permits.map((permit) {
+          return {
+            'serviceId': permit['formatted_id'] ?? permit['id'] ?? 'N/A',
+            'id': permit['concern_slip_id'] ?? 'N/A',
+            'permitId': permit['id'] ?? 'N/A', // Add permit ID for actions
+            'title': permit['title'] ?? 'Untitled Work Order',
+            'buildingUnit': permit['location'] ?? 'N/A',
+            'schedule': _formatDateRange(permit['valid_from'], permit['valid_to']),
+            'priority': _mapStatusToPriority(permit['status']),
+            'status': _mapStatusToDisplay(permit['status']),
+            'rawStatus': permit['status'] ?? 'pending', // Keep raw status for actions
+            
+            // Additional task data
+            'dateRequested': _formatDate(permit['created_at']),
+            'requestedBy': permit['requested_by'] ?? 'N/A',
+            'department': permit['category'] ?? 'General',
+            'description': permit['description'] ?? '',
+            'validFrom': permit['valid_from'] ?? 'N/A',
+            'validTo': permit['valid_to'] ?? 'N/A',
+            'contractors': permit['contractors'] ?? [],
+            'attachments': permit['attachments'] ?? [],
+          };
+        }).toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error fetching work order permits: $e';
+        _isLoading = false;
+      });
+      print('[Work Order Permits] Error: $e');
+    }
+  }
+
+  String _formatDate(dynamic date) {
+    if (date == null) return 'N/A';
+    
+    try {
+      DateTime dateTime;
+      if (date is String) {
+        dateTime = DateTime.parse(date);
+      } else if (date is DateTime) {
+        dateTime = date;
+      } else {
+        return 'N/A';
+      }
+      return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return 'N/A';
+    }
+  }
+
+  String _formatDateRange(dynamic startDate, dynamic endDate) {
+    if (startDate == null && endDate == null) return 'N/A';
+    
+    final start = _formatDateWithTime(startDate);
+    final end = _formatDateWithTime(endDate);
+    
+    if (start == 'N/A' && end == 'N/A') return 'N/A';
+    if (start == 'N/A') return 'Until $end';
+    if (end == 'N/A') return 'From $start';
+    
+    return '$start - $end';
+  }
+
+  String _formatDateWithTime(dynamic date) {
+    if (date == null) return 'N/A';
+    
+    try {
+      DateTime dateTime;
+      if (date is String) {
+        dateTime = DateTime.parse(date);
+      } else if (date is DateTime) {
+        dateTime = date;
+      } else {
+        return 'N/A';
+      }
+      
+      // Format: "Oct 15, 2025 4:10 AM"
+      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      final month = months[dateTime.month - 1];
+      final day = dateTime.day;
+      final year = dateTime.year;
+      final hour = dateTime.hour > 12 ? dateTime.hour - 12 : (dateTime.hour == 0 ? 12 : dateTime.hour);
+      final minute = dateTime.minute.toString().padLeft(2, '0');
+      final ampm = dateTime.hour >= 12 ? 'PM' : 'AM';
+      
+      return '$month $day, $year $hour:$minute $ampm';
+    } catch (e) {
+      return 'N/A';
+    }
+  }
+
+  String _mapStatusToPriority(String? status) {
+    switch (status?.toLowerCase()) {
+      case 'pending':
+        return 'Pending Review';
+      case 'approved':
+        return 'High';
+      case 'denied':
+        return 'Low';
+      case 'completed':
+        return 'Low';
+      default:
+        return 'Medium';
+    }
+  }
+
+  String _mapStatusToDisplay(String? status) {
+    switch (status?.toLowerCase()) {
+      case 'pending':
+        return 'Pending';
+      case 'approved':
+        return 'In Progress';
+      case 'denied':
+        return 'Cancelled';
+      case 'completed':
+        return 'Completed';
+      default:
+        return 'Pending';
+    }
+  }
 
   // Dropdown values for filtering
   String _selectedRole = 'All Roles';
@@ -90,6 +214,9 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   ) {
     final RenderBox overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox;
+    
+    final isPending = task['rawStatus']?.toLowerCase() == 'pending';
+    final isApproved = task['rawStatus']?.toLowerCase() == 'approved';
 
     showMenu(
       context: context,
@@ -115,19 +242,51 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
             ],
           ),
         ),
-        PopupMenuItem(
-          value: 'edit',
-          child: Row(
-            children: [
-              Icon(Icons.edit_outlined, color: Colors.blue[600], size: 18),
-              const SizedBox(width: 12),
-              Text(
-                'Edit',
-                style: TextStyle(color: Colors.blue[600], fontSize: 14),
-              ),
-            ],
+        // Show approve option only for pending permits
+        if (isPending)
+          PopupMenuItem(
+            value: 'approve',
+            child: Row(
+              children: [
+                Icon(Icons.check_circle_outline, color: Colors.green[600], size: 18),
+                const SizedBox(width: 12),
+                Text(
+                  'Approve',
+                  style: TextStyle(color: Colors.green[600], fontSize: 14),
+                ),
+              ],
+            ),
           ),
-        ),
+        // Show deny option only for pending permits
+        if (isPending)
+          PopupMenuItem(
+            value: 'deny',
+            child: Row(
+              children: [
+                Icon(Icons.cancel_outlined, color: Colors.orange[700], size: 18),
+                const SizedBox(width: 12),
+                Text(
+                  'Deny',
+                  style: TextStyle(color: Colors.orange[700], fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+        // Show complete option for approved permits
+        if (isApproved)
+          PopupMenuItem(
+            value: 'complete',
+            child: Row(
+              children: [
+                Icon(Icons.done_all, color: Colors.blue[600], size: 18),
+                const SizedBox(width: 12),
+                Text(
+                  'Mark Complete',
+                  style: TextStyle(color: Colors.blue[600], fontSize: 14),
+                ),
+              ],
+            ),
+          ),
         PopupMenuItem(
           value: 'delete',
           child: Row(
@@ -157,8 +316,14 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       case 'view':
         _viewTask(task);
         break;
-      case 'edit':
-        _editTask(task);
+      case 'approve':
+        _approvePermit(task);
+        break;
+      case 'deny':
+        _denyPermit(task);
+        break;
+      case 'complete':
+        _completePermit(task);
         break;
       case 'delete':
         _deleteTask(task);
@@ -171,15 +336,219 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     WorkOrderConcernSlipDialog.show(context, task);
   }
 
-  // Edit task method
-  void _editTask(Map<String, dynamic> task) {
-    // Implement edit functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Edit task: ${task['id']}'),
-        backgroundColor: Colors.blue,
-      ),
+  // Approve permit method
+  Future<void> _approvePermit(Map<String, dynamic> task) async {
+    final permitId = task['permitId'];
+    
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Approve Work Order Permit'),
+          content: Text('Are you sure you want to approve permit ${task['serviceId']}?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.green),
+              child: const Text('Approve'),
+            ),
+          ],
+        );
+      },
     );
+
+    if (confirmed == true) {
+      try {
+        setState(() => _isLoading = true);
+        
+        // Call API to approve permit
+        await _apiService.approveWorkOrderPermit(permitId);
+        
+        // Refresh the list
+        await _fetchWorkOrderPermits();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Permit ${task['serviceId']} approved successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error approving permit: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  // Deny permit method
+  Future<void> _denyPermit(Map<String, dynamic> task) async {
+    final permitId = task['permitId'];
+    final reasonController = TextEditingController();
+    
+    // Show dialog to get denial reason
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Deny Work Order Permit'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Are you sure you want to deny permit ${task['serviceId']}?'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: reasonController,
+                decoration: const InputDecoration(
+                  labelText: 'Reason for denial',
+                  border: OutlineInputBorder(),
+                  hintText: 'Enter reason...',
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Deny'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true && reasonController.text.isNotEmpty) {
+      try {
+        setState(() => _isLoading = true);
+        
+        // Call API to deny permit
+        await _apiService.denyWorkOrderPermit(permitId, reasonController.text);
+        
+        // Refresh the list
+        await _fetchWorkOrderPermits();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Permit ${task['serviceId']} denied'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      } catch (e) {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error denying permit: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  // Complete permit method
+  Future<void> _completePermit(Map<String, dynamic> task) async {
+    final permitId = task['permitId'];
+    final notesController = TextEditingController();
+    
+    // Show dialog to get completion notes
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Complete Work Order Permit'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Mark permit ${task['serviceId']} as completed?'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: notesController,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  labelText: 'Completion Notes (Optional)',
+                  hintText: 'Enter any notes about the completion...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.blue),
+              child: const Text('Complete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      try {
+        setState(() => _isLoading = true);
+        
+        // Call API to complete permit with notes
+        await _apiService.completeWorkOrderPermit(
+          permitId,
+          completionNotes: notesController.text.isNotEmpty 
+              ? notesController.text 
+              : null,
+        );
+        
+        // Refresh the list
+        await _fetchWorkOrderPermits();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Permit ${task['serviceId']} marked as completed'),
+              backgroundColor: Colors.blue,
+            ),
+          );
+        }
+      } catch (e) {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error completing permit: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   // Delete task method
@@ -508,93 +877,132 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  "Repair Tasks",
+                  "Work Order Permits",
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
                     color: Colors.black87,
                   ),
                 ),
-                // Repair Type Dropdown
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey[300]!),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedConcernType,
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          _selectedConcernType = newValue!;
-                        });
-
-                        // Navigate based on selection
-                        if (newValue == 'Concern Slip') {
-                          context.go('/work/repair');
-                        } else if (newValue == 'Job Service') {
-                          context.go('/adminweb/pages/adminrepair_js_page');
-                        } else if (newValue == 'Work Order Permit') {
-                          context.go('/adminweb/pages/adminrepair_wop_page');
-                        }
-                      },
-                      items:
-                          <String>[
-                            'Concern Slip',
-                            'Job Service',
-                            'Work Order Permit',
-                          ].map<DropdownMenuItem<String>>((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(
-                                value,
-                                style: const TextStyle(fontSize: 14),
-                              ),
-                            );
-                          }).toList(),
+                Row(
+                  children: [
+                    // Refresh Button
+                    IconButton(
+                      icon: Icon(Icons.refresh, color: Colors.blue[600]),
+                      onPressed: _isLoading ? null : _fetchWorkOrderPermits,
+                      tooltip: 'Refresh',
                     ),
-                  ),
+                    const SizedBox(width: 16),
+                    // Repair Type Dropdown
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedConcernType,
+                          onChanged: (String? newValue) {
+                            setState(() {
+                              _selectedConcernType = newValue!;
+                            });
+
+                            // Navigate based on selection
+                            if (newValue == 'Concern Slip') {
+                              context.go('/work/repair');
+                            } else if (newValue == 'Job Service') {
+                              context.go('/adminweb/pages/adminrepair_js_page');
+                            } else if (newValue == 'Work Order Permit') {
+                              context.go('/adminweb/pages/adminrepair_wop_page');
+                            }
+                          },
+                          items:
+                              <String>[
+                                'Concern Slip',
+                                'Job Service',
+                                'Work Order Permit',
+                              ].map<DropdownMenuItem<String>>((String value) {
+                                return DropdownMenuItem<String>(
+                                  value: value,
+                                  child: Text(
+                                    value,
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                );
+                              }).toList(),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
           Divider(height: 1, thickness: 1, color: Colors.grey[400]),
 
-          // Data Table
+          // Loading/Error/Data Display
           Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SingleChildScrollView(
-                child: DataTable(
-                  columnSpacing: 16,
-                  headingRowHeight: 56,
-                  dataRowHeight: 64,
-                  headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
-                  headingTextStyle: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[600],
-                    letterSpacing: 0.5,
-                  ),
-                  dataTextStyle: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.black87,
-                  ),
-                  columns: [
-                    DataColumn(label: _fixedCell(0, const Text("SERVICE ID"))),
-                    DataColumn(label: _fixedCell(1, const Text("CONCERN ID"))),
-                    DataColumn(label: _fixedCell(2, const Text("TITLE"))),
-                    DataColumn(
-                      label: _fixedCell(3, const Text("BUILDING & UNIT")),
-                    ),
-                    DataColumn(label: _fixedCell(4, const Text("SCHEDULE"))),
-                    DataColumn(label: _fixedCell(5, const Text("STATUS"))),
-                    DataColumn(label: _fixedCell(6, const Text("PRIORITY"))),
-                    DataColumn(label: _fixedCell(7, const Text(""))),
-                  ],
-                  rows:
-                      _repairTasks.map((task) {
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _errorMessage.isNotEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
+                            const SizedBox(height: 16),
+                            Text(
+                              _errorMessage,
+                              style: TextStyle(color: Colors.red[700]),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: _fetchWorkOrderPermits,
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _repairTasks.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No work order permits found',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          )
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: SingleChildScrollView(
+                              child: DataTable(
+                                columnSpacing: 16,
+                                headingRowHeight: 56,
+                                dataRowHeight: 64,
+                                headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
+                                headingTextStyle: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[600],
+                                  letterSpacing: 0.5,
+                                ),
+                                dataTextStyle: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black87,
+                                ),
+                                columns: [
+                                  DataColumn(label: _fixedCell(0, const Text("SERVICE ID"))),
+                                  DataColumn(label: _fixedCell(1, const Text("CONCERN ID"))),
+                                  DataColumn(label: _fixedCell(2, const Text("TITLE"))),
+                                  DataColumn(
+                                    label: _fixedCell(3, const Text("BUILDING & UNIT")),
+                                  ),
+                                  DataColumn(label: _fixedCell(4, const Text("SCHEDULE"))),
+                                  DataColumn(label: _fixedCell(5, const Text("STATUS"))),
+                                  DataColumn(label: _fixedCell(6, const Text("PRIORITY"))),
+                                  DataColumn(label: _fixedCell(7, const Text(""))),
+                                ],
+                                rows: _repairTasks.map((task) {
                         return DataRow(
                           cells: [
                             DataCell(
@@ -674,9 +1082,9 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                           ],
                         );
                       }).toList(),
-                ),
-              ),
-            ),
+                              ),
+                            ),
+                          ),
           ),
           Divider(height: 1, thickness: 1, color: Colors.grey[400]),
 
@@ -687,7 +1095,9 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  "Showing 1 to 1 of 1 entry",
+                  _repairTasks.isEmpty
+                      ? "No entries"
+                      : "Showing 1 to ${_repairTasks.length} of ${_repairTasks.length} ${_repairTasks.length == 1 ? 'entry' : 'entries'}",
                   style: TextStyle(color: Colors.grey[600], fontSize: 14),
                 ),
                 Row(

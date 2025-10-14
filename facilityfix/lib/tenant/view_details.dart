@@ -1417,7 +1417,7 @@ class _ViewDetailsPageState extends State<ViewDetailsPage> {
             location: 'Tower A - 5th Floor',
             description:
                 'Routine quarterly inspection of the main water lines on 5F.',
-            checklist: const [
+            checklist_complete: const [
               'Shut off main valve',
               'Inspect joints',
               'Check for leaks',
@@ -1442,7 +1442,7 @@ class _ViewDetailsPageState extends State<ViewDetailsPage> {
             location: 'Tower A - 5th Floor',
             description:
                 'Routine quarterly inspection of the main water lines on 5F.',
-            checklist: const [
+            checklist_complete: const [
               'Shut off main valve',
               'Inspect joints',
               'Check for leaks',

@@ -16,8 +16,10 @@ class _InventoryManagementItemsPageState
     extends State<InventoryManagementItemsPage> {
   final ApiService _apiService = ApiService();
   List<Map<String, dynamic>> _inventoryItems = [];
+  List<Map<String, dynamic>> _filteredItems = [];
   bool _isLoading = true;
   String? _errorMessage;
+  String? _selectedStatus;
 
   // TODO: Replace with actual building ID from user session
   final String _buildingId = 'default_building_id';
@@ -57,6 +59,7 @@ class _InventoryManagementItemsPageState
           _inventoryItems = List<Map<String, dynamic>>.from(
             response['data'] ?? [],
           );
+          _updateFilteredItems();
           _isLoading = false;
         });
       } else {
@@ -120,11 +123,11 @@ class _InventoryManagementItemsPageState
 
   // Column widths for table
   final List<double> _colW = <double>[
-    180, // ITEM NO.
-    340, // ITEM NAME
-    120, // STOCK
-    140, // TAG
-    120, // STATUS
+    190, // ITEM NO.
+    380, // ITEM NAME
+    200, // STOCK
+    //140, // TAG
+    160, // STATUS
     48, // ACTION
   ];
 
@@ -248,6 +251,63 @@ class _InventoryManagementItemsPageState
         backgroundColor: Colors.blue,
       ),
     );
+  }
+
+  void _updateFilteredItems() {
+    setState(() {
+      if (_selectedStatus == null || _selectedStatus == 'All') {
+        _filteredItems = List.from(_inventoryItems);
+      } else {
+        _filteredItems = _inventoryItems
+            .where((item) => _getItemStatus(item) == _selectedStatus)
+            .toList();
+      }
+    });
+  }
+
+  void _showFilterMenu(BuildContext context, Offset position) {
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+
+    final List<String> statusOptions = [
+      'All',
+      'In Stock',
+      'Low Stock',
+      'Out of Stock',
+    ];
+
+    showMenu(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(position.dx, position.dy - 4, 0, 0),
+        Offset.zero & overlay.size,
+      ),
+      items: statusOptions.map((String status) {
+        return PopupMenuItem<String>(
+          value: status,
+          child: Row(
+            children: [
+              Icon(
+                Icons.check,
+                color: _selectedStatus == status ? Colors.blue : Colors.transparent,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(status),
+            ],
+          ),
+        );
+      }).toList(),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      elevation: 8,
+    ).then((String? value) {
+      if (value != null) {
+        setState(() {
+          _selectedStatus = value == 'All' ? null : value;
+          _updateFilteredItems();
+        });
+      }
+    });
   }
 
   void _deleteItem(Map<String, dynamic> item) {
@@ -489,34 +549,59 @@ class _InventoryManagementItemsPageState
                             ),
                             const SizedBox(width: 12),
                             // Filter button
-                            Container(
-                              height: 40,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.tune,
-                                    color: Colors.grey[600],
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    "Filter",
-                                    style: TextStyle(
-                                      color: Colors.grey[700],
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
+                            Builder(
+                              builder: (context) {
+                                return InkWell(
+                                  onTap: () {
+                                    final RenderBox button =
+                                        context.findRenderObject() as RenderBox;
+                                    final size = button.size;
+                                    final Offset position =
+                                        button.localToGlobal(Offset.zero);
+                                    _showFilterMenu(
+                                      context,
+                                      position + Offset(0, size.height),
+                                    );
+                                  },
+                                  child: Container(
+                                    height: 40,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: _selectedStatus != null
+                                            ? Colors.blue
+                                            : Colors.grey[300]!,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.tune,
+                                          color: _selectedStatus != null
+                                              ? Colors.blue
+                                              : Colors.grey[600],
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          _selectedStatus ?? "Filter",
+                                          style: TextStyle(
+                                            color: _selectedStatus != null
+                                                ? Colors.blue
+                                                : Colors.grey[700],
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ],
-                              ),
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -597,14 +682,14 @@ class _InventoryManagementItemsPageState
                             label: _fixedCell(1, const Text("ITEM NAME")),
                           ),
                           DataColumn(label: _fixedCell(2, const Text("STOCK"))),
-                          DataColumn(label: _fixedCell(3, const Text("TAG"))),
+                          // DataColumn(label: _fixedCell(3, const Text("TAG"))),
                           DataColumn(
-                            label: _fixedCell(4, const Text("STATUS")),
+                            label: _fixedCell(3, const Text("STATUS")),
                           ),
-                          DataColumn(label: _fixedCell(5, const Text(""))),
+                          DataColumn(label: _fixedCell(4, const Text(""))),
                         ],
                         rows:
-                            _inventoryItems.map((item) {
+                            _filteredItems.map((item) {
                               final itemNo =
                                   item['item_code'] ?? item['id'] ?? 'N/A';
                               final itemName = item['item_name'] ?? 'Unknown';
@@ -629,13 +714,13 @@ class _InventoryManagementItemsPageState
                                   ),
                                   DataCell(_fixedCell(1, _ellipsis(itemName))),
                                   DataCell(_fixedCell(2, _ellipsis(stock))),
-                                  DataCell(_fixedCell(3, _buildTagChip(tag))),
+                                  // DataCell(_fixedCell(3, _buildTagChip(tag))),
                                   DataCell(
-                                    _fixedCell(4, _buildStatusChip(status)),
+                                    _fixedCell(3, _buildStatusChip(status)),
                                   ),
                                   DataCell(
                                     _fixedCell(
-                                      5,
+                                      4,
                                       Builder(
                                         builder: (context) {
                                           return IconButton(
@@ -676,7 +761,7 @@ class _InventoryManagementItemsPageState
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "Showing 1 to ${_inventoryItems.length} of ${_inventoryItems.length} entries",
+                          "Showing 1 to ${_filteredItems.length} of ${_inventoryItems.length} entries",
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 14,

@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/services/chat_helper.dart';
+import 'package:facilityfix/staff/view_details/workorder.dart';
 import 'package:facilityfix/tenant/announcement.dart';
 import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/notification.dart';
 import 'package:facilityfix/tenant/profile.dart';
 import 'package:facilityfix/tenant/request_forms.dart';
 import 'package:facilityfix/tenant/view_details.dart';
+import 'package:facilityfix/widgets/view_details.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:facilityfix/widgets/cards.dart';
@@ -373,12 +375,14 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   }
 
   Widget buildCard(Map<String, dynamic> r) {
-    final createdAt =
-        DateTime.tryParse(r['created_at'] ?? '') ?? DateTime.now();
+    final createdAt = DateTime.tryParse(r['created_at'] ?? '') ?? DateTime.now();
+    final requestType = (r['request_type'] ?? '').toLowerCase();
+    final concernSlipId = r['id'] ?? '';
+    final hasMaterialsUsed = r.containsKey('materials_used') && r['materials_used'] != null;
 
     return RepairCard(
       title: r['title'] ?? 'Untitled Request',
-      id: r['formatted_id'] ?? r['id'] ?? '', // Display formatted ID
+      id: (r['formatted_id'] ?? r['id'] ?? '').toString().substring(0, ((r['formatted_id'] ?? r['id'] ?? '').toString().length > 11 ? 11 : (r['formatted_id'] ?? r['id'] ?? '').toString().length)), // Display up to 16 chars
       createdAt: createdAt,
       statusTag: r['status'] ?? 'pending',
       departmentTag: r['category'],
@@ -388,15 +392,46 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       assignedStaff: r['assigned_staff'],
       staffDepartment: r['staff_department'],
       onTap: () {
-        // Use raw ID for navigation to match Home Dashboard behavior
-        final concernSlipId = r['id'] ?? '';
-        if (concernSlipId.isNotEmpty) {
+        if (concernSlipId.isEmpty) return;
+        if (hasMaterialsUsed) {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder:
-                  (_) =>
-                      TenantConcernSlipDetailPage(concernSlipId: concernSlipId),
+              builder: (_) => JobServiceDetails(
+                id: concernSlipId,
+                concernSlipId: concernSlipId,
+                createdAt: createdAt,
+                requestTypeTag: r['request_type'] ?? 'Job Service',
+                statusTag: r['status'] ?? 'pending',
+                requestedBy: r['assigned_staff'] ?? '',
+                unitId: r['unit_id'] ?? '',
+                materialsUsed: r['materials_used'],
+                // Add other required fields as needed
+              ),
+            ),
+          );
+        } 
+        else if (requestType.contains('work order')) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => WorkOrderDetailsPage(workOrderId: r['id'], selectedTabLabel: '',),
+            ),
+          );
+        }
+        else if (requestType.contains('concern slip')) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => TenantConcernSlipDetailPage(concernSlipId: concernSlipId),
+            ),
+          );
+        } else {
+          // Fallback to concern slip details
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => TenantConcernSlipDetailPage(concernSlipId: concernSlipId),
             ),
           );
         }

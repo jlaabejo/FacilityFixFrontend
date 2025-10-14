@@ -1,6 +1,6 @@
 // lib/tenant/profile.dart
 import 'dart:io';
-import 'package:facilityfix/landingpage/welcomepage.dart';
+import 'package:facilityfix/landingpage/splash_screen.dart';
 import 'package:facilityfix/tenant/notification.dart';
 import 'package:facilityfix/widgets/profile.dart';
 import 'package:file_picker/file_picker.dart';
@@ -677,11 +677,11 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                         const SizedBox(height: 24),
 
-                        // Profile completion indicator
-                        if (_profileData != null) ...[
-                          _buildProfileCompletionCard(),
-                          const SizedBox(height: 24),
-                        ],
+                        // // Profile completion indicator
+                        // if (_profileData != null) ...[
+                        //   _buildProfileCompletionCard(),
+                        //   const SizedBox(height: 24),
+                        // ],
 
                         // PERSONAL DETAILS — display-only
                         SectionCard(
@@ -782,7 +782,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                   Navigator.pushAndRemoveUntil(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) => const WelcomePage(),
+                                      builder: (_) => const SplashScreen(),
                                     ),
                                     (route) => false,
                                   );

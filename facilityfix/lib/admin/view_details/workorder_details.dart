@@ -353,7 +353,7 @@ class _WorkOrderDetailsPageState extends State<WorkOrderDetailsPage> {
           title: 'Quarterly Pipe Inspection',
           description: 'Check main and branch lines for leaks, corrosion, and pressure stability.',
           location: 'Tower A – 5th Floor',
-          checklist: const [
+          checklist_complete: const [
             'Notify tenants on the affected floor',
             'Shut off water supply safely',
             'Inspect risers and branch lines for leaks/corrosion',
@@ -381,7 +381,7 @@ class _WorkOrderDetailsPageState extends State<WorkOrderDetailsPage> {
           title: 'Quarterly Pipe Inspection',
           description: 'Check main and branch lines for leaks, corrosion, and pressure stability.',
           location: 'Tower A – 5th Floor',
-          checklist: const [
+          checklist_complete: const [
             'Notify tenants on the affected floor',
             'Shut off water supply safely',
             'Inspect risers and branch lines for leaks/corrosion',

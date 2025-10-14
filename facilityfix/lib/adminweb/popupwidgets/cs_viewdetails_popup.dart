@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../popupwidgets/assignstaff_popup.dart';
 
 class ConcernSlipDetailDialog extends StatelessWidget {
   final Map<String, dynamic> task;
@@ -59,14 +58,19 @@ class ConcernSlipDetailDialog extends StatelessWidget {
 
                     // Work Description Section
                     _buildWorkDescription(),
+                    
+                    // Staff Assessment Section (if available)
+                    if (task['rawData']?['staff_assessment'] != null || 
+                        task['rawData']?['staff_recommendation'] != null) ...[
+                      const SizedBox(height: 32),
+                      Divider(color: Colors.grey[300], thickness: 1, height: 1),
+                      const SizedBox(height: 32),
+                      _buildStaffAssessmentSection(),
+                    ],
                   ],
                 ),
               ),
             ),
-            Divider(color: Colors.grey[300], thickness: 1, height: 1),
-
-            // Footer with Next Button
-            _buildFooter(context),
           ],
         ),
       ),
@@ -288,37 +292,105 @@ class ConcernSlipDetailDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildFooter(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(32),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          ElevatedButton(
-            onPressed: () {
-              // Handle next action
-              Navigator.of(context).pop();
-              AssignScheduleWorkDialog.show(
-                context,
-                task,
-              ); // Open assign dialog
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1976D2),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              elevation: 0,
-            ),
-            child: const Text(
-              'Next',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-            ),
+  Widget _buildStaffAssessmentSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Staff Assessment',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 24),
+        
+        // Assessment and Recommendation in a row layout
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Staff Assessment
+            if (task['rawData']?['staff_assessment'] != null)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'ASSESSMENT',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[600],
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue[200]!),
+                      ),
+                      child: Text(
+                        task['rawData']['staff_assessment'],
+                        style: TextStyle(
+                          fontSize: 14,
+                          height: 1.5,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            
+            // Spacing between assessment and recommendation
+            if (task['rawData']?['staff_assessment'] != null && 
+                task['rawData']?['staff_recommendation'] != null)
+              const SizedBox(width: 24),
+            
+            // Staff Recommendation
+            if (task['rawData']?['staff_recommendation'] != null)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'RECOMMENDATION',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[600],
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.green[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green[200]!),
+                      ),
+                      child: Text(
+                        task['rawData']['staff_recommendation'],
+                        style: TextStyle(
+                          fontSize: 14,
+                          height: 1.5,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ],
     );
   }
 

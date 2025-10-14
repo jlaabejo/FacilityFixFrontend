@@ -802,6 +802,7 @@ class APIService {
     required String validTo,
     required List<Map<String, String>> contractors,
     String? unitId,
+    String? concernSlipId,  // Add concern_slip_id parameter
     List<String>? attachments,
   }) async {
     try {
@@ -815,10 +816,14 @@ class APIService {
         'valid_to': validTo,
         'contractors': contractors,
         if (unitId != null) 'unit_id': unitId,
+        if (concernSlipId != null) 'concern_slip_id': concernSlipId,  // Include concern_slip_id in body
         'attachments': attachments ?? [],
       };
 
       print('[API] Submitting work order permit request...');
+      if (concernSlipId != null) {
+        print('[API] Linking to concern slip: $concernSlipId');
+      }
 
       final response = await post(
         '/work-order-permits/',
@@ -1066,7 +1071,6 @@ class APIService {
   }) async {
     try {
       await _refreshRoleLabelFromToken();
-      final token = await _requireToken();
       
       final body = {
         'status': status,
@@ -1075,7 +1079,6 @@ class APIService {
       
       final response = await patch(
         '/job-services/$jobServiceId/status',
-        headers: _authHeaders(token),
         body: jsonEncode(body),
       );
 
@@ -1166,7 +1169,7 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
       final response = await get(
-        '/work-orders/$workOrderId',
+        '/work-order-permits/$workOrderId',
         headers: _authHeaders(token),
       );
 
@@ -1282,6 +1285,76 @@ class APIService {
       }
     } catch (e) {
       print('Error updating maintenance task: $e');
+      rethrow;
+    }
+  }
+
+  /// Update the entire checklist for a maintenance task
+  Future<Map<String, dynamic>> updateMaintenanceChecklist({
+    required String taskId,
+    required List<Map<String, dynamic>> checklistCompleted,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+      
+      final response = await patch(
+        '/maintenance/$taskId/checklist',
+        headers: _authHeaders(token),
+        body: jsonEncode({
+          'checklist_completed': checklistCompleted,
+        }),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to update checklist: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error updating checklist: $e');
+      rethrow;
+    }
+  }
+
+  /// Update a single checklist item
+  Future<Map<String, dynamic>> updateChecklistItem({
+    required String taskId,
+    required String itemId,
+    required bool completed,
+    String? task,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = {
+        'item_id': itemId,
+        'completed': completed,
+      };
+      if (task != null) {
+        body['task'] = task;
+      }
+
+      final response = await patch(
+        '/maintenance/$taskId/checklist/$itemId',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to update checklist item: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error updating checklist item: $e');
       rethrow;
     }
   }
@@ -1996,10 +2069,22 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
+      // Allowed departments
+      const allowedDepartments = [
+        'maintenance',
+        'carpentry',
+        'plumbing',
+        'electrical',
+        'masonry',
+      ];
+
+      // Normalize department
+      final normalizedDept = department?.trim().toLowerCase();
+
       // Build query parameters
       final queryParams = <String, String>{};
-      if (department != null && department.isNotEmpty) {
-        queryParams['department'] = department;
+      if (normalizedDept != null && allowedDepartments.contains(normalizedDept)) {
+        queryParams['department'] = normalizedDept;
       }
       if (availableOnly) {
         queryParams['available_only'] = 'true';

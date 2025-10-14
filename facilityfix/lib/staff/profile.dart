@@ -1,6 +1,6 @@
 // lib/staff/profile.dart
 import 'dart:io';
-import 'package:facilityfix/landingpage/welcomepage.dart';
+import 'package:facilityfix/landingpage/splash_screen.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/notification.dart';
@@ -317,22 +317,13 @@ class _ProfilePageState extends State<ProfilePage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        title: 'Profile',
+        title: 'View Details',
         leading: const Padding(
           padding: EdgeInsets.only(right: 8),
           child: BackButton(),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const NotificationPage()),
-              );
-            },
-          ),
-        ],
+        showMore: true,
+        showHistory: true,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -436,7 +427,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         Navigator.pushAndRemoveUntil(
                           context,
                           MaterialPageRoute(
-                              builder: (_) => const WelcomePage()),
+                              builder: (_) => const SplashScreen()),
                           (route) => false,
                         );
                       },

@@ -228,7 +228,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                   child: Row(
                     children: [
                       Image.asset(
-                        'assets/images/logo.png',
+                        'images/logo.png',
                         height: 40,
                       ),
                       const SizedBox(width: 8),
@@ -275,7 +275,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         sectionKey: 'user',
                         children: [
                           _subNavItem('Users', 'user_users'),
-                          _subNavItem('Roles Management', 'user_roles'),
+                          //_subNavItem('Roles Management', 'user_roles'),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -359,34 +359,8 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                   color: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.end,  // Changed to end alignment
                     children: [
-                      // Enhanced modern search bar
-                      SizedBox(
-                        width: 350,
-                        child: TextField(
-                          decoration: InputDecoration(
-                            hintText: 'Search anything...',
-                            hintStyle: const TextStyle(
-                              color: Color(0xFF64748B),
-                            ),
-                            prefixIcon: const Icon(
-                              Icons.search,
-                              color: Color(0xFF64748B),
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            filled: true,
-                            fillColor: const Color(0xFFF8FAFC),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                          ),
-                        ),
-                      ),
                       // Header action buttons
                       Row(
                         children: [

@@ -52,14 +52,18 @@ class ConcernSlip {
   });
 
   factory ConcernSlip.fromJson(Map<String, dynamic> json) {
+    // Handle both field name conventions
+    final statusField = json['status'] ?? json['status_tag'];
+    final categoryField = json['category'] ?? json['department_tag'];
+    
     return ConcernSlip(
-      id: json['id'] ?? '',
-      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+      id: json['id'] ?? json['formatted_id'] ?? '',
+      createdAt: DateTime.tryParse(json['created_at'] ?? json['submitted_at'] ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(json['updated_at'] ?? ''),
-      departmentTag: json['department_tag'],
+      departmentTag: categoryField,
       requestTypeTag: json['request_type'] ?? 'Concern Slip',
       priority: json['priority'],
-      statusTag: json['status_tag'] ?? 'Pending',
+      statusTag: statusField ?? 'Pending',
       resolutionType: json['resolution_type'],
       requestedBy: json['requested_by'] ?? '',
       unitId: json['unit_id'] ?? '',
@@ -179,18 +183,22 @@ class JobService {
   });
 
   factory JobService.fromJson(Map<String, dynamic> json) {
-    DateTime? _dt(String? x) => x == null ? null : DateTime.tryParse(x);
+    DateTime? _dt(dynamic x) => x == null ? null : DateTime.tryParse(x.toString());
     List<String>? _list(dynamic v) =>
         (v as List?)?.map((e) => e.toString()).toList();
 
+    // Handle both field name conventions
+    final statusField = json['status'] ?? json['status_tag'];
+    final categoryField = json['category'] ?? json['department_tag'];
+
     return JobService(
-      id: json['id'] ?? '',
-      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+      id: json['id'] ?? json['formatted_id'] ?? '',
+      createdAt: _dt(json['created_at'] ?? json['submitted_at']) ?? DateTime.now(),
       updatedAt: _dt(json['updated_at']),
       requestTypeTag: json['request_type'] ?? 'Job Service',
-      departmentTag: json['department_tag'],
+      departmentTag: categoryField,
       priority: json['priority'],
-      statusTag: json['status_tag'] ?? 'Pending',
+      statusTag: statusField ?? 'Pending',
       resolutionType: json['resolution_type'],
       title: json['title'] ?? '',
       unitId: json['unit_id'] ?? '',
@@ -204,8 +212,8 @@ class JobService {
       staffDepartment: json['staff_department'],
       assignedPhotoUrl: json['assigned_photo_url'],
 
-      startedAt: _dt(json['started_at']),
-      completedAt: _dt(json['completed_at']),
+      startedAt: _dt(json['started_at'] ?? json['actual_start_date']),
+      completedAt: _dt(json['completed_at'] ?? json['actual_completion_date']),
       assessedAt: _dt(json['assessed_at']),
       assessment: json['assessment'],
       attachments: _list(json['attachments']),
@@ -344,14 +352,22 @@ class WorkOrderPermit {
     List<String>? _list(dynamic v) =>
         (v as List?)?.map((e) => e.toString()).toList();
 
+    // Handle both field name conventions from different API endpoints
+    final contractorContact = json['contractor_contact'] ?? json['contractor_number'];
+    final validFrom = json['valid_from'] ?? json['work_schedule_from'];
+    final validTo = json['valid_to'] ?? json['work_schedule_to'];
+    final entryReqs = json['entry_requirements'] ?? json['entry_equipments'];
+    final statusField = json['status'] ?? json['status_tag'];
+    final categoryField = json['category'] ?? json['department_tag'];
+
     return WorkOrderPermit(
-      id: json['id'] ?? '',
-      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+      id: json['id'] ?? json['formatted_id'] ?? '',
+      createdAt: _dt(json['created_at'] ?? json['submitted_at']) ?? DateTime.now(),
       updatedAt: _dt(json['updated_at']),
       requestTypeTag: json['request_type'] ?? 'Work Order',
-      departmentTag: json['department_tag'],
+      departmentTag: categoryField,
       priority: json['priority'],
-      statusTag: json['status_tag'] ?? 'Pending',
+      statusTag: statusField ?? 'Pending',
       resolutionType: json['resolution_type'],
       title: json['title'] ?? '',
       unitId: json['unit_id'] ?? '',
@@ -364,12 +380,12 @@ class WorkOrderPermit {
       requestedBy: json['requested_by'],
 
       contractorName: json['contractor_name'] ?? '',
-      contractorNumber: json['contractor_number'] ?? '',
+      contractorNumber: contractorContact ?? '',
       contractorCompany: json['contractor_company'],
 
-      workScheduleFrom: DateTime.parse(json['work_schedule_from']),
-      workScheduleTo: DateTime.parse(json['work_schedule_to']),
-      entryEquipments: json['entry_equipments'],
+      workScheduleFrom: _dt(validFrom) ?? DateTime.now(),
+      workScheduleTo: _dt(validTo) ?? DateTime.now(),
+      entryEquipments: entryReqs,
 
       approvedBy: json['approved_by'],
       approvalDate: _dt(json['approval_date']),
@@ -489,14 +505,18 @@ class Maintenance {
     List<String>? _list(dynamic v) =>
         (v as List?)?.map((e) => e.toString()).toList();
 
+    // Handle both field name conventions
+    final statusField = json['status'] ?? json['status_tag'];
+    final categoryField = json['category'] ?? json['department_tag'];
+
     return Maintenance(
-      id: json['id'] ?? '',
-      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+      id: json['id'] ?? json['formatted_id'] ?? '',
+      createdAt: _dt(json['created_at'] ?? json['submitted_at']) ?? DateTime.now(),
       updatedAt: _dt(json['updated_at']),
-      departmentTag: json['department_tag'],
+      departmentTag: categoryField,
       requestTypeTag: json['request_type'] ?? 'Maintenance',
       priority: json['priority'],
-      statusTag: json['status_tag'] ?? 'Pending',
+      statusTag: statusField ?? 'Pending',
       resolutionType: json['resolution_type'],
 
       requestedBy: json['requested_by'] ?? '',
@@ -506,7 +526,7 @@ class Maintenance {
       description: json['description'] ?? '',
       checklist: json['checklist']?.toString() ?? '',
       attachments: _list(json['attachments']),
-      adminNote: json['admin_note'],
+      adminNote: json['admin_note'] ?? json['admin_notes'],
 
       assignedStaff: json['assigned_staff'],
       staffDepartment: json['staff_department'],

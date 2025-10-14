@@ -824,18 +824,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
     }
   }
 
-  Future<void> _showCreateUserDialog() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('User creation functionality coming soon!'),
-        backgroundColor: Colors.blue,
-      ),
-    );
-    
-    // TODO: Implement user creation dialog
-    // This would involve creating a new dialog similar to UserProfileDialog
-    // but for creating new users with validation and API integration
-  }
+  
 
   @override
   Widget build(BuildContext context) {
@@ -950,70 +939,12 @@ class _AdminUserPageState extends State<AdminUserPage> {
                   onPressed: _fetchUsers,
                   tooltip: 'Refresh',
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 32),
 
-                // Filter Button
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.tune, size: 20, color: Colors.grey.shade600),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Filter',
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
-                    ],
-                  ),
-                ),
+                
                 const Spacer(),
 
-                // Export Button
-                OutlinedButton.icon(
-                  onPressed: () {
-                    // TODO: Implement export functionality
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Export feature coming soon!'),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.download, size: 18),
-                  label: const Text('Export'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.grey.shade700,
-                    side: BorderSide(color: Colors.grey.shade300),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-
-                // Add User Button
-                ElevatedButton.icon(
-                  onPressed: () => _showCreateUserDialog(),
-                  icon: const Icon(Icons.person_add, size: 18),
-                  label: const Text('Add User'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[600],
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    elevation: 0,
-                  ),
-                ),
+                
               ],
             ),
             const SizedBox(height: 32),

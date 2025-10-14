@@ -677,6 +677,50 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                       ),
                     ),
                     Divider(height: 1, thickness: 1, color: Colors.grey[400]),
+                    if (_isLoading)
+                      const Padding(
+                        padding: EdgeInsets.all(40.0),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (_errorMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.all(40.0),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              size: 48,
+                              color: Colors.red[300],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              _errorMessage!,
+                              style: TextStyle(
+                                color: Colors.red[700],
+                                fontSize: 16,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              onPressed: _fetchAnnouncements,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (_announcementItems.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(40.0),
+                        child: Center(
+                          child: Text(
+                            'No announcement found',
+                            style: TextStyle(fontSize: 16, color: Colors.grey),
+                          ),
+                        ),
+                      )
+                    else
 
                     // Data Table
                     SingleChildScrollView(

@@ -732,13 +732,13 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.refresh, color: Colors.grey[600], size: 18),
+                  Icon(Icons.refresh_rounded, size: 20, color: Colors.blue[600]),
                   const SizedBox(width: 8),
                   Text(
-                    "Refresh",
+                    'Refresh',
                     style: TextStyle(
-                      color: Colors.grey[700],
                       fontSize: 14,
+                      color: Colors.blue[600],
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -861,11 +861,35 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                       ),
                     )
                     : _filteredTasks.isEmpty
-                    ? const Center(
-                      child: Text(
-                        'No concern slips found',
-                        style: TextStyle(fontSize: 16, color: Colors.grey),
-                      ),
+                    ? Center(
+                      child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.work_outline,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No Concern Slip Found',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'There are currently no concern slip requests to display.',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                        
+                      ],
+                    ),
                     )
                     : SingleChildScrollView(
                       scrollDirection: Axis.horizontal,

@@ -393,8 +393,8 @@ class _InventoryFormState extends State<InventoryForm> {
           // Inventory Item Selector
           if (_isLoadingItems)
             const Center(child: CircularProgressIndicator())
-          else if (_inventoryItems.isEmpty)
-            const Text('No inventory items available', style: TextStyle(color: Colors.red))
+          // else if (_inventoryItems.isEmpty)
+          //   const Text('No inventory items available', style: TextStyle(color: Colors.red))
           else
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,

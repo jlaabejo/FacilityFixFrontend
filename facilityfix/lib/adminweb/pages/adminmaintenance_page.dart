@@ -539,11 +539,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                         ),
                         Row(
                           children: [
-                            IconButton(
-                              onPressed: _fetchMaintenanceTasks,
-                              icon: const Icon(Icons.refresh),
-                              tooltip: 'Refresh',
-                            ),
+                            
                             const SizedBox(width: 8),
                             Container(
                               width: 240,
@@ -576,31 +572,17 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                             Container(
                               height: 40,
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
+                                horizontal: 8,
                               ),
                               decoration: BoxDecoration(
                                 border: Border.all(color: Colors.grey[300]!),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.tune,
-                                    color: Colors.grey[600],
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    "Filter",
-                                    style: TextStyle(
-                                      color: Colors.grey[700],
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                              child: IconButton(
+                              onPressed: _fetchMaintenanceTasks,
+                              icon: const Icon(Icons.refresh),
+                              tooltip: 'Refresh',
+                            ),
                             ),
                           ],
                         ),

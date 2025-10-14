@@ -841,28 +841,7 @@ class _AdminRolePageState extends State<AdminRolePage> {
                 ),
                 const SizedBox(width: 16),
 
-                // Filter Button
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.tune, size: 20, color: Colors.grey.shade600),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Filter',
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
-                    ],
-                  ),
-                ),
+                
                 const Spacer(),
 
                 // Export Button

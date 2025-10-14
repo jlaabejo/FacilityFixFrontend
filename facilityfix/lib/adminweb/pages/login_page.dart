@@ -126,14 +126,20 @@ class _LoginPageState extends State<LoginPage> {
     final isDesktop = MediaQuery.of(context).size.width >= 800;
 
     return Scaffold(
-      body: Row(
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/landinggraphics2.png'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Row(
         children: [
           // Left Panel (as-is)
           if (isDesktop)
             Expanded(
               flex: 1,
               child: Container(
-                color: const Color(0xFFB5D9F3),
                 padding: const EdgeInsets.all(32),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -141,7 +147,7 @@ class _LoginPageState extends State<LoginPage> {
                     Row(
                       children: [
                         Image.asset(
-                          'assets/images/logo.png',
+                          'assets/images/logo (2).png',
                           height: 40,
                         ),
                         const SizedBox(width: 8),
@@ -158,8 +164,8 @@ class _LoginPageState extends State<LoginPage> {
                     const Spacer(),
                     Center(
                       child: Image.asset(
-                        'assets/images/leftpartgraphics.png',
-                        height: 400,
+                        'assets/images/logo (2).png',
+                        height: 600,
                         fit: BoxFit.contain,
                       ),
                     ),
@@ -173,8 +179,8 @@ class _LoginPageState extends State<LoginPage> {
           Expanded(
             flex: 1,
             child: Center(
-              child: SizedBox(
-                width: 400,
+                child: SizedBox(
+                  width: 400,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -292,30 +298,14 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
 
-                    // Optional: quick link to dashboard if already authenticated
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        TextButton(
-                          onPressed: () async {
-                            final t = await AuthStorage.getToken();
-                            if (t != null && t.isNotEmpty && mounted) {
-                              context.go('/dashboard');
-                            } else {
-                              _showSnack('No active session found.');
-                            }
-                          },
-                          child: const Text('dashboard'),
-                        ),
-                      ],
-                    ),
+                    
                   ],
                 ),
               ),
             ),
           ),
-        ],
+      ],
+        ),
       ),
     );
   }
