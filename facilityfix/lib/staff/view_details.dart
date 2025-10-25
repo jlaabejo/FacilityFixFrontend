@@ -45,6 +45,7 @@ class _StaffConcernSlipDetailPageState
   String? _recommendationError;
   bool _isSubmitting = false;
   bool _showAssessmentForm = false; // Toggle to show/hide form
+  String _selectedResolutionType = 'work_order'; // Default to work_order
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -181,6 +182,7 @@ class _StaffConcernSlipDetailPageState
       final body = {
         'assessment': _assessmentController.text.trim(),
         'recommendation': _recommendationController.text.trim(),
+        'resolution_type': _selectedResolutionType,
         'attachments': [], // TODO: Add attachment support
       };
       
@@ -376,7 +378,110 @@ class _StaffConcernSlipDetailPageState
               errorText: _recommendationError,
             ),
 
+            const SizedBox(height: 16),
+            const Text(
+              'Resolution Type',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedResolutionType = 'work_order';
+                      });
+                    },
+                    child: Container(
+                      color: Colors.transparent,
+                      child: Row(
+                        children: [
+                          Radio<String>(
+                            value: 'work_order',
+                            groupValue: _selectedResolutionType,
+                            activeColor: const Color(0xFF005CE7),
+                            onChanged: (String? value) {
+                              if (value != null) {
+                                setState(() {
+                                  _selectedResolutionType = value;
+                                });
+                              }
+                            },
+                          ),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Work Order',
+                                  style: TextStyle(fontSize: 14),
+                                ),
+                                const SizedBox(height: 2),
+                                const Text(
+                                  'For repairs requiring external contractors',
+                                  style: TextStyle(fontSize: 12, color: Color(0xFF667085)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedResolutionType = 'job_service';
+                      });
+                    },
+                    child: Container(
+                      color: Colors.transparent,
+                      child: Row(
+                        children: [
+                          Radio<String>(
+                            value: 'job_service',
+                            groupValue: _selectedResolutionType,
+                            activeColor: const Color(0xFF005CE7),
+                            onChanged: (String? value) {
+                              if (value != null) {
+                                setState(() {
+                                  _selectedResolutionType = value;
+                                });
+                              }
+                            },
+                          ),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Job Service',
+                                  style: TextStyle(fontSize: 14),
+                                ),
+                                const SizedBox(height: 2),
+                                const Text(
+                                  'For repairs handled by internal staff',
+                                  style: TextStyle(fontSize: 12, color: Color(0xFF667085)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
             const Text(
               'Attachment',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),

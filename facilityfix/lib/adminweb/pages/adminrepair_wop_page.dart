@@ -75,31 +75,62 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
 
     try {
       final permits = await _apiService.getAllWorkOrderPermits();
-      
+
+      // Fetch concern slip data for each permit to get assessment and recommendation
+      final tasks = <Map<String, dynamic>>[];
+
+      for (var permit in permits) {
+        Map<String, dynamic> taskData = {
+          'serviceId': permit['formatted_id'] ?? permit['id'] ?? 'N/A',
+          'id': permit['concern_slip_id'] ?? 'N/A',
+          'permitId': permit['id'] ?? 'N/A', // Add permit ID for actions
+          'title': permit['title'] ?? 'Untitled Work Order',
+          'buildingUnit': permit['location'] ?? 'N/A',
+          'schedule': _formatDateRange(permit['valid_from'], permit['valid_to']),
+          'priority': _mapStatusToPriority(permit['status']),
+          'status': _mapStatusToDisplay(permit['status']),
+          'rawStatus': permit['status'] ?? 'pending', // Keep raw status for actions
+
+          // Additional task data
+          'dateRequested': _formatDate(permit['created_at']),
+          'requestedBy': permit['requested_by'] ?? 'N/A',
+          'department': permit['category'] ?? 'General',
+          'description': permit['description'] ?? '',
+          'validFrom': permit['valid_from'] ?? 'N/A',
+          'validTo': permit['valid_to'] ?? 'N/A',
+          'contractors': permit['contractors'] ?? [],
+          'attachments': permit['attachments'] ?? [],
+        };
+
+        // Fetch concern slip data if concern_slip_id exists
+        final concernSlipId = permit['concern_slip_id'];
+        if (concernSlipId != null && concernSlipId != 'N/A') {
+          try {
+            final concernSlip = await _apiService.getConcernSlip(concernSlipId);
+
+            // Add assessment and recommendation from concern slip
+            taskData['assessment'] = concernSlip['staff_assessment'] ?? 'No assessment available';
+            taskData['recommendation'] = concernSlip['staff_recommendation'] ?? 'No recommendation available';
+            taskData['accountType'] = concernSlip['category'] ?? taskData['department'];
+
+            print('[Work Order Permits] Fetched concern slip $concernSlipId: assessment=${concernSlip['staff_assessment']}, recommendation=${concernSlip['staff_recommendation']}');
+          } catch (e) {
+            print('[Work Order Permits] Error fetching concern slip $concernSlipId: $e');
+            // Set default values if concern slip fetch fails
+            taskData['assessment'] = 'Unable to load assessment';
+            taskData['recommendation'] = 'Unable to load recommendation';
+          }
+        } else {
+          // No concern slip ID, use defaults
+          taskData['assessment'] = 'No assessment available';
+          taskData['recommendation'] = 'No recommendation available';
+        }
+
+        tasks.add(taskData);
+      }
+
       setState(() {
-        _repairTasks = permits.map((permit) {
-          return {
-            'serviceId': permit['formatted_id'] ?? permit['id'] ?? 'N/A',
-            'id': permit['concern_slip_id'] ?? 'N/A',
-            'permitId': permit['id'] ?? 'N/A', // Add permit ID for actions
-            'title': permit['title'] ?? 'Untitled Work Order',
-            'buildingUnit': permit['location'] ?? 'N/A',
-            'schedule': _formatDateRange(permit['valid_from'], permit['valid_to']),
-            'priority': _mapStatusToPriority(permit['status']),
-            'status': _mapStatusToDisplay(permit['status']),
-            'rawStatus': permit['status'] ?? 'pending', // Keep raw status for actions
-            
-            // Additional task data
-            'dateRequested': _formatDate(permit['created_at']),
-            'requestedBy': permit['requested_by'] ?? 'N/A',
-            'department': permit['category'] ?? 'General',
-            'description': permit['description'] ?? '',
-            'validFrom': permit['valid_from'] ?? 'N/A',
-            'validTo': permit['valid_to'] ?? 'N/A',
-            'contractors': permit['contractors'] ?? [],
-            'attachments': permit['attachments'] ?? [],
-          };
-        }).toList();
+        _repairTasks = tasks;
         _isLoading = false;
       });
     } catch (e) {

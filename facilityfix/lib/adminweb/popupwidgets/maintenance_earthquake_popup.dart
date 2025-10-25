@@ -1,22 +1,25 @@
 import 'package:flutter/material.dart';
 import '../popupwidgets/assignstaff_popup.dart';
+import '../services/api_service.dart';
 
 class EarthquakeDialog extends StatefulWidget {
   final Map<String, dynamic> maintenanceData;
+  final VoidCallback? onSaved;
 
   const EarthquakeDialog({
     super.key,
     required this.maintenanceData,
+    this.onSaved,
   });
 
   @override
   State<EarthquakeDialog> createState() => _EarthquakeDialogState();
 
-  static void show(BuildContext context, Map<String, dynamic> data) {
+  static void show(BuildContext context, Map<String, dynamic> data, {VoidCallback? onSaved}) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return EarthquakeDialog(maintenanceData: data);
+        return EarthquakeDialog(maintenanceData: data, onSaved: onSaved);
       },
     );
   }
@@ -26,6 +29,8 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
   bool isEditMode = false;
   int? selectedTaskIndex;
   late List<Map<String, dynamic>> tasks;
+  final ApiService _apiService = ApiService();
+  bool _isSaving = false;
 
   // Width for the new checkbox column to keep layout tidy
   static const double _checkColWidth = 40;
@@ -33,9 +38,23 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
   @override
   void initState() {
     super.initState();
-    tasks = List<Map<String, dynamic>>.from(
-      widget.maintenanceData['tasks'] ?? _getDefaultTasks(),
-    );
+    // Convert checklist_completed from backend to tasks format for the UI
+    final checklistCompleted = widget.maintenanceData['checklist_completed'] as List?;
+
+    if (checklistCompleted != null && checklistCompleted.isNotEmpty) {
+      tasks = checklistCompleted.map((item) {
+        return {
+          'id': item['id'] ?? '',
+          'name': item['task'] ?? 'Unnamed Task',
+          'assigned': item['assigned_to'] ?? null,  // Use item-level assignment
+          'rotation': widget.maintenanceData['recurrence_type'] ?? 'Quarterly',
+          'status': (item['completed'] == true) ? 'Completed' : null,
+          'completed': item['completed'] ?? false,
+        };
+      }).toList().cast<Map<String, dynamic>>();
+    } else {
+      tasks = List<Map<String, dynamic>>.from(_getDefaultTasks());
+    }
   }
 
   List<Map<String, dynamic>> _getDefaultTasks() {
@@ -90,37 +109,130 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
   }
 
   void _handleAssignTask() {
-    if (selectedTaskIndex != null) {
-      final selectedTask = tasks[selectedTaskIndex!];
-      AssignScheduleWorkDialog.show(
-        context,
-        {
-          'taskName': selectedTask['name'],
-          'priority': widget.maintenanceData['priority'] ?? 'Medium',
-          'rotation': selectedTask['rotation'],
-          'status': selectedTask['status'] ?? 'Pending',
-        },
-      );
-    } else {
+    // Assign individual checklist item
+    if (selectedTaskIndex == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select a task first'),
+          content: Text('Please select a checklist item first'),
           behavior: SnackBarBehavior.floating,
         ),
       );
+      return;
     }
+
+    final selectedTask = tasks[selectedTaskIndex!];
+    _assignChecklistItem(selectedTask);
   }
 
-  void _saveChanges() {
-    setState(() {
-      isEditMode = false;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Changes saved successfully'),
-        behavior: SnackBarBehavior.floating,
-      ),
+  Future<void> _assignChecklistItem(Map<String, dynamic> item) async {
+    // Show assignment dialog for the specific checklist item
+    final taskData = {
+      'id': '${widget.maintenanceData['id']}_${item['id']}',
+      'task_id': widget.maintenanceData['id'],
+      'checklist_item_id': item['id'],
+      'title': item['name'] ?? 'Checklist Item',
+      'priority': widget.maintenanceData['priority'] ?? 'high',
+      'category': 'safety',
+      'department': 'Safety Team',
+      'scheduled_date': widget.maintenanceData['scheduled_date'],
+    };
+
+    AssignScheduleWorkDialog.show(
+      context,
+      taskData,
+      isMaintenanceTask: true,
+      onAssignmentComplete: () async {
+        // After assignment, refresh the task data
+        try {
+          final response = await _apiService.getSpecialMaintenanceTask('earthquake');
+          if (response['success'] == true && mounted) {
+            final updatedTask = response['task'] as Map<String, dynamic>;
+            final checklistCompleted = updatedTask['checklist_completed'] as List?;
+
+            if (checklistCompleted != null && checklistCompleted.isNotEmpty) {
+              setState(() {
+                tasks = checklistCompleted.map((checklistItem) {
+                  return {
+                    'id': checklistItem['id'] ?? '',
+                    'name': checklistItem['task'] ?? 'Unnamed Task',
+                    'assigned': checklistItem['assigned_to'] ?? null,
+                    'rotation': updatedTask['recurrence_type'] ?? 'Quarterly',
+                    'status': (checklistItem['completed'] == true) ? 'Completed' : null,
+                    'completed': checklistItem['completed'] ?? false,
+                  };
+                }).toList().cast<Map<String, dynamic>>();
+              });
+            }
+          }
+        } catch (e) {
+          print('[v0] Error refreshing task data: $e');
+        }
+
+        // Also call parent callback
+        widget.onSaved?.call();
+      },
     );
+  }
+
+  Future<void> _saveChanges() async {
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      final taskId = widget.maintenanceData['id'];
+      if (taskId == null) {
+        throw Exception('Task ID is missing');
+      }
+
+      // Convert tasks back to checklist format
+      final checklistCompleted = tasks.map((task) {
+        return {
+          'id': task['id'] ?? '',
+          'task': task['name'] ?? '',
+          'completed': task['completed'] ?? (task['status']?.toLowerCase() == 'completed'),
+        };
+      }).toList();
+
+      // Update the checklist via API
+      final response = await _apiService.updateMaintenanceTaskChecklist(
+        taskId,
+        checklistCompleted,
+      );
+
+      if (response['success'] == true && mounted) {
+        setState(() {
+          isEditMode = false;
+          _isSaving = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Changes saved successfully'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+        // Call the onSaved callback if provided
+        widget.onSaved?.call();
+      }
+    } catch (e) {
+      print('[v0] Error saving changes: $e');
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save changes: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   // Helper: determine if a task is completed based on its status

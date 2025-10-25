@@ -15,7 +15,8 @@ import '../services/api_services.dart';
 
 /// Simple data model for the list (avoids mixing widgets & data).
 class AnnouncementItem {
-  final String id;
+  final String id; // Raw UUID for API calls
+  final String formattedId; // User-friendly ID for display (e.g., "ANN-2025-001")
   final String title;
   final String announcementType; // e.g. "utility interruption"
   final DateTime createdAt;
@@ -23,6 +24,7 @@ class AnnouncementItem {
 
   const AnnouncementItem({
     required this.id,
+    required this.formattedId,
     required this.title,
     required this.announcementType,
     required this.createdAt,
@@ -31,6 +33,7 @@ class AnnouncementItem {
 
   AnnouncementItem copyWith({
     String? id,
+    String? formattedId,
     String? title,
     String? announcementType,
     String? classification,
@@ -40,6 +43,7 @@ class AnnouncementItem {
   }) {
     return AnnouncementItem(
       id: id ?? this.id,
+      formattedId: formattedId ?? this.formattedId,
       title: title ?? this.title,
       announcementType: announcementType ?? this.announcementType,
       createdAt: createdAt ?? this.createdAt,
@@ -169,11 +173,12 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
         _all = announcements.map((ann) {
           // Backend now ensures 'id' field always contains the correct document ID
           return AnnouncementItem(
-            id: ann['id'] ?? ann['formatted_id'] ?? '',
+            id: ann['id'] ?? '',
+            formattedId: ann['formatted_id'] ?? ann['id'] ?? '',
             title: ann['title'] ?? 'Untitled',
             announcementType: ann['type'] ?? 'general',
             createdAt: DateTime.tryParse(ann['created_at'] ?? '') ?? DateTime.now(),
-            isRead: false,
+            isRead: ann['is_read'] ?? false,
           );
         }).toList();
         _isLoading = false;
@@ -338,7 +343,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                               child: Stack(
                                 children: [
                                   AnnouncementCard(
-                                    id: a.id,
+                                    id: a.formattedId, // Display formatted ID
                                     title: a.title,
                                     announcementType: a.announcementType,
                                     createdAt: a.createdAt, // DateTime ✅
@@ -367,6 +372,9 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                                             ),
                                           ),
                                         );
+                                        // Refresh the list after returning from details
+                                        // to reflect any changes (like marking as read)
+                                        _fetchAnnouncements();
                                       } catch (e) {
                                         print('[Admin Announcements] Error navigating to details: $e');
                                       }

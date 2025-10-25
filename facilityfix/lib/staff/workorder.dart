@@ -6,6 +6,8 @@ import 'package:facilityfix/staff/view_details.dart';
 import 'package:facilityfix/staff/job_service_detail.dart';
 import 'package:facilityfix/staff/maintenance.dart';
 import 'package:facilityfix/staff/announcement.dart';
+import 'package:facilityfix/staff/calendar.dart';
+import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/services/chat_helper.dart';
 import 'package:facilityfix/staff/notification.dart';
 import 'package:facilityfix/staff/home.dart';
@@ -122,22 +124,44 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     NavItem(icon: Icons.work),
     NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
+    NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),
   ];
 
   void _onTabTapped(int index) {
-    final destinations = [
-      const HomePage(),
-      const WorkOrderPage(),
-      const MaintenancePage(),
-      const AnnouncementPage(),
-      const ProfilePage(),
-    ];
-    if (index != 1) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => destinations[index]),
-      );
+    if (index == 1) return; // Already on WorkOrder page
+
+    switch (index) {
+      case 0:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+        break;
+      case 2:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MaintenancePage()),
+        );
+        break;
+      case 3:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AnnouncementPage()),
+        );
+        break;
+      case 4:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const CalendarPage()),
+        );
+        break;
+      case 5:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const InventoryPage()),
+        );
+        break;
     }
   }
 

@@ -57,9 +57,9 @@ class _ProfilePageState extends State<ProfilePage> {
   // Tenant id (user_id) to display as Tenant ID
   String _tenantId = '';
 
-  ImageProvider get _profileImageProvider {
+  ImageProvider? get _profileImageProvider {
     if (_profileImageFile != null) return FileImage(_profileImageFile!);
-    
+
     // Use new profile data first
     if (_profileData != null &&
         _profileData!['photo_url'] != null &&
@@ -67,10 +67,10 @@ class _ProfilePageState extends State<ProfilePage> {
       try {
         return NetworkImage(_profileData!['photo_url'].toString());
       } catch (_) {
-        // fallthrough to asset
+        // fallthrough
       }
     }
-    
+
     // Fallback to legacy profile map
     if (_profileMap != null &&
         _profileMap!['photo_url'] != null &&
@@ -78,10 +78,10 @@ class _ProfilePageState extends State<ProfilePage> {
       try {
         return NetworkImage(_profileMap!['photo_url'].toString());
       } catch (_) {
-        // fallthrough to asset
+        // fallthrough
       }
     }
-    return const AssetImage('assets/images/profile.png');
+    return null; // Return null to show initials
   }
 
   @override
@@ -114,7 +114,10 @@ class _ProfilePageState extends State<ProfilePage> {
         
         // Also save to legacy profile map for backward compatibility
         _profileMap = Map<String, dynamic>.from(profile);
+        _tenantId =
+            (_profileMap!['tenant_id'] ?? _profileMap!['id'] ?? '').toString();
         
+        print("TENANT PROFILE: _profileMap=$_profileMap");
         print('[TenantProfile] Profile loaded successfully');
       } else {
         // Try loading from legacy storage as fallback
@@ -138,8 +141,6 @@ class _ProfilePageState extends State<ProfilePage> {
     final displayName = _profileService.getDisplayName(profile);
     nameController.text = displayName;
 
-    // Get user ID
-    _tenantId = _profileService.getUserId(profile);
 
     // Email
     final contactInfo = _profileService.getContactInfo(profile);
@@ -274,7 +275,7 @@ class _ProfilePageState extends State<ProfilePage> {
       if (emailRaw.isNotEmpty) {
         final at = emailRaw.indexOf('@');
         final local = at > 0 ? emailRaw.substring(0, at) : emailRaw;
-        final cleaned = local.replaceAll(RegExp(r'[\._\-]+'), ' ').trim();
+        final cleaned = local.replaceAll(RegExp(r'[._\-]+'), ' ').trim();
         if (cleaned.isNotEmpty) fullName = cleaned;
       }
 
@@ -290,9 +291,6 @@ class _ProfilePageState extends State<ProfilePage> {
     // Fill controllers from saved profile, preserving UI formatting
     nameController.text = fullName;
 
-    // Tenant ID (prefer user_id then id)
-    _tenantId =
-        (_profileMap!['user_id'] ?? _profileMap!['id'] ?? '').toString();
 
     emailController.text = (_profileMap!['email'] ?? '').toString();
     final phone =
@@ -543,21 +541,23 @@ class _ProfilePageState extends State<ProfilePage> {
     final s = raw.trim();
     if (s.isEmpty) return null;
 
-    // Common patterns:
-    // "Building A • Unit 1001" or "Bldg A • Unit 1001"
-    final regex1 = RegExp(
-      r'(?i)(?:building|bldg)\s*[:]?\s*([^\s•,]+).*?(?:unit)\s*[:]?\s*([^\s•,]+)',
-    );
-    final m1 = regex1.firstMatch(s);
-    if (m1 != null) {
-      return {'building_id': m1.group(1) ?? '', 'unit_id': m1.group(2) ?? ''};
-    }
+    // Remove any common separators and split into parts
+    final cleaned = s
+        .replaceAll('Building', '')
+        .replaceAll('building', '')
+        .replaceAll('Bldg', '')
+        .replaceAll('bldg', '')
+        .replaceAll('Unit', '')
+        .replaceAll('unit', '')
+        .replaceAll(':', '')
+        .trim();
 
-    // "A • 1001" or "A - 1001" or "A 1001"
-    final regex2 = RegExp(r'^([A-Za-z0-9\-]+)[\s\-\•]+([A-Za-z0-9\-]+)$');
-    final m2 = regex2.firstMatch(s);
-    if (m2 != null) {
-      return {'building_id': m2.group(1) ?? '', 'unit_id': m2.group(2) ?? ''};
+    // Split by common separators (bullet, dash, space, comma)
+    final parts = cleaned.split(RegExp(r'[\s,\-]+'));
+    final nonEmpty = parts.where((p) => p.isNotEmpty).toList();
+
+    if (nonEmpty.length >= 2) {
+      return {'building_id': nonEmpty[0], 'unit_id': nonEmpty[1]};
     }
 
     // fallback: cannot parse

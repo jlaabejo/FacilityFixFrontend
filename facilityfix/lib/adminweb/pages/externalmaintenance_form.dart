@@ -961,7 +961,7 @@ class _ExternalMaintenanceFormPageState
                                 elevation: 0,
                               ),
                               child: const Text(
-                                'Next',
+                                'Submit',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w500,
@@ -1107,7 +1107,7 @@ class _ExternalMaintenanceFormPageState
 
       if (mounted) {
         context.push(
-          '/work/maintenance/${_taskCodeController.text}/external',
+          '/work/maintenance',
           extra: taskData,
         );
       }

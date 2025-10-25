@@ -1223,7 +1223,7 @@ class APIService {
       final token = await _requireToken();
       print('[API] getAllMaintenance - Token length: ${token.length}');
       print('[API] getAllMaintenance - Making request to: $baseUrl/maintenance/');
-      
+
       final response = await get('/maintenance/', headers: _authHeaders(token));
       print('[API] getAllMaintenance - Response status: ${response.statusCode}');
       print('[API] getAllMaintenance - Response body length: ${response.body.length}');
@@ -1241,6 +1241,48 @@ class APIService {
       }
     } catch (e) {
       print('Error getting all maintenance: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getMyAssignedMaintenance({
+    String? buildingId,
+    String? status,
+    String? category,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      // Build query parameters
+      final queryParams = <String, String>{};
+      if (buildingId != null) queryParams['building_id'] = buildingId;
+      if (status != null) queryParams['status'] = status;
+      if (category != null) queryParams['category'] = category;
+
+      final queryString = queryParams.isEmpty
+          ? ''
+          : '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}';
+
+      print('[API] getMyAssignedMaintenance - Making request to: $baseUrl/maintenance/assigned-to-me$queryString');
+
+      final response = await get('/maintenance/assigned-to-me$queryString', headers: _authHeaders(token));
+      print('[API] getMyAssignedMaintenance - Response status: ${response.statusCode}');
+      print('[API] getMyAssignedMaintenance - Response body length: ${response.body.length}');
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final List<dynamic> data = jsonDecode(response.body);
+        print('[API] getMyAssignedMaintenance - Parsed ${data.length} assigned tasks');
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        print('[API] getMyAssignedMaintenance - Error response: ${response.body}');
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get assigned maintenance tasks: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting assigned maintenance: $e');
       rethrow;
     }
   }
@@ -1355,6 +1397,234 @@ class APIService {
       }
     } catch (e) {
       print('Error updating checklist item: $e');
+      rethrow;
+    }
+  }
+
+  // ===== Special Maintenance Tasks =====
+
+  /// Get all special maintenance tasks
+  Future<List<Map<String, dynamic>>> getSpecialMaintenanceTasks() async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      print('[API] getSpecialMaintenanceTasks - Making request to: $baseUrl/maintenance/special');
+
+      final response = await get('/maintenance/special', headers: _authHeaders(token));
+      print('[API] getSpecialMaintenanceTasks - Response status: ${response.statusCode}');
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+
+        // Handle both array and object responses
+        if (data is List) {
+          return data.cast<Map<String, dynamic>>();
+        } else if (data is Map && data['tasks'] is List) {
+          final tasks = data['tasks'] as List;
+          return tasks.cast<Map<String, dynamic>>();
+        } else {
+          throw Exception('Unexpected response format for special maintenance tasks');
+        }
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get special maintenance tasks: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting special maintenance tasks: $e');
+      rethrow;
+    }
+  }
+
+  /// Get summary of all special maintenance tasks
+  Future<Map<String, dynamic>> getSpecialMaintenanceTasksSummary() async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      print('[API] getSpecialMaintenanceTasksSummary - Making request to: $baseUrl/maintenance/special/summary');
+
+      final response = await get('/maintenance/special/summary', headers: _authHeaders(token));
+      print('[API] getSpecialMaintenanceTasksSummary - Response status: ${response.statusCode}');
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get special maintenance tasks summary: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting special maintenance tasks summary: $e');
+      rethrow;
+    }
+  }
+
+  /// Get a specific special maintenance task by key
+  Future<Map<String, dynamic>> getSpecialMaintenanceTask(String taskKey) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      print('[API] getSpecialMaintenanceTask - Making request to: $baseUrl/maintenance/special/$taskKey');
+
+      final response = await get('/maintenance/special/$taskKey', headers: _authHeaders(token));
+      print('[API] getSpecialMaintenanceTask - Response status: ${response.statusCode}');
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+        // Handle both direct task object and wrapped response
+        if (data['task'] != null) {
+          return data['task'] as Map<String, dynamic>;
+        } else {
+          return data;
+        }
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get special maintenance task: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting special maintenance task: $e');
+      rethrow;
+    }
+  }
+
+  /// Reset a special maintenance task checklist
+  Future<Map<String, dynamic>> resetSpecialMaintenanceTask(String taskKey) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      print('[API] resetSpecialMaintenanceTask - Making request to: $baseUrl/maintenance/special/$taskKey/reset');
+
+      final response = await post(
+        '/maintenance/special/$taskKey/reset',
+        headers: _authHeaders(token),
+        body: jsonEncode({}),
+      );
+      print('[API] resetSpecialMaintenanceTask - Response status: ${response.statusCode}');
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to reset special maintenance task: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error resetting special maintenance task: $e');
+      rethrow;
+    }
+  }
+
+  /// Initialize special maintenance tasks
+  Future<Map<String, dynamic>> initializeSpecialMaintenanceTasks() async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      print('[API] initializeSpecialMaintenanceTasks - Making request to: $baseUrl/maintenance/special/initialize');
+
+      final response = await post(
+        '/maintenance/special/initialize',
+        headers: _authHeaders(token),
+        body: jsonEncode({}),
+      );
+      print('[API] initializeSpecialMaintenanceTasks - Response status: ${response.statusCode}');
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to initialize special maintenance tasks: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error initializing special maintenance tasks: $e');
+      rethrow;
+    }
+  }
+
+  /// Assign a checklist item in a special maintenance task to a staff member
+  Future<Map<String, dynamic>> assignSpecialMaintenanceChecklistItem({
+    required String taskKey,
+    required String itemId,
+    required String staffId,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final taskId = 'SPECIAL-${taskKey.toUpperCase()}-001';
+
+      print('[API] assignSpecialMaintenanceChecklistItem - Making request to: $baseUrl/maintenance/$taskId/checklist/$itemId/assign');
+
+      final response = await post(
+        '/maintenance/$taskId/checklist/$itemId/assign',
+        headers: _authHeaders(token),
+        body: jsonEncode({
+          'staff_id': staffId,
+          'assigned_to': staffId,
+        }),
+      );
+      print('[API] assignSpecialMaintenanceChecklistItem - Response status: ${response.statusCode}');
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to assign checklist item: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error assigning special maintenance checklist item: $e');
+      rethrow;
+    }
+  }
+
+  /// Update a single checklist item completion status in a special maintenance task
+  Future<Map<String, dynamic>> updateSpecialMaintenanceChecklistItem({
+    required String taskKey,
+    required String itemId,
+    required bool completed,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final taskId = 'SPECIAL-${taskKey.toUpperCase()}-001';
+
+      print('[API] updateSpecialMaintenanceChecklistItem - Making request to: $baseUrl/maintenance/$taskId/checklist/$itemId');
+
+      final response = await patch(
+        '/maintenance/$taskId/checklist/$itemId',
+        headers: _authHeaders(token),
+        body: jsonEncode({
+          'item_id': itemId,
+          'completed': completed,
+        }),
+      );
+      print('[API] updateSpecialMaintenanceChecklistItem - Response status: ${response.statusCode}');
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to update checklist item: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error updating special maintenance checklist item: $e');
       rethrow;
     }
   }

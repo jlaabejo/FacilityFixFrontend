@@ -8,6 +8,7 @@ import 'package:facilityfix/widgets/forms.dart' hide DropdownField; // use BOTH:
 import 'package:flutter/material.dart' hide FilledButton; // hide Flutter FilledButton
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/modals.dart'; // CustomPopup
+import 'package:facilityfix/services/api_services.dart';
 
 class AnnouncementForm extends StatefulWidget {
   final String requestType;
@@ -140,6 +141,10 @@ class _AnnouncementFormState extends State<AnnouncementForm> {
 
   // ---------------- Maintenance-style flags ----------------
   bool _submitted = false;
+  bool _isSubmitting = false;
+
+  // ---------------- API Service ----------------
+  late final APIService _apiService;
 
   // ---------------- Tiny 4px caption style ----------------
   static const TextStyle _kErr4px = TextStyle(
@@ -220,7 +225,7 @@ class _AnnouncementFormState extends State<AnnouncementForm> {
       // Audience
       DropdownField<String>(
         label: 'Audience',
-        items: const ['Tenant', 'Staff', 'All', 'Others'],
+        items: const ['Tenants', 'Staff', 'All', 'Others'],
         value: audienceController.text.isEmpty ? null : audienceController.text,
         onChanged: (v) => setState(() => audienceController.text = v ?? ''),
         isRequired: _submitted,
@@ -337,8 +342,14 @@ class _AnnouncementFormState extends State<AnnouncementForm> {
     ];
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _apiService = APIService();
+  }
+
   // ---------------- Submit ----------------
-  void _onSubmit() {
+  Future<void> _onSubmit() async {
     _submitted = true;
 
     _formKey.currentState?.validate();
@@ -351,10 +362,46 @@ class _AnnouncementFormState extends State<AnnouncementForm> {
       return;
     }
 
-    _showRequestDialog(context);
+    setState(() => _isSubmitting = true);
+
+    try {
+      // Get user profile to fetch building_id
+      final profile = await _apiService.getUserProfile();
+      final buildingId = profile?['building_id'] as String? ??
+                         profile?['buildingId'] as String? ??
+                         'default_building';
+
+      // Map audience values: Tenants -> tenants, Staff -> staff, All -> all
+      String apiAudience = audienceController.text.toLowerCase();
+
+      // Create the announcement
+      await _apiService.createAnnouncement(
+        title: noticeTypeController.text.trim(),
+        buildingId: buildingId,
+        audience: apiAudience,
+        announcementType: noticeTypeController.text.trim(),
+        locationAffected: locationController.text.trim(),
+        description: descriptionController.text.trim(),
+        isActive: true,
+        scheduleStart: _visibilityFromDT?.toIso8601String(),
+        scheduleEnd: _visibilityToDT?.toIso8601String(),
+      );
+
+      setState(() => _isSubmitting = false);
+
+      if (!mounted) return;
+      _showSuccessDialog(context);
+    } catch (e) {
+      setState(() => _isSubmitting = false);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to create announcement: $e')),
+      );
+    }
   }
 
-  void _showRequestDialog(BuildContext context) {
+  void _showSuccessDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (_) => CustomPopup(
@@ -386,13 +433,15 @@ class _AnnouncementFormState extends State<AnnouncementForm> {
         child: SizedBox(
           width: double.infinity,
           height: 48,
-          child: FilledButton(
-            label: 'Submit',
-            backgroundColor: const Color(0xFF005CE7),
-            textColor: Colors.white,
-            withOuterBorder: false,
-            onPressed: _onSubmit,
-          ),
+          child: _isSubmitting
+              ? const Center(child: CircularProgressIndicator())
+              : FilledButton(
+                  label: 'Submit',
+                  backgroundColor: const Color(0xFF005CE7),
+                  textColor: Colors.white,
+                  withOuterBorder: false,
+                  onPressed: _onSubmit,
+                ),
         ),
       ),
     );

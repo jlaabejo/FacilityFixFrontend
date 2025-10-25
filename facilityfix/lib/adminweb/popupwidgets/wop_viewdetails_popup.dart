@@ -482,14 +482,6 @@ class WorkOrderPermitDialog extends StatelessWidget {
                     _buildDetailsGrid(),
                     const SizedBox(height: 32),
 
-                    // Specific Instructions Section
-                    _buildSpecificInstructions(),
-                    const SizedBox(height: 32),
-
-                    // Permit Validation Section
-                    _buildPermitValidation(),
-                    const SizedBox(height: 32),
-
                     // Contractor's Side Section
                     _buildContractorSide(),
                   ],

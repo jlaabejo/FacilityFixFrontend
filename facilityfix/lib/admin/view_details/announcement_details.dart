@@ -102,6 +102,36 @@ class _AnnouncementDetailsState extends State<AnnouncementDetailsPage> {
     }
   }
 
+  Future<void> _markAsRead() async {
+    try {
+      await _apiService.markAnnouncementViewed(widget.announcementId);
+
+      // Refresh the announcement details to reflect the change
+      await _fetchAnnouncementDetails();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Marked as read'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      print('[AnnouncementDetails] Error marking as read: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to mark as read: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -143,8 +173,8 @@ class _AnnouncementDetailsState extends State<AnnouncementDetailsPage> {
                     child: Column(
                       children: [
                         AnnouncementDetails(
-                          id: _announcement?['formatted_id'] ?? 
-                              _announcement?['id'] ?? 
+                          id: _announcement?['formatted_id'] ??
+                              _announcement?['id'] ??
                               'N/A',
                           title: _announcement?['title'] ?? 'Untitled',
                           createdAt: _formatDateOnly(_announcement?['created_at']),
@@ -155,6 +185,8 @@ class _AnnouncementDetailsState extends State<AnnouncementDetailsPage> {
                           scheduleEnd: _formatDate(_announcement?['expiry_date']),
                           contactNumber: _announcement?['contact_number'] ?? 'N/A',
                           contactEmail: _announcement?['contact_email'] ?? 'N/A',
+                          isRead: _announcement?['is_read'] ?? false,
+                          onMarkAsRead: _announcement?['is_read'] == true ? null : _markAsRead,
                         ),
                       ],
                     ),

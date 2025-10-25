@@ -547,6 +547,26 @@ class ApiService {
     }
   }
 
+  /// Get a specific concern slip by ID
+  Future<Map<String, dynamic>> getConcernSlip(String concernSlipId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/concern-slips/$concernSlipId'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to load concern slip: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('[v0] Error fetching concern slip: $e');
+      rethrow;
+    }
+  }
+
   // ============================================
   // JOB SERVICES ENDPOINTS
   // ============================================
@@ -939,6 +959,269 @@ class ApiService {
       }
     } catch (e) {
       print('[v0] Error deleting maintenance task: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> updateMaintenanceTaskChecklist(
+    String taskId,
+    List<Map<String, dynamic>> checklistCompleted,
+  ) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.patch(
+        Uri.parse('$baseUrl/maintenance/$taskId/checklist'),
+        headers: headers,
+        body: json.encode({
+          'checklist_completed': checklistCompleted,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to update maintenance task checklist: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error updating maintenance task checklist: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> assignStaffToMaintenanceTask(
+    String taskId,
+    String staffId, {
+    DateTime? scheduledDate,
+    String? notes,
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final body = {
+        'staff_id': staffId,
+        if (scheduledDate != null) 'scheduled_date': scheduledDate.toIso8601String(),
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+      };
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/maintenance/$taskId/assign'),
+        headers: headers,
+        body: json.encode(body),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to assign staff to maintenance task: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error assigning staff to maintenance task: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> assignStaffToChecklistItem(
+    String taskId,
+    String itemId,
+    String staffId,
+  ) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final body = {
+        'staff_id': staffId,
+      };
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/maintenance/$taskId/checklist/$itemId/assign'),
+        headers: headers,
+        body: json.encode(body),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to assign staff to checklist item: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error assigning staff to checklist item: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================
+  // SPECIAL MAINTENANCE TASKS ENDPOINTS
+  // ============================================
+
+  Future<Map<String, dynamic>> initializeSpecialMaintenanceTasks() async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/maintenance/special/initialize'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to initialize special maintenance tasks: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error initializing special maintenance tasks: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> getSpecialMaintenanceTasks() async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/maintenance/special'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to load special maintenance tasks: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error fetching special maintenance tasks: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> getSpecialMaintenanceTasksSummary() async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/maintenance/special/summary'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to load special maintenance tasks summary: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error fetching special maintenance tasks summary: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> getSpecialMaintenanceTask(String taskKey) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/maintenance/special/$taskKey'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to load special maintenance task: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error fetching special maintenance task: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> resetSpecialMaintenanceTask(String taskKey) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/maintenance/special/$taskKey/reset'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to reset special maintenance task: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error resetting special maintenance task: $e');
+      rethrow;
+    }
+  }
+
+  /// Assign a checklist item in a special maintenance task to a staff member
+  Future<Map<String, dynamic>> assignSpecialMaintenanceChecklistItem({
+    required String taskKey,
+    required String itemId,
+    required String staffId,
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final taskId = 'SPECIAL-${taskKey.toUpperCase()}-001';
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/maintenance/$taskId/checklist/$itemId/assign'),
+        headers: headers,
+        body: json.encode({
+          'staff_id': staffId,
+          'assigned_to': staffId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to assign checklist item: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error assigning special maintenance checklist item: $e');
+      rethrow;
+    }
+  }
+
+  /// Update a single checklist item completion status in a special maintenance task
+  Future<Map<String, dynamic>> updateSpecialMaintenanceChecklistItem({
+    required String taskKey,
+    required String itemId,
+    required bool completed,
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final taskId = 'SPECIAL-${taskKey.toUpperCase()}-001';
+
+      final response = await http.patch(
+        Uri.parse('$baseUrl/maintenance/$taskId/checklist/$itemId'),
+        headers: headers,
+        body: json.encode({
+          'item_id': itemId,
+          'completed': completed,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to update checklist item: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error updating special maintenance checklist item: $e');
       rethrow;
     }
   }

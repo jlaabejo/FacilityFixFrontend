@@ -1792,6 +1792,10 @@ class AnnouncementDetails extends StatelessWidget {
   final String contactNumber;
   final String contactEmail;
 
+  // ===== Read Status =====
+  final bool isRead;
+  final VoidCallback? onMarkAsRead;
+
   const AnnouncementDetails({
     super.key,
     required this.id,
@@ -1809,6 +1813,8 @@ class AnnouncementDetails extends StatelessWidget {
     this.attachment,
     required this.contactNumber,
     required this.contactEmail,
+    this.isRead = false,
+    this.onMarkAsRead,
   });
 
   String get _statusLabel {
@@ -1935,20 +1941,83 @@ class AnnouncementDetails extends StatelessWidget {
               title: 'Location Affected',
               content: locationAffected,
             ),
-            _buildSectionCard(
-              title: 'Schedule',
-              content: 'Start: $scheduleStart\nEnd: $scheduleEnd',
-            ),
+  
 
             if (hasAttachment)
               _buildSectionCard(title: 'Attachment', content: attachment!),
 
-            // Contact Section
-            _buildSectionCard(
-              title: 'Need Help?',
-              content: '📱 $contactNumber\n📧 $contactEmail',
-              backgroundColor: const Color(0xFFEFF5FF),
-            ),
+            // Mark as Read Button
+            if (!isRead && onMarkAsRead != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: onMarkAsRead,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF005CE7),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.check_circle_outline, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Mark as Read',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+            // Already Read Indicator
+            if (isRead)
+              Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0F9FF),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFBAE6FD), width: 1),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.check_circle,
+                        size: 20,
+                        color: Color(0xFF0284C7),
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'You have read this announcement',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF0284C7),
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),

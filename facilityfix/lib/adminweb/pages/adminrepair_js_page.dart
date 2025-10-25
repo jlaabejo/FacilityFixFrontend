@@ -83,9 +83,42 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       final apiService = ApiService();
       final jobServices = await apiService.getAllJobServices();
 
+      // Process each job service and fetch concern slip data
+      final tasks = <Map<String, dynamic>>[];
+
+      for (var jobService in jobServices) {
+        Map<String, dynamic> taskData = _processJobServiceData(jobService);
+
+        // Fetch concern slip data to get assessment and recommendation
+        final concernSlipId = jobService['concern_slip_id'];
+        if (concernSlipId != null && concernSlipId.toString().isNotEmpty) {
+          try {
+            final concernSlip = await apiService.getConcernSlip(concernSlipId.toString());
+
+            // Add assessment and recommendation from concern slip
+            taskData['assessment'] = concernSlip['staff_assessment'] ?? 'No assessment available';
+            taskData['recommendation'] = concernSlip['staff_recommendation'] ?? 'No recommendation available';
+            taskData['concernId'] = concernSlip['formatted_id'] ?? concernSlipId.toString();
+
+            print('[Job Services] Fetched concern slip $concernSlipId: assessment=${concernSlip['staff_assessment']}, recommendation=${concernSlip['staff_recommendation']}');
+          } catch (e) {
+            print('[Job Services] Error fetching concern slip $concernSlipId: $e');
+            // Set default values if concern slip fetch fails
+            taskData['assessment'] = 'Unable to load assessment';
+            taskData['recommendation'] = 'Unable to load recommendation';
+          }
+        } else {
+          // No concern slip ID, use defaults
+          taskData['assessment'] = 'No assessment available';
+          taskData['recommendation'] = 'No recommendation available';
+        }
+
+        tasks.add(taskData);
+      }
+
       if (mounted) {
         setState(() {
-          _repairTasks = jobServices.map((jobService) => _processJobServiceData(jobService)).toList();
+          _repairTasks = tasks;
           _isLoading = false;
           _errorMessage = null;
         });
@@ -111,15 +144,14 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       'schedule': _formatDate(jobService['scheduled_date'] ?? jobService['created_at']),
       'priority': _capitalizePriority(jobService['priority']),
       'status': _capitalizeStatus(jobService['status']),
-      
+
       // Additional task data
       'title': jobService['title'] ?? 'Job Service Request',
       'dateRequested': _formatDate(jobService['created_at']),
       'requestedBy': jobService['reported_by'] ?? 'N/A',
       'department': _mapCategoryToDepartment(jobService['category']),
       'description': jobService['description'] ?? '',
-      'assessment': jobService['work_notes']?.join(' ') ?? '',
-      'recommendation': '',
+      // assessment and recommendation will be fetched from concern slip in _loadJobServices
     };
   }
 

@@ -21,6 +21,13 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
   bool _isLoading = true;
   String? _error;
 
+  // Special maintenance tasks summary data
+  Map<String, dynamic> _specialTasksSummary = {
+    'fire_safety': {'exists': false},
+    'earthquake': {'exists': false},
+    'typhoon_flood': {'exists': false},
+  };
+
   @override
   void initState() {
     super.initState();
@@ -29,13 +36,10 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
 
   Future<void> _initializeAndFetchData() async {
     try {
-      // Get auth token from storage
-      final token = await AuthStorage.getToken();
-      if (token != null) {
-        _apiService.setAuthToken(token);
-      }
-
-      await _fetchMaintenanceTasks();
+      await Future.wait([
+        _fetchMaintenanceTasks(),
+        _fetchSpecialTasksSummary(),
+      ]);
     } catch (e) {
       print('[v0] Error initializing: $e');
       if (mounted) {
@@ -43,6 +47,37 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
           _error = 'Failed to initialize: $e';
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  Future<void> _fetchSpecialTasksSummary() async {
+    try {
+      final response = await _apiService.getSpecialMaintenanceTasksSummary();
+
+      if (response['success'] == true) {
+        final summaries = response['summaries'] as Map<String, dynamic>;
+        if (mounted) {
+          setState(() {
+            _specialTasksSummary = summaries;
+          });
+        }
+      }
+    } catch (e) {
+      print('[v0] Error fetching special tasks summary: $e');
+      // Non-critical error, tasks may not be initialized yet
+      // Try to initialize them
+      try {
+        await _apiService.initializeSpecialMaintenanceTasks();
+        // Retry fetching after initialization
+        final response = await _apiService.getSpecialMaintenanceTasksSummary();
+        if (response['success'] == true && mounted) {
+          setState(() {
+            _specialTasksSummary = response['summaries'] as Map<String, dynamic>;
+          });
+        }
+      } catch (initError) {
+        print('[v0] Error initializing special tasks: $initError');
       }
     }
   }
@@ -268,6 +303,75 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     return '';
   }
 
+  // Helper methods for special tasks
+  String _getSpecialTaskValue(String taskKey) {
+    final taskData = _specialTasksSummary[taskKey] as Map<String, dynamic>?;
+    if (taskData == null || taskData['exists'] != true) {
+      return 'N/A';
+    }
+    final completionPercentage = taskData['completion_percentage'] ?? 0;
+    return '${completionPercentage.toStringAsFixed(0)}%';
+  }
+
+  String _getSpecialTaskSubtitle(String taskKey) {
+    final taskData = _specialTasksSummary[taskKey] as Map<String, dynamic>?;
+    if (taskData == null || taskData['exists'] != true) {
+      return 'Not initialized';
+    }
+    final nextDate = taskData['next_scheduled_date'] ?? 'Not scheduled';
+    return 'Next: $nextDate';
+  }
+
+  Future<void> _viewSpecialTask(String taskKey) async {
+    try {
+      final response = await _apiService.getSpecialMaintenanceTask(taskKey);
+      if (response['success'] == true && mounted) {
+        final task = response['task'] as Map<String, dynamic>;
+
+        // Map task_key to dialog
+        switch (taskKey) {
+          case 'fire_safety':
+            FireSafetyDialog.show(
+              context,
+              task,
+              onSaved: () {
+                _fetchSpecialTasksSummary();
+              },
+            );
+            break;
+          case 'earthquake':
+            EarthquakeDialog.show(
+              context,
+              task,
+              onSaved: () {
+                _fetchSpecialTasksSummary();
+              },
+            );
+            break;
+          case 'typhoon_flood':
+            TyphoonFloodDialog.show(
+              context,
+              task,
+              onSaved: () {
+                _fetchSpecialTasksSummary();
+              },
+            );
+            break;
+        }
+      }
+    } catch (e) {
+      print('[v0] Error viewing special task: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load task details: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   // View method
   void _viewMaintenance(Map<String, dynamic> maintenance) {
     final id = (maintenance['id'] ?? '').toString();
@@ -457,46 +561,31 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
             ),
             const SizedBox(height: 32),
 
-            // Summary cards - using dynamic data instead of hardcoded values
+            // Summary cards - using dynamic data from special tasks
             Row(
               children: [
                 _buildSummaryCard(
                   "FIRE SAFETY",
-                  "Data Loading...", // This should be calculated from actual maintenance tasks
-                  "Loading...", // This should show actual next scheduled date
+                  _getSpecialTaskValue('fire_safety'),
+                  _getSpecialTaskSubtitle('fire_safety'),
                   Colors.white,
-                  onTap: () {
-                    FireSafetyDialog.show(context, {
-                      "description": "Fire safety inspection",
-                    });
-                  },
+                  onTap: () => _viewSpecialTask('fire_safety'),
                 ),
                 const SizedBox(width: 16),
                 _buildSummaryCard(
                   "EARTHQUAKE",
-                  "Data Loading...", // This should be calculated from actual maintenance tasks
-                  "Loading...", // This should show actual next scheduled date
+                  _getSpecialTaskValue('earthquake'),
+                  _getSpecialTaskSubtitle('earthquake'),
                   Colors.white,
-                  onTap: () {
-                    EarthquakeDialog.show(context, {
-                      'description': 'Earthquake safety inspection tasks',
-                      'priority': 'High',
-                    });
-                  },
+                  onTap: () => _viewSpecialTask('earthquake'),
                 ),
                 const SizedBox(width: 16),
                 _buildSummaryCard(
                   "TYPHOON/FLOOD",
-                  "Data Loading...", // This should be calculated from actual maintenance tasks
-                  "Loading...", // This should show actual next scheduled date
+                  _getSpecialTaskValue('typhoon_flood'),
+                  _getSpecialTaskSubtitle('typhoon_flood'),
                   Colors.white,
-                  onTap: () {
-                    TyphoonFloodDialog.show(context, {
-                      'description':
-                          'Typhoon and flood safety inspection tasks for this facility',
-                      'priority': 'High',
-                    });
-                  },
+                  onTap: () => _viewSpecialTask('typhoon_flood'),
                 ),
                 const SizedBox(width: 16),
                 _buildSummaryCard(

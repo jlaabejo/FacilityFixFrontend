@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/staff/maintenance.dart';
+import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/notification.dart';
 import 'package:facilityfix/staff/profile.dart';
 import 'package:facilityfix/staff/view_details/announcement_details.dart';
@@ -17,7 +18,8 @@ import '../services/api_services.dart';
 
 /// Simple data model for the list (avoids mixing widgets & data).
 class AnnouncementItem {
-  final String id;
+  final String id; // Raw UUID for API calls
+  final String formattedId; // User-friendly ID for display (e.g., "ANN-2025-001")
   final String title;
   final String announcementType; // e.g. "utility interruption"
   final DateTime createdAt;
@@ -25,6 +27,7 @@ class AnnouncementItem {
 
   const AnnouncementItem({
     required this.id,
+    required this.formattedId,
     required this.title,
     required this.announcementType,
     required this.createdAt,
@@ -33,6 +36,7 @@ class AnnouncementItem {
 
   AnnouncementItem copyWith({
     String? id,
+    String? formattedId,
     String? title,
     String? announcementType,
     String? classification,
@@ -42,6 +46,7 @@ class AnnouncementItem {
   }) {
     return AnnouncementItem(
       id: id ?? this.id,
+      formattedId: formattedId ?? this.formattedId,
       title: title ?? this.title,
       announcementType: announcementType ?? this.announcementType,
       createdAt: createdAt ?? this.createdAt,
@@ -65,25 +70,47 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
     NavItem(icon: Icons.work),
     NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
+    NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),
   ];
 
   void _onTabTapped(int index) {
-    final destinations = [
-      const HomePage(),
-      const WorkOrderPage(),
-      const MaintenancePage(),
-      const AnnouncementPage(),
-      const InventoryPage(),
-      const ProfilePage(),
-    ];
-    if (index != _selectedIndex) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => destinations[index]),
-      );
-      setState(() => _selectedIndex = index);
+    if (index == 3) return; // Already on Announcement page
+
+    switch (index) {
+      case 0:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+        break;
+      case 1:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const WorkOrderPage()),
+        );
+        break;
+      case 2:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MaintenancePage()),
+        );
+        break;
+      case 4:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const CalendarPage()),
+        );
+        break;
+      case 5:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const InventoryPage()),
+        );
+        break;
     }
+
+    setState(() => _selectedIndex = index);
   }
 
   // ===== Search, classification & read-status filters =====
@@ -157,10 +184,10 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
 
       print('[Staff Announcements] Fetching with building_id: $buildingId');
 
-      // Fetch announcements from API
+      // Fetch announcements from API - staff should see 'staff' and 'all' announcements
       final announcements = await _apiService.getAllAnnouncements(
         buildingId: buildingId,
-        audience: 'all',
+        audience: 'all', // Fetch all to filter on frontend
         activeOnly: true,
         limit: 100,
       );
@@ -168,17 +195,26 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
       print('[Staff Announcements] Fetched ${announcements.length} announcements');
 
       // Convert API response to AnnouncementItem objects
+      // Filter to only include announcements for staff or all audiences
       setState(() {
-        _all = announcements.map((ann) {
-          // Backend now ensures 'id' field always contains the correct document ID
-          return AnnouncementItem(
-            id: ann['id'] ?? ann['formatted_id'] ?? '',
-            title: ann['title'] ?? 'Untitled',
-            announcementType: ann['type'] ?? 'general',
-            createdAt: DateTime.tryParse(ann['created_at'] ?? '') ?? DateTime.now(),
-            isRead: false,
-          );
-        }).toList();
+        _all = announcements
+            .where((ann) {
+              final audience = (ann['audience'] ?? 'all').toString().toLowerCase();
+              return audience == 'staff' || audience == 'all';
+            })
+            .map((ann) {
+              // Backend now ensures 'id' field always contains the correct document ID
+              // and provides is_read status based on current user
+              return AnnouncementItem(
+                id: ann['id'] ?? '',
+                formattedId: ann['formatted_id'] ?? ann['id'] ?? '',
+                title: ann['title'] ?? 'Untitled',
+                announcementType: ann['type'] ?? 'general',
+                createdAt: DateTime.tryParse(ann['created_at'] ?? '') ?? DateTime.now(),
+                isRead: ann['is_read'] ?? false,  // Read status from backend
+              );
+            })
+            .toList();
         _isLoading = false;
       });
     } catch (e) {
@@ -341,7 +377,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                               child: Stack(
                                 children: [
                                   AnnouncementCard(
-                                    id: a.id,
+                                    id: a.formattedId, // Display formatted ID
                                     title: a.title,
                                     announcementType: a.announcementType,
                                     createdAt: a.createdAt, // DateTime ✅
@@ -370,6 +406,9 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                                             ),
                                           ),
                                         );
+                                        // Refresh the list after returning from details
+                                        // to reflect any changes (like marking as read)
+                                        _fetchAnnouncements();
                                       } catch (e) {
                                         print('[Staff Announcements] Error navigating to details: $e');
                                       }

@@ -323,18 +323,43 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
 
       print('[v0] Fetching announcements for building: $buildingId');
 
-      final response = await _apiService.getAnnouncements(
-        buildingId: buildingId,
-        audience: 'all',
-        activeOnly: false,
-      );
+      // Admin should see ALL announcements regardless of audience
+      // We'll fetch all audiences and merge them
+      final allAnnouncementsMap = <String, Map<String, dynamic>>{};
 
-      print('[v0] Full API response: $response');
+      // Fetch announcements for each audience type
+      for (final audience in ['all', 'staff', 'tenants']) {
+        try {
+          final response = await _apiService.getAnnouncements(
+            buildingId: buildingId,
+            audience: audience,
+            activeOnly: false,
+            publishedOnly: false, // Admin should see drafts too
+          );
 
-      if (response.containsKey('announcements')) {
-        final announcementsList = response['announcements'];
+          if (response.containsKey('announcements')) {
+            final announcements = response['announcements'] as List?;
+            if (announcements != null) {
+              for (final ann in announcements) {
+                // Use announcement ID as key to avoid duplicates
+                final id = ann['id'] ?? ann['formatted_id'];
+                if (id != null) {
+                  allAnnouncementsMap[id] = ann as Map<String, dynamic>;
+                }
+              }
+            }
+          }
+        } catch (e) {
+          print('[v0] Warning: Failed to fetch $audience announcements: $e');
+        }
+      }
 
-        if (announcementsList != null && announcementsList is List) {
+      // Convert map to list
+      final announcementsList = allAnnouncementsMap.values.toList();
+
+      print('[v0] Total announcements loaded: ${announcementsList.length}');
+
+      if (announcementsList.isNotEmpty) {
           setState(() {
             _announcementItems = List<Map<String, dynamic>>.from(
               announcementsList.map((announcement) {
@@ -379,15 +404,9 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
               '[v0] Successfully loaded ${_announcementItems.length} announcements',
             );
           });
-        } else {
-          setState(() {
-            _announcementItems = [];
-            _isLoading = false;
-          });
-        }
       } else {
         setState(() {
-          _errorMessage = 'Invalid response format from server';
+          _announcementItems = [];
           _isLoading = false;
         });
       }

@@ -78,7 +78,6 @@ class JobServiceConcernSlipDialog extends StatelessWidget {
             ),
 
             // Footer with Next Button
-            _buildFooter(context),
           ],
         ),
       ),
@@ -144,15 +143,13 @@ class JobServiceConcernSlipDialog extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // Priority Section (centered)
+        // Priority and Status Section
         Row(
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildPriorityChip(task['priority'] ?? 'Medium'),
-              ],
-            ),
+            _buildPriorityChip(task['priority'] ?? 'Medium'),
+            const SizedBox(width: 16),
+            _buildStatusChip(task['status'] ?? 'Pending'),
+            const Spacer(),
           ],
         ),
         const SizedBox(height: 24),
@@ -192,12 +189,6 @@ class JobServiceConcernSlipDialog extends StatelessWidget {
             const Expanded(child: SizedBox()), // Empty space for alignment
           ],
         ),
-        const SizedBox(height: 24),
-        Divider(
-          color: Colors.grey[300],
-          thickness: 1,
-          height: 1,
-        ),
       ],
     );
   }
@@ -232,6 +223,12 @@ class JobServiceConcernSlipDialog extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Divider(
+          color: Colors.grey[300],
+          thickness: 1,
+          height: 1,
+        ),
+        const SizedBox(height: 16),
         const Text(
           'Work Description',
           style: TextStyle(
@@ -242,7 +239,7 @@ class JobServiceConcernSlipDialog extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Text(
-          task['description'] ?? 
+          task['description'] ??
           'The kitchen faucet has been continuously leaking since last night. Water is dripping even when the handle is fully closed, which may lead to water waste and higher utility bills. Please inspect and repair as soon as possible.',
           style: TextStyle(
             fontSize: 15,
@@ -250,7 +247,7 @@ class JobServiceConcernSlipDialog extends StatelessWidget {
             color: Colors.grey[700],
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
         Divider(
           color: Colors.grey[300],
           thickness: 1,
@@ -386,7 +383,51 @@ class JobServiceConcernSlipDialog extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
-        '${priority} Priority',
+        '$priority Priority',
+        style: TextStyle(
+          color: textColor,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(String status) {
+    Color bgColor;
+    Color textColor;
+    switch (status.toLowerCase()) {
+      case 'in progress':
+      case 'approved':
+        bgColor = const Color.fromARGB(49, 82, 131, 205);
+        textColor = const Color.fromARGB(255, 0, 93, 232);
+        break;
+      case 'pending':
+      case 'pending review':
+        bgColor = const Color(0xFFFFEBEE);
+        textColor = const Color(0xFFD32F2F);
+        break;
+      case 'completed':
+        bgColor = const Color(0xFFE8F5E8);
+        textColor = const Color(0xFF2E7D32);
+        break;
+      case 'cancelled':
+      case 'denied':
+        bgColor = Colors.grey[100]!;
+        textColor = Colors.grey[700]!;
+        break;
+      default:
+        bgColor = Colors.grey[200]!;
+        textColor = Colors.grey[700]!;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        status,
         style: TextStyle(
           color: textColor,
           fontSize: 12,
@@ -710,33 +751,7 @@ class JobServiceScheduleDialog extends StatelessWidget {
           const Spacer(),
           
           // Next Button
-          ElevatedButton(
-            onPressed: () {
-              // Handle next action
-              Navigator.of(context).pop();
-              AssignScheduleWorkDialog.show(context, task);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1976D2),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 32,
-                vertical: 16,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              elevation: 0,
-            ),
-            child: const Text(
-              'Next',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
+          ],
       ),
     );
   }

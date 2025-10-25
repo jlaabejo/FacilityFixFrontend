@@ -5,7 +5,6 @@ import 'package:file_picker/file_picker.dart';
 import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
 import '../../services/auth_storage.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class EditAnnouncementPage extends StatefulWidget {
   final String announcementId;
@@ -102,35 +101,23 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
   // Auth initialization method
   Future<void> _initializeAuth() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        try {
-          // Use getIdToken with force refresh = false to avoid type issues
-          final token = await user.getIdToken(false);
-          if (token != null) {
-            await AuthStorage.saveToken(token);
-            _apiService.setAuthToken(token);
-            print('[Edit] Auth token saved for user: ${user.email}');
-          }
-        } catch (tokenError) {
-          print('[Edit] Error getting token: $tokenError');
-          // Try to get token without forcing refresh as fallback
-          try {
-            final token = await user.getIdToken();
-            if (token != null) {
-              await AuthStorage.saveToken(token);
-              _apiService.setAuthToken(token);
-              print('[Edit] Auth token saved (fallback) for user: ${user.email}');
-            }
-          } catch (fallbackError) {
-            print('[Edit] Fallback token retrieval failed: $fallbackError');
-            throw Exception('Failed to retrieve authentication token');
-          }
+      // Get stored token from AuthStorage
+      final token = await AuthStorage.getToken();
+
+      if (token != null && token.isNotEmpty) {
+        print('[Edit] Auth token loaded from storage');
+
+        // Get user profile for additional info if needed
+        final profile = await AuthStorage.getProfile();
+        if (profile != null) {
+          print('[Edit] User profile loaded: ${profile['email']}');
         }
+
+        // Load announcement data
+        await _loadAnnouncementData();
       } else {
-        throw Exception('No authenticated user found');
+        throw Exception('No authentication token found. Please login again.');
       }
-      await _loadAnnouncementData();
     } catch (e) {
       print('[Edit] Error initializing auth: $e');
       setState(() {

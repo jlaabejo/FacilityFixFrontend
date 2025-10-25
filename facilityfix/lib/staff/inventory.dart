@@ -4,6 +4,7 @@ import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/staff/maintenance.dart';
 import 'package:facilityfix/staff/announcement.dart';
+import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/profile.dart';
 import 'package:facilityfix/staff/view_details/invetory_details.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
@@ -132,23 +133,44 @@ class _InventoryPageState extends State<InventoryPage> {
     NavItem(icon: Icons.work),
     NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
+    NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),
   ];
 
   void _onTabTapped(int index) {
-    final destinations = [
-      const HomePage(),
-      const WorkOrderPage(),
-      const MaintenancePage(),
-      const AnnouncementPage(),
-      const InventoryPage(),
-      const ProfilePage(),
-    ];
-    if (index != 4) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => destinations[index]),
-      );
+    if (index == 5) return; // Already on Inventory page
+
+    switch (index) {
+      case 0:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+        break;
+      case 1:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const WorkOrderPage()),
+        );
+        break;
+      case 2:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MaintenancePage()),
+        );
+        break;
+      case 3:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AnnouncementPage()),
+        );
+        break;
+      case 4:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const CalendarPage()),
+        );
+        break;
     }
   }
 
@@ -501,7 +523,7 @@ class _InventoryPageState extends State<InventoryPage> {
       ),
       bottomNavigationBar: NavBar(
         items: _navItems,
-        currentIndex: 4,
+        currentIndex: 5,
         onTap: _onTabTapped,
       ),
     );

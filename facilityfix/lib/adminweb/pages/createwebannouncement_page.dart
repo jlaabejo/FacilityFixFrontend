@@ -29,7 +29,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
   List<File> _attachedFiles = [];
 
   // Dropdown options
-  final List<String> _audienceOptions = ['Tenant', 'Staff', 'All'];
+  final List<String> _audienceOptions = ['Tenants', 'Staff', 'All'];
 
   final List<Map<String, dynamic>> _typeOptions = [
     {
@@ -256,17 +256,28 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
     try {
       final response = await _apiService.createAnnouncement(announcementData);
 
+      print('[v0] Create announcement response: $response');
+
       // Hide loading indicator
       if (mounted) Navigator.of(context).pop();
 
       // Show success message
       if (mounted) {
+        final formattedId = response['formatted_id'] ??
+                           response['announcement']?['formatted_id'] ??
+                           response['id'] ??
+                           response['announcement']?['id'] ??
+                           'Unknown';
+
+        print('[v0] Success! Announcement ID: $formattedId');
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Announcement created successfully! ID: ${response['formatted_id'] ?? response['id']}',
+              'Announcement created successfully! ID: $formattedId',
             ),
             backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
           ),
         );
 

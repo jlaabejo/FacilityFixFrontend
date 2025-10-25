@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/config/env.dart';
+import 'package:facilityfix/services/auth_service.dart';
 import 'package:facilityfix/staff/announcement.dart';
+import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/services/chat_helper.dart';
 import 'package:facilityfix/staff/notification.dart';
 import 'package:facilityfix/staff/home.dart';
@@ -35,6 +37,7 @@ class _MaintenancePageState extends State<MaintenancePage> {
   // ─────────────── Dynamic data from API ───────────────
   List<Map<String, dynamic>> _allMaintenanceTasks = [];
   bool _isLoading = true;
+  String _currentStaffId = '';
 
   // ===== Refresh =============================================================
   Future<void> _refresh() async {
@@ -43,51 +46,96 @@ class _MaintenancePageState extends State<MaintenancePage> {
 
   Future<void> _loadAllMaintenanceTasks() async {
     setState(() => _isLoading = true);
+    
 
     try {
-      // Get current user to filter tasks assigned to them
+      // Get current user profile for logging/debugging
       final profile = await AuthStorage.getProfile();
-      
-      // Try multiple possible user ID field names
-      final userId = profile?['uid'] ?? 
-                    profile?['user_id'] ?? 
-                    profile?['id'] ?? 
+
+      final userId = profile?['uid'] ??
+                    profile?['user_id'] ??
+                    profile?['id'] ??
                     profile?['userId'] ?? '';
-      
+
+      final staffId = profile?['staff_id'] ??
+                     profile?['staffId'] ??
+                     userId;
+
       final userEmail = profile?['email'] ?? '';
-      
+
+      // Store staff ID for checklist filtering
+      _currentStaffId = staffId;
+
       print('DEBUG: Current user profile: $profile');
       print('DEBUG: Current user ID: $userId');
+      print('DEBUG: Current staff ID: $staffId');
       print('DEBUG: Current user email: $userEmail');
-      
-      if (userId.isEmpty && userEmail.isEmpty) {
-        print('Warning: No user ID or email found - showing all maintenance tasks');
-        print('User may need to log in again for proper task filtering');
-        // Don't return early - show all tasks instead of empty list
-      }
 
       // Use staff role for API service
       final apiService = APIService(roleOverride: AppRole.staff);
-      print('DEBUG: Making API call to getAllMaintenance...');
-      final allTasks = await apiService.getAllMaintenance();
-      print('DEBUG: API response received - task count: ${allTasks.length}');
-      print('DEBUG: Sample task data: ${allTasks.isNotEmpty ? allTasks.first : 'No tasks'}');
+
+     
+      print('DEBUG: Making API call to getMyAssignedMaintenance...');
+      final assignedTasks = await apiService.getMyAssignedMaintenance();
+      print('DEBUG: API response received - assigned task count: ${assignedTasks.length}');
+      print('DEBUG: Sample assigned task data: ${assignedTasks.isNotEmpty ? assignedTasks.first : 'No tasks'}');
+
+      // Also load special maintenance tasks
+      print('DEBUG: Making API call to getSpecialMaintenanceTasks...');
+      List<Map<String, dynamic>> specialTasks = [];
+      try {
+        specialTasks = await apiService.getSpecialMaintenanceTasks();
+        print('DEBUG: Special tasks loaded - count: ${specialTasks.length}');
+      } catch (e) {
+        print('DEBUG: Note - Special maintenance tasks not available yet: $e');
+        // Not critical if special tasks aren't available
+      }
 
       if (mounted) {
-        // For now, show all tasks to debug the rendering issue
-        // TODO: Implement proper user-based filtering later
-        List<Map<String, dynamic>> assignedTasks = allTasks;
-        
         print('DEBUG: User profile fields available: ${profile?.keys.toList()}');
         print('DEBUG: Sample task assigned_to values:');
-        for (int i = 0; i < allTasks.length && i < 3; i++) {
-          final task = allTasks[i];
+        for (int i = 0; i < assignedTasks.length && i < 3; i++) {
+          final task = assignedTasks[i];
           print('  Task ${i + 1}: assigned_to="${task['assigned_to']}", assigned_staff="${task['assigned_staff']}"');
+          // Check checklist items too
+          final checklist = task['checklist_completed'] as List?;
+          if (checklist != null && checklist.isNotEmpty) {
+            print('    Checklist items:');
+            for (var item in checklist.take(2)) {
+              print('      - ${item['task']}: assigned_to="${item['assigned_to']}"');
+            }
+          }
         }
-        print('DEBUG: Showing all ${assignedTasks.length} tasks (filtering temporarily disabled)');
+        print('DEBUG: Showing ${assignedTasks.length} regular tasks and ${specialTasks.length} special tasks assigned to user');
+
+        // For special tasks, filter checklist items to only show items assigned to current user
+        final filteredSpecialTasks = specialTasks.map((task) {
+          final checklist = task['checklist_completed'] as List?;
+          if (checklist != null && checklist.isNotEmpty) {
+            // Filter checklist to only include items assigned to this user
+            final filteredChecklist = checklist.where((item) {
+              final assignedTo = item['assigned_to'];
+              return assignedTo != null && assignedTo == userId;
+            }).toList();
+
+            // Only include the task if there are assigned items
+            if (filteredChecklist.isNotEmpty) {
+              return {
+                ...task,
+                'checklist_completed': filteredChecklist,
+              };
+            }
+          }
+          return null;
+        }).where((task) => task != null).cast<Map<String, dynamic>>().toList();
+
+        print('DEBUG: Filtered special tasks to ${filteredSpecialTasks.length} with assigned items only');
+
+        // Combine regular and filtered special tasks
+        final allTasks = [...assignedTasks, ...filteredSpecialTasks];
 
         setState(() {
-          _allMaintenanceTasks = assignedTasks.map((task) {
+          _allMaintenanceTasks = allTasks.map((task) {
             // Ensure consistent data structure
             final mappedTask = {
               'id': task['id'] ?? '',
@@ -126,9 +174,8 @@ class _MaintenancePageState extends State<MaintenancePage> {
             return mappedTask;
           }).toList();
           _isLoading = false;
-          
-          print('DEBUG: Mapped ${_allMaintenanceTasks.length} tasks for display');
-          print('DEBUG: Sample mapped task: ${_allMaintenanceTasks.isNotEmpty ? _allMaintenanceTasks.first : 'None'}');
+
+          print('DEBUG: Mapped ${_allMaintenanceTasks.length} total tasks for display');
         });
       }
     } catch (e) {
@@ -159,23 +206,44 @@ class _MaintenancePageState extends State<MaintenancePage> {
     NavItem(icon: Icons.work),
     NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
+    NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),
   ];
 
   void _onTabTapped(int index) {
-    final destinations = [
-      const HomePage(),
-      const WorkOrderPage(),
-      const MaintenancePage(),
-      const AnnouncementPage(),
-      const InventoryPage(),
-      const ProfilePage(),
-    ];
-    if (index != 2) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => destinations[index]),
-      );
+    if (index == 2) return; // Already on Maintenance page
+
+    switch (index) {
+      case 0:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+        break;
+      case 1:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const WorkOrderPage()),
+        );
+        break;
+      case 3:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AnnouncementPage()),
+        );
+        break;
+      case 4:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const CalendarPage()),
+        );
+        break;
+      case 5:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const InventoryPage()),
+        );
+        break;
     }
   }
 
@@ -424,7 +492,10 @@ class _MaintenancePageState extends State<MaintenancePage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => _MaintenanceDetailScreen(task: task),
+            builder: (_) => _MaintenanceDetailScreen(
+              task: task,
+              currentStaffId: _currentStaffId,
+            ),
           ),
         ).then((_) {
           // Refresh data when returning
@@ -651,8 +722,12 @@ class MobileTabSelector extends StatelessWidget {
 // Maintenance Detail Screen using MaintenanceDetails widget
 class _MaintenanceDetailScreen extends StatefulWidget {
   final Map<String, dynamic> task;
+  final String currentStaffId;
 
-  const _MaintenanceDetailScreen({required this.task});
+  const _MaintenanceDetailScreen({
+    required this.task,
+    required this.currentStaffId,
+  });
 
   @override
   State<_MaintenanceDetailScreen> createState() => _MaintenanceDetailScreenState();
@@ -661,6 +736,8 @@ class _MaintenanceDetailScreen extends StatefulWidget {
 class _MaintenanceDetailScreenState extends State<_MaintenanceDetailScreen> {
   late List<Map<String, dynamic>> _checklistItems;
   bool _isUpdating = false;
+  late TextEditingController _notesController;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -669,14 +746,34 @@ class _MaintenanceDetailScreenState extends State<_MaintenanceDetailScreen> {
     print('DEBUG: Task data keys: ${widget.task.keys.toList()}');
     print('DEBUG: Raw checklist_completed value: ${widget.task['checklist_completed']}');
     print('DEBUG: Raw checklist_completed type: ${widget.task['checklist_completed'].runtimeType}');
-    _checklistItems = _convertChecklistToMap(widget.task['checklist_completed']);
+    _checklistItems = _convertChecklistToMap(widget.task['checklist_completed'], widget.task['category'] ?? 'general');
     print('DEBUG: Converted checklist items: $_checklistItems');
     print('DEBUG: Checklist items count: ${_checklistItems.length}');
+
+    // Initialize notes controller with existing notes if available
+    _notesController = TextEditingController(
+      text: widget.task['completion_notes'] ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
   }
   
   // Computed properties for checklist progress
-  int get completedCount => _checklistItems.where((item) => item['completed'] == true).length;
-  int get totalCount => _checklistItems.length;
+  // Only count items visible to current user
+  int get completedCount => _checklistItems.where((item) {
+    final assignedTo = item['assigned_to']?.toString() ?? '';
+    final isVisibleToMe = assignedTo.isEmpty || assignedTo == widget.currentStaffId;
+    return isVisibleToMe && item['completed'] == true;
+  }).length;
+
+  int get totalCount => _checklistItems.where((item) {
+    final assignedTo = item['assigned_to']?.toString() ?? '';
+    return assignedTo.isEmpty || assignedTo == widget.currentStaffId;
+  }).length;
 
   DateTime? _parseDate(dynamic value) {
     if (value == null) return null;
@@ -705,7 +802,7 @@ class _MaintenanceDetailScreenState extends State<_MaintenanceDetailScreen> {
     return date?.toIso8601String() ?? '';
   }
 
-  List<Map<String, dynamic>> _convertChecklistToMap(dynamic checklist) {
+  List<Map<String, dynamic>> _convertChecklistToMap(dynamic checklist, String category) {
     print('DEBUG _convertChecklistToMap: Input checklist: $checklist');
     print('DEBUG _convertChecklistToMap: Input type: ${checklist.runtimeType}');
     
@@ -727,13 +824,19 @@ class _MaintenanceDetailScreenState extends State<_MaintenanceDetailScreen> {
           print('DEBUG _convertChecklistToMap: Item is Map? $isMap, item: $item');
           return isMap;
         })
+
+
         .map<Map<String, dynamic>>((item) {
-          final converted = {
+          final converted = <String, dynamic>{
             'id': item['id']?.toString() ?? '',
             'task': item['task']?.toString() ?? '',
             'completed': item['completed'] == true,
           };
-          print('DEBUG _convertChecklistToMap: Converted item: $converted');
+          final assigned = item['assigned_to'];
+
+          if (assigned != null && assigned.toString().trim().isNotEmpty && category == 'safety') {
+            converted['assigned_to'] = assigned.toString();
+          }
           return converted;
         })
         .where((item) {
@@ -773,8 +876,8 @@ class _MaintenanceDetailScreenState extends State<_MaintenanceDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              newCompletedStatus 
-                ? 'Task marked as completed' 
+              newCompletedStatus
+                ? 'Task marked as completed'
                 : 'Task marked as incomplete'
             ),
             duration: const Duration(seconds: 1),
@@ -784,7 +887,7 @@ class _MaintenanceDetailScreenState extends State<_MaintenanceDetailScreen> {
       }
     } catch (e) {
       print('Error updating checklist item: $e');
-      
+
       // Revert optimistic update on error
       setState(() {
         _checklistItems[index]['completed'] = !_checklistItems[index]['completed'];
@@ -802,6 +905,48 @@ class _MaintenanceDetailScreenState extends State<_MaintenanceDetailScreen> {
     } finally {
       if (mounted) {
         setState(() => _isUpdating = false);
+      }
+    }
+  }
+
+  Future<void> _saveCompletionNotes() async {
+    if (_isSubmitting) return;
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final apiService = APIService(roleOverride: AppRole.staff);
+      await apiService.updateMaintenanceTask(
+        widget.task['id'],
+        {
+          'completion_notes': _notesController.text,
+        },
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Notes saved successfully'),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error saving completion notes: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving notes: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
       }
     }
   }
@@ -969,7 +1114,17 @@ class _MaintenanceDetailScreenState extends State<_MaintenanceDetailScreen> {
                         itemBuilder: (context, index) {
                           final item = _checklistItems[index];
                           final isCompleted = item['completed'] == true;
-                          
+                          final assignedTo = item['assigned_to']?.toString() ?? '';
+
+                          // If there's an assigned_to field, check if it matches current user
+                          // If no assigned_to field (empty string), show the item (it's a general task)
+                          print("CURRENT STAFF ID: ${widget.currentStaffId}, ITEM ASSIGNED TO: $assignedTo");
+                          print("CATEGORY: ${widget.task['category']}");
+                          if (assignedTo != widget.currentStaffId && widget.task['category'] == 'safety') {
+                            // Skip items assigned to someone else
+                            return const SizedBox.shrink();
+                          } 
+
                           return InkWell(
                             onTap: _isUpdating ? null : () => _toggleChecklistItem(index),
                             child: Container(
@@ -1025,6 +1180,127 @@ class _MaintenanceDetailScreenState extends State<_MaintenanceDetailScreen> {
                   ),
                 ),
               ],
+
+              // Completion Notes Section
+              const SizedBox(height: 24),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: const BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(color: Color(0xFFE5E7EB)),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.note_outlined,
+                            size: 20,
+                            color: Color(0xFF6B7280),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Completion Notes',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1F2937),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Notes Input
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextField(
+                            controller: _notesController,
+                            maxLines: 4,
+                            decoration: InputDecoration(
+                              hintText: 'Add any notes about the completion of this task...',
+                              hintStyle: const TextStyle(
+                                color: Color(0xFF9CA3AF),
+                                fontSize: 14,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFE5E7EB),
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFE5E7EB),
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFF3B82F6),
+                                  width: 2,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.all(12),
+                            ),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF1F2937),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: _isUpdating ? null : _saveCompletionNotes,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF3B82F6),
+                                disabledBackgroundColor: const Color(0xFFD1D5DB),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: _isUpdating
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(
+                                          Colors.white,
+                                        ),
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Save Notes',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),

@@ -14,7 +14,8 @@ import '../services/api_services.dart';
 
 /// Simple data model for the list (avoids mixing widgets & data).
 class AnnouncementItem {
-  final String id;
+  final String id; // Raw UUID for API calls
+  final String formattedId; // User-friendly ID for display (e.g., "ANN-2025-001")
   final String title;
   final String announcementType; // e.g. "utility interruption"
   final DateTime createdAt;
@@ -22,6 +23,7 @@ class AnnouncementItem {
 
   const AnnouncementItem({
     required this.id,
+    required this.formattedId,
     required this.title,
     required this.announcementType,
     required this.createdAt,
@@ -30,6 +32,7 @@ class AnnouncementItem {
 
   AnnouncementItem copyWith({
     String? id,
+    String? formattedId,
     String? title,
     String? announcementType,
     String? classification,
@@ -39,6 +42,7 @@ class AnnouncementItem {
   }) {
     return AnnouncementItem(
       id: id ?? this.id,
+      formattedId: formattedId ?? this.formattedId,
       title: title ?? this.title,
       announcementType: announcementType ?? this.announcementType,
       createdAt: createdAt ?? this.createdAt,
@@ -152,10 +156,10 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
 
       print('[Announcements] Fetching with building_id: $buildingId');
 
-      // Fetch announcements from API
+      // Fetch announcements from API - tenants should see 'tenants' and 'all' announcements
       final announcements = await _apiService.getAllAnnouncements(
         buildingId: buildingId,
-        audience: 'all',
+        audience: 'all', // Fetch all to filter on frontend
         activeOnly: true,
         limit: 100,
       );
@@ -163,17 +167,24 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
       print('[Announcements] Fetched ${announcements.length} announcements');
 
       // Convert API response to AnnouncementItem objects
+      // Filter to only include announcements for tenants or all audiences
       setState(() {
-        _all = announcements.map((ann) {
-          // Backend now ensures 'id' field always contains the correct document ID
-          return AnnouncementItem(
-            id: ann['id'] ?? ann['formatted_id'] ?? '',
-            title: ann['title'] ?? 'Untitled',
-            announcementType: ann['type'] ?? 'general',
-            createdAt: DateTime.tryParse(ann['created_at'] ?? '') ?? DateTime.now(),
-            isRead: false, // TODO: Track read status per user
-          );
-        }).toList();
+        _all = announcements
+            .where((ann) {
+              final audience = (ann['audience'] ?? 'all').toString().toLowerCase();
+              return audience == 'tenants' || audience == 'all';
+            })
+            .map((ann) {
+              return AnnouncementItem(
+                id: ann['id'] ?? '',
+                formattedId: ann['formatted_id'] ?? ann['id'] ?? '',
+                title: ann['title'] ?? 'Untitled',
+                announcementType: ann['type'] ?? 'general',
+                createdAt: DateTime.tryParse(ann['created_at'] ?? '') ?? DateTime.now(),
+                isRead: ann['is_read'] ?? false,  // Read status from backend
+              );
+            })
+            .toList();
         _isLoading = false;
       });
     } catch (e) {
@@ -224,6 +235,8 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
       final classMatch = _matchesClassification(a.announcementType);
       final searchMatch = _matchesSearch("${a.title} ${a.announcementType}");
       final statusMatch = _matchesStatus(a);
+
+      print('[Announcements] Filtering "${a.title}": classMatch=$classMatch, searchMatch=$searchMatch, statusMatch=$statusMatch');
       return classMatch && searchMatch && statusMatch;
     }).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -336,7 +349,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                               child: Stack(
                                 children: [
                                   AnnouncementCard(
-                                    id: a.id,
+                                    id: a.formattedId, // Display formatted ID
                                     title: a.title,
                                     announcementType: a.announcementType,
                                     createdAt: a.createdAt, // DateTime ✅
@@ -367,7 +380,8 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                                           ),
                                         );
                                         // Refresh the list after returning from details
-                                        // (in case announcement was updated/deleted)
+                                        // to reflect any changes (like marking as read)
+                                        _fetchAnnouncements();
                                       } catch (e) {
                                         print('[Announcements] Error navigating to details: $e');
                                       }

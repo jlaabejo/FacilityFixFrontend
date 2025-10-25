@@ -23,9 +23,9 @@ class AppEnv {
   };
 
   static Map<AppRole, String> _deviceHosts(String ip) => {
-    AppRole.tenant: 'http://72.60.234.106:8000',
-    AppRole.staff:  'http://72.60.234.106:8000',
-    AppRole.admin:  'http://72.60.234.106:8000',
+    AppRole.tenant: 'http://192.168.1.63:8000',
+    AppRole.staff:  'http://192.168.1.63:8000',
+    AppRole.admin:  'http://192.168.1.63:8000',
   };
 
   /// Default per-platform base URL (localhost for web/desktop, emulator loopback, etc.)

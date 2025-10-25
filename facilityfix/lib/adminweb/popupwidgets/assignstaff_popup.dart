@@ -1,15 +1,18 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/api_services.dart';
+import '../services/api_service.dart' as admin_api;
 
 class AssignScheduleWorkDialog extends StatefulWidget {
   final Map<String, dynamic> task;
   final VoidCallback? onAssignmentComplete;
+  final bool isMaintenanceTask;
 
   const AssignScheduleWorkDialog({
     super.key,
     required this.task,
     this.onAssignmentComplete,
+    this.isMaintenanceTask = false,
   });
 
   @override
@@ -20,6 +23,7 @@ class AssignScheduleWorkDialog extends StatefulWidget {
     BuildContext context,
     Map<String, dynamic> task, {
     VoidCallback? onAssignmentComplete,
+    bool isMaintenanceTask = false,
   }) {
     showDialog(
       context: context,
@@ -28,6 +32,7 @@ class AssignScheduleWorkDialog extends StatefulWidget {
         return AssignScheduleWorkDialog(
           task: task,
           onAssignmentComplete: onAssignmentComplete,
+          isMaintenanceTask: isMaintenanceTask,
         );
       },
     );
@@ -37,6 +42,7 @@ class AssignScheduleWorkDialog extends StatefulWidget {
 class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
   final _formKey = GlobalKey<FormState>();
   final APIService _apiService = APIService();
+  final admin_api.ApiService _adminApiService = admin_api.ApiService();
   bool _formValid = false;
   bool _isLoading = false;
   bool _isAssigning = false;
@@ -140,6 +146,57 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
 
   String _getStaffId(Map<String, dynamic> staff) {
     return staff['user_id'] ?? staff['id'] ?? '';
+  }
+
+  String _getStaffInitials(Map<String, dynamic> staff) {
+    final firstName = staff['first_name'] ?? '';
+    final lastName = staff['last_name'] ?? '';
+
+    String initials = '';
+    if (firstName.isNotEmpty) initials += firstName[0].toUpperCase();
+    if (lastName.isNotEmpty) initials += lastName[0].toUpperCase();
+
+    return initials.isNotEmpty ? initials : 'SM';
+  }
+
+  Color _getStaffAvatarColor(Map<String, dynamic> staff) {
+    final colors = [
+      const Color(0xFF6366F1), // Indigo
+      const Color(0xFF8B5CF6), // Violet
+      const Color(0xFFEC4899), // Pink
+      const Color(0xFFF59E0B), // Amber
+      const Color(0xFF10B981), // Emerald
+      const Color(0xFF3B82F6), // Blue
+      const Color(0xFF06B6D4), // Cyan
+      const Color(0xFFF97316), // Orange
+      const Color(0xFF14B8A6), // Teal
+      const Color(0xFFA855F7), // Purple
+    ];
+
+    final name = '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'.trim();
+    final hash = name.hashCode.abs();
+    return colors[hash % colors.length];
+  }
+
+  Widget _buildStaffAvatar(Map<String, dynamic> staff, {double size = 32}) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: _getStaffAvatarColor(staff),
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          _getStaffInitials(staff),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: size * 0.4,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -292,10 +349,79 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               hintText: _filteredStaffList.isEmpty ? 'No staff available' : 'Select Staff...',
             ),
+            selectedItemBuilder: (BuildContext context) {
+              return _filteredStaffList.map((staff) {
+                final staffId = _getStaffId(staff);
+                if (selectedStaffId == staffId) {
+                  final firstName = staff['first_name'] ?? '';
+                  final lastName = staff['last_name'] ?? '';
+                  String name = '$firstName $lastName'.trim();
+                  if (name.isEmpty) name = 'Staff Member';
+
+                  return Row(
+                    children: [
+                      _buildStaffAvatar(staff, size: 28),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black87,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                return const SizedBox.shrink();
+              }).toList();
+            },
             items: _filteredStaffList.map((staff) {
               final staffId = _getStaffId(staff);
-              final displayName = _getStaffDisplayName(staff);
-              return DropdownMenuItem(value: staffId, child: Text(displayName, overflow: TextOverflow.ellipsis));
+              final firstName = staff['first_name'] ?? '';
+              final lastName = staff['last_name'] ?? '';
+              final department = staff['staff_department'] ?? staff['department'] ?? 'General';
+
+              String name = '$firstName $lastName'.trim();
+              if (name.isEmpty) name = 'Staff Member';
+
+              return DropdownMenuItem(
+                value: staffId,
+                child: Row(
+                  children: [
+                    _buildStaffAvatar(staff, size: 32),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black87,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            department,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
             }).toList(),
             onChanged: _filteredStaffList.isEmpty ? null : (value) {
               setState(() {
@@ -410,22 +536,100 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
   Future<void> _handleSaveAndAssign() async {
     if (!_formValid || selectedStaffId == null) return;
     setState(() => _isAssigning = true);
+
     try {
-      final concernSlipId = widget.task['rawData']?['id'] ?? widget.task['rawData']?['_doc_id'] ?? widget.task['id'];
-      if (concernSlipId == null) throw Exception('Concern slip ID not found');
-      print('[AssignStaff] Assigning staff $selectedStaffId to concern slip $concernSlipId');
-      final result = await _apiService.assignStaffToConcernSlip(concernSlipId, selectedStaffId!);
-      print('[AssignStaff] Assignment successful: $result');
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Staff assigned successfully to ${widget.task['id']}'), backgroundColor: Colors.green, duration: const Duration(seconds: 3)));
-        widget.onAssignmentComplete?.call();
+      if (widget.isMaintenanceTask) {
+        // Check if this is a checklist item assignment
+        final checklistItemId = widget.task['checklist_item_id'];
+
+        if (checklistItemId != null) {
+          // Handle checklist item assignment
+          final taskId = widget.task['task_id'];
+          if (taskId == null) throw Exception('Task ID not found');
+
+          print('[AssignStaff] Assigning staff $selectedStaffId to checklist item $checklistItemId');
+
+          final result = await _adminApiService.assignStaffToChecklistItem(
+            taskId,
+            checklistItemId,
+            selectedStaffId!,
+          );
+
+          print('[AssignStaff] Checklist item assignment successful: $result');
+
+          if (mounted) {
+            Navigator.of(context).pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Staff assigned successfully to checklist item'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+            widget.onAssignmentComplete?.call();
+          }
+        } else {
+          // Handle whole maintenance task assignment
+          final taskId = widget.task['id'] ?? widget.task['task_id'];
+          if (taskId == null) throw Exception('Maintenance task ID not found');
+
+          print('[AssignStaff] Assigning staff $selectedStaffId to maintenance task $taskId');
+
+          final result = await _adminApiService.assignStaffToMaintenanceTask(
+            taskId,
+            selectedStaffId!,
+            scheduledDate: selectedDate,
+            notes: notesController.text.trim().isNotEmpty ? notesController.text.trim() : null,
+          );
+
+          print('[AssignStaff] Maintenance task assignment successful: $result');
+
+          if (mounted) {
+            Navigator.of(context).pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Staff assigned successfully to maintenance task'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+            widget.onAssignmentComplete?.call();
+          }
+        }
+      } else {
+        // Handle concern slip assignment (original logic)
+        final concernSlipId = widget.task['rawData']?['id'] ?? widget.task['rawData']?['_doc_id'] ?? widget.task['id'];
+        if (concernSlipId == null) throw Exception('Concern slip ID not found');
+
+        print('[AssignStaff] Assigning staff $selectedStaffId to concern slip $concernSlipId');
+
+        final result = await _apiService.assignStaffToConcernSlip(concernSlipId, selectedStaffId!);
+
+        print('[AssignStaff] Assignment successful: $result');
+
+        if (mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Staff assigned successfully to ${widget.task['id']}'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          widget.onAssignmentComplete?.call();
+        }
       }
     } catch (e) {
       print('[AssignStaff] Assignment failed: $e');
       if (mounted) {
         setState(() => _isAssigning = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to assign staff: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to assign staff: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
       }
     }
   }

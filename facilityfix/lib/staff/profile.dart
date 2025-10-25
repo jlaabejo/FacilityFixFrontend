@@ -48,7 +48,7 @@ class _ProfilePageState extends State<ProfilePage> {
   String _staffId = '';
   String _fullName = 'User';
 
-  ImageProvider get _profileImageProvider {
+  ImageProvider? get _profileImageProvider {
     if (_profileImageFile != null) return FileImage(_profileImageFile!);
     if (_profileMap != null &&
         _profileMap!['photo_url'] != null &&
@@ -57,7 +57,7 @@ class _ProfilePageState extends State<ProfilePage> {
         return NetworkImage(_profileMap!['photo_url'].toString());
       } catch (_) {}
     }
-    return const AssetImage('assets/images/profile.png');
+    return null; // Return null to show initials
   }
 
   @override
@@ -93,9 +93,9 @@ class _ProfilePageState extends State<ProfilePage> {
     final email = (_profileMap!['email'] ?? '').toString();
     final phone = (_profileMap!['phone_number'] ?? '').toString();
     final staffDept = (_profileMap!['staff_department'] ?? '').toString();
-    final staffId = (_profileMap!['user_id'] ?? _profileMap!['id'] ?? '').toString();
+    final staffId = (_profileMap!['staff_id'] ?? _profileMap!['id'] ?? '').toString();
     final birthDate = (_profileMap!['birthdate'] ?? _profileMap!['birth_date'] ?? '').toString();
-
+    
     // Construct full name with fallback
     final fullName = (('$firstName $lastName').trim().isNotEmpty)
         ? '$firstName $lastName'.trim()

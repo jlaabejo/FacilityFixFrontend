@@ -211,22 +211,38 @@ class SectionCard extends StatelessWidget {
 
 /// Avatar widget with gradient border and camera badge
 class ProfileInfoWidget extends StatelessWidget {
-  final ImageProvider profileImage;
+  final ImageProvider? profileImage;
   final String fullName;
   final String staffId;
   final VoidCallback onTap;
 
   const ProfileInfoWidget({
     super.key,
-    required this.profileImage,
+    this.profileImage,
     required this.fullName,
     required this.staffId,
     required this.onTap,
   });
 
+  String _getInitials(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return 'U';
+
+    final parts = trimmed.split(RegExp(r'\s+'));
+    if (parts.isEmpty) return 'U';
+
+    if (parts.length == 1) {
+      return parts[0].substring(0, 1).toUpperCase();
+    }
+
+    return '${parts[0].substring(0, 1)}${parts[1].substring(0, 1)}'.toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final initials = _getInitials(fullName);
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -247,10 +263,23 @@ class ProfileInfoWidget extends StatelessWidget {
                 child: CircleAvatar(
                   radius: 44,
                   backgroundColor: Colors.white,
-                  child: CircleAvatar(
-                    radius: 40,
-                    backgroundImage: profileImage,
-                  ),
+                  child: profileImage != null
+                      ? CircleAvatar(
+                          radius: 40,
+                          backgroundImage: profileImage,
+                        )
+                      : CircleAvatar(
+                          radius: 40,
+                          backgroundColor: const Color(0xFF005CE7),
+                          child: Text(
+                            initials,
+                            style: const TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
                 ),
               ),
             ),
