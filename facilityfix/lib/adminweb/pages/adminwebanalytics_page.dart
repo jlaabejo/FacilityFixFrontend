@@ -44,6 +44,16 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
   Map<String, List<HeatMapData>> _buildingHeatMap = {};
   List<Map<String, dynamic>> _trendChartData = [];
 
+  // Comparison metrics
+  double _totalRequestsChange = 0.0;
+  bool _totalRequestsIncreasing = true;
+  double _openIssuesChange = 0.0;
+  bool _openIssuesIncreasing = true;
+  double _resolvedTodayChange = 0.0;
+  bool _resolvedTodayIncreasing = true;
+  double _resolutionTimeChange = 0.0;
+  bool _resolutionTimeImproving = true;
+
   @override
   void initState() {
     super.initState();
@@ -138,22 +148,58 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
   void _processAnalyticsData() {
     // Process dashboard stats
     if (_dashboardStats != null) {
-      _totalRequests = _dashboardStats!['total_requests'] ?? 0;
-      _openIssues = _dashboardStats!['pending_concerns'] ?? 0;
-      _resolvedToday =
-          0; // Would need additional endpoint for today's completions
-      _resolutionTime =
-          2.4; // Would need to calculate from job completion times
+      // Extract from overall_metrics which contains aggregated data
+      final overallMetrics = _dashboardStats!['overall_metrics'] as Map<String, dynamic>?;
+      if (overallMetrics != null) {
+        _totalRequests = overallMetrics['total_requests'] ?? 0;
+        _openIssues = overallMetrics['pending_items'] ?? 0;
+        _resolvedToday = overallMetrics['completed_today'] ?? 0;
+        _resolutionTime = (overallMetrics['average_resolution_time_days'] ?? 0.0).toDouble();
+
+        // Extract comparison metrics if available
+        final comparisons = overallMetrics['comparisons'] as Map<String, dynamic>?;
+        if (comparisons != null) {
+          _totalRequestsChange = (comparisons['total_requests_change'] ?? 0.0).toDouble();
+          _totalRequestsIncreasing = comparisons['total_requests_increasing'] ?? true;
+          _openIssuesChange = (comparisons['pending_items_change'] ?? 0.0).toDouble();
+          _openIssuesIncreasing = comparisons['pending_items_increasing'] ?? true;
+          _resolvedTodayChange = (comparisons['completed_today_change'] ?? 0.0).toDouble();
+          _resolvedTodayIncreasing = comparisons['completed_today_increasing'] ?? true;
+          _resolutionTimeChange = (comparisons['resolution_time_change'] ?? 0.0).toDouble();
+          _resolutionTimeImproving = comparisons['resolution_time_improving'] ?? true;
+        }
+      } else {
+        // Fallback: try to get from concern_slips directly
+        final concernSlips = _dashboardStats!['concern_slips'] as Map<String, dynamic>?;
+        _totalRequests = concernSlips?['total_requests'] ?? 0;
+        _openIssues = concernSlips?['pending_concerns'] ?? 0;
+        _resolvedToday = 0;
+        _resolutionTime = 0.0;
+      }
     }
 
     // Process category breakdown
     if (_categoryBreakdown != null) {
-      final categories =
-          _categoryBreakdown!['categories'] as Map<String, dynamic>?;
-      if (categories != null) {
-        _categoryData = categories.map(
-          (key, value) => MapEntry(key, value as int),
-        );
+      // Try to get from combined_overview first (aggregated data)
+      final combinedOverview = _categoryBreakdown!['combined_overview'] as Map<String, dynamic>?;
+      if (combinedOverview != null) {
+        final categories = combinedOverview['categories'] as Map<String, dynamic>?;
+        if (categories != null) {
+          _categoryData = categories.map(
+            (key, value) => MapEntry(key, value as int),
+          );
+        }
+      } else {
+        // Fallback: try concern_slips categories
+        final concernSlips = _categoryBreakdown!['concern_slips'] as Map<String, dynamic>?;
+        if (concernSlips != null) {
+          final categories = concernSlips['categories'] as Map<String, dynamic>?;
+          if (categories != null) {
+            _categoryData = categories.map(
+              (key, value) => MapEntry(key, value as int),
+            );
+          }
+        }
       }
     }
 
@@ -462,8 +508,10 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                                     child: _buildAnalyticsCard(
                                       'TOTAL REQUEST',
                                       _totalRequests.toString(),
-                                      '6.7% from last month',
-                                      true,
+                                      _totalRequestsChange > 0
+                                          ? '${_totalRequestsChange.toStringAsFixed(1)}% from last month'
+                                          : '',
+                                      _totalRequestsIncreasing,
                                       Colors.blue,
                                       Icons.inventory_2_outlined,
                                     ),
@@ -473,8 +521,10 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                                     child: _buildAnalyticsCard(
                                       'OPEN ISSUE',
                                       _openIssues.toString(),
-                                      '8% from last week',
-                                      false,
+                                      _openIssuesChange > 0
+                                          ? '${_openIssuesChange.toStringAsFixed(1)}% from last week'
+                                          : '',
+                                      _openIssuesIncreasing,
                                       Colors.yellow[700]!,
                                       Icons.layers_outlined,
                                     ),
@@ -488,8 +538,10 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                                     child: _buildAnalyticsCard(
                                       'RESOLVED TODAY',
                                       _resolvedToday.toString(),
-                                      '24% from yesterday',
-                                      true,
+                                      _resolvedTodayChange > 0
+                                          ? '${_resolvedTodayChange.toStringAsFixed(1)}% from yesterday'
+                                          : '',
+                                      _resolvedTodayIncreasing,
                                       Colors.green,
                                       Icons.check_circle_outline,
                                     ),
@@ -499,8 +551,10 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                                     child: _buildAnalyticsCard(
                                       'RESOLUTION TIME',
                                       '${_resolutionTime.toStringAsFixed(1)} days',
-                                      '18% improvement',
-                                      true,
+                                      _resolutionTimeChange > 0
+                                          ? '${_resolutionTimeChange.toStringAsFixed(1)}% improvement'
+                                          : '',
+                                      _resolutionTimeImproving,
                                       Colors.red,
                                       Icons.trending_up,
                                     ),
@@ -517,8 +571,10 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                                 child: _buildAnalyticsCard(
                                   'TOTAL REQUEST',
                                   _totalRequests.toString(),
-                                  '6.7% from last month',
-                                  true,
+                                  _totalRequestsChange > 0
+                                      ? '${_totalRequestsChange.toStringAsFixed(1)}% from last month'
+                                      : '',
+                                  _totalRequestsIncreasing,
                                   Colors.blue,
                                   Icons.inventory_2_outlined,
                                 ),
@@ -528,8 +584,10 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                                 child: _buildAnalyticsCard(
                                   'OPEN ISSUE',
                                   _openIssues.toString(),
-                                  '8% from last week',
-                                  false,
+                                  _openIssuesChange > 0
+                                      ? '${_openIssuesChange.toStringAsFixed(1)}% from last week'
+                                      : '',
+                                  _openIssuesIncreasing,
                                   Colors.yellow[700]!,
                                   Icons.layers_outlined,
                                 ),
@@ -539,8 +597,10 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                                 child: _buildAnalyticsCard(
                                   'RESOLVED TODAY',
                                   _resolvedToday.toString(),
-                                  '24% from yesterday',
-                                  true,
+                                  _resolvedTodayChange > 0
+                                      ? '${_resolvedTodayChange.toStringAsFixed(1)}% from yesterday'
+                                      : '',
+                                  _resolvedTodayIncreasing,
                                   Colors.green,
                                   Icons.check_circle_outline,
                                 ),
@@ -550,8 +610,10 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                                 child: _buildAnalyticsCard(
                                   'RESOLUTION TIME',
                                   '${_resolutionTime.toStringAsFixed(1)} days',
-                                  '18% improvement',
-                                  true,
+                                  _resolutionTimeChange > 0
+                                      ? '${_resolutionTimeChange.toStringAsFixed(1)}% improvement'
+                                      : '',
+                                  _resolutionTimeImproving,
                                   Colors.red,
                                   Icons.trending_up,
                                 ),
@@ -580,7 +642,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                             children: [
                               _buildBuildingHeatMap(),
                               const SizedBox(height: 20),
-                              // Temporarily hidden: _buildTopIssueChart(),
+                              _buildTopIssueChart(),
                             ],
                           );
                         } else {
@@ -589,9 +651,8 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(flex: 1, child: _buildBuildingHeatMap()),
-                              // Temporarily hidden:
-                              // const SizedBox(width: 20),
-                              // Expanded(flex: 1, child: _buildTopIssueChart()),
+                              const SizedBox(width: 20),
+                              Expanded(flex: 1, child: _buildTopIssueChart()),
                             ],
                           );
                         }
@@ -676,31 +737,33 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
               color: Colors.black87,
             ),
           ),
-          const SizedBox(height: 4),
 
-          // Bottom Row: Percentage and Subtitle
-          Row(
-            children: [
-              Icon(
-                isIncrease ? Icons.trending_up : Icons.trending_down,
-                color: isIncrease ? Colors.green : Colors.red,
-                size: 14,
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isIncrease ? Colors.green : Colors.red,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+          // Bottom Row: Percentage and Subtitle (only show if subtitle is not empty)
+          if (subtitle.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(
+                  isIncrease ? Icons.trending_up : Icons.trending_down,
+                  color: isIncrease ? Colors.green : Colors.red,
+                  size: 14,
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isIncrease ? Colors.green : Colors.red,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -1006,11 +1069,8 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
   }
 
   // ============================================
-  // TOP ISSUE BY CATEGORY PIE CHART WIDGET - TEMPORARILY DISABLED
+  // TOP ISSUE BY CATEGORY PIE CHART WIDGET
   // ============================================
-  // TOP ISSUE BY CATEGORY PIE CHART WIDGET - TEMPORARILY DISABLED
-  // ============================================
-  /*
   Widget _buildTopIssueChart() {
     final categoryData =
         _categoryData.isNotEmpty
@@ -1157,7 +1217,6 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
       ),
     );
   }
-  */ // End of _buildTopIssueChart()
 
   // ============================================
   // REQUEST TRENDS CHART WIDGET

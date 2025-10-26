@@ -124,6 +124,8 @@ class JobService {
 
   // Requester / linkage (optional but useful in details)
   final String? requestedBy;
+  final String? requestedByName;
+  final String? requestedByEmail;
   final String? concernSlipId;
   final String? scheduleAvailability; // raw string or iso
   final String? additionalNotes;
@@ -161,6 +163,8 @@ class JobService {
 
     // Requester / Linkage
     this.requestedBy,
+    this.requestedByName,
+    this.requestedByEmail,
     this.concernSlipId,
     this.scheduleAvailability,
     this.additionalNotes,
@@ -204,6 +208,8 @@ class JobService {
       unitId: json['unit_id'] ?? '',
 
       requestedBy: json['requested_by'],
+      requestedByName: json['requested_by_name'],
+      requestedByEmail: json['requested_by_email'],
       concernSlipId: json['concern_slip_id'],
       scheduleAvailability: json['schedule_availability'],
       additionalNotes: json['additional_notes'],
@@ -280,6 +286,7 @@ class WorkOrderPermit {
   // Linkage / requester
   final String? concernSlipId;     // links back to slip
   final String? requestedBy;
+  final String? requestedByName;   // Full name of requester
 
   // Permit Specific Details
   final String contractorName;     // required
@@ -296,6 +303,7 @@ class WorkOrderPermit {
   final DateTime? approvalDate;
   final String? denialReason;
   final String? adminNotes;
+  final String? completionNotes;
 
   // Attachments (optional)
   final List<String>? attachments;
@@ -324,6 +332,7 @@ class WorkOrderPermit {
     // Linkage / requester
     this.concernSlipId,
     this.requestedBy,
+    this.requestedByName,
 
     // Permit specifics
     required this.contractorName,
@@ -340,6 +349,7 @@ class WorkOrderPermit {
     this.approvalDate,
     this.denialReason,
     this.adminNotes,
+    this.completionNotes,
 
     // Attachments
     this.attachments,
@@ -347,13 +357,72 @@ class WorkOrderPermit {
   });
 
   factory WorkOrderPermit.fromJson(Map<String, dynamic> json) {
-    DateTime? _dt(dynamic v) =>
-        v == null ? null : DateTime.tryParse(v.toString());
+    DateTime? _dt(dynamic v) {
+      if (v == null) return null;
+
+      // Try parsing ISO format first
+      var parsed = DateTime.tryParse(v.toString());
+      if (parsed != null) return parsed;
+
+      // Try parsing human-readable format like "Oct 15, 2025 4:10 AM"
+      try {
+        // Common date formats
+        final formats = [
+          RegExp(r'^([A-Za-z]{3}) (\d+), (\d{4}) (\d+):(\d+) ([AP]M)$'),
+        ];
+
+        final str = v.toString().trim();
+        for (var format in formats) {
+          final match = format.firstMatch(str);
+          if (match != null) {
+            // Parse the matched groups
+            final monthStr = match.group(1)!;
+            final day = int.parse(match.group(2)!);
+            final year = int.parse(match.group(3)!);
+            var hour = int.parse(match.group(4)!);
+            final minute = int.parse(match.group(5)!);
+            final ampm = match.group(6)!;
+
+            // Convert month string to number
+            const months = {
+              'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+              'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
+            };
+            final month = months[monthStr] ?? 1;
+
+            // Convert to 24-hour format
+            if (ampm == 'PM' && hour != 12) hour += 12;
+            if (ampm == 'AM' && hour == 12) hour = 0;
+
+            return DateTime(year, month, day, hour, minute);
+          }
+        }
+      } catch (e) {
+        print('[WorkOrderPermit] Error parsing date: $e');
+      }
+
+      return null;
+    }
+
     List<String>? _list(dynamic v) =>
         (v as List?)?.map((e) => e.toString()).toList();
 
     // Handle both field name conventions from different API endpoints
-    final contractorContact = json['contractor_contact'] ?? json['contractor_number'];
+    // Extract contractor info from contractors array if present
+    String contractorName = json['contractor_name'] ?? '';
+    String contractorContact = json['contractor_contact'] ?? json['contractor_number'] ?? '';
+    String? contractorCompany = json['contractor_company'];
+
+    // Check if contractors array exists and extract first contractor
+    if (json['contractors'] != null && json['contractors'] is List && (json['contractors'] as List).isNotEmpty) {
+      final firstContractor = (json['contractors'] as List)[0];
+      if (firstContractor is Map) {
+        contractorName = firstContractor['name']?.toString() ?? contractorName;
+        contractorContact = firstContractor['contact']?.toString() ?? contractorContact;
+        contractorCompany = firstContractor['company']?.toString() ?? contractorCompany;
+      }
+    }
+
     final validFrom = json['valid_from'] ?? json['work_schedule_from'];
     final validTo = json['valid_to'] ?? json['work_schedule_to'];
     final entryReqs = json['entry_requirements'] ?? json['entry_equipments'];
@@ -370,7 +439,7 @@ class WorkOrderPermit {
       statusTag: statusField ?? 'Pending',
       resolutionType: json['resolution_type'],
       title: json['title'] ?? '',
-      unitId: json['unit_id'] ?? '',
+      unitId: json['unit_id'] ?? json['location'] ?? '',
 
       assignedStaff: json['assigned_staff'],
       staffDepartment: json['staff_department'],
@@ -378,10 +447,11 @@ class WorkOrderPermit {
 
       concernSlipId: json['concern_slip_id'],
       requestedBy: json['requested_by'],
+      requestedByName: json['requested_by_name'],
 
-      contractorName: json['contractor_name'] ?? '',
-      contractorNumber: contractorContact ?? '',
-      contractorCompany: json['contractor_company'],
+      contractorName: contractorName,
+      contractorNumber: contractorContact,
+      contractorCompany: contractorCompany,
 
       workScheduleFrom: _dt(validFrom) ?? DateTime.now(),
       workScheduleTo: _dt(validTo) ?? DateTime.now(),
@@ -391,6 +461,7 @@ class WorkOrderPermit {
       approvalDate: _dt(json['approval_date']),
       denialReason: json['denial_reason'],
       adminNotes: json['admin_notes'],
+      completionNotes: json['completion_notes'],
 
       attachments: _list(json['attachments']),
       staffAttachments: _list(json['staff_attachments']),
@@ -415,6 +486,7 @@ class WorkOrderPermit {
 
     'concern_slip_id': concernSlipId,
     'requested_by': requestedBy,
+    'requested_by_name': requestedByName,
 
     'contractor_name': contractorName,
     'contractor_number': contractorNumber,
@@ -428,6 +500,7 @@ class WorkOrderPermit {
     'approval_date': approvalDate?.toIso8601String(),
     'denial_reason': denialReason,
     'admin_notes': adminNotes,
+    'completion_notes': completionNotes,
 
     'attachments': attachments,
     'staff_attachments': staffAttachments,
@@ -581,7 +654,9 @@ class WorkOrderDetails {
   final String? resolutionType;     // job_service | work_permit | rejected
 
   // Requester / Linkage
-  final String? requestedBy;        // tenant or admin name
+  final String? requestedBy;        // tenant or admin user ID (e.g., T-0001, S-0002)
+  final String? requestedByName;    // full name of requester
+  final String? requestedByEmail;   // email of requester
   final String? concernSlipId;      // link to related concern slip
   final String? unitId;             // unit or location identifier
   final String? scheduleAvailability; // for scheduling availability
@@ -613,6 +688,7 @@ class WorkOrderDetails {
   final DateTime? approvalDate;
   final String? denialReason;
   final String? adminNotes;
+  final String? completionNotes;
 
   // Documentation & Assessment
   final DateTime? startedAt;
@@ -638,6 +714,8 @@ class WorkOrderDetails {
 
     // Requester / Linkage
     this.requestedBy,
+    this.requestedByName,
+    this.requestedByEmail,
     this.concernSlipId,
     this.unitId,
     this.scheduleAvailability,
@@ -669,6 +747,7 @@ class WorkOrderDetails {
     this.approvalDate,
     this.denialReason,
     this.adminNotes,
+    this.completionNotes,
 
     // Documentation & Tracking
     this.startedAt,

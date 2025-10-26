@@ -388,6 +388,8 @@ class JobServiceDetails extends StatelessWidget {
 
   //  Tenant / Requester
   final String requestedBy;
+  final String? requestedByName; // Full name of requester
+  final String? requestedByEmail; // Email of requester
   final String unitId;
   final String? scheduleAvailability; // e.g. "Aug 12, 1:30 PM"
   final String? additionalNotes;
@@ -424,6 +426,8 @@ class JobServiceDetails extends StatelessWidget {
 
     // Tenant / Requester
     required this.requestedBy,
+    this.requestedByName,
+    this.requestedByEmail,
     required this.unitId,
     this.scheduleAvailability,
     this.additionalNotes,
@@ -1205,14 +1209,7 @@ class WorkOrderPermitDetails extends StatelessWidget {
           
           // ===== Complete Button (only show if approved/in-progress and onComplete callback exists) =====
           if (_canBeCompleted() && onComplete != null && id != null) ...[
-            SizedBox(height: 20 * s),
-            SizedBox(
-              width: double.infinity,
-              child: fx.FilledButton(
-                onPressed: () => _showCompleteDialog(context),
-                label: 'Mark as Completed',
-              ),
-            ),
+           
           ],
         ],
       ),

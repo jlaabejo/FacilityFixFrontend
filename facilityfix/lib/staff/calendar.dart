@@ -351,18 +351,7 @@ class _CalendarPageState extends State<CalendarPage> {
               ),
             ),
           ),
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => WorkOrderDetailsPage(
-                workOrderId: w.id,
-                selectedTabLabel: w.requestTypeTag.toLowerCase().contains('concern')
-                  ? 'concern slip assigned'
-                  : 'work order details',
-              ),
-            ),
-          ),
-        ),
+         ),
       );
 
   Color _getStatusColor(String status) {

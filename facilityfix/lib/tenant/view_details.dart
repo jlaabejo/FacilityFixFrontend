@@ -50,7 +50,7 @@ class _TenantConcernSlipDetailPageState
     try {
       final apiService = APIService();
       Map<String, dynamic> data;
-      
+
       // Try to determine the request type and call appropriate endpoint
       try {
         // First try as concern slip
@@ -84,6 +84,9 @@ class _TenantConcernSlipDetailPageState
         }
       }
 
+      // Enrich data with user names if we have user IDs
+      await _enrichWithUserNames(data, apiService);
+
       if (mounted) {
         setState(() {
           _concernSlipData = data;
@@ -98,6 +101,44 @@ class _TenantConcernSlipDetailPageState
           _isLoading = false;
         });
       }
+    }
+  }
+
+  /// Fetch and populate user names when we have user IDs
+  Future<void> _enrichWithUserNames(Map<String, dynamic> data, APIService apiService) async {
+    try {
+      // Fetch reported_by name if we have the ID but not the name
+      if (data.containsKey('reported_by') &&
+          data['reported_by'] != null &&
+          !data.containsKey('reported_by_name')) {
+        final userId = data['reported_by'].toString();
+        print('[DEBUG] Fetching user name for reported_by: $userId');
+        final userData = await apiService.getUserById(userId);
+        if (userData != null) {
+          final firstName = userData['first_name'] ?? '';
+          final lastName = userData['last_name'] ?? '';
+          data['reported_by_name'] = '$firstName $lastName'.trim();
+          print('[DEBUG] Set reported_by_name to: ${data['reported_by_name']}');
+        }
+      }
+
+      // Fetch assigned_to name if we have the ID but not the name
+      if (data.containsKey('assigned_to') &&
+          data['assigned_to'] != null &&
+          !data.containsKey('assigned_to_name')) {
+        final userId = data['assigned_to'].toString();
+        print('[DEBUG] Fetching user name for assigned_to: $userId');
+        final userData = await apiService.getUserById(userId);
+        if (userData != null) {
+          final firstName = userData['first_name'] ?? '';
+          final lastName = userData['last_name'] ?? '';
+          data['assigned_to_name'] = '$firstName $lastName'.trim();
+          print('[DEBUG] Set assigned_to_name to: ${data['assigned_to_name']}');
+        }
+      }
+    } catch (e) {
+      print('[DEBUG] Error enriching user names: $e');
+      // Don't fail the entire load if we can't fetch user names
     }
   }
 

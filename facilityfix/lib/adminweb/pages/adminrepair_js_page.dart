@@ -991,7 +991,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                               _fixedCell(
                                 1,
                                 _ellipsis(
-                                  task['id'],
+                                  task['concernId'],
                                   style: TextStyle(
                                     color: Colors.grey[700],
                                     fontSize: 13,

@@ -103,6 +103,9 @@ class _StaffConcernSlipDetailPageState
       final apiService = APIService(roleOverride: AppRole.staff);
       final data = await apiService.getConcernSlipById(widget.concernSlipId);
 
+      // Enrich data with user names if we have user IDs
+      await _enrichWithUserNames(data, apiService);
+
       if (mounted) {
         setState(() {
           _concernSlipData = data;
@@ -117,6 +120,44 @@ class _StaffConcernSlipDetailPageState
           _isLoading = false;
         });
       }
+    }
+  }
+
+  /// Fetch and populate user names when we have user IDs
+  Future<void> _enrichWithUserNames(Map<String, dynamic> data, APIService apiService) async {
+    try {
+      // Fetch reported_by name if we have the ID but not the name
+      if (data.containsKey('reported_by') &&
+          data['reported_by'] != null &&
+          !data.containsKey('reported_by_name')) {
+        final userId = data['reported_by'].toString();
+        print('[DEBUG] Fetching user name for reported_by: $userId');
+        final userData = await apiService.getUserById(userId);
+        if (userData != null) {
+          final firstName = userData['first_name'] ?? '';
+          final lastName = userData['last_name'] ?? '';
+          data['reported_by_name'] = '$firstName $lastName'.trim();
+          print('[DEBUG] Set reported_by_name to: ${data['reported_by_name']}');
+        }
+      }
+
+      // Fetch assigned_to name if we have the ID but not the name
+      if (data.containsKey('assigned_to') &&
+          data['assigned_to'] != null &&
+          !data.containsKey('assigned_to_name')) {
+        final userId = data['assigned_to'].toString();
+        print('[DEBUG] Fetching user name for assigned_to: $userId');
+        final userData = await apiService.getUserById(userId);
+        if (userData != null) {
+          final firstName = userData['first_name'] ?? '';
+          final lastName = userData['last_name'] ?? '';
+          data['assigned_to_name'] = '$firstName $lastName'.trim();
+          print('[DEBUG] Set assigned_to_name to: ${data['assigned_to_name']}');
+        }
+      }
+    } catch (e) {
+      print('[DEBUG] Error enriching user names: $e');
+      // Don't fail the entire load if we can't fetch user names
     }
   }
 
@@ -590,7 +631,7 @@ class _StaffConcernSlipDetailPageState
                             statusTag: _concernSlipData!['status'] ?? 'pending',
                             resolutionType:
                                 _concernSlipData!['resolution_type'],
-                            requestedBy: _concernSlipData!['reported_by'] ?? '',
+                            requestedBy: _concernSlipData!['reported_by_name'] ?? _concernSlipData!['reported_by'] ?? '',
                             unitId: _concernSlipData!['unit_id'] ?? '',
                             scheduleAvailability:
                                 _concernSlipData!['schedule_availability'],
@@ -599,7 +640,7 @@ class _StaffConcernSlipDetailPageState
                                 _concernSlipData!['description'] ?? '',
                             attachments: _parseStringList(
                                 _concernSlipData!['attachments']),
-                            assignedStaff: _concernSlipData!['assigned_to'],
+                            assignedStaff: _concernSlipData!['assigned_to_name'] ?? _concernSlipData!['assigned_to'],
                             staffDepartment:
                                 _concernSlipData!['staff_department'],
                             assessedAt:

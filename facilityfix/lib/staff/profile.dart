@@ -13,6 +13,7 @@ import 'package:facilityfix/widgets/modals.dart';
 import 'package:facilityfix/widgets/profile.dart';
 import 'package:facilityfix/widgets/forgotPassword.dart';
 import 'package:facilityfix/services/auth_storage.dart';
+import 'package:facilityfix/services/profile_service.dart';
 import 'package:intl/intl.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -42,6 +43,9 @@ class _ProfilePageState extends State<ProfilePage> {
 
   final ImagePicker _picker = ImagePicker();
   File? _profileImageFile;
+
+  // Profile service for API calls
+  final ProfileService _profileService = ProfileService();
 
   // In-memory persisted profile map
   Map<String, dynamic>? _profileMap;
@@ -268,36 +272,85 @@ class _ProfilePageState extends State<ProfilePage> {
 
     if (updated == null || !mounted) return;
 
-    final parts = updated.fullName.trim().split(RegExp(r'\s+'));
-    final firstName = parts.isNotEmpty ? parts.first : '';
-    final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
-
-    setState(() {
-      _fullName = updated.fullName;
-      emailController.text = updated.userEmail;
-      phoneNumberController.text = updated.contactNumber;
-      staffDepartmentController.text =
-          updated.staffDepartment ?? staffDepartmentController.text;
-      birthDateController.text = updated.birthDate.isNotEmpty
-          ? _formatBirthDateForDisplay(updated.birthDate)
-          : '';
-    });
-
-    _profileMap = {
-      ...?_profileMap,
-      'first_name': firstName,
-      'last_name': lastName,
-      'email': updated.userEmail,
-      'phone_number': updated.contactNumber,
-      'staff_department': updated.staffDepartment ?? _profileMap?['staff_department'],
-      'birthdate': _normalizeBirthDateForSave(updated.birthDate),
-    };
-
-    await AuthStorage.saveProfile(_profileMap ?? {});
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Profile updated')),
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
     );
+
+    try {
+      final parts = updated.fullName.trim().split(RegExp(r'\s+'));
+      final firstName = parts.isNotEmpty ? parts.first : '';
+      final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+
+      // Update profile using ProfileService to call backend API
+      final success = await _profileService.updateCurrentUserProfile(
+        firstName: firstName.isNotEmpty ? firstName : null,
+        lastName: lastName.isNotEmpty ? lastName : null,
+        phoneNumber: updated.contactNumber.isNotEmpty ? updated.contactNumber : null,
+        birthDate: updated.birthDate.isNotEmpty ? _normalizeBirthDateForSave(updated.birthDate) : null,
+        staffDepartment: updated.staffDepartment,
+      );
+
+      // Hide loading indicator
+      if (mounted) Navigator.of(context).pop();
+
+      if (success) {
+        // Update local state and storage
+        setState(() {
+          _fullName = updated.fullName;
+          emailController.text = updated.userEmail;
+          phoneNumberController.text = updated.contactNumber;
+          staffDepartmentController.text =
+              updated.staffDepartment ?? staffDepartmentController.text;
+          birthDateController.text = updated.birthDate.isNotEmpty
+              ? _formatBirthDateForDisplay(updated.birthDate)
+              : '';
+        });
+
+        _profileMap = {
+          ...?_profileMap,
+          'first_name': firstName,
+          'last_name': lastName,
+          'email': updated.userEmail,
+          'phone_number': updated.contactNumber,
+          'staff_department': updated.staffDepartment ?? _profileMap?['staff_department'],
+          'birthdate': _normalizeBirthDateForSave(updated.birthDate),
+          'birth_date': _normalizeBirthDateForSave(updated.birthDate),
+        };
+
+        await AuthStorage.saveProfile(_profileMap ?? {});
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile updated successfully')),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to update profile. Please try again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Hide loading indicator
+      if (mounted) Navigator.of(context).pop();
+
+      print('[StaffProfile] Error updating profile: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating profile: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   String _normalizeBirthDateForSave(String prettyOrIso) {

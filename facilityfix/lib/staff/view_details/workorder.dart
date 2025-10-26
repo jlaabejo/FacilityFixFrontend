@@ -93,23 +93,28 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       // Determine the type of work order based on ID prefix
       if (workOrderId.toUpperCase().startsWith('CS-')) {
         data = await _apiService.getConcernSlipById(workOrderId);
+        await _enrichWithUserNames(data);
         final concernSlip = ConcernSlip.fromJson(data);
         _fetchedWorkOrder = _concernSlipToWorkOrderDetails(concernSlip);
       } else if (workOrderId.toUpperCase().startsWith('JS-')) {
         data = await _apiService.getJobServiceById(workOrderId);
+        await _enrichWithUserNames(data);
         final jobService = JobService.fromJson(data);
         _fetchedWorkOrder = _jobServiceToWorkOrderDetails(jobService);
       } else if (workOrderId.toUpperCase().startsWith('WO-')) {
         data = await _apiService.getWorkOrderById(workOrderId);
+        await _enrichWithUserNames(data);
         final workOrderPermit = WorkOrderPermit.fromJson(data);
         _fetchedWorkOrder = _workOrderPermitToWorkOrderDetails(workOrderPermit);
       } else if (workOrderId.toUpperCase().startsWith('MT-')) {
         data = await _apiService.getMaintenanceTaskById(workOrderId);
+        await _enrichWithUserNames(data);
         final maintenance = Maintenance.fromJson(data);
         _fetchedWorkOrder = _maintenanceToWorkOrderDetails(maintenance);
       } else {
         // Default to work order if prefix is unknown
         data = await _apiService.getWorkOrderById(workOrderId);
+        await _enrichWithUserNames(data);
         final workOrderPermit = WorkOrderPermit.fromJson(data);
         _fetchedWorkOrder = _workOrderPermitToWorkOrderDetails(workOrderPermit);
       }
@@ -129,6 +134,59 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         _isLoading = false;
         _errorMessage = 'Failed to load work order details: $e';
       });
+    }
+  }
+
+  /// Fetch and populate user names when we have user IDs
+  Future<void> _enrichWithUserNames(Map<String, dynamic> data) async {
+    try {
+      // Fetch requested_by name if we have the ID but not the name
+      if (data.containsKey('requested_by') &&
+          data['requested_by'] != null &&
+          !data.containsKey('requested_by_name')) {
+        final userId = data['requested_by'].toString();
+        print('[DEBUG] Fetching user name for requested_by: $userId');
+        final userData = await _apiService.getUserById(userId);
+        if (userData != null) {
+          final firstName = userData['first_name'] ?? '';
+          final lastName = userData['last_name'] ?? '';
+          data['requested_by_name'] = '$firstName $lastName'.trim();
+          print('[DEBUG] Set requested_by_name to: ${data['requested_by_name']}');
+        }
+      }
+
+      // Also handle reported_by (for concern slips)
+      if (data.containsKey('reported_by') &&
+          data['reported_by'] != null &&
+          !data.containsKey('reported_by_name')) {
+        final userId = data['reported_by'].toString();
+        print('[DEBUG] Fetching user name for reported_by: $userId');
+        final userData = await _apiService.getUserById(userId);
+        if (userData != null) {
+          final firstName = userData['first_name'] ?? '';
+          final lastName = userData['last_name'] ?? '';
+          data['reported_by_name'] = '$firstName $lastName'.trim();
+          print('[DEBUG] Set reported_by_name to: ${data['reported_by_name']}');
+        }
+      }
+
+      // Fetch assigned_to name if we have the ID but not the name
+      if (data.containsKey('assigned_to') &&
+          data['assigned_to'] != null &&
+          !data.containsKey('assigned_to_name')) {
+        final userId = data['assigned_to'].toString();
+        print('[DEBUG] Fetching user name for assigned_to: $userId');
+        final userData = await _apiService.getUserById(userId);
+        if (userData != null) {
+          final firstName = userData['first_name'] ?? '';
+          final lastName = userData['last_name'] ?? '';
+          data['assigned_to_name'] = '$firstName $lastName'.trim();
+          print('[DEBUG] Set assigned_to_name to: ${data['assigned_to_name']}');
+        }
+      }
+    } catch (e) {
+      print('[DEBUG] Error enriching user names: $e');
+      // Don't fail the entire load if we can't fetch user names
     }
   }
 
@@ -169,6 +227,8 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       statusTag: js.statusTag,
       resolutionType: js.resolutionType,
       requestedBy: js.requestedBy,
+      requestedByName: js.requestedByName,
+      requestedByEmail: js.requestedByEmail,
       concernSlipId: js.concernSlipId,
       unitId: js.unitId,
       scheduleAvailability: js.scheduleAvailability,
@@ -198,6 +258,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       statusTag: wop.statusTag,
       resolutionType: wop.resolutionType,
       requestedBy: wop.requestedBy,
+      requestedByName: wop.requestedByName,
       concernSlipId: wop.concernSlipId,
       unitId: wop.unitId,
       title: wop.title,
@@ -214,6 +275,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       approvalDate: wop.approvalDate,
       denialReason: wop.denialReason,
       adminNotes: wop.adminNotes,
+      completionNotes: wop.completionNotes,
       attachments: wop.attachments,
       staffAttachments: wop.staffAttachments,
     );
@@ -455,6 +517,8 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
 
       // Tenant / Requester
       requestedBy: w.requestedBy ?? '—',
+      requestedByName: w.requestedByName,
+      requestedByEmail: w.requestedByEmail,
       unitId: w.unitId ?? '—',
       scheduleAvailability: w.scheduleAvailability,
       additionalNotes: w.additionalNotes,
@@ -551,6 +615,15 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       approvalDate: w.approvalDate,
       denialReason: w.denialReason,
       adminNotes: w.adminNotes,
+      completionNotes: w.completionNotes,
+
+      // Callback for completion
+      onComplete: (permitId, completionNotes) async {
+        debugPrint('[WorkOrderPermit] onComplete called with permitId: $permitId, notes: $completionNotes');
+        // The logic is already handled in _showMarkAsCompleteDialog
+        // This callback is triggered from within the WorkOrderPermitDetails widget
+        await _showMarkAsCompleteDialog();
+      },
     );
   }
 

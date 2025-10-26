@@ -90,7 +90,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
           'priority': _mapStatusToPriority(permit['status']),
           'status': _mapStatusToDisplay(permit['status']),
           'rawStatus': permit['status'] ?? 'pending', // Keep raw status for actions
-
+          'concernId': permit['concern_slip_id'] ?? 'N/A',
           // Additional task data
           'dateRequested': _formatDate(permit['created_at']),
           'requestedBy': permit['requested_by'] ?? 'N/A',
@@ -1052,7 +1052,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                               _fixedCell(
                                 1,
                                 _ellipsis(
-                                  task['id'],
+                                  task['concernId'],
                                   style: TextStyle(
                                     color: Colors.grey[700],
                                     fontSize: 13,

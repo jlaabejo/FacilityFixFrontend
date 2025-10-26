@@ -416,13 +416,13 @@ class APIService {
     try {
       // Try to get from local storage first
       final local = await AuthStorage.getProfile();
-      
+
       // If we have local data and it's recent (less than 1 hour old), use it
       if (local != null) {
         final updatedAt = local['updated_at'] as String?;
         if (updatedAt != null) {
           final lastUpdate = DateTime.tryParse(updatedAt);
-          if (lastUpdate != null && 
+          if (lastUpdate != null &&
               DateTime.now().difference(lastUpdate).inHours < 1) {
             print('[API] Using cached profile data');
             return local;
@@ -433,11 +433,41 @@ class APIService {
       // Otherwise fetch from server
       print('[API] Fetching fresh profile data from server');
       return await fetchCurrentUserProfile();
-      
+
     } catch (e) {
       print('[API] Error in getUserProfile: $e');
       // Fallback to local storage if server fetch fails
       return await AuthStorage.getProfile();
+    }
+  }
+
+  /// Fetch user details by user ID (e.g., T-0001, S-0001)
+  Future<Map<String, dynamic>?> getUserById(String userId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      print('[API] Fetching user details for: $userId');
+
+      final response = await get(
+        '/users/$userId',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode == 200) {
+        final userData = jsonDecode(response.body) as Map<String, dynamic>;
+        print('[API] User data fetched successfully for $userId');
+        return userData;
+      } else if (response.statusCode == 404) {
+        print('[API] User not found: $userId');
+        return null;
+      } else {
+        print('[API] Failed to fetch user: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('[API] Error fetching user by ID: $e');
+      return null;
     }
   }
 
