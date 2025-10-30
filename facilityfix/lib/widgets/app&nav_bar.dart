@@ -6,6 +6,11 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final Widget? leading;
   final bool showMore;
   final bool showHistory;
+  final bool showEdit;
+  final bool showDelete;
+  final VoidCallback? onHistoryTap;
+  final VoidCallback? onEditTap;
+  final VoidCallback? onDeleteTap;
 
   const CustomAppBar({
     super.key,
@@ -14,6 +19,11 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.leading,
     this.showMore = false,
     this.showHistory = false,
+    this.showEdit = false,
+    this.showDelete = false,
+    this.onHistoryTap,
+    this.onEditTap,
+    this.onDeleteTap,
   });
 
   void _showBottomSheet(BuildContext context) {
@@ -47,81 +57,44 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                   title: const Text('View History'),
                   onTap: () {
                     Navigator.pop(context);
+                    onHistoryTap?.call();
                   },
                 ),
                 const SizedBox(height: 8),
               ],
 
-              ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Colors.green.withOpacity(0.1),
-                  child: const Icon(Icons.edit, color: Colors.green),
+              if (showEdit)
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.green.withOpacity(0.1),
+                    child: const Icon(Icons.edit, color: Colors.green),
+                  ),
+                  title: const Text('Edit'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    onEditTap?.call();
+                  },
                 ),
-                title: const Text('Edit'),
-                onTap: () {
-                  Navigator.pop(context);
-                },
-              ),
-              const SizedBox(height: 8),
+              if (showEdit) const SizedBox(height: 8),
 
-              ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Colors.red.withOpacity(0.1),
-                  child: const Icon(Icons.delete, color: Colors.red),
+              if (showDelete)
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.red.withOpacity(0.1),
+                    child: const Icon(Icons.delete, color: Colors.red),
+                  ),
+                  title: const Text(
+                    'Delete',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    onDeleteTap?.call();
+                  },
                 ),
-                title: const Text(
-                  'Delete',
-                  style: TextStyle(color: Colors.red),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showDeleteDialog(context);
-                },
-              ),
               const SizedBox(height: 16),
             ],
           ),
-        );
-      },
-    );
-  }
-
-  void _showDeleteDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: const Text(
-            'Confirm Delete',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: const Text('Are you sure you want to delete this item?'),
-          actionsAlignment: MainAxisAlignment.spaceBetween,
-          actions: [
-            TextButton(
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF005CE8),
-              ),
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text('Delete'),
-            ),
-          ],
         );
       },
     );

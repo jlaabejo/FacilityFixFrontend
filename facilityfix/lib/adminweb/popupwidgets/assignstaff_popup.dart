@@ -2,6 +2,7 @@
 import 'package:flutter/services.dart';
 import '../../services/api_services.dart';
 import '../services/api_service.dart' as admin_api;
+import '../services/round_robin_assignment_service.dart';
 
 class AssignScheduleWorkDialog extends StatefulWidget {
   final Map<String, dynamic> task;
@@ -43,6 +44,7 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
   final _formKey = GlobalKey<FormState>();
   final APIService _apiService = APIService();
   final admin_api.ApiService _adminApiService = admin_api.ApiService();
+  final RoundRobinAssignmentService _roundRobinService = RoundRobinAssignmentService();
   bool _formValid = false;
   bool _isLoading = false;
   bool _isAssigning = false;
@@ -513,15 +515,58 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
         children: [
           OutlinedButton(
             onPressed: _isAssigning ? null : () => Navigator.of(context).pop(),
-            style: OutlinedButton.styleFrom(foregroundColor: Colors.blue[600], side: BorderSide(color: Colors.blue[600]!), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.blue[600],
+              side: BorderSide(color: Colors.blue[600]!),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             child: const Text('Back', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
           ),
-          ElevatedButton(
-            onPressed: (_formValid && !_isAssigning) ? _handleSaveAndAssign : null,
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green[600], foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), elevation: 0),
-            child: _isAssigning
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
-                : const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.save, size: 18), SizedBox(width: 8), Text('Save & Assign Staff', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500))]),
+          Row(
+            children: [
+              // Auto-Assign Button
+              OutlinedButton.icon(
+                onPressed: _isAssigning ? null : _handleAutoAssign,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.orange[600],
+                  side: BorderSide(color: Colors.orange[600]!),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.autorenew, size: 18),
+                label: const Text('Auto-Assign', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+              ),
+              const SizedBox(width: 12),
+              // Manual Assign Button
+              ElevatedButton(
+                onPressed: (_formValid && !_isAssigning) ? _handleSaveAndAssign : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green[600],
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
+                ),
+                child: _isAssigning
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.save, size: 18),
+                          SizedBox(width: 8),
+                          Text('Save & Assign Staff', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                        ],
+                      ),
+              ),
+            ],
           ),
         ],
       ),
@@ -531,6 +576,102 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(context: context, initialDate: selectedDate ?? DateTime.now(), firstDate: DateTime.now(), lastDate: DateTime(2030, 12));
     if (picked != null && picked != selectedDate) setState(() => selectedDate = picked);
+  }
+
+  /// Handle auto-assignment using round-robin algorithm
+  Future<void> _handleAutoAssign() async {
+    setState(() => _isAssigning = true);
+
+    try {
+      // Determine task type and department
+      String? taskCategory = widget.task['category']?.toString().toLowerCase();
+      String? department;
+
+      switch (taskCategory) {
+        case 'electrical':
+          department = 'electrical';
+          break;
+        case 'plumbing':
+          department = 'plumbing';
+          break;
+        case 'hvac':
+          department = 'hvac';
+          break;
+        case 'carpentry':
+          department = 'carpentry';
+          break;
+        case 'maintenance':
+          department = 'maintenance';
+          break;
+        case 'security':
+          department = 'security';
+          break;
+        case 'fire_safety':
+          department = 'fire_safety';
+          break;
+        default:
+          department = 'maintenance'; // Default fallback
+      }
+
+      // Determine task type
+      String taskType;
+      String? taskId;
+      
+      if (widget.isMaintenanceTask) {
+        taskType = 'maintenance';
+        taskId = widget.task['id'] ?? widget.task['task_id'];
+      } else {
+        taskType = 'concern_slip';
+        taskId = widget.task['rawData']?['id'] ?? 
+                 widget.task['rawData']?['_doc_id'] ?? 
+                 widget.task['id'];
+      }
+
+      if (taskId == null || taskId.isEmpty) {
+        throw Exception('Task ID not found');
+      }
+
+      print('[AutoAssign] Starting auto-assignment for $taskType: $taskId');
+      print('[AutoAssign] Department: $department');
+
+      // Use round-robin service to auto-assign
+      final assignedStaff = await _roundRobinService.autoAssignTask(
+        taskId: taskId,
+        taskType: taskType,
+        department: department,
+        notes: notesController.text.trim().isNotEmpty ? notesController.text.trim() : null,
+      );
+
+      if (assignedStaff != null) {
+        final staffName = '${assignedStaff['first_name'] ?? ''} ${assignedStaff['last_name'] ?? ''}'.trim();
+        
+        if (mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Auto-assigned to $staffName successfully!'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          widget.onAssignmentComplete?.call();
+        }
+      } else {
+        throw Exception('No available staff found in $department department');
+      }
+    } catch (e) {
+      print('[AutoAssign] Auto-assignment failed: $e');
+      if (mounted) {
+        setState(() => _isAssigning = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Auto-assignment failed: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _handleSaveAndAssign() async {

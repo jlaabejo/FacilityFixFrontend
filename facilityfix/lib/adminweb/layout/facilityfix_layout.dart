@@ -229,7 +229,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                     children: [
                       Image.asset(
                         'images/logo.png',
-                        height: 40,
+                        height: 50,
                       ),
                       const SizedBox(width: 8),
                       const Text(

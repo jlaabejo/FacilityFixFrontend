@@ -1,7 +1,6 @@
 // lib/widgets/signup.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:facilityfix/landingpage/choose.dart';
 import 'package:facilityfix/tenant/home.dart' as Tenant;
 import 'package:facilityfix/staff/home.dart' as Staff;
 import 'package:facilityfix/admin/home.dart' as Admin;
@@ -290,10 +289,7 @@ class _SignUpState extends State<SignUp> {
       if (userId.isEmpty) {
         _snack('Registered, but user_id missing. Please log in manually.');
         if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const ChooseRole(isLogin: true)),
-        );
+        Navigator.pop(context); // Close signup modal
         return;
       }
 
@@ -407,9 +403,9 @@ class _SignUpState extends State<SignUp> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            'Sign Up as ${widget.role[0].toUpperCase()}${widget.role.substring(1)}',
-                            style: const TextStyle(
+                          const Text(
+                            'Sign Up',
+                            style: TextStyle(
                               color: Color(0xFF005CE7),
                               fontSize: 26,
                               fontWeight: FontWeight.w600,
@@ -593,12 +589,8 @@ class _SignUpState extends State<SignUp> {
                               const Text('Already have an account? '),
                               GestureDetector(
                                 onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const ChooseRole(isLogin: true),
-                                    ),
-                                  );
+                                  Navigator.pop(context); // Close signup modal
+                                  // Role selection modal will show again from the main screen
                                 },
                                 child: const Text(
                                   'Log in',

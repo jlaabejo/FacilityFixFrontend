@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/services/chat_helper.dart';
-import 'package:facilityfix/staff/view_details/workorder.dart';
 import 'package:facilityfix/tenant/announcement.dart';
 import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/notification.dart';
 import 'package:facilityfix/tenant/profile.dart';
 import 'package:facilityfix/tenant/request_forms.dart';
-import 'package:facilityfix/tenant/view_details.dart';
+import 'package:facilityfix/tenant/view_details/concern_slip_details.dart';
+import 'package:facilityfix/tenant/view_details/workorder_details.dart';
 import 'package:facilityfix/widgets/view_details.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart';
@@ -48,11 +48,33 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       final apiService = APIService();
       final allRequests = await apiService.getAllTenantRequests();
 
+      // Enrich requests with staff names
+      for (var request in allRequests) {
+        await _enrichWithStaffName(request, apiService);
+      }
+
       if (mounted) {
         setState(() {
           _allRequests =
               allRequests.map((request) {
                 // Convert API response to WorkOrder-like structure
+                // For work orders, try to get department from various fields
+                final requestType = (request['request_type'] ?? '').toLowerCase();
+                String? department;
+                
+                if (requestType.contains('work order') || requestType.contains('work permit')) {
+                  // For work orders, try department_tag, then request_type_detail, then category
+                  department = request['department_tag'] ?? 
+                               request['request_type_detail'] ?? 
+                               request['category'] ?? 
+                               'general';
+                } else {
+                  // For other requests, use category or department_tag
+                  department = request['category'] ?? 
+                               request['department_tag'] ?? 
+                               'general';
+                }
+                
                 return {
                   'id': request['id'] ?? '', // Use raw ID for navigation
                   'formatted_id': request['formatted_id'] ?? request['id'] ?? '', // Keep formatted ID for display
@@ -60,17 +82,20 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                   'created_at':
                       request['created_at'] ?? DateTime.now().toIso8601String(),
                   'status': request['status'] ?? 'pending',
-                  'category':
-                      request['category'] ??
-                      request['department_tag'] ??
-                      'general',
+                  'category': department,
                   'priority': request['priority'] ?? 'medium',
                   'request_type': request['request_type'] ?? 'Concern Slip',
-                  'unit_id': request['unit_id'] ?? '',
+                  'unit_id': request['unit_id'] ?? request['location'] ?? '',
                   'assigned_staff':
-                      request['assigned_to'] ?? request['assigned_staff'],
+                      request['assigned_to_name'] ?? 
+                      request['assigned_staff'] ?? 
+                      request['assigned_to'],
                   'staff_department':
-                      request['staff_department'] ?? request['category'],
+                      request['staff_department'] ?? department,
+                  'staff_photo_url':
+                      request['staff_photo_url'] ?? 
+                      request['assigned_photo_url'] ?? 
+                      request['photo_url'],
                   'description': request['description'] ?? '',
                   'location': request['location'] ?? '',
                 };
@@ -86,6 +111,39 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  /// Fetch and populate staff name when we have staff user ID
+  Future<void> _enrichWithStaffName(Map<String, dynamic> data, APIService apiService) async {
+    try {
+      // Fetch assigned_to name if we have the ID but not the name
+      if (data.containsKey('assigned_to') &&
+          data['assigned_to'] != null &&
+          data['assigned_to'].toString().isNotEmpty &&
+          !data.containsKey('assigned_to_name')) {
+        final userId = data['assigned_to'].toString();
+        print('[DEBUG] Fetching staff name for assigned_to: $userId');
+        
+        try {
+          final userData = await apiService.getUserById(userId);
+          if (userData != null) {
+            final firstName = userData['first_name'] ?? '';
+            final lastName = userData['last_name'] ?? '';
+            final fullName = '$firstName $lastName'.trim();
+            if (fullName.isNotEmpty) {
+              data['assigned_to_name'] = fullName;
+              print('[DEBUG] Set assigned_to_name to: $fullName');
+            }
+          }
+        } catch (e) {
+          print('[DEBUG] Could not fetch user data for $userId: $e');
+          // Don't fail, just continue without the name
+        }
+      }
+    } catch (e) {
+      print('[DEBUG] Error enriching staff name: $e');
+      // Don't fail the entire load if we can't fetch staff names
     }
   }
 
@@ -275,7 +333,20 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
 
   bool _departmentMatches(Map<String, dynamic> w) {
     if (_selectedDepartment == 'All') return true;
-    return _norm(w['category']) == _norm(_selectedDepartment);
+    
+    final category = _norm(w['category']);
+    final selectedDept = _norm(_selectedDepartment);
+    
+    // If "Others" is selected, show all categories that are NOT the main 4 departments
+    if (selectedDept == 'others') {
+      return category != 'carpentry' && 
+             category != 'plumbing' && 
+             category != 'electrical' && 
+             category != 'masonry';
+    }
+    
+    // For specific departments, match exactly
+    return category == selectedDept;
   }
 
   bool _searchMatches(Map<String, dynamic> w) {
@@ -316,43 +387,26 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   }
 
   List<String> get _statusOptions {
-    final base = _allRequests
-        .where(_tabMatchesByRequestType)
-        .where(_departmentMatches)
-        .where(_searchMatches);
-    final set = <String>{};
-    for (final w in base) {
-      final s = (w['status'] ?? '').toString().trim();
-      if (s.isNotEmpty) set.add(s);
-    }
-    final list = set.toList()..sort();
-    return ['All', ...list];
+    // Fixed status list for all tabs
+    return [
+      'All',
+      'Assessed',
+      'Assigned',
+      'Completed',
+      'Pending',
+    ];
   }
 
   List<String> get _deptOptions {
-    // predefined departments
-    final predefined = {
-      'Maintenance',
+    // Fixed department list
+    return [
+      'All',
       'Carpentry',
       'Plumbing',
       'Electrical',
       'Masonry',
-    };
-
-    final base = _allRequests
-        .where(_statusMatches)
-        .where(_departmentMatches)
-        .where(_searchMatches);
-
-    final set = <String>{};
-    for (final w in base) {
-      final d = (w['category'] ?? '').toString().trim();
-      if (d.isNotEmpty) set.add(d);
-    }
-
-    // merge both sets
-    final list = {...predefined, ...set}.toList()..sort();
-    return ['All', ...list];
+      'Others',
+    ];
   }
 
   List<TabItem> get _tabs {
@@ -391,6 +445,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       requestTypeTag: r['request_type'] ?? 'Concern Slip',
       assignedStaff: r['assigned_staff'],
       staffDepartment: r['staff_department'],
+      staffPhotoUrl: r['staff_photo_url'],
       onTap: () {
         if (concernSlipId.isEmpty) return;
         if (hasMaterialsUsed) {
@@ -415,7 +470,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => WorkOrderDetailsPage(workOrderId: r['id'], selectedTabLabel: '',),
+              builder: (_) => WorkOrderDetailsPage(workOrderId: r['id'], selectedTabLabel: ''),
             ),
           );
         }

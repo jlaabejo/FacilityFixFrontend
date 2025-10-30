@@ -43,8 +43,6 @@ class _LogInState extends State<LogIn> {
   bool _obscurePassword = true;
   bool _loading = false;
 
-  String get _normalizedRole => widget.role.toLowerCase();
-
   @override
   void initState() {
     super.initState();
@@ -216,9 +214,9 @@ class _LogInState extends State<LogIn> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          'Log In as ${widget.role[0].toUpperCase()}${widget.role.substring(1)}',
-                          style: const TextStyle(
+                        const Text(
+                          'Log In',
+                          style: TextStyle(
                             color: Color(0xFF005CE7),
                             fontSize: 26,
                             fontWeight: FontWeight.w600,

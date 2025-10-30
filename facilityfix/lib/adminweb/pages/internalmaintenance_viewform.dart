@@ -194,10 +194,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
 
   Future<void> _loadInventoryItems() async {
     try {
-      // TODO: Replace with actual building ID from user session
-      const buildingId = 'default_building_id';
-      
-      final response = await _apiService.getInventoryItems(buildingId: buildingId);
+      final response = await _apiService.getInventoryItems();
       
       if (response['success'] == true && response['data'] != null) {
         setState(() {

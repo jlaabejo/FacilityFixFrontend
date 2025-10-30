@@ -168,7 +168,7 @@ class ConcernSlipDetails extends StatelessWidget {
           ),
           SizedBox(height: 4 * s),
           Text(
-            id,
+            UiIdFormatter.formatConcernSlipId(id),
             style: TextStyle(
               fontFamily: 'Inter',
               fontSize: 12 * s,
@@ -543,7 +543,7 @@ class JobServiceDetails extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  id.length > 8 ? id.substring(0, 8) : id,
+                  UiIdFormatter.formatJobServiceId(id),
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                   fontFamily: 'Inter',
@@ -1002,7 +1002,7 @@ class WorkOrderPermitDetails extends StatelessWidget {
               if ((id ?? '').isNotEmpty)
                 Expanded(
                   child: Text(
-                    id!,
+                    UiIdFormatter.formatWorkOrderPermitId(id!),
                     style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: 12 * s,
@@ -1991,27 +1991,6 @@ class AnnouncementDetails extends StatelessWidget {
                     color: const Color(0xFFF0F9FF),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: const Color(0xFFBAE6FD), width: 1),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.check_circle,
-                        size: 20,
-                        color: Color(0xFF0284C7),
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'You have read this announcement',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF0284C7),
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ),

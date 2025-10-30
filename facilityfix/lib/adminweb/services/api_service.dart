@@ -447,6 +447,40 @@ class ApiService {
     }
   }
 
+  /// Assign staff to a work order or maintenance task
+  Future<Map<String, dynamic>> assignStaffToWorkOrder(
+    String workOrderId,
+    String staffUserId, {
+    String? note,
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final body = <String, dynamic>{
+        'assigned_to': staffUserId,
+      };
+      if (note != null && note.isNotEmpty) {
+        body['note'] = note;
+      }
+
+      final response = await http.patch(
+        Uri.parse('$baseUrl/work-orders/$workOrderId/assign'),
+        headers: headers,
+        body: json.encode(body),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to assign staff to work order: ${response.statusCode} ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error assigning staff to work order: $e');
+      rethrow;
+    }
+  }
+
   /// Set resolution type for an assessed concern slip (Admin only)
   Future<Map<String, dynamic>> setResolutionType(
     String concernSlipId, {

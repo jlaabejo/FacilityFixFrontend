@@ -147,7 +147,7 @@ class _LoginPageState extends State<LoginPage> {
                     Row(
                       children: [
                         Image.asset(
-                          'assets/images/logo (2).png',
+                          'assets/images/logo.png',
                           height: 40,
                         ),
                         const SizedBox(width: 8),
@@ -164,7 +164,7 @@ class _LoginPageState extends State<LoginPage> {
                     const Spacer(),
                     Center(
                       child: Image.asset(
-                        'assets/images/logo (2).png',
+                        'assets/images/leftpartgraphics.png',
                         height: 600,
                         fit: BoxFit.contain,
                       ),

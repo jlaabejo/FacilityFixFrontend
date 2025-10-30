@@ -608,12 +608,6 @@ class _ProfilePageState extends State<ProfilePage> {
               );
             },
           ),
-          // Add refresh button
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadUserProfile,
-            tooltip: 'Refresh Profile',
-          ),
         ],
       ),
       body: SafeArea(

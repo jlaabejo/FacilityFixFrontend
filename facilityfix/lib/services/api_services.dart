@@ -979,6 +979,7 @@ class APIService {
     String? category,
     String? priority,
     String? unitId,
+    String? scheduleAvailability,
     List<String>? attachments,
   }) async {
     try {
@@ -992,6 +993,7 @@ class APIService {
       if (category != null) body['category'] = category;
       if (priority != null) body['priority'] = _mapPriorityToBackend(priority);
       if (unitId != null) body['unit_id'] = unitId;
+      if (scheduleAvailability != null) body['schedule_availability'] = scheduleAvailability;
       if (attachments != null) body['attachments'] = attachments;
 
       final response = await http.patch(
@@ -1010,6 +1012,88 @@ class APIService {
       }
     } catch (e) {
       print('Error updating concern slip: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> updateJobService({
+    required String jobServiceId,
+    String? notes,
+    String? location,
+    String? unitId,
+    String? scheduleAvailability,
+    List<String>? attachments,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = <String, dynamic>{};
+      if (notes != null) body['notes'] = notes;
+      if (location != null) body['location'] = location;
+      if (unitId != null) body['unit_id'] = unitId;
+      if (scheduleAvailability != null) body['schedule_availability'] = scheduleAvailability;
+      if (attachments != null) body['attachments'] = attachments;
+
+      final response = await http.patch(
+        _u('/job-services/$jobServiceId'),
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to update job service: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error updating job service: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> updateWorkOrder({
+    required String workOrderId,
+    String? contractorName,
+    String? contractorNumber,
+    String? contractorCompany,
+    String? workScheduleFrom,
+    String? workScheduleTo,
+    List<String>? entryEquipments,
+    List<String>? attachments,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = <String, dynamic>{};
+      if (contractorName != null) body['contractor_name'] = contractorName;
+      if (contractorNumber != null) body['contractor_number'] = contractorNumber;
+      if (contractorCompany != null) body['contractor_company'] = contractorCompany;
+      if (workScheduleFrom != null) body['work_schedule_from'] = workScheduleFrom;
+      if (workScheduleTo != null) body['work_schedule_to'] = workScheduleTo;
+      if (entryEquipments != null) body['entry_equipments'] = entryEquipments;
+      if (attachments != null) body['attachments'] = attachments;
+
+      final response = await http.patch(
+        _u('/work-order-permits/$workOrderId'),
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to update work order: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error updating work order: $e');
       rethrow;
     }
   }
@@ -1034,6 +1118,54 @@ class APIService {
       }
     } catch (e) {
       print('Error deleting concern slip: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> deleteJobService(String jobServiceId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await delete(
+        '/job-services/$jobServiceId',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to delete job service: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error deleting job service: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> deleteWorkOrder(String workOrderId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await delete(
+        '/work-order-permits/$workOrderId',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to delete work order: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error deleting work order: $e');
       rethrow;
     }
   }

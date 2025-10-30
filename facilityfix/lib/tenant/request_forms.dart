@@ -20,7 +20,23 @@ class RequestForm extends StatefulWidget {
   /// Optional concern slip ID for linking Job Service to existing concern slip
   final String? concernSlipId;
 
-  const RequestForm({super.key, required this.requestType, this.concernSlipId});
+  /// Optional: Initial data for editing existing requests
+  final Map<String, dynamic>? initialData;
+
+  /// Optional: Request ID when editing
+  final String? requestId;
+
+  /// Whether this is an edit operation
+  final bool isEditing;
+
+  const RequestForm({
+    super.key, 
+    required this.requestType, 
+    this.concernSlipId,
+    this.initialData,
+    this.requestId,
+    this.isEditing = false,
+  });
 
   @override
   State<RequestForm> createState() => _RequestFormState();
@@ -182,6 +198,10 @@ class _RequestFormState extends State<RequestForm> {
   final TextEditingController permitIdController = TextEditingController();
   final TextEditingController validFromController = TextEditingController();
   final TextEditingController validToController = TextEditingController();
+  final TextEditingController contractorNameController = TextEditingController();
+  final TextEditingController contractorNumberController = TextEditingController();
+  final TextEditingController contractorCompanyController = TextEditingController();
+  final TextEditingController entryEquipmentsController = TextEditingController();
 
   // Local state
   String _requestTypeValue = ''; // dropdown selection for work order type
@@ -252,6 +272,71 @@ class _RequestFormState extends State<RequestForm> {
     setState(() => _isLoadingUserData = true);
 
     try {
+      // If editing, use initial data
+      if (widget.isEditing && widget.initialData != null) {
+        final data = widget.initialData!;
+        
+        // Pre-fill all fields with existing data
+        reqIdController.text = data['formatted_id'] ?? widget.requestId ?? data['id'] ?? '';
+        
+        if (data['created_at'] != null) {
+          try {
+            final createdAt = DateTime.parse(data['created_at']);
+            dateRequestedController.text = DateFormat('MMM d, yyyy h:mm a').format(createdAt);
+          } catch (e) {
+            dateRequestedController.text = data['created_at'];
+          }
+        }
+        
+        unitController.text = data['unit_id'] ?? '';
+        nameController.text = data['requested_by'] ?? data['reported_by_name'] ?? '';
+        titleController.text = data['title'] ?? '';
+        descriptionController.text = data['description'] ?? '';
+        availabilityController.text = data['schedule_availability'] ?? '';
+        
+        // Work Order specific fields
+        if (widget.requestType == 'Work Order') {
+          permitIdController.text = data['formatted_id'] ?? data['id'] ?? '';
+          contractorNameController.text = data['contractor_name'] ?? '';
+          contractorNumberController.text = data['contractor_number'] ?? '';
+          contractorCompanyController.text = data['contractor_company'] ?? '';
+          
+          if (data['work_schedule_from'] != null) {
+            try {
+              final from = DateTime.parse(data['work_schedule_from']);
+              validFromController.text = DateFormat('MMM d, yyyy h:mm a').format(from);
+            } catch (e) {
+              validFromController.text = data['work_schedule_from'];
+            }
+          }
+          
+          if (data['work_schedule_to'] != null) {
+            try {
+              final to = DateTime.parse(data['work_schedule_to']);
+              validToController.text = DateFormat('MMM d, yyyy h:mm a').format(to);
+            } catch (e) {
+              validToController.text = data['work_schedule_to'];
+            }
+          }
+          
+          // Handle entry equipments
+          if (data['entry_equipments'] != null) {
+            if (data['entry_equipments'] is List) {
+              entryEquipmentsController.text = (data['entry_equipments'] as List).join(', ');
+            } else if (data['entry_equipments'] is String) {
+              entryEquipmentsController.text = data['entry_equipments'];
+            }
+          }
+        }
+        
+        // Set request type for dropdowns
+        _requestTypeValue = data['category'] ?? data['department_tag'] ?? '';
+        
+        setState(() => _isLoadingUserData = false);
+        return;
+      }
+      
+      // Original logic for creating new requests
       // Generate auto-incrementing ID based on request type
       final now = DateTime.now();
       final year = now.year;
@@ -260,6 +345,20 @@ class _RequestFormState extends State<RequestForm> {
       String formattedId;
 
       try {
+        switch (widget.requestType) {
+          case 'Concern Slip':
+            formattedId = await apiService.getNextConcernSlipId();
+            break;
+          case 'Job Service':
+            formattedId = await apiService.getNextJobServiceId();
+            break;
+          case 'Work Order':
+            formattedId = await apiService.getNextWorkOrderId();
+            break;
+          default:
+            formattedId = 'REQ-$year-00001';
+        }
+      } catch (e) {
         switch (widget.requestType) {
           case 'Concern Slip':
             formattedId = await apiService.getNextConcernSlipId();
@@ -350,6 +449,10 @@ class _RequestFormState extends State<RequestForm> {
     permitIdController.dispose();
     validFromController.dispose();
     validToController.dispose();
+    contractorNameController.dispose();
+    contractorNumberController.dispose();
+    contractorCompanyController.dispose();
+    entryEquipmentsController.dispose();
     super.dispose();
   }
 
@@ -576,6 +679,62 @@ class _RequestFormState extends State<RequestForm> {
       final apiService = APIService();
       Map<String, dynamic> result;
 
+      // Handle editing existing requests
+      if (widget.isEditing && widget.requestId != null) {
+        if (type == 'Concern Slip') {
+          print('[SUBMIT] Updating concern slip...');
+          
+          result = await apiService.updateConcernSlip(
+            concernSlipId: widget.requestId!,
+            scheduleAvailability: availabilityController.text.trim(),
+          );
+          
+          result['success'] = true;
+        } else if (type == 'Job Service') {
+          print('[SUBMIT] Updating job service...');
+          
+          result = await apiService.updateJobService(
+            jobServiceId: widget.requestId!,
+            scheduleAvailability: availabilityController.text.trim(),
+          );
+          
+          result['success'] = true;
+        } else if (type == 'Work Order') {
+          print('[SUBMIT] Updating work order...');
+          
+          // Parse entry equipments from comma-separated string
+          final equipments = entryEquipmentsController.text
+              .split(',')
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList();
+          
+          result = await apiService.updateWorkOrder(
+            workOrderId: widget.requestId!,
+            contractorName: contractorNameController.text.trim(),
+            contractorNumber: contractorNumberController.text.trim(),
+            contractorCompany: contractorCompanyController.text.trim(),
+            workScheduleFrom: validFromController.text.trim(),
+            workScheduleTo: validToController.text.trim(),
+            entryEquipments: equipments,
+          );
+          
+          result['success'] = true;
+        } else {
+          throw Exception('Unknown request type: $type');
+        }
+
+        if (result['success'] == true) {
+          print('[SUBMIT] Update successful');
+          _showSnack('$type updated successfully');
+          Navigator.pop(context, true); // Return true to indicate success
+        } else {
+          _showSnack('Failed to update $type. Please try again.');
+        }
+        return;
+      }
+
+      // Original submit logic for creating new requests
       if (type == 'Concern Slip') {
         print('[SUBMIT] Submitting concern slip to Firebase...');
 
@@ -784,6 +943,7 @@ class _RequestFormState extends State<RequestForm> {
                 controller: titleController,
                 hintText: 'Enter Task Title',
                 isRequired: true,
+                readOnly: widget.isEditing, // Read-only when editing
                 errorText: _errCS('title'),
                 prefixIcon: const Padding(
                   padding: EdgeInsets.all(8.0),
@@ -797,6 +957,7 @@ class _RequestFormState extends State<RequestForm> {
                 hintText: 'Enter task description (will be analyzed by our AI)',
                 isRequired: true,
                 maxLines: 4,
+                readOnly: widget.isEditing, // Read-only when editing
                 errorText: _errCS('desc'),
               ),
               _buildAIInsights(),
@@ -806,7 +967,7 @@ class _RequestFormState extends State<RequestForm> {
                 hintText: 'Select date and time range (e.g., 9:00 AM - 11:00 AM)',
                 isRequired: true,
                 readOnly: true,
-                onTap: () => _pickAvailabilityRange(availabilityController),
+                onTap: () => _pickAvailabilityRange(availabilityController), // Always allow picking availability
                 errorText: _errCS('avail'),
                 prefixIcon: const Padding(
                   padding: EdgeInsets.all(8.0),
@@ -1131,7 +1292,9 @@ class _RequestFormState extends State<RequestForm> {
                 width: double.infinity,
                 height: 48,
                 child: fx.FilledButton(
-                  label: _isSubmitting ? 'Submitting...' : 'Create Task',
+                  label: _isSubmitting 
+                      ? (widget.isEditing ? 'Updating...' : 'Submitting...') 
+                      : (widget.isEditing ? 'Update Request' : 'Create Task'),
                   backgroundColor: const Color(0xFF005CE7),
                   withOuterBorder: false,
                   elevation: 0,

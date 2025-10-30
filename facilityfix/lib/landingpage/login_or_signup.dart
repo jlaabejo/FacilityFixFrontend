@@ -1,7 +1,7 @@
-import 'package:facilityfix/landingpage/choose.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/landingpage/login.dart';
+import 'package:facilityfix/landingpage/signup.dart';
 
 class LoginOrSignup extends StatefulWidget {
   final String role;
@@ -58,6 +58,24 @@ class _LoginOrSignupState extends State<LoginOrSignup>
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  void _openLoginModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const LogIn(role: 'tenant'),
+    );
+  }
+
+  void _openSignUpModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const SignUp(role: 'tenant'),
+    );
   }
 
   @override
@@ -128,9 +146,9 @@ class _LoginOrSignupState extends State<LoginOrSignup>
                     return Positioned(
                       left: 0,
                       right: 0,
-                      top: (h * 0.43) + offsetY, // was 0.48 → now higher
+                      top: (h * 0.43) + offsetY,
                       child: Opacity(
-                        opacity: _welcomeSlide.value,
+                        opacity: _welcomeSlide.value.clamp(0.0, 1.0),
                         child: Text(
                           'Welcome',
                           textAlign: TextAlign.center,
@@ -191,13 +209,7 @@ class _LoginOrSignupState extends State<LoginOrSignup>
                               ),
                             ),
                             onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const ChooseRole(isLogin: true),
-                                ),
-                              );
+                              _openLoginModal(context);
                             },
                             child: const Text(
                               'Log In',
@@ -225,13 +237,7 @@ class _LoginOrSignupState extends State<LoginOrSignup>
                               ),
                             ),
                             onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const ChooseRole(isLogin: false),
-                                ),
-                              );
+                              _openSignUpModal(context);
                             },
                             child: const Text(
                               'Sign Up',

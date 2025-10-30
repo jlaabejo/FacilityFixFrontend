@@ -28,7 +28,7 @@ void main() async {
       print('[FacilityFix] Firebase connection verified');
       
       // Initialize chat collections only if Firebase is working
-      await ChatHelper.initializeChat();
+      await ChatHelper.initializeChat(); 
       print('[FacilityFix] Chat initialized successfully');
     } else {
       print('[FacilityFix] Firebase connection failed');

@@ -1,4 +1,6 @@
 import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/tenant/view_details/annnouncement_details.dart';
+import 'package:facilityfix/tenant/view_details/concern_slip_details.dart';
 import 'package:facilityfix/widgets/modals.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/tenant/announcement.dart';
@@ -8,7 +10,6 @@ import 'package:facilityfix/tenant/workorder.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/services/auth_storage.dart';
-import 'package:facilityfix/tenant/view_details.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -23,11 +24,14 @@ class _HomeState extends State<HomePage> {
 
   // runtime user fields (defaults)
   String _userName = 'User';
+  String _fullName = 'User'; // For initials extraction
   String _unitLabel = '—';
+  String? _photoUrl;
 
   List<Map<String, dynamic>> _allRequests = [];
   int _activeRequestsCount = 0;
   int _doneRequestsCount = 0;
+  List<Map<String, dynamic>> _latestAnnouncements = [];
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -41,6 +45,7 @@ class _HomeState extends State<HomePage> {
     super.initState();
     _loadUserData();
     _loadAllRequests();
+    _loadLatestAnnouncements();
   }
 
   Future<void> _loadAllRequests() async {
@@ -81,6 +86,40 @@ class _HomeState extends State<HomePage> {
       }
     } catch (e) {
       print('Error loading all requests: $e');
+    }
+  }
+
+  Future<void> _loadLatestAnnouncements() async {
+    try {
+      // Get user profile to determine building
+      final profile = await AuthStorage.getProfile();
+      final buildingId = profile?['building_id']?.toString() ?? 'default_building';
+      
+      final apiService = APIService();
+      
+      // Fetch more announcements to ensure we have 3 after filtering
+      final announcements = await apiService.getAllAnnouncements(
+        buildingId: buildingId,
+        audience: 'all', // Fetch all to filter on frontend
+        activeOnly: true,
+        limit: 10, // Fetch more to account for filtering
+      );
+
+      if (mounted) {
+        // Filter to only include announcements for tenants or all audiences
+        final filteredAnnouncements = announcements.where((ann) {
+          final audience = (ann['audience'] ?? 'all').toString().toLowerCase();
+          return audience == 'tenants' || audience == 'all';
+        }).toList();
+
+        setState(() {
+          // Take only the 3 most recent after filtering
+          _latestAnnouncements = filteredAnnouncements.take(3).toList();
+        });
+      }
+    } catch (e) {
+      print('Error loading latest announcements: $e');
+      // Don't show error to user, just keep empty list
     }
   }
 
@@ -126,16 +165,26 @@ class _HomeState extends State<HomePage> {
   void _updateUIFromProfile(Map<String, dynamic> profile) {
     // ---- Name ----
     String firstName = '';
+    String fullNameValue = '';
     final firstRaw = (profile['first_name'] ?? '').toString().trim();
+    final lastRaw = (profile['last_name'] ?? '').toString().trim();
 
     if (firstRaw.isNotEmpty) {
       firstName = _titleCaseFirstOnly(firstRaw);
+      fullNameValue = firstRaw;
+      if (lastRaw.isNotEmpty) {
+        fullNameValue = '$firstRaw $lastRaw';
+      }
     } else {
       final fullName = (profile['full_name'] ?? '').toString().trim();
       if (fullName.isNotEmpty) {
         firstName = _titleCaseFirstOnly(fullName);
+        fullNameValue = fullName;
       }
     }
+
+    // ---- Profile Photo ----
+    final photoUrl = (profile['photo_url'] ?? '').toString().trim();
 
     // ---- Building Unit (snake_case only, no formatting) ----
     final buildingUnit = (profile['building_unit'] ?? '').toString().trim();
@@ -144,6 +193,8 @@ class _HomeState extends State<HomePage> {
     if (mounted) {
       setState(() {
         _userName = firstName.isNotEmpty ? firstName : 'User';
+        _fullName = fullNameValue.isNotEmpty ? fullNameValue : 'User';
+        _photoUrl = photoUrl.isNotEmpty ? photoUrl : null;
         _unitLabel = formattedUnit; // ✅ show raw building_unit only
       });
     }
@@ -189,6 +240,7 @@ class _HomeState extends State<HomePage> {
   Future<void> _refresh() async {
     await _loadUserData();
     await _loadAllRequests();
+    await _loadLatestAnnouncements();
   }
 
   Widget _buildRequestCard(Map<String, dynamic> request) {
@@ -442,6 +494,249 @@ class _HomeState extends State<HomePage> {
     }
   }
 
+  Widget _buildAnnouncementCard(Map<String, dynamic> announcement) {
+    final title = announcement['title'] ?? 'Untitled Announcement';
+    final content = announcement['content'] ?? '';
+    final announcementType = announcement['type'] ?? 'general';
+    final priorityLevel = announcement['priority_level'] ?? 'normal';
+    final createdAt = announcement['date_added'] ?? announcement['created_at'] ?? '';
+    final formattedId = announcement['formatted_id'] ?? 'ANN-${announcement['id'] ?? ''}';
+    final announcementId = announcement['id'] ?? '';
+
+    // Truncate content for preview
+    String contentPreview = content;
+    if (content.length > 120) {
+      contentPreview = '${content.substring(0, 120)}...';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: InkWell(
+        onTap: () {
+          // Navigate to announcement detail page
+          if (announcementId.isNotEmpty) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AnnouncementDetailsPage(
+                  announcementId: announcementId,
+                  announcementData: announcement,
+                ),
+              ),
+            ).then((_) {
+              // Refresh announcements when returning
+              _loadLatestAnnouncements();
+            });
+          }
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _getAnnouncementTypeColor(announcementType).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    _getAnnouncementTypeIcon(announcementType),
+                    size: 20,
+                    color: _getAnnouncementTypeColor(announcementType),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1B1D21),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        formattedId,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF667085),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (priorityLevel != 'normal')
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _getPriorityColor(priorityLevel).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      _formatPriority(priorityLevel),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: _getPriorityColor(priorityLevel),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              contentPreview,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF374151),
+                height: 1.4,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(
+                  Icons.access_time,
+                  size: 14,
+                  color: const Color(0xFF9CA3AF),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  _formatAnnouncementDate(createdAt),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF667085),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  _formatAnnouncementType(announcementType),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: _getAnnouncementTypeColor(announcementType),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getAnnouncementTypeIcon(String type) {
+    switch (type.toLowerCase()) {
+      case 'maintenance':
+        return Icons.build_outlined;
+      case 'reminder':
+        return Icons.notifications_outlined;
+      case 'event':
+        return Icons.event_outlined;
+      case 'policy':
+        return Icons.policy_outlined;
+      case 'emergency':
+        return Icons.warning_amber_outlined;
+      default:
+        return Icons.announcement_outlined;
+    }
+  }
+
+  Color _getAnnouncementTypeColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'maintenance':
+        return const Color(0xFF0891B2);
+      case 'reminder':
+        return const Color(0xFFF59E0B);
+      case 'event':
+        return const Color(0xFF7C3AED);
+      case 'policy':
+        return const Color(0xFF2563EB);
+      case 'emergency':
+        return const Color(0xFFDC2626);
+      default:
+        return const Color(0xFF667085);
+    }
+  }
+
+  String _formatAnnouncementType(String type) {
+    switch (type.toLowerCase()) {
+      case 'maintenance':
+        return 'Maintenance';
+      case 'reminder':
+        return 'Reminder';
+      case 'event':
+        return 'Event';
+      case 'policy':
+        return 'Policy';
+      case 'emergency':
+        return 'Emergency';
+      case 'general':
+        return 'General';
+      default:
+        return type;
+    }
+  }
+
+  String _formatAnnouncementDate(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      final now = DateTime.now();
+      final difference = now.difference(date);
+
+      if (difference.inDays == 0) {
+        if (difference.inHours == 0) {
+          if (difference.inMinutes == 0) {
+            return 'Just now';
+          }
+          return '${difference.inMinutes}m ago';
+        }
+        return '${difference.inHours}h ago';
+      } else if (difference.inDays == 1) {
+        return 'Yesterday';
+      } else if (difference.inDays < 7) {
+        return '${difference.inDays}d ago';
+      } else {
+        return '${date.day}/${date.month}/${date.year}';
+      }
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
+  /// Extract initials from full name (e.g., "Janelle De Guzman" → "JD")
+  String _getInitials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || name.trim().isEmpty) return 'U';
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return (parts.first[0] + parts[1][0]).toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     final displayName = _userName.isNotEmpty ? _userName : 'User';
@@ -605,7 +900,7 @@ class _HomeState extends State<HomePage> {
 
                         // Latest Announcement
                         SectionHeader(
-                          title: 'Latest',
+                          title: 'Latest Announcements',
                           actionLabel: 'View all',
                           onActionTap:
                               () => Navigator.of(context).push(
@@ -615,42 +910,51 @@ class _HomeState extends State<HomePage> {
                               ),
                         ),
                         const SizedBox(height: 12),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF9FAFB),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFE5E7EB)),
-                          ),
-                          child: const Column(
-                            children: [
-                              Icon(
-                                Icons.announcement_outlined,
-                                size: 48,
-                                color: Color(0xFF9CA3AF),
-                              ),
-                              SizedBox(height: 12),
-                              Text(
-                                'No announcements',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF374151),
+                        _latestAnnouncements.isEmpty
+                            ? Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF9FAFB),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFFE5E7EB)),
                                 ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Building announcements will appear here',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Color(0xFF6B7280),
+                                child: const Column(
+                                  children: [
+                                    Icon(
+                                      Icons.announcement_outlined,
+                                      size: 48,
+                                      color: Color(0xFF9CA3AF),
+                                    ),
+                                    SizedBox(height: 12),
+                                    Text(
+                                      'No announcements',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF374151),
+                                      ),
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      'Building announcements will appear here',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Color(0xFF6B7280),
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
                                 ),
-                                textAlign: TextAlign.center,
+                              )
+                            : Column(
+                                children:
+                                    _latestAnnouncements
+                                        .map(
+                                          (announcement) => _buildAnnouncementCard(announcement),
+                                        )
+                                        .toList(),
                               ),
-                            ],
-                          ),
-                        ),
                         const SizedBox(height: 24),
                       ],
                     ),

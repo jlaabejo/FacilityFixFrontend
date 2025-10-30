@@ -2,14 +2,13 @@ import 'dart:async';
 import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/notification.dart';
 import 'package:facilityfix/tenant/profile.dart';
+import 'package:facilityfix/tenant/view_details/annnouncement_details.dart';
 import 'package:facilityfix/tenant/workorder.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/helper_models.dart';
 import 'package:flutter/material.dart';
-
-import '../staff/view_details/announcement_details.dart';
 import '../services/api_services.dart';
 
 /// Simple data model for the list (avoids mixing widgets & data).
@@ -20,6 +19,7 @@ class AnnouncementItem {
   final String announcementType; // e.g. "utility interruption"
   final DateTime createdAt;
   final bool isRead;
+  final Map<String, dynamic> fullData; // Store full API response for details page
 
   const AnnouncementItem({
     required this.id,
@@ -28,6 +28,7 @@ class AnnouncementItem {
     required this.announcementType,
     required this.createdAt,
     required this.isRead,
+    required this.fullData,
   });
 
   AnnouncementItem copyWith({
@@ -39,6 +40,7 @@ class AnnouncementItem {
     String? details,
     DateTime? createdAt,
     bool? isRead,
+    Map<String, dynamic>? fullData,
   }) {
     return AnnouncementItem(
       id: id ?? this.id,
@@ -47,6 +49,7 @@ class AnnouncementItem {
       announcementType: announcementType ?? this.announcementType,
       createdAt: createdAt ?? this.createdAt,
       isRead: isRead ?? this.isRead,
+      fullData: fullData ?? this.fullData,
     );
   }
 }
@@ -182,6 +185,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                 announcementType: ann['type'] ?? 'general',
                 createdAt: DateTime.tryParse(ann['created_at'] ?? '') ?? DateTime.now(),
                 isRead: ann['is_read'] ?? false,  // Read status from backend
+                fullData: ann, // Store complete announcement data
               );
             })
             .toList();
@@ -376,6 +380,9 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
                                           MaterialPageRoute(
                                             builder: (_) => AnnouncementDetailsPage(
                                               announcementId: a.id,
+                                              // Pass the full announcement data from the list
+                                              // to avoid re-fetching and permission issues
+                                              announcementData: a.fullData,
                                             ),
                                           ),
                                         );
