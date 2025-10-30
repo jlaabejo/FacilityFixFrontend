@@ -155,13 +155,36 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
 
   Future<void> _loadLinkedInventoryRequests() async {
     try {
+      print('[v0] Loading inventory requests for task ${widget.taskId}');
       final response = await _apiService.getInventoryRequestsByMaintenanceTask(widget.taskId);
-      
+
+      print('[v0] Inventory requests response: $response');
+
       if (response['success'] == true && response['data'] != null) {
+        final requests = List<Map<String, dynamic>>.from(response['data']);
+
+        // Enrich inventory requests with item details
+        for (var request in requests) {
+          if (request['inventory_id'] != null) {
+            try {
+              final itemData = await _apiService.getInventoryItemById(request['inventory_id']);
+              if (itemData != null) {
+                request['item_name'] = itemData['item_name'];
+                request['item_code'] = itemData['item_code'];
+              }
+            } catch (e) {
+              print('[v0] Error loading inventory item details: $e');
+              // Continue without item details
+            }
+          }
+        }
+
         setState(() {
-          _linkedInventoryRequests = List<Map<String, dynamic>>.from(response['data']);
+          _linkedInventoryRequests = requests;
         });
         print('[v0] Loaded ${_linkedInventoryRequests.length} inventory requests for task ${widget.taskId}');
+      } else {
+        print('[v0] No inventory requests found or invalid response');
       }
     } catch (e) {
       print('[v0] Error loading linked inventory requests: $e');
@@ -338,14 +361,23 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
       final updateData = _takeSnapshot();
       print('[v0] Updating maintenance task: ${widget.taskId} -> $updateData');
 
-      // TODO: Call API to update the task
-      // await _apiService.updateMaintenanceTask(widget.taskId, updateData);
+      // Create inventory requests for selected items first
+      final inventoryRequestIds = await _createInventoryRequests();
 
-      // Create inventory requests for selected items
-      await _createInventoryRequests();
+      // TODO: Call API to update the task with all data including inventory request IDs
+      // For now, we're not updating the task yet until the API is implemented
+      // await _apiService.updateMaintenanceTask(widget.taskId, {
+      //   ...updateData,
+      //   if (inventoryRequestIds.isNotEmpty) 'inventory_request_ids': inventoryRequestIds,
+      // });
 
       _original = Map<String, String>.from(updateData); // update baseline
       setState(() => _isEditMode = false);
+
+      // Reload inventory requests to show the newly created ones
+      if (inventoryRequestIds.isNotEmpty) {
+        await _loadLinkedInventoryRequests();
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -365,20 +397,30 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     }
   }
 
-  Future<void> _createInventoryRequests() async {
-    if (_selectedInventoryItems.isEmpty) return;
+  Future<List<String>> _createInventoryRequests() async {
+    if (_selectedInventoryItems.isEmpty) return [];
+
+    final List<String> createdRequestIds = [];
 
     try {
       for (final item in _selectedInventoryItems) {
-        await _apiService.createInventoryRequest(
+        final response = await _apiService.createInventoryRequest(
           inventoryId: item['inventory_id'],
           buildingId: 'default_building_id', // TODO: Use actual building ID
           quantityRequested: item['quantity'],
           purpose: 'Maintenance Task: ${widget.taskId}',
           requestedBy: _createdByCtrl.text.isNotEmpty ? _createdByCtrl.text : 'system',
+          maintenanceTaskId: widget.taskId,
         );
+
+        // Extract the request ID from the response
+        if (response['success'] == true && response['request_id'] != null) {
+          createdRequestIds.add(response['request_id']);
+          print('[v0] Created inventory request: ${response['request_id']}');
+        }
       }
-      print('[v0] Created ${_selectedInventoryItems.length} inventory requests');
+      print('[v0] Created ${createdRequestIds.length} inventory requests for task ${widget.taskId}');
+      return createdRequestIds;
     } catch (e) {
       print('[v0] Error creating inventory requests: $e');
       throw Exception('Failed to create inventory requests: $e');

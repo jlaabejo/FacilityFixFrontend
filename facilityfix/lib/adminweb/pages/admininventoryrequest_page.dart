@@ -246,18 +246,113 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
 
   // View request method
   void _viewRequest(Map<String, dynamic> item) {
-    // Use _doc_id as the primary ID from Firestore
-    final requestId = item['_doc_id'] ?? item['id'];
-    if (requestId != null) {
-      context.go('/inventory/request/$requestId');
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Request ID not found'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        final requestId = item['_doc_id'] ?? item['id'] ?? 'N/A';
+        final itemName = item['item_name'] ?? 'Item ${item['inventory_id'] ?? 'Unknown'}';
+        final purpose = item['purpose'] ?? 'General';
+        final quantity = (item['quantity_requested'] ?? 0).toString();
+        final quantityApproved = (item['quantity_approved'] ?? 0).toString();
+        final status = item['status'] ?? 'pending';
+        final requestedBy = item['requested_by'] ?? 'Unknown';
+        final requestedDate = _formatDate(item['requested_date']);
+        final approvedDate = _formatDate(item['approved_date']);
+        final adminNotes = item['admin_notes'] ?? 'No notes';
+        final maintenanceTaskId = item['maintenance_task_id'] ?? item['reference_id'];
+
+        return AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.info_outline, color: Color(0xFF1976D2)),
+              const SizedBox(width: 12),
+              const Text('Request Details'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: SizedBox(
+              width: 500,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildDetailRow('Request ID', requestId),
+                  const Divider(height: 20),
+                  _buildDetailRow('Item Name', itemName),
+                  _buildDetailRow('Purpose', purpose),
+                  _buildDetailRow('Quantity Requested', quantity),
+                  if (status == 'approved' || status == 'fulfilled')
+                    _buildDetailRow('Quantity Approved', quantityApproved),
+                  const Divider(height: 20),
+                  _buildDetailRow('Status', status.toUpperCase()),
+                  _buildDetailRow('Requested By', requestedBy),
+                  _buildDetailRow('Requested Date', requestedDate),
+                  if (status == 'approved' || status == 'fulfilled' || status == 'denied')
+                    _buildDetailRow('Response Date', approvedDate),
+                  const Divider(height: 20),
+                  if (maintenanceTaskId != null && maintenanceTaskId.toString().isNotEmpty)
+                    _buildDetailRow('Maintenance Task', maintenanceTaskId.toString()),
+                  if (adminNotes.isNotEmpty && adminNotes != 'No notes') ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Admin Notes:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      adminNotes,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 150,
+            child: Text(
+              '$label:',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[700],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _approveRequest(Map<String, dynamic> item) async {

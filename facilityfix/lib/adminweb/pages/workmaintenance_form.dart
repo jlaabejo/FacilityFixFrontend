@@ -278,12 +278,14 @@ class _InternalMaintenanceFormPageState
     });
   }
 
-  Future<void> _createInventoryRequests(String taskId) async {
-    if (_selectedInventoryItems.isEmpty) return;
+  Future<List<String>> _createInventoryRequests(String taskId) async {
+    if (_selectedInventoryItems.isEmpty) return [];
+
+    final List<String> createdRequestIds = [];
 
     try {
       for (final item in _selectedInventoryItems) {
-        await _mainApiService.createInventoryRequest(
+        final response = await _mainApiService.createInventoryRequest(
           inventoryId: item['inventory_id'],
           buildingId: 'default_building_id', // TODO: Use actual building ID
           quantityRequested: item['quantity'],
@@ -291,8 +293,15 @@ class _InternalMaintenanceFormPageState
           requestedBy: _assignedStaffController.text.isNotEmpty ? _assignedStaffController.text : 'system',
           maintenanceTaskId: taskId, // Link to maintenance task
         );
+
+        // Extract the request ID from the response
+        if (response['success'] == true && response['request_id'] != null) {
+          createdRequestIds.add(response['request_id']);
+          print('[v0] Created inventory request: ${response['request_id']}');
+        }
       }
-      print('[v0] Created ${_selectedInventoryItems.length} inventory requests linked to task $taskId');
+      print('[v0] Created ${createdRequestIds.length} inventory requests linked to task $taskId');
+      return createdRequestIds;
     } catch (e) {
       print('[v0] Error creating inventory requests: $e');
       throw Exception('Failed to create inventory requests: $e');
@@ -536,12 +545,26 @@ class _InternalMaintenanceFormPageState
       print('[v0] Using task ID for inventory requests: $actualTaskId');
 
       // Create inventory requests for selected items with the correct task ID
-      await _createInventoryRequests(actualTaskId);
+      final inventoryRequestIds = await _createInventoryRequests(actualTaskId);
+
+      // Update the maintenance task with the inventory request IDs
+      if (inventoryRequestIds.isNotEmpty) {
+        try {
+          await _apiService.updateMaintenanceTask(
+            actualTaskId,
+            {'inventory_request_ids': inventoryRequestIds},
+          );
+          print('[v0] Updated maintenance task with inventory request IDs: $inventoryRequestIds');
+        } catch (e) {
+          print('[v0] Warning: Failed to update maintenance task with inventory request IDs: $e');
+          // Don't fail the whole operation if this update fails
+        }
+      }
 
       // Navigate to view page with the data
       if (mounted) {
         context.push(
-          '/work/maintenance/$actualTaskId/internal?edit=1',
+          '/work/maintenance/',
           extra: maintenance,
         );
       }
@@ -1454,7 +1477,7 @@ class _InternalMaintenanceFormPageState
                               ),
                             ),
                             child: const Text(
-                              "Next",
+                              "Submit Internal Task",
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
