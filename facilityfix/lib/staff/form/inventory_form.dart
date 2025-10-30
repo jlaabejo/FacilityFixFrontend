@@ -63,6 +63,7 @@ class _InventoryFormState extends State<InventoryForm> {
   // Inventory items from API
   List<Map<String, dynamic>> _inventoryItems = [];
   bool _isLoadingItems = true;
+  bool _isSubmitting = false;
   String? _selectedInventoryId;
   String? _buildingId;
   String? _userId;
@@ -71,8 +72,6 @@ class _InventoryFormState extends State<InventoryForm> {
   final TextEditingController itemNameController = TextEditingController();
   final TextEditingController itemCodeController = TextEditingController();
   final TextEditingController dateRequestedController = TextEditingController();
-  final TextEditingController requestedByController = TextEditingController();
-  final TextEditingController departmentController = TextEditingController();
   final TextEditingController neededByController = TextEditingController();
 
   // Item Details controllers
@@ -82,15 +81,7 @@ class _InventoryFormState extends State<InventoryForm> {
 
   final TextEditingController _classificationOtherCtrl = TextEditingController();
 
-  bool _submittedBasic = false;
-  bool _submittedItem = false;
-
-  String get _currentStep =>
-      InventoryFormSteps.isValid(widget.requestType)
-          ? widget.requestType
-          : InventoryFormSteps.basic;
-
-  bool get _isFinalStep => _currentStep == InventoryFormSteps.item;
+  bool _submitted = false;
 
   // ---- Error helpers
   String? _errBasic(String key) {
@@ -101,10 +92,6 @@ class _InventoryFormState extends State<InventoryForm> {
         return itemCodeController.text.trim().isEmpty ? 'Item code is required' : null;
       case 'dateRequested':
         return dateRequestedController.text.trim().isEmpty ? 'Date requested is required' : null;
-      case 'requestedBy':
-        return requestedByController.text.trim().isEmpty ? 'Requested by is required' : null;
-      case 'department':
-        return departmentController.text.trim().isEmpty ? 'Department is required' : null;
       case 'neededBy':
         return neededByController.text.trim().isEmpty ? 'Needed by is required' : null;
       default:
@@ -131,56 +118,34 @@ class _InventoryFormState extends State<InventoryForm> {
 
   // ---- Actions
   void _onPrimaryPressed() {
+    setState(() => _submitted = true);
+
     final formOk = _formKey.currentState?.validate() ?? false;
 
-    if (_isFinalStep) {
-      setState(() => _submittedItem = true);
+    final hasErrors =
+        _selectedInventoryId == null ||
+        _errBasic('name')          != null ||
+        _errBasic('code')          != null ||
+        _errBasic('dateRequested') != null ||
+        _errBasic('neededBy')      != null ||
+        _errItem('quantity')       != null ||
+        _errItem('unit')           != null;
 
-      final hasItemErrors =
-          _errItem('quantity')  != null ||
-          _errItem('unit')      != null;
-
-      if (!formOk || hasItemErrors) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please fix the highlighted fields.')),
-        );
-        return;
-      }
-
-      // Submit the request to API
-      _submitInventoryRequest();
-    } else {
-      setState(() => _submittedBasic = true);
-
-      final hasBasicErrors =
-          _selectedInventoryId == null ||
-          _errBasic('name')          != null ||
-          _errBasic('code')          != null ||
-          _errBasic('dateRequested') != null ||
-          _errBasic('requestedBy')   != null ||
-          _errBasic('department')    != null ||
-          _errBasic('neededBy')      != null;
-
-      if (!formOk || hasBasicErrors) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(
-            _selectedInventoryId == null 
-              ? 'Please select an inventory item' 
-              : 'Please fix the highlighted fields.'
-          )),
-        );
-        return;
-      }
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const InventoryForm(
-            requestType: InventoryFormSteps.item,
+    if (!formOk || hasErrors) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _selectedInventoryId == null
+              ? 'Please select an inventory item'
+              : 'Please complete all required fields before submitting.'
           ),
         ),
       );
+      return;
     }
+
+    // Submit the request to API
+    _submitInventoryRequest();
   }
 
   void _showRequestDialog(BuildContext context) {
@@ -214,13 +179,46 @@ class _InventoryFormState extends State<InventoryForm> {
         child: SizedBox(
           width: double.infinity,
           height: 48,
-          child: FilledButton(
-            label: _isFinalStep ? 'Submit' : 'Next',
-            backgroundColor: const Color(0xFF005CE7),
-            textColor: Colors.white,
-            withOuterBorder: false,
-            onPressed: _onPrimaryPressed,
-          ),
+          child: _isSubmitting
+              ? ElevatedButton(
+                  onPressed: null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF005CE7),
+                    disabledBackgroundColor: const Color(0xFF005CE7).withOpacity(0.6),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        'Submitting...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : FilledButton(
+                  label: 'Submit Request',
+                  backgroundColor: const Color(0xFF005CE7),
+                  textColor: Colors.white,
+                  withOuterBorder: false,
+                  onPressed: _onPrimaryPressed,
+                ),
         ),
       ),
     );
@@ -232,8 +230,6 @@ class _InventoryFormState extends State<InventoryForm> {
       itemNameController,
       itemCodeController,
       dateRequestedController,
-      requestedByController,
-      departmentController,
       neededByController,
       requestQuantityController,
       unitController,
@@ -249,8 +245,6 @@ class _InventoryFormState extends State<InventoryForm> {
       itemNameController,
       itemCodeController,
       dateRequestedController,
-      requestedByController,
-      departmentController,
       neededByController,
       requestQuantityController,
       unitController,
@@ -284,15 +278,13 @@ class _InventoryFormState extends State<InventoryForm> {
   void initState() {
     super.initState();
     _apiService = APIService(roleOverride: AppRole.staff);
-    
+
     final now = DateTime.now();
 
     dateRequestedController.text =
         "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
     itemCodeController.text =
         "INV-${now.year}-${now.millisecondsSinceEpoch.toString().substring(7)}";
-    requestedByController.text = 'CMO Staff';
-    departmentController.text  = 'Maintenance';
 
     _attachFieldListeners();
     _loadUserDataAndInventory();
@@ -302,12 +294,14 @@ class _InventoryFormState extends State<InventoryForm> {
     try {
       final profile = await AuthStorage.getProfile();
       _buildingId = profile?['building_id']?.toString() ?? 'default_building';
-      _userId = profile?['user_id']?.toString() ?? '';
+      // Try both uid and user_id fields
+      _userId = profile?['uid']?.toString() ?? profile?['user_id']?.toString() ?? '';
+
+      print('DEBUG: Loaded user data - buildingId: $_buildingId, userId: $_userId');
 
       // Fetch inventory items
       final response = await _apiService.getInventoryItems(
-        buildingId: _buildingId!,
-        includeInactive: false,
+
       );
 
       if (mounted) {
@@ -332,36 +326,76 @@ class _InventoryFormState extends State<InventoryForm> {
   }
 
   Future<void> _submitInventoryRequest() async {
+    if (_isSubmitting) return; // Prevent double submission
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
     try {
       if (_selectedInventoryId == null) {
         throw Exception('Please select an inventory item');
       }
 
-      final quantity = int.parse(requestQuantityController.text.trim());
-      
+      if (_buildingId == null || _buildingId!.isEmpty) {
+        throw Exception('Building ID not available. Please try logging out and logging back in.');
+      }
+
+      if (_userId == null || _userId!.isEmpty) {
+        throw Exception('User ID not available. Please try logging out and logging back in.');
+      }
+
+      final quantityText = requestQuantityController.text.trim();
+      if (quantityText.isEmpty) {
+        throw Exception('Please enter a quantity');
+      }
+
+      final quantity = int.tryParse(quantityText);
+      if (quantity == null || quantity <= 0) {
+        throw Exception('Please enter a valid quantity');
+      }
+
+      print('DEBUG: Creating inventory request with:');
+      print('  - Inventory ID: $_selectedInventoryId');
+      print('  - Building ID: $_buildingId');
+      print('  - Quantity: $quantity');
+      print('  - Requested By: $_userId');
+
       final response = await _apiService.createInventoryRequest(
         inventoryId: _selectedInventoryId!,
         buildingId: _buildingId!,
         quantityRequested: quantity,
-        purpose: notesController.text.trim().isEmpty 
-            ? 'Staff inventory request' 
+        purpose: notesController.text.trim().isEmpty
+            ? 'Staff inventory request'
             : notesController.text.trim(),
         requestedBy: _userId!,
       );
+
+      print('DEBUG: Response from createInventoryRequest: $response');
 
       if (response['success'] == true) {
         if (mounted) {
           _showRequestDialog(context);
         }
       } else {
-        throw Exception(response['message'] ?? 'Failed to create request');
+        throw Exception(response['message'] ?? response['detail'] ?? 'Failed to create request');
       }
     } catch (e) {
-      print('Error submitting inventory request: $e');
+      print('ERROR: Error submitting inventory request: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
       }
     }
   }
@@ -372,8 +406,6 @@ class _InventoryFormState extends State<InventoryForm> {
     itemNameController.dispose();
     itemCodeController.dispose();
     dateRequestedController.dispose();
-    requestedByController.dispose();
-    departmentController.dispose();
     neededByController.dispose();
     requestQuantityController.dispose();
     unitController.dispose();
@@ -382,194 +414,166 @@ class _InventoryFormState extends State<InventoryForm> {
     super.dispose();
   }
 
-  // ---- Form fields by step
+  // ---- Form fields - single page
   List<Widget> _getFormFields() {
-    switch (_currentStep) {
-      case InventoryFormSteps.basic:
-        return [
-          const Text('Basic Information', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 16),
-          
-          // Inventory Item Selector
-          if (_isLoadingItems)
-            const Center(child: CircularProgressIndicator())
-          // else if (_inventoryItems.isEmpty)
-          //   const Text('No inventory items available', style: TextStyle(color: Colors.red))
-          else
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Select Inventory Item',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF344054),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                DropdownButtonFormField<String>(
-                  value: _selectedInventoryId,
-                  decoration: InputDecoration(
-                    hintText: 'Choose an item from inventory',
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  items: _inventoryItems.map((item) {
-                    final id = item['id']?.toString() ?? item['_doc_id']?.toString() ?? '';
-                    final name = item['item_name']?.toString() ?? 'Unknown';
-                    final code = item['item_code']?.toString() ?? '';
-                    final stock = item['current_stock']?.toString() ?? '0';
-                    return DropdownMenuItem<String>(
-                      value: id,
-                      child: Text('$name ($code) - Stock: $stock'),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedInventoryId = value;
-                      // Auto-fill item name and code
-                      final selectedItem = _inventoryItems.firstWhere(
-                        (item) => (item['id']?.toString() ?? item['_doc_id']?.toString()) == value,
-                        orElse: () => {},
-                      );
-                      if (selectedItem.isNotEmpty) {
-                        itemNameController.text = selectedItem['item_name']?.toString() ?? '';
-                        itemCodeController.text = selectedItem['item_code']?.toString() ?? '';
-                        departmentController.text = selectedItem['department']?.toString() ?? 'Maintenance';
-                      }
-                    });
-                  },
-                  validator: (value) {
-                    if (_submittedBasic && (value == null || value.isEmpty)) {
-                      return 'Please select an inventory item';
-                    }
-                    return null;
-                  },
-                ),
-              ],
-            ),
-          const SizedBox(height: 12),
-          
-          InputField(
-            label: 'Item Name',
-            controller: itemNameController,
-            readOnly: true,
-            isRequired: true,
-            errorText: _submittedBasic ? _errBasic('name') : null,
-          ),
-          const SizedBox(height: 12),
-          InputField(
-            label: 'Item Code',
-            controller: itemCodeController,
-            readOnly: true,
-            isRequired: true,
-            errorText: _submittedBasic ? _errBasic('code') : null,
-          ),
-          const SizedBox(height: 12),
-          InputField(
-            label: 'Date Requested',
-            controller: dateRequestedController,
-            readOnly: true,
-            isRequired: true,
-            errorText: _submittedBasic ? _errBasic('dateRequested') : null,
-          ),
-          const SizedBox(height: 12),
-          InputField(
-            label: 'Requested By',
-            controller: requestedByController,
-            readOnly: true,
-            isRequired: true,
-            errorText: _submittedBasic ? _errBasic('requestedBy') : null,
-          ),
-          const SizedBox(height: 12),
-          InputField(
-            label: 'Department',
-            controller: departmentController,
-            readOnly: true,
-            isRequired: true,
-            errorText: _submittedBasic ? _errBasic('department') : null,
-          ),
-          const SizedBox(height: 12),
-          GestureDetector(
-            onTap: _pickNeededByDate,
-            child: AbsorbPointer(
-              child: InputField(
-                label: 'Needed By',
-                controller: neededByController,
-                hintText: 'Pick date',
-                isRequired: true,
-                suffixIcon: const Icon(Icons.calendar_today_rounded, size: 20),
-                errorText: _submittedBasic ? _errBasic('neededBy') : null,
+    return [
+      const Text('Request Information', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 16),
+
+      // Inventory Item Selector
+      if (_isLoadingItems)
+        const Center(child: CircularProgressIndicator())
+      else
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Select Inventory Item *',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF344054),
               ),
             ),
-          ),
-        ];
-
-      case InventoryFormSteps.item:
-      return [
-        const Text(
-          'Item Request Details',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 12),
-
-        // Request Quantity
-        InputField(
-          label: 'Request Quantity',
-          controller: requestQuantityController,
-          keyboardType: TextInputType.number,
-          hintText: 'Enter quantity (e.g. 10)',
-          isRequired: true,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(9),
+            const SizedBox(height: 6),
+            DropdownButtonFormField<String>(
+              value: _selectedInventoryId,
+              decoration: InputDecoration(
+                hintText: 'Choose an item from inventory',
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              items: _inventoryItems.map((item) {
+                final id = item['id']?.toString() ?? item['_doc_id']?.toString() ?? '';
+                final name = item['item_name']?.toString() ?? 'Unknown';
+                final code = item['item_code']?.toString() ?? '';
+                final stock = item['current_stock']?.toString() ?? '0';
+                final unit = item['unit_of_measure']?.toString() ?? 'pcs';
+                return DropdownMenuItem<String>(
+                  value: id,
+                  child: Text('$name ($code) - Stock: $stock $unit'),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedInventoryId = value;
+                  // Auto-fill item name, code, and unit
+                  final selectedItem = _inventoryItems.firstWhere(
+                    (item) => (item['id']?.toString() ?? item['_doc_id']?.toString()) == value,
+                    orElse: () => {},
+                  );
+                  if (selectedItem.isNotEmpty) {
+                    itemNameController.text = selectedItem['item_name']?.toString() ?? '';
+                    itemCodeController.text = selectedItem['item_code']?.toString() ?? '';
+                    unitController.text = selectedItem['unit_of_measure']?.toString() ?? 'pcs';
+                  }
+                });
+              },
+              validator: (value) {
+                if (_submitted && (value == null || value.isEmpty)) {
+                  return 'Please select an inventory item';
+                }
+                return null;
+              },
+            ),
           ],
-          errorText: _submittedItem ? _errItem('quantity') : null,
         ),
-        const SizedBox(height: 12),
+      const SizedBox(height: 12),
 
-        // Unit
-        DropdownField<String>(
-          label: 'Unit',
-          value: unitController.text.isEmpty ? null : unitController.text,
-          items: const ['pcs', 'box', 'set', 'pack', 'roll', 'litre', 'kg', 'gal'],
-          onChanged: (v) {
-            setState(() => unitController.text = v ?? '');
-            _formKey.currentState?.validate();
-          },
-          isRequired: true,
-          requiredMessage: 'Unit is required.',
-          hintText: 'Select unit of measurement',
+      InputField(
+        label: 'Item Name',
+        controller: itemNameController,
+        readOnly: true,
+        isRequired: true,
+        errorText: _submitted ? _errBasic('name') : null,
+      ),
+      const SizedBox(height: 12),
+      InputField(
+        label: 'Item Code',
+        controller: itemCodeController,
+        readOnly: true,
+        isRequired: true,
+        errorText: _submitted ? _errBasic('code') : null,
+      ),
+      const SizedBox(height: 12),
+      InputField(
+        label: 'Date Requested',
+        controller: dateRequestedController,
+        readOnly: true,
+        isRequired: true,
+        errorText: _submitted ? _errBasic('dateRequested') : null,
+      ),
+      const SizedBox(height: 12),
+      GestureDetector(
+        onTap: _pickNeededByDate,
+        child: AbsorbPointer(
+          child: InputField(
+            label: 'Needed By',
+            controller: neededByController,
+            hintText: 'Pick date',
+            isRequired: true,
+            suffixIcon: const Icon(Icons.calendar_today_rounded, size: 20),
+            errorText: _submitted ? _errBasic('neededBy') : null,
+          ),
         ),
-        const SizedBox(height: 12),
+      ),
 
-        // Notes
-        InputField(
-          label: 'Notes (optional)',
-          controller: notesController,
-          hintText: 'Add remarks, special instructions, or purpose',
-          maxLines: 4,
-        ),
-      ];
+      const SizedBox(height: 24),
+      const Text('Request Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 12),
 
-      default:
-        return const [];
-    }
+      // Request Quantity
+      InputField(
+        label: 'Request Quantity',
+        controller: requestQuantityController,
+        keyboardType: TextInputType.number,
+        hintText: 'Enter quantity (e.g. 10)',
+        isRequired: true,
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(9),
+        ],
+        errorText: _submitted ? _errItem('quantity') : null,
+      ),
+      const SizedBox(height: 12),
+
+      // Unit
+      DropdownField<String>(
+        label: 'Unit',
+        value: unitController.text.isEmpty ? null : unitController.text,
+        items: const ['pcs', 'box', 'set', 'pack', 'roll', 'litre', 'kg', 'gal'],
+        onChanged: (v) {
+          setState(() => unitController.text = v ?? '');
+          _formKey.currentState?.validate();
+        },
+        isRequired: true,
+        requiredMessage: 'Unit is required.',
+        hintText: 'Select unit of measurement',
+      ),
+      const SizedBox(height: 12),
+
+      // Notes
+      InputField(
+        label: 'Notes (optional)',
+        controller: notesController,
+        hintText: 'Add remarks, special instructions, or purpose',
+        maxLines: 4,
+      ),
+    ];
   }
 
   @override
   Widget build(BuildContext context) {
-    final autovalidate = (_submittedBasic || _submittedItem)
+    final autovalidate = _submitted
         ? AutovalidateMode.always
         : AutovalidateMode.disabled;
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        title: _isFinalStep ? InventoryFormSteps.item : 'Add Inventory Item',
+        title: 'Request Inventory Item',
         leading: const BackButton(),
       ),
       body: SafeArea(

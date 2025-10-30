@@ -227,8 +227,9 @@ class _InventoryPageState extends State<InventoryPage> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => const InventoryDetails(
+                builder: (_) => InventoryDetails(
                   selectedTabLabel: 'inventory details',
+                  itemId: it.id,  // Pass the item ID
                 ),
               ),
             );
@@ -260,8 +261,9 @@ class _InventoryPageState extends State<InventoryPage> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => const InventoryDetails(
+                builder: (_) => InventoryDetails(
                   selectedTabLabel: 'inventory request',
+                  requestId: rq.requestId,  // Pass the request ID
                 ),
               ),
             );

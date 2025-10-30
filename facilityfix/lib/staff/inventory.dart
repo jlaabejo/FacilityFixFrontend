@@ -88,7 +88,7 @@ class InventoryRequest {
   factory InventoryRequest.fromJson(Map<String, dynamic> json) {
     return InventoryRequest(
       itemName: json['item_name'] ?? 'Unknown Item',
-      requestId: json['id'] ?? '',
+      requestId: json['_doc_id'] ?? json['id'] ?? '',
       department: json['department'] ?? 'Unknown',
       status: json['status'] ?? 'pending',
       quantityRequested: json['quantity_requested'],
@@ -265,24 +265,72 @@ class _InventoryPageState extends State<InventoryPage> {
     }
   }
 
-  /// Load inventory requests from API (general - no building filter)
+  /// Load inventory requests from API - includes general requests and maintenance-assigned requests
   Future<void> _loadInventoryRequests() async {
     if (_isLoadingRequests) return;
-    
+
     setState(() {
       _isLoadingRequests = true;
     });
 
     try {
-      // Call the general requests endpoint without building filter
-      final requestsData = await _apiService.getInventoryRequests();
+      // Fetch both general requests and maintenance-assigned requests
+      final results = await Future.wait([
+        _apiService.getInventoryRequests().catchError((e) {
+          print('Error loading general requests: $e');
+          return <Map<String, dynamic>>[];
+        }),
+        _apiService.getMyMaintenanceInventoryRequests().catchError((e) {
+          print('Error loading maintenance requests: $e');
+          return <Map<String, dynamic>>[];
+        }),
+      ]);
+
+      final generalRequests = results[0];
+      final maintenanceRequests = results[1];
+
+      // Combine both lists and remove duplicates based on request ID
+      final allRequestsMap = <String, Map<String, dynamic>>{};
+
+      for (var request in generalRequests) {
+        final id = request['_doc_id'] ?? request['id'];
+        if (id != null) {
+          allRequestsMap[id] = request;
+        }
+      }
+
+      for (var request in maintenanceRequests) {
+        final id = request['_doc_id'] ?? request['id'];
+        if (id != null) {
+          allRequestsMap[id] = request;
+        }
+      }
+
+      // Enrich with item details
+      for (var request in allRequestsMap.values) {
+        if (request['inventory_id'] != null) {
+          try {
+            final itemData = await _apiService.getInventoryItemById(request['inventory_id']);
+            if (itemData != null) {
+              request['item_name'] = itemData['item_name'];
+              request['department'] = itemData['department'];
+            }
+          } catch (e) {
+            print('Error loading item details: $e');
+          }
+        }
+      }
 
       setState(() {
-        _requests = requestsData.map((request) => InventoryRequest.fromJson(request)).toList();
-        
+        _requests = allRequestsMap.values
+            .map((request) => InventoryRequest.fromJson(request))
+            .toList();
+
         // Update tabs count
         tabs[1] = TabItem(label: 'Requests', count: _requests.length);
       });
+
+      print('DEBUG: Loaded ${_requests.length} total inventory requests (general + maintenance)');
     } catch (e) {
       print('Error loading inventory requests: $e');
       setState(() {

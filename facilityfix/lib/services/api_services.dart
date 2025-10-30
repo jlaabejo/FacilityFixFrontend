@@ -1688,17 +1688,13 @@ class APIService {
     }
   }
 
-  Future<Map<String, dynamic>> getInventoryItems({
-    required String buildingId,
-    bool includeInactive = false,
-  }) async {
+  Future<Map<String, dynamic>> getInventoryItems() async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
       
-      final queryParams = includeInactive ? '?include_inactive=true' : '';
       final response = await get(
-        '/inventory/buildings/$buildingId/items$queryParams',
+        '/inventory/items',
         headers: _authHeaders(token),
       );
 
@@ -1786,6 +1782,35 @@ class APIService {
     }
   }
 
+  /// Get all inventory requests from maintenance tasks assigned to current user
+  Future<List<Map<String, dynamic>>> getMyMaintenanceInventoryRequests() async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await get(
+        '/inventory/my-maintenance-requests',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+        return [];
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to load my maintenance inventory requests: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error fetching my maintenance inventory requests: $e');
+      rethrow;
+    }
+  }
+
   /// Get all inventory requests with optional filters
   Future<List<Map<String, dynamic>>> getInventoryRequests({
     String? buildingId,
@@ -1858,15 +1883,57 @@ class APIService {
     }
   }
 
-  /// Get a specific inventory request by ID
+  /// Get a specific inventory request by ID - uses dedicated backend endpoint
   Future<Map<String, dynamic>?> getInventoryRequestById(String requestId) async {
     try {
-      // Get all requests and find the matching one
-      final requests = await getInventoryRequests();
-      final found = requests.where(
-        (req) => req['id'] == requestId || req['_doc_id'] == requestId,
-      ).toList();
-      return found.isNotEmpty ? found.first : null;
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      print('DEBUG: Fetching inventory request from /inventory/requests/$requestId');
+
+      final response = await get(
+        '/inventory/requests/$requestId',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        print('DEBUG: Received response: $data');
+
+        if (data['success'] == true && data['data'] != null) {
+          final request = data['data'] as Map<String, dynamic>;
+
+          // Enrich with item details if inventory_id is available
+          if (request['inventory_id'] != null) {
+            try {
+              final itemData = await getInventoryItemById(request['inventory_id']);
+              if (itemData != null) {
+                request['item_name'] = itemData['item_name'];
+                request['item_code'] = itemData['item_code'];
+                request['department'] = itemData['department'];
+                request['unit_of_measure'] = itemData['unit_of_measure'];
+                request['category'] = itemData['category'];
+              }
+            } catch (e) {
+              print('Error enriching request with item details: $e');
+              // Continue without item details
+            }
+          }
+
+          return request;
+        } else {
+          print('No inventory request found with ID: $requestId');
+          return null;
+        }
+      } else if (response.statusCode == 404) {
+        print('Inventory request not found: $requestId');
+        return null;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get inventory request: ${errorBody['detail'] ?? response.body}',
+        );
+      }
     } catch (e) {
       print('Error getting inventory request by ID: $e');
       return null;

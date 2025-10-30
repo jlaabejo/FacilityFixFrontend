@@ -738,6 +738,8 @@ class _MaintenanceDetailScreenState extends State<_MaintenanceDetailScreen> {
   bool _isUpdating = false;
   late TextEditingController _notesController;
   bool _isSubmitting = false;
+  List<Map<String, dynamic>> _inventoryRequests = [];
+  bool _isLoadingInventoryRequests = true;
 
   @override
   void initState() {
@@ -754,12 +756,65 @@ class _MaintenanceDetailScreenState extends State<_MaintenanceDetailScreen> {
     _notesController = TextEditingController(
       text: widget.task['completion_notes'] ?? '',
     );
+
+    // Load inventory requests for this task
+    _loadInventoryRequests();
   }
 
   @override
   void dispose() {
     _notesController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadInventoryRequests() async {
+    setState(() {
+      _isLoadingInventoryRequests = true;
+    });
+
+    try {
+      final apiService = APIService(roleOverride: AppRole.staff);
+      final taskId = widget.task['id'];
+
+      if (taskId == null || taskId.isEmpty) {
+        print('DEBUG: No task ID available for loading inventory requests');
+        return;
+      }
+
+      print('DEBUG: Loading inventory requests for task $taskId');
+      final response = await apiService.getInventoryRequestsByMaintenanceTask(taskId);
+
+      if (response['success'] == true && response['data'] != null) {
+        final requests = List<Map<String, dynamic>>.from(response['data']);
+
+        // Enrich with item details
+        for (var request in requests) {
+          if (request['inventory_id'] != null) {
+            try {
+              final itemData = await apiService.getInventoryItemById(request['inventory_id']);
+              if (itemData != null) {
+                request['item_name'] = itemData['item_name'];
+                request['item_code'] = itemData['item_code'];
+              }
+            } catch (e) {
+              print('DEBUG: Error loading item details: $e');
+            }
+          }
+        }
+
+        setState(() {
+          _inventoryRequests = requests;
+        });
+
+        print('DEBUG: Loaded ${_inventoryRequests.length} inventory requests');
+      }
+    } catch (e) {
+      print('DEBUG: Error loading inventory requests: $e');
+    } finally {
+      setState(() {
+        _isLoadingInventoryRequests = false;
+      });
+    }
   }
   
   // Computed properties for checklist progress
@@ -1301,6 +1356,153 @@ class _MaintenanceDetailScreenState extends State<_MaintenanceDetailScreen> {
                   ],
                 ),
               ),
+
+              // Inventory Requests Section
+              if (_inventoryRequests.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(color: Color(0xFFE5E7EB)),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.inventory_2_outlined,
+                              size: 20,
+                              color: Color(0xFF6B7280),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Inventory Requests',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1F2937),
+                              ),
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF3F4F6),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '${_inventoryRequests.length} ${_inventoryRequests.length == 1 ? 'Request' : 'Requests'}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF6B7280),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Request Items
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _inventoryRequests.length,
+                        separatorBuilder: (_, __) => const Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: Color(0xFFE5E7EB),
+                        ),
+                        itemBuilder: (context, index) {
+                          final request = _inventoryRequests[index];
+                          final itemName = request['item_name'] ?? 'Unknown Item';
+                          final quantity = request['quantity_requested'] ?? 0;
+                          final status = request['status'] ?? 'pending';
+
+                          Color statusColor;
+                          Color statusBgColor;
+                          switch (status.toLowerCase()) {
+                            case 'approved':
+                              statusColor = const Color(0xFF059669);
+                              statusBgColor = const Color(0xFFECFDF5);
+                              break;
+                            case 'fulfilled':
+                              statusColor = const Color(0xFF10B981);
+                              statusBgColor = const Color(0xFFD1FAE5);
+                              break;
+                            case 'denied':
+                              statusColor = const Color(0xFFDC2626);
+                              statusBgColor = const Color(0xFFFEE2E2);
+                              break;
+                            default:
+                              statusColor = const Color(0xFF6B7280);
+                              statusBgColor = const Color(0xFFF3F4F6);
+                          }
+
+                          return Container(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        itemName,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF1F2937),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Quantity: $quantity',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFF6B7280),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: statusBgColor,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    status.toUpperCase(),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: statusColor,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),

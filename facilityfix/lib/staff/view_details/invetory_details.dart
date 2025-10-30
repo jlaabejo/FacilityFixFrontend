@@ -59,9 +59,16 @@ class _InventoryDetailsState extends State<InventoryDetails> {
     });
 
     try {
+      print('DEBUG: Loading data for tab: ${widget.selectedTabLabel}');
+      print('DEBUG: Item ID: ${widget.itemId}');
+      print('DEBUG: Request ID: ${widget.requestId}');
+
       if (widget.selectedTabLabel.toLowerCase() == 'inventory details' && widget.itemId != null) {
         // Fetch inventory item
+        print('DEBUG: Fetching inventory item with ID: ${widget.itemId}');
         final data = await _apiService.getInventoryItemById(widget.itemId!);
+        print('DEBUG: Inventory item data received: $data');
+
         if (mounted) {
           setState(() {
             _itemData = data;
@@ -70,23 +77,38 @@ class _InventoryDetailsState extends State<InventoryDetails> {
         }
       } else if (widget.selectedTabLabel.toLowerCase() == 'inventory request' && widget.requestId != null) {
         // Fetch inventory request
+        print('DEBUG: Fetching inventory request with ID: ${widget.requestId}');
         final data = await _apiService.getInventoryRequestById(widget.requestId!);
-        if (mounted) {
-          setState(() {
-            _requestData = data;
-            _isLoading = false;
-          });
+        print('DEBUG: Inventory request data received: $data');
+
+        if (data == null) {
+          print('DEBUG: Request data is null, setting error message');
+          if (mounted) {
+            setState(() {
+              _errorMessage = 'Request not found with ID: ${widget.requestId}';
+              _isLoading = false;
+            });
+          }
+        } else {
+          if (mounted) {
+            setState(() {
+              _requestData = data;
+              _isLoading = false;
+            });
+          }
         }
       } else {
-        // No ID provided, use placeholder
+        // No ID provided
+        print('DEBUG: No ID provided for ${widget.selectedTabLabel}');
         if (mounted) {
           setState(() {
+            _errorMessage = 'No ID provided';
             _isLoading = false;
           });
         }
       }
     } catch (e) {
-      print('Error loading inventory details: $e');
+      print('ERROR: Error loading inventory details: $e');
       if (mounted) {
         setState(() {
           _errorMessage = e.toString();
@@ -401,58 +423,136 @@ class _InventoryDetailsState extends State<InventoryDetails> {
 
   // Content (without the button; button is sticky in bottomNavigationBar)
   Widget _buildTabContent() {
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading details...'),
+          ],
+        ),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage!,
+              style: const TextStyle(color: Colors.red),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => _loadData(),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
     switch (widget.selectedTabLabel.toLowerCase()) {
       case 'inventory details':
+        if (_itemData == null) {
+          return const Center(child: Text("Item not found."));
+        }
+
+        final item = _itemData!;
+        String formatDate(dynamic date) {
+          if (date == null) return 'N/A';
+          try {
+            final dt = date is DateTime ? date : DateTime.parse(date.toString());
+            return '${dt.day.toString().padLeft(2, '0')} / ${dt.month.toString().padLeft(2, '0')} / ${dt.year.toString().substring(2)}';
+          } catch (e) {
+            return 'N/A';
+          }
+        }
+
         return InventoryDetailsScreen(
           // Basic Information
-          itemName: "Galvanized Screw 3mm",
-          itemId: "INV-2025-014",
-          status: "In Stock",
+          itemName: item['item_name'] ?? 'Unknown Item',
+          itemId: item['item_code'] ?? item['id'] ?? 'N/A',
+          status: _getStockStatus(item),
           // Item Details
-          dateAdded: "01 / 09 / 25",
-          classification: "Hardware",
-          department: "Civil / Carpentry",
+          dateAdded: formatDate(item['date_added'] ?? item['created_at']),
+          classification: item['classification'] ?? item['category'] ?? 'N/A',
+          department: item['department'] ?? 'N/A',
           // Stock
-          stockStatus: "In Stock",
-          quantity: "150 pcs",
-          reorderLevel: "50 pcs",
-          unit: "pcs",
+          stockStatus: _getStockStatus(item),
+          quantity: '${item['current_stock'] ?? 0} ${item['unit_of_measure'] ?? 'pcs'}',
+          reorderLevel: '${item['reorder_level'] ?? 0} ${item['unit_of_measure'] ?? 'pcs'}',
+          unit: item['unit_of_measure'] ?? 'pcs',
           // Supplier
-          supplierName: "Metro Hardware Supply",
-          supplierNumber: "+63 912 345 6789",
-          warrantyUntil: "12 / 12 / 26",
+          supplierName: item['supplier_name'] ?? 'N/A',
+          supplierNumber: item['supplier_contact'] ?? 'N/A',
+          warrantyUntil: formatDate(item['expiry_date']),
         );
 
       case 'inventory request':
+        if (_requestData == null) {
+          return const Center(child: Text("Request not found."));
+        }
+
+        final request = _requestData!;
+        String formatDate(dynamic date) {
+          if (date == null) return 'N/A';
+          try {
+            final dt = date is DateTime ? date : DateTime.parse(date.toString());
+            return '${dt.day.toString().padLeft(2, '0')} / ${dt.month.toString().padLeft(2, '0')} / ${dt.year.toString().substring(2)}';
+          } catch (e) {
+            return 'N/A';
+          }
+        }
+
         return InventoryDetailsScreen(
           // Basic Information
-          itemName: "Electrical Tape",
-          itemId: " ",
-          status: "Pending",
+          itemName: request['item_name'] ?? 'Unknown Item',
+          itemId: request['_doc_id'] ?? request['id'] ?? 'N/A',
+          status: (request['status'] ?? 'pending').toString().toUpperCase(),
           // Request Item
-          requestId: "REQ-ITM-2025-091",
-          requestQuantity: "10",
-          requestUnit: "rolls",
-          dateNeeded: "15 / 09 / 25",
-          reqLocation: "Tower B – Unit 12A",
+          requestId: request['_doc_id'] ?? request['id'] ?? 'N/A',
+          requestQuantity: (request['quantity_requested'] ?? 0).toString(),
+          requestUnit: request['unit_of_measure'] ?? 'pcs',
+          dateNeeded: formatDate(request['requested_date'] ?? request['created_at']),
+          reqLocation: request['location'] ?? 'N/A',
           // Requestor
-          staffName: "Juan Dela Cruz",
-          staffDepartment: "Maintenance",
+          staffName: request['requested_by'] ?? 'Unknown',
+          staffDepartment: request['department'] ?? 'N/A',
           // Notes
-          notes: "Required for rewiring work in common hallways.",
+          notes: request['justification'] ?? request['admin_notes'] ?? 'No notes provided.',
         );
 
       default:
-        return const Center(child: Text("No requests found."));
+        return const Center(child: Text("No data found."));
+    }
+  }
+
+  String _getStockStatus(Map<String, dynamic> item) {
+    final currentStock = item['current_stock'] ?? 0;
+    final reorderLevel = item['reorder_level'] ?? 0;
+
+    if (currentStock == 0) {
+      return 'Out of Stock';
+    } else if (currentStock <= reorderLevel) {
+      return 'Critical';
+    } else {
+      return 'In Stock';
     }
   }
 
   // Sticky button builder (only for Inventory Details tab)
   Widget _buildStickyRequestBar() {
-    // Match the details shown above
-    const itemName = 'Galvanized Screw 3mm';
-    const itemId = 'INV-2025-014';
-    const defaultUnit = 'pcs';
+    // Use actual item data if available, otherwise use defaults
+    final itemName = _itemData?['item_name'] ?? 'Unknown Item';
+    final itemId = _itemData?['item_code'] ?? _itemData?['id'] ?? 'N/A';
+    final defaultUnit = _itemData?['unit_of_measure'] ?? 'pcs';
 
     return SafeArea(
       top: false,
@@ -467,11 +567,15 @@ class _InventoryDetailsState extends State<InventoryDetails> {
           height: 48,
           child: custom_buttons.FilledButton(
             label: 'Request Item',
-            onPressed: () => _openRequestItemSheet(
-              itemName: itemName,
-              itemId: itemId,
-              defaultUnit: defaultUnit,
-            ),
+            onPressed: () {
+              if (_itemData != null) {
+                _openRequestItemSheet(
+                  itemName: itemName,
+                  itemId: itemId,
+                  defaultUnit: defaultUnit,
+                );
+              }
+            },
             borderRadius: 12,
             backgroundColor: const Color(0xFF005CE7), // primary blue
             withOuterBorder: false, // <-- remove outer border line
