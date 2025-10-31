@@ -299,27 +299,6 @@ class _AdminWebSettingsPageState extends State<AdminWebSettingsPage> {
                 Row(
                   children: [
                     Expanded(
-                      child: _buildTextField(
-                        controller: _maintenanceIntervalController,
-                        label: "Default Maintenance Interval (days)",
-                        hint: "30",
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildTextField(
-                        controller: _sessionTimeoutController,
-                        label: "Session Timeout (minutes)",
-                        hint: "60",
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    Expanded(
                       child: _buildDropdown(
                         value: _selectedTheme,
                         label: "Theme",

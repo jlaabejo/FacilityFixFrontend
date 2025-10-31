@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:facilityfix/landingpage/splash_screen.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/home.dart';
-import 'package:facilityfix/staff/notification.dart';
 import 'package:facilityfix/staff/workorder.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -29,6 +28,7 @@ class _ProfilePageState extends State<ProfilePage> {
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
+    NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
     NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),

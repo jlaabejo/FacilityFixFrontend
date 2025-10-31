@@ -1,7 +1,7 @@
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/config/env.dart';
-import 'package:facilityfix/staff/view_details.dart';
-import 'package:facilityfix/staff/job_service_detail.dart';
+import 'package:facilityfix/staff/view_details/concern_slip.dart';
+import 'package:facilityfix/staff/view_details/job_service_detail.dart';
 import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/staff/maintenance.dart';
 import 'package:facilityfix/staff/announcement.dart';
@@ -29,14 +29,12 @@ class _HomeState extends State<HomePage> {
   // runtime user fields (defaults)
   String _userName = 'User';
   String _unitLabel = '—';
+  String _userInitials = ' ';
 
   List<Map<String, dynamic>> _allRequests = [];
   int _activeRequestsCount = 0;
   int _doneRequestsCount = 0;
   List<Map<String, dynamic>> _latestAnnouncements = [];
-  List<Map<String, dynamic>> _inventoryRequests = [];
-  int _pendingInventoryCount = 0;
-  int _approvedInventoryCount = 0;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -183,12 +181,6 @@ class _HomeState extends State<HomePage> {
           }
         }
 
-        setState(() {
-          _inventoryRequests = requests;
-          _pendingInventoryCount = pendingCount;
-          _approvedInventoryCount = approvedCount;
-        });
-
         print('[Staff Home] Loaded ${requests.length} inventory requests');
         print('[Staff Home] Pending: $pendingCount, Approved: $approvedCount');
       }
@@ -205,6 +197,20 @@ class _HomeState extends State<HomePage> {
     final firstWord = s.split(RegExp(r'\s+')).first;
     final lower = firstWord.toLowerCase();
     return '${lower[0].toUpperCase()}${lower.substring(1)}';
+  }
+
+  // Extract initials from full name
+  String _getInitials(String fullName) {
+    final trimmed = fullName.trim();
+    if (trimmed.isEmpty) return 'U';
+    
+    final parts = trimmed.split(RegExp(r'\s+'));
+    if (parts.length == 1) {
+      return parts[0][0].toUpperCase();
+    }
+    
+    // Take first letter of first name and last name
+    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
   }
 
   Future<void> _loadUserData() async {
@@ -254,14 +260,19 @@ class _HomeState extends State<HomePage> {
   void _updateUIFromProfile(Map<String, dynamic> profile) {
     // ---- Name ----
     String firstName = '';
+    String fullNameForInitials = '';
     final firstRaw = (profile['first_name'] ?? '').toString().trim();
 
     if (firstRaw.isNotEmpty) {
       firstName = _titleCaseFirstOnly(firstRaw);
+      // Build full name for initials
+      final lastRaw = (profile['last_name'] ?? '').toString().trim();
+      fullNameForInitials = '$firstRaw ${lastRaw.isNotEmpty ? lastRaw : ''}'.trim();
     } else {
       final fullName = (profile['full_name'] ?? '').toString().trim();
       if (fullName.isNotEmpty) {
         firstName = _titleCaseFirstOnly(fullName);
+        fullNameForInitials = fullName;
       }
     }
 
@@ -273,6 +284,7 @@ class _HomeState extends State<HomePage> {
       setState(() {
         _userName = firstName.isNotEmpty ? firstName : 'User';
         _unitLabel = formattedDept; // Show department for staff
+        _userInitials = _getInitials(fullNameForInitials.isNotEmpty ? fullNameForInitials : 'User');
       });
     }
   }
@@ -873,9 +885,17 @@ class _HomeState extends State<HomePage> {
       appBar: CustomAppBar(
         title: 'Home',
         leading: IconButton(
-          icon: const CircleAvatar(
-            backgroundImage: AssetImage('assets/images/profile.png'),
+          icon: CircleAvatar(
+            backgroundColor: const Color(0xFF005CE7),
             radius: 16,
+            child: Text(
+              _userInitials,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
           onPressed: () {
             Navigator.push(
@@ -1033,47 +1053,6 @@ class _HomeState extends State<HomePage> {
                                       .toList(),
                             ),
                         const SizedBox(height: 24),
-
-                        // Inventory Requests
-                        SectionHeader(
-                          title: 'Inventory Requests',
-                          actionLabel: 'View all',
-                          onActionTap:
-                              () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => const InventoryPage(),
-                                ),
-                              ),
-                        ),
-                        const SizedBox(height: 12),
-
-                        Row(
-                          children: [
-                            Expanded(
-                              child: StatusCard(
-                                title: 'Pending',
-                                count: '$_pendingInventoryCount',
-                                icon: Icons.hourglass_empty,
-                                iconColor: const Color(0xFFF79009),
-                                backgroundColor: const Color(0xFFFFFAEB),
-                                borderColor: const Color(0xFFF79009),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: StatusCard(
-                                title: 'Approved',
-                                count: '$_approvedInventoryCount',
-                                icon: Icons.check_circle_outline,
-                                iconColor: const Color(0xFF24D164),
-                                backgroundColor: const Color(0xFFF0FDF4),
-                                borderColor: const Color(0xFF24D164),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-
                         // Latest Announcement
                         SectionHeader(
                           title: 'Latest',

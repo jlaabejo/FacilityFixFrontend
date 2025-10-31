@@ -27,6 +27,7 @@ class _AnnouncementDetailsState extends State<AnnouncementDetailsPage> {
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
+    NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
     NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),
@@ -137,13 +138,10 @@ class _AnnouncementDetailsState extends State<AnnouncementDetailsPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        leading: Row(
+        title: 'View Details',
+        leading: const Row(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(0, 0, 8, 0),
-              child: const BackButton(),
-            ),
-            Text('View Details'),
+            Padding(padding: EdgeInsets.only(right: 8), child: BackButton()),
           ],
         ),
       ),

@@ -736,6 +736,7 @@ class RepairCard extends StatelessWidget {
   // Details
   final String title;
   final String unitId;
+  final String? location; // For job services and other requests
 
   // Staff
   final String? assignedStaff;
@@ -758,6 +759,7 @@ class RepairCard extends StatelessWidget {
     required this.statusTag,
     required this.title,
     required this.unitId,
+    this.location,
     this.assignedStaff,
     this.staffDepartment,
     this.staffPhotoUrl,
@@ -913,8 +915,8 @@ class RepairCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
 
-                // Unit (optional)
-                if (unitId.trim().isNotEmpty)
+                // Unit or Location (optional)
+                if (unitId.trim().isNotEmpty || (location?.trim().isNotEmpty ?? false))
                   Row(
                     children: [
                       const Icon(
@@ -925,7 +927,9 @@ class RepairCard extends StatelessWidget {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          unitId.trim(),
+                          (location?.trim().isNotEmpty ?? false) 
+                            ? location!.trim() 
+                            : unitId.trim(),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -1096,7 +1100,7 @@ class MaintenanceCard extends StatelessWidget {
           Flexible(
             child: _AssigneeLine(
               name: assignees.first.name,
-              department: assignees.first.department,
+              department: null, // Don't show department tag in maintenance
               photoUrl: assignees.first.photoUrl,
               dense: true,
             ),
@@ -1108,19 +1112,8 @@ class MaintenanceCard extends StatelessWidget {
         ],
       );
     } else {
-      leftCluster = Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (departmentTag?.trim().isNotEmpty ?? false) ...[
-            Flexible(
-              child: _EllipsizedTag(
-                child: DepartmentTag(departmentTag!.trim()),
-              ),
-            ),
-            const SizedBox(width: 6),
-          ],
-        ],
-      );
+      // No assignee - show empty or minimal info
+      leftCluster = const SizedBox.shrink();
     }
 
     return Material(
@@ -1253,7 +1246,8 @@ class MaintenanceCard extends StatelessWidget {
                   children: [
                     leftCluster,
                     const Spacer(),
-                    IconPill(icon: Icons.chat_bubble_outline, onTap: onChatTap),
+                    if (onChatTap != null)
+                      IconPill(icon: Icons.chat_bubble_outline, onTap: onChatTap),
                   ],
                 ),
               ],
@@ -1368,9 +1362,24 @@ class _AssigneeLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double avatarSize = dense ? 34 : 34;
-    final double reqMaxWidth = dense ? 120 : 120;
 
-    final widgets = <Widget>[_buildAvatar(photoUrl, name, size: avatarSize)];
+    final widgets = <Widget>[
+      _buildAvatar(photoUrl, name, size: avatarSize),
+      const SizedBox(width: 8),
+      Flexible(
+        child: Text(
+          name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF475467),
+          ),
+        ),
+      ),
+    ];
 
     if ((department ?? '').trim().isNotEmpty) {
       widgets.add(const SizedBox(width: 6));

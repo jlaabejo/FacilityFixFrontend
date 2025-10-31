@@ -2,8 +2,8 @@ import 'dart:async';
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/services/auth_storage.dart';
 import 'package:facilityfix/config/env.dart';
-import 'package:facilityfix/staff/view_details.dart';
-import 'package:facilityfix/staff/job_service_detail.dart';
+import 'package:facilityfix/staff/view_details/concern_slip.dart';
+import 'package:facilityfix/staff/view_details/job_service_detail.dart';
 import 'package:facilityfix/staff/maintenance.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
@@ -11,12 +11,10 @@ import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/services/chat_helper.dart';
 import 'package:facilityfix/staff/notification.dart';
 import 'package:facilityfix/staff/home.dart';
-import 'package:facilityfix/staff/profile.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/helper_models.dart';
-import 'package:facilityfix/widgets/modals.dart';
 import 'package:flutter/material.dart';
 
 class WorkOrderPage extends StatefulWidget {
@@ -27,12 +25,12 @@ class WorkOrderPage extends StatefulWidget {
 }
 
 class _WorkOrderPageState extends State<WorkOrderPage> {
+  int _selectedIndex = 1;
   // ─────────────── Tabs (by request type) ───────────────
   String _selectedTabLabel = "All";
 
   // ─────────────── Filters ───────────────
   String _selectedStatus = 'All';
-  String _selectedDepartment = 'All'; // mapped as "classification"
   final TextEditingController _searchController = TextEditingController();
 
   // ─────────────── Dynamic data from API ───────────────
@@ -77,6 +75,8 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                   'unit_id': request['unit_id'] ?? '',
                   'assigned_staff':
                       request['assigned_to'] ?? request['assigned_staff'],
+                  'staff_name': 
+                      request['staff_name'] ?? request['assigned_staff_name'] ?? '',
                   'staff_department':
                       request['staff_department'] ?? request['category'],
                   'description': request['description'] ?? '',
@@ -129,39 +129,19 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   ];
 
   void _onTabTapped(int index) {
-    if (index == 1) return; // Already on WorkOrder page
-
-    switch (index) {
-      case 0:
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const HomePage()),
-        );
-        break;
-      case 2:
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const MaintenancePage()),
-        );
-        break;
-      case 3:
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const AnnouncementPage()),
-        );
-        break;
-      case 4:
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const CalendarPage()),
-        );
-        break;
-      case 5:
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const InventoryPage()),
-        );
-        break;
+    final destinations = [
+      const HomePage(),
+      const WorkOrderPage(),
+      const MaintenancePage(),
+      const AnnouncementPage(),
+      const CalendarPage(),
+      const InventoryPage(),
+    ];
+    if (index != _selectedIndex) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => destinations[index]),
+      );
     }
   }
 
@@ -217,23 +197,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     }
   }
 
-  // ===== Popup to create request ============================================
-  // Note: Staff members respond to requests rather than creating them
-  void _showRequestDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder:
-          (_) => CustomPopup(
-            title: 'Staff Access',
-            message: 'Staff members can view and respond to requests. Only tenants can create new requests.',
-            primaryText: 'OK',
-            onPrimaryPressed: () {
-              Navigator.of(context).pop();
-            },
-          ),
-    );
-  }
-
   // ===== Filtering logic =====================================================
   static const List<String> _months = [
     'Jan',
@@ -274,11 +237,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     return _norm(w['status']) == _norm(_selectedStatus);
   }
 
-  bool _departmentMatches(Map<String, dynamic> w) {
-    if (_selectedDepartment == 'All') return true;
-    return _norm(w['category']) == _norm(_selectedDepartment);
-  }
-
   bool _assignmentMatches(Map<String, dynamic> w) {
     if (!_showOnlyMyAssignments || _currentUserId == null) return true;
     final assignedStaff = w['assigned_staff'] ?? w['assigned_to'];
@@ -308,7 +266,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       _allRequests
           .where(_tabMatchesByRequestType)
           .where(_statusMatches)
-          .where(_departmentMatches)
           .where(_searchMatches)
           .where(_assignmentMatches)
           .toList();
@@ -324,50 +281,14 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   }
 
   List<String> get _statusOptions {
-    final base = _allRequests
-        .where(_tabMatchesByRequestType)
-        .where(_departmentMatches)
-        .where(_searchMatches);
-    final set = <String>{};
-    for (final w in base) {
-      final s = (w['status'] ?? '').toString().trim();
-      if (s.isNotEmpty) set.add(s);
-    }
-    final list = set.toList()..sort();
-    return ['All', ...list];
-  }
-
-  List<String> get _deptOptions {
-    // predefined departments
-    final predefined = {
-      'Maintenance',
-      'Carpentry',
-      'Plumbing',
-      'Electrical',
-      'Masonry',
-    };
-
-    final base = _allRequests
-        .where(_tabMatchesByRequestType)
-        .where(_statusMatches)
-        .where(_searchMatches);
-
-    final set = <String>{};
-    for (final w in base) {
-      final d = (w['category'] ?? '').toString().trim();
-      if (d.isNotEmpty) set.add(d);
-    }
-
-    // merge both sets
-    final list = {...predefined, ...set}.toList()..sort();
-    return ['All', ...list];
+    // Fixed status list matching the filter design
+    return ['All', 'Assessed', 'Assigned', 'Completed', 'Sent'];
   }
 
   List<TabItem> get _tabs {
     final visible =
         _allRequests
             .where(_statusMatches)
-            .where(_departmentMatches)
             .where(_searchMatches)
             .toList();
 
@@ -378,7 +299,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       TabItem(label: 'All', count: visible.length),
       TabItem(label: 'Concern Slip', count: countFor('concern slip')),
       TabItem(label: 'Job Service', count: countFor('job service')),
-      TabItem(label: 'Work Order', count: countFor('work order')),
     ];
   }
 
@@ -394,8 +314,9 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       departmentTag: r['category'],
       priorityTag: r['priority'],
       unitId: r['unit_id'] ?? '',
+      location: r['location'],
       requestTypeTag: r['request_type'] ?? 'Concern Slip',
-      assignedStaff: r['assigned_staff'],
+      assignedStaff: r['staff_name'] ?? r['assigned_staff'],
       staffDepartment: r['staff_department'],
       onTap: () {
         // Extract the raw ID from the formatted ID or use the ID directly
@@ -488,18 +409,10 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                           searchController: _searchController,
                           selectedStatus: _selectedStatus,
                           statuses: _statusOptions,
-                          selectedClassification: _selectedDepartment,
-                          classifications: _deptOptions,
                           onStatusChanged: (status) {
                             setState(() {
                               _selectedStatus =
                                   status.trim().isEmpty ? 'All' : status;
-                            });
-                          },
-                          onClassificationChanged: (dept) {
-                            setState(() {
-                              _selectedDepartment =
-                                  dept.trim().isEmpty ? 'All' : dept;
                             });
                           },
                           onSearchChanged: (_) {
@@ -507,46 +420,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                           },
                         ),
                         const SizedBox(height: 16),
-
-                        // My Assignments Toggle
-                        // Container(
-                        //   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        //   decoration: BoxDecoration(
-                        //     color: const Color(0xFFF8FAFC),
-                        //     borderRadius: BorderRadius.circular(8),
-                        //     border: Border.all(color: const Color(0xFFE2E8F0)),
-                        //   ),
-                        //   child: Row(
-                        //     children: [
-                        //       const Icon(
-                        //         Icons.person_outline,
-                        //         size: 20,
-                        //         color: Color(0xFF64748B),
-                        //       ),
-                        //       const SizedBox(width: 8),
-                        //       const Text(
-                        //         'Show only my assignments',
-                        //         style: TextStyle(
-                        //           fontSize: 14,
-                        //           fontWeight: FontWeight.w500,
-                        //           color: Color(0xFF475569),
-                        //         ),
-                        //       ),
-                        //       const Spacer(),
-                        //       Switch(
-                        //         value: _showOnlyMyAssignments,
-                        //         onChanged: (value) {
-                        //           setState(() {
-                        //             _showOnlyMyAssignments = value;
-                        //           });
-                        //         },
-                        //         activeColor: const Color(0xFF005CE7),
-                        //         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        //       ),
-                        //     ],
-                        //   ),
-                        // ),
-                        // const SizedBox(height: 16),
                         StatusTabSelector(
                           tabs: _tabs,
                           selectedLabel: _selectedTabLabel,
@@ -610,7 +483,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       ),
       bottomNavigationBar: NavBar(
         items: _navItems,
-        currentIndex: 1,
+        currentIndex: _selectedIndex,
         onTap: _onTabTapped,
       ),
     );

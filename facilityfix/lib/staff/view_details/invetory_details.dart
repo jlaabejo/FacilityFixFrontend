@@ -29,7 +29,7 @@ class InventoryDetails extends StatefulWidget {
 }
 
 class _InventoryDetailsState extends State<InventoryDetails> {
-  final int _selectedIndex = 4;
+  final int _selectedIndex = 5;
   late final APIService _apiService;
   
   bool _isLoading = true;
@@ -40,6 +40,7 @@ class _InventoryDetailsState extends State<InventoryDetails> {
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
+    NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
     NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),

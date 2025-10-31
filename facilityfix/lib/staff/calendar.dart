@@ -406,10 +406,6 @@ class _CalendarPageState extends State<CalendarPage> {
               );
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadCalendarData,
-          ),
         ],
       ),
       body: SafeArea(

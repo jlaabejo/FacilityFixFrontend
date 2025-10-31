@@ -435,8 +435,9 @@ class HoldBottomSheet extends StatefulWidget {
 
 class _HoldBottomSheetState extends State<HoldBottomSheet> {
   final TextEditingController _note = TextEditingController();
+  final TextEditingController _otherReasonController = TextEditingController();
 
-  // Reasons + optional icons
+  // Reasons (no icons)
   static const _reasons = <String>[
     'Waiting for materials',
     'Tenant unavailable',
@@ -445,15 +446,6 @@ class _HoldBottomSheetState extends State<HoldBottomSheet> {
     'Weather constraints',
     'Other',
   ];
-
-  static const Map<String, IconData> _reasonIcons = {
-    'Waiting for materials': Icons.inventory_2_outlined,
-    'Tenant unavailable': Icons.sentiment_dissatisfied_outlined,
-    'Rescheduled': Icons.event_repeat,
-    'Awaiting approval': Icons.verified_outlined,
-    'Weather constraints': Icons.thunderstorm_outlined,
-    'Other': Icons.more_horiz,
-  };
 
   late String _selectedReason;
   DateTime? _resumeAt;
@@ -469,6 +461,7 @@ class _HoldBottomSheetState extends State<HoldBottomSheet> {
   @override
   void dispose() {
     _note.dispose();
+    _otherReasonController.dispose();
     super.dispose();
   }
 
@@ -507,10 +500,15 @@ class _HoldBottomSheetState extends State<HoldBottomSheet> {
   }
 
   void _confirm() {
+    // Use custom reason if "Other" is selected and field is not empty
+    final finalReason = _selectedReason == 'Other' && _otherReasonController.text.trim().isNotEmpty
+        ? _otherReasonController.text.trim()
+        : _selectedReason;
+    
     Navigator.pop(
       context,
       HoldResult(
-        reason: _selectedReason,
+        reason: finalReason,
         note: _note.text.trim().isEmpty ? null : _note.text.trim(),
         resumeAt: _resumeAt,
       ),
@@ -519,7 +517,6 @@ class _HoldBottomSheetState extends State<HoldBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final media = MediaQuery.of(context);
     final bottomInset = media.viewInsets.bottom;
 
@@ -557,10 +554,44 @@ class _HoldBottomSheetState extends State<HoldBottomSheet> {
                       const SizedBox(height: 8),
                       _ReasonChips(
                         reasons: _reasons,
-                        icons: _reasonIcons,
                         selected: _selectedReason,
                         onChanged: (r) => setState(() => _selectedReason = r),
                       ),
+                      
+                      // Show input field when "Other" is selected
+                      if (_selectedReason == 'Other') ...[
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _otherReasonController,
+                          decoration: InputDecoration(
+                            hintText: 'Please specify the reason...',
+                            hintStyle: const TextStyle(
+                              color: Color(0xFF9CA3AF),
+                              fontSize: 14,
+                            ),
+                            filled: true,
+                            fillColor: const Color(0xFFF9FAFB),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                            border: OutlineInputBorder(
+                              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderSide: const BorderSide(color: Color(0xFF005CE7), width: 1.4),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ],
                       const SizedBox(height: 16),
 
                       const _SectionLabel('Resume date & time'),
@@ -594,19 +625,23 @@ class _HoldBottomSheetState extends State<HoldBottomSheet> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          side: BorderSide(color: cs.outlineVariant),
+                          side: const BorderSide(color: Color(0xFFD1D5DB)),
                           padding: const EdgeInsets.symmetric(vertical: 14),
+                          foregroundColor: const Color(0xFF374151),
                         ),
                         onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel'),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: cs.primary,
-                          foregroundColor: cs.onPrimary,
+                          backgroundColor: const Color(0xFF3B82F6),
+                          foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -614,7 +649,10 @@ class _HoldBottomSheetState extends State<HoldBottomSheet> {
                           elevation: 0,
                         ),
                         icon: const Icon(Icons.pause_circle_outline),
-                        label: const Text('Confirm Hold'),
+                        label: const Text(
+                          'Confirm Hold',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
                         onPressed: _confirm,
                       ),
                     ),
@@ -636,9 +674,10 @@ class _ThemedPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const kPrimary = Color(0xFF005CE7);
-    const kSurface = Color(0xFFE5E7EB);
-    const kText    = Color(0xFF666666);
+    // Custom colors - NOT using default colors
+    const kPrimary = Color(0xFF3B82F6); // Blue
+    const kSurface = Color(0xFFF3F4F6); // Light gray
+    const kText    = Color(0xFF1F2937); // Dark gray
 
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -647,7 +686,6 @@ class _ThemedPicker extends StatelessWidget {
       data: theme.copyWith(
         colorScheme: scheme.copyWith(
           primary: kPrimary,
-          // Optional but often helpful so accents match:
           secondary: kPrimary,
           onPrimary: Colors.white,
           surface: kSurface,
@@ -712,57 +750,44 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-/// Reason chips (pill style)
+/// Reason chips (pill style) - No icons, improved UI
 class _ReasonChips extends StatelessWidget {
   final List<String> reasons;
-  final Map<String, IconData> icons;
   final String selected;
   final ValueChanged<String> onChanged;
 
   const _ReasonChips({
     required this.reasons,
-    required this.icons,
     required this.selected,
     required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: reasons.map((r) {
         final isSelected = r == selected;
         return ChoiceChip(
-          label: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icons[r] ?? Icons.more_horiz,
-                size: 16,
-                color: isSelected ? cs.onPrimary : cs.primary,
-              ),
-              const SizedBox(width: 6),
-              Text(r),
-            ],
-          ),
+          label: Text(r),
           selected: isSelected,
           onSelected: (_) => onChanged(r),
-          shape: StadiumBorder(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
             side: BorderSide(
-              color: isSelected ? cs.primary : const Color(0xFFE5E7EB),
-              width: 1,
+              color: isSelected ? const Color(0xFF3B82F6) : const Color(0xFFD1D5DB),
+              width: isSelected ? 1.5 : 1,
             ),
           ),
-          labelPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           showCheckmark: false,
-          selectedColor: cs.primary,
+          selectedColor: const Color(0xFF3B82F6),
           backgroundColor: Colors.white,
           labelStyle: TextStyle(
-            color: isSelected ? cs.onPrimary : const Color(0xFF111827),
+            color: isSelected ? Colors.white : const Color(0xFF374151),
             fontWeight: FontWeight.w600,
+            fontSize: 13,
           ),
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         );

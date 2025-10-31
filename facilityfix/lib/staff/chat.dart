@@ -41,6 +41,7 @@ class _ChatPageState extends State<ChatPage> {
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
+    NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
     NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),

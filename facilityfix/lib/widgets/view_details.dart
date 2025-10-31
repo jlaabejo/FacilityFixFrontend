@@ -69,41 +69,10 @@ class ConcernSlipDetails extends StatelessWidget {
   });
 
   // Map resolution -> what we show as "Request Type"
+  // For concern slip, always show "Concern Slip" regardless of resolution
   String _effectiverequestTypeTag() {
-    final res = resolutionType?.trim().toLowerCase();
-
-
-    if (this.title.contains("Job Service")){
-      return "Job Service";
-    }
-
-
-    if (this.title.contains("Work Order")){
-      return "Work Order";
-    }
-
-     if (this.title.contains("Rejected")){
-      return "Concern Slip";
-    }
-
-     if (this.title.contains("Rejected")){
-      return "Concern Slip";
-    }
-
-
-
-
-    switch (res) {
-      case 'job_service':
-        return 'Job Service';
-      case 'work_permit':
-        return 'Work Order';
-      case 'rejected':
-        // keep it as Concern Slip; reflect rejection via statusTag
-        return 'Concern Slip';
-      default:
-        return requestTypeTag;
-    }
+    // Always return "Concern Slip" for this widget
+    return 'Concern Slip';
   }
 
   // Local helpers for formatting via UiDateUtils
@@ -233,13 +202,20 @@ class ConcernSlipDetails extends StatelessWidget {
           SizedBox(height: 12 * s),
 
           // ===== Requester Details =====
-          const _SectionTitle('Requester Details'),
-          SizedBox(height: 8 * s),
-          KeyValueRow.text(label: 'Requested By', valueText: requestedBy),
-          if ((unitId ?? '').isNotEmpty) ...[
+            const _SectionTitle('Requester Details'),
+            SizedBox(height: 8 * s),
+            KeyValueRow.text(label: 'Requested By', valueText: requestedBy),
+            if (unitId.isNotEmpty) ...[
             SizedBox(height: 4 * s),
-            KeyValueRow.text(label: 'Unit ID', valueText: unitId!),
-          ],
+            KeyValueRow.text(label: 'Unit ID', valueText: unitId),
+            ],
+            if ((scheduleAvailability?.trim().isNotEmpty ?? false)) ...[
+            SizedBox(height: 4 * s),
+            KeyValueRow.text(
+              label: 'Schedule Availability',
+              valueText: _fmtScheduleAvail(scheduleAvailability) ?? '—',
+            ),
+            ],
 
           // ----- Divider -----
           SizedBox(height: 14 * s),
@@ -284,10 +260,20 @@ class ConcernSlipDetails extends StatelessWidget {
             SizedBox(height: 12 * s),
 
             _Section(
-              title: 'Staff Assessment',
+              title: 'Assigned Staff',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+
+                  // Date Assessed (shown once)
+                  if (assessedAt != null) ...[
+                    KeyValueRow.text(
+                      label: 'Date Assessed',
+                      valueText: _fmtDate(assessedAt!),
+                    ),
+                    SizedBox(height: 8 * s),
+                  ],
+
                   // Assigned Staff subsection (only if we have any staff info)
                   if ((assignedStaff?.trim().isNotEmpty ?? false) ||
                       (staffDepartment?.trim().isNotEmpty ?? false) ||
@@ -317,15 +303,6 @@ class ConcernSlipDetails extends StatelessWidget {
                         ],
                       ),
                     ),
-                  ],
-
-                  // Date Assessed (shown once)
-                  if (assessedAt != null) ...[
-                    KeyValueRow.text(
-                      label: 'Date Assessed',
-                      valueText: _fmtDate(assessedAt!),
-                    ),
-                    SizedBox(height: 8 * s),
                   ],
 
                   // Assessment text
@@ -383,8 +360,8 @@ class JobServiceDetails extends StatelessWidget {
   final String requestTypeTag; // e.g. "Job Service"
   final String? resolutionType; // job_service, work_permit, rejected
   final String? priority; // High | Medium | Low
-  final String
-  statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+  final String? departmentTag;
+  final String statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
 
   //  Tenant / Requester
   final String requestedBy;
@@ -410,6 +387,9 @@ class JobServiceDetails extends StatelessWidget {
 
   // Tracking
   final List<String>? materialsUsed;
+  
+  // Callbacks
+  final VoidCallback? onViewConcernSlip;
 
   const JobServiceDetails({
     super.key,
@@ -423,6 +403,7 @@ class JobServiceDetails extends StatelessWidget {
     this.priority,
     required this.statusTag,
     this.resolutionType,
+    this.departmentTag,
 
     // Tenant / Requester
     required this.requestedBy,
@@ -447,6 +428,9 @@ class JobServiceDetails extends StatelessWidget {
 
     // Tracking
     this.materialsUsed,
+    
+    // Callbacks
+    this.onViewConcernSlip,
   });
 
   // Map resolution type to what we DISPLAY as "Request Type".
@@ -556,15 +540,61 @@ class JobServiceDetails extends StatelessWidget {
                  
               ),
               SizedBox(width: 8 * s),
-              Text(
-                'From Slip: $concernSlipId',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 11.5 * s,
-                  color: const Color(0xFF667085),
-                  fontWeight: FontWeight.w500,
+              if (concernSlipId.isNotEmpty && onViewConcernSlip != null)
+                GestureDetector(
+                  onTap: onViewConcernSlip,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 6 * s),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF005CE7),
+                      borderRadius: BorderRadius.circular(6 * s),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF005CE7).withOpacity(0.2),
+                          blurRadius: 4 * s,
+                          offset: Offset(0, 2 * s),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.description_outlined,
+                          size: 16 * s,
+                          color: Colors.white,
+                        ),
+                        SizedBox(width: 6 * s),
+                        Text(
+                          'View Concern Slip',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12 * s,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                        SizedBox(width: 4 * s),
+                        Icon(
+                          Icons.arrow_forward,
+                          size: 14 * s,
+                          color: Colors.white,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else if (concernSlipId.isNotEmpty)
+                Text(
+                  'From Slip: $concernSlipId',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11.5 * s,
+                    color: const Color(0xFF667085),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
             ],
           ),
 
@@ -577,7 +607,7 @@ class JobServiceDetails extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 KeyValueRow.text(
-                  label: 'Date Created',
+                  label: 'Date Requested',
                   valueText: _fmtDate(createdAt),
                 ),
                 if (updatedAt != null) ...[
@@ -605,6 +635,14 @@ class JobServiceDetails extends StatelessWidget {
                     labelWidth: 120 * s,
                   ),
                 ],
+                if ((departmentTag?.trim().isNotEmpty ?? false)) ...[
+                  SizedBox(height: 6 * s),
+                  KeyValueRow(
+                    label: 'Department',
+                    value: DepartmentTag(departmentTag!.trim()),
+                    labelWidth: 120 * s,
+                  ),
+                ],
               ],
             ),
           ),
@@ -615,13 +653,22 @@ class JobServiceDetails extends StatelessWidget {
           SizedBox(height: 12 * s),
 
           // ===== Requester Details =====
-          const _SectionTitle('Requester Details'),
-          SizedBox(height: 8 * s),
-          KeyValueRow.text(label: 'Requested By', valueText: requestedBy),
-          if ((unitId ?? '').isNotEmpty) ...[
+            const _SectionTitle('Requester Details'),
+            SizedBox(height: 8 * s),
+            KeyValueRow.text(label: 'Requested By', valueText: requestedBy),
+            // Name and Email intentionally removed to match Concern Slip mapping
+            // Show Unit ID and optional Schedule Availability
+            if (unitId.isNotEmpty) ...[
             SizedBox(height: 4 * s),
-            KeyValueRow.text(label: 'Unit ID', valueText: unitId!),
-          ],
+            KeyValueRow.text(label: 'Unit ID', valueText: unitId),
+            ],
+            if ((scheduleAvailability?.trim().isNotEmpty ?? false)) ...[
+            SizedBox(height: 4 * s),
+            KeyValueRow.text(
+              label: 'Schedule Availability',
+              valueText: _fmtSchedAvail(scheduleAvailability) ?? '—',
+            ),
+            ],
 
           // ----- Divider -----
           SizedBox(height: 14 * s),
@@ -633,17 +680,19 @@ class JobServiceDetails extends StatelessWidget {
               (scheduleAvailability?.trim().isNotEmpty ?? false) ||
               (assessment?.trim().isNotEmpty ?? false)) ...[
             _Section(
-              title: 'Additional Notes',
-              child: Column(
+                title: 'Additional Notes',
+                child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Additional Notes Text
                   if ((additionalNotes?.trim().isNotEmpty ?? false)) ...[
-                    Text(
-                      additionalNotes!.trim(),
-                      style: TextStyle(fontSize: 14 * s),
-                    ),
-                    SizedBox(height: 8 * s),
+                  _SectionCard(
+                    title: 'Additional Notes',
+                    content: additionalNotes!.trim(),
+                    padding: EdgeInsets.all(14 * s),
+                    hideIfEmpty: false,
+                  ),
+                  SizedBox(height: 8 * s),
                   ],
 
                   // Optional Schedule Availability
@@ -667,7 +716,6 @@ class JobServiceDetails extends StatelessWidget {
                 ],
               ),
             ),
-            SizedBox(height: 14 * s),
           ],
 
 
@@ -676,39 +724,35 @@ class JobServiceDetails extends StatelessWidget {
           ffDivider(),
           SizedBox(height: 12 * s),
 
-          // ===== Staff =====
+          // ===== Assigned Staff =====
           if (hasStaffBits) ...[
-            _Section(
-              title: 'Assigned Staff',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if ((assignedStaff?.trim().isNotEmpty ?? false)) ...[
-                    _AvatarNameBlock(
-                      name: assignedStaff!.trim(),
-                      departmentTag:
-                          (staffDepartment?.trim().isNotEmpty ?? false)
-                              ? staffDepartment!.trim()
-                              : null,
-                      photoUrl:
-                          (staffPhotoUrl?.trim().isNotEmpty ?? false)
-                              ? staffPhotoUrl!.trim()
-                              : null,
-                    ),
-                    SizedBox(height: 10 * s),
-                  ] else if ((staffDepartment?.trim().isNotEmpty ?? false)) ...[
-                    DepartmentTag(staffDepartment!.trim()),
-                    SizedBox(height: 10 * s),
-                  ],
-
-                  if (assessedAt != null)
-                    KeyValueRow.text(
-                      label: 'Date Assessed',
-                      valueText: _fmtDate(assessedAt!),
-                    ),
-                ],
+            const _SectionTitle('Assigned Staff'),
+            SizedBox(height: 8 * s),
+            
+            // Show staff avatar/name if available
+            if ((assignedStaff?.trim().isNotEmpty ?? false)) ...[
+              _AvatarNameBlock(
+                name: assignedStaff!.trim(),
+                departmentTag: (staffDepartment?.trim().isNotEmpty ?? false) 
+                    ? staffDepartment!.trim() 
+                    : null,
+                photoUrl: (staffPhotoUrl?.trim().isNotEmpty ?? false) 
+                    ? staffPhotoUrl!.trim() 
+                    : null,
               ),
-            ),
+            ] else if ((staffDepartment?.trim().isNotEmpty ?? false)) ...[
+              DepartmentTag(staffDepartment!.trim()),
+            ],
+            
+            // Date Assessed
+            if (assessedAt != null) ...[
+              SizedBox(height: 8 * s),
+              KeyValueRow.text(
+                label: 'Date Assessed',
+                valueText: _fmtDate(assessedAt!),
+              ),
+            ],
+            
             SizedBox(height: 14 * s),
           ],
 
@@ -1463,9 +1507,7 @@ class _MaintenanceState extends State<MaintenanceDetails> {
         assessedText.isNotEmpty ||
         assessedAttachments.isNotEmpty;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      child: Column(
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
@@ -1488,14 +1530,28 @@ class _MaintenanceState extends State<MaintenanceDetails> {
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            widget.id,
-            style: const TextStyle(
-              color: Color(0xFF475467),
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
+          
+          // ID and Tags Row
+          Row(
+            children: [
+              Text(
+                widget.id,
+                style: const TextStyle(
+                  color: Color(0xFF475467),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 8),
+              if ((widget.departmentTag ?? '').trim().isNotEmpty)
+                DepartmentTag(widget.departmentTag!),
+              const SizedBox(width: 8),
+              if ((widget.priority ?? '').trim().isNotEmpty)
+                PriorityTag(priority: widget.priority!),
+            ],
           ),
+
+          const SizedBox(height: 16),
 
           // Basic info
           _Section(
@@ -1515,20 +1571,6 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                   KeyValueRow.text(
                     label: 'Location',
                     valueText: widget.location!.trim(),
-                  ),
-                ],
-                if ((widget.departmentTag ?? '').trim().isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  KeyValueRow.text(
-                    label: 'Department',
-                    valueText: widget.departmentTag!.trim(),
-                  ),
-                ],
-                if ((widget.priority ?? '').trim().isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  KeyValueRow.text(
-                    label: 'Priority',
-                    valueText: widget.priority!.trim(),
                   ),
                 ],
                 if (widget.startedAt != null) ...[
@@ -1568,9 +1610,7 @@ class _MaintenanceState extends State<MaintenanceDetails> {
               hideIfEmpty: false,
             ),
           ],
-
           const SizedBox(height: 10),
-
           // Checklist (interactive)
           if ((widget.checklist_complete ?? const <String>[]).isNotEmpty)
             _Section(
@@ -1634,80 +1674,74 @@ class _MaintenanceState extends State<MaintenanceDetails> {
           ffDivider(),
           const SizedBox(height: 8),
 
-          // Staff Details
-          if ((widget.assignedStaff ?? '').trim().isNotEmpty ||
-              (widget.assessment ?? '').trim().isNotEmpty ||
-              widget.assessedAt != null ||
-              (widget.staffAttachments ?? const <String>[]).isNotEmpty)
+          // Staff Details - Avatar and Name only
+          if ((widget.assignedStaff ?? '').trim().isNotEmpty)
             _Section(
               title: "Staff Details",
+              child: _AvatarNameBlock(
+                name: widget.assignedStaff!.trim(),
+                departmentTag:
+                    (widget.staffDepartment?.trim().isNotEmpty ?? false)
+                        ? widget.staffDepartment!.trim()
+                        : null,
+                photoUrl:
+                    (widget.staffPhotoUrl?.trim().isNotEmpty ?? false)
+                        ? widget.staffPhotoUrl!.trim()
+                        : null,
+              ),
+            ),
+
+          // Assessment Section - Only show if assessment exists
+          if (widget.assessedAt != null ||
+              (widget.assessment?.trim().isNotEmpty ?? false)) ...[
+            const SizedBox(height: 14),
+            _Section(
+              title: 'Assessment',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Avatar, Name, Department
-                  if ((widget.assignedStaff?.trim().isNotEmpty ?? false))
-                    _AvatarNameBlock(
-                      name: widget.assignedStaff!.trim(),
-                      departmentTag:
-                          (widget.staffDepartment?.trim().isNotEmpty ?? false)
-                              ? widget.staffDepartment!.trim()
-                              : null,
-                      photoUrl:
-                          (widget.staffPhotoUrl?.trim().isNotEmpty ?? false)
-                              ? widget.staffPhotoUrl!.trim()
-                              : null,
+                  // Date Assessed
+                  if (widget.assessedAt != null) ...[
+                    KeyValueRow.text(
+                      label: 'Assessed At',
+                      valueText: _relativeOrFullDT(widget.assessedAt),
                     ),
+                    const SizedBox(height: 8),
+                  ],
 
-                    // ===== Assessment Section =====
-                    if (widget.assessedAt != null ||
-                        (widget.assessment?.trim().isNotEmpty ?? false)) ...[
-                      const SizedBox(height: 14),
-                      _Section(
-                        title: 'Assessment',
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Date Assessed
-                            if (widget.assessedAt != null) ...[
-                              KeyValueRow.text(
-                                label: 'Assessed At',
-                                valueText: _relativeOrFullDT(widget.assessedAt),
-                              ),
-                              const SizedBox(height: 8),
-                            ],
+                  // Assessment Notes
+                  if ((widget.assessment ?? '').trim().isNotEmpty) ...[
+                    Text(
+                      widget.assessment!.trim(),
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  ],
 
-                            // Assessment Notes
-                            if ((widget.assessment ?? '').trim().isNotEmpty) ...[
-                              Text(
-                                widget.assessment!.trim(),
-                                style: const TextStyle(fontSize: 14),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                    ],
-
-                  // Attachments
-                  if ((widget.staffAttachments ?? const <String>[])
-                      .isNotEmpty) ...[
+                  // Assessment Attachments
+                  if ((widget.staffAttachments ?? const <String>[]).isNotEmpty) ...[
                     const SizedBox(height: 12),
-                    _Section(
-                      title: "Assessment Attachments",
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children:
-                            (widget.staffAttachments ?? const <String>[])
-                                .map((u) => _thumb(u, h: 80, w: 140))
-                                .toList(),
+                    const Text(
+                      "Assessment Attachments",
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF101828),
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children:
+                          (widget.staffAttachments ?? const <String>[])
+                              .map((u) => _thumb(u, h: 80, w: 140))
+                              .toList(),
                     ),
                   ],
                 ],
               ),
             ),
+          ],
 
           // Materials used (optional)
           if ((widget.materialsUsed ?? const <String>[]).isNotEmpty)
@@ -1754,7 +1788,6 @@ class _MaintenanceState extends State<MaintenanceDetails> {
               ),
             ),
         ],
-      ),
     );
   }
 }
@@ -1942,58 +1975,6 @@ class AnnouncementDetails extends StatelessWidget {
 
             if (hasAttachment)
               _buildSectionCard(title: 'Attachment', content: attachment!),
-
-            // Mark as Read Button
-            if (!isRead && onMarkAsRead != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 20),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: onMarkAsRead,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF005CE7),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.check_circle_outline, size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          'Mark as Read',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-            // Already Read Indicator
-            if (isRead)
-              Padding(
-                padding: const EdgeInsets.only(top: 20),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0F9FF),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFBAE6FD), width: 1),
-                  ),
-                ),
-              ),
           ],
         ),
       ),

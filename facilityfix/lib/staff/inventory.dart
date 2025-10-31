@@ -5,7 +5,6 @@ import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/staff/maintenance.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
-import 'package:facilityfix/staff/profile.dart';
 import 'package:facilityfix/staff/view_details/invetory_details.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart';
