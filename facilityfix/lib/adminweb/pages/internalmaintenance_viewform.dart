@@ -194,6 +194,8 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
 
   Future<void> _loadInventoryItems() async {
     try {
+
+      
       final response = await _apiService.getInventoryItems();
       
       if (response['success'] == true && response['data'] != null) {

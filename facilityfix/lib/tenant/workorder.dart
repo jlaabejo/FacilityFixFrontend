@@ -510,7 +510,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        title: 'Work Order Management',
+        title: 'Repair Request Management',
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
