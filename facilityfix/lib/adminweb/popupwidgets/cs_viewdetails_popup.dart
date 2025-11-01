@@ -208,7 +208,7 @@ class ConcernSlipDetailDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: _buildDetailItem('REQUESTED BY', 'Erika De Guzman'),
+              child: _buildDetailItem('REQUESTED BY', task['rawData']?['reported_by'] ?? 'N/A'),
             ),
             const SizedBox(width: 48),
             Expanded(

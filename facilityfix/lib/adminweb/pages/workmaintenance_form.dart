@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
+import '../services/round_robin_assignment_service.dart';
 import '../../services/auth_storage.dart';
 import '../../services/api_services.dart' as main_api;
 
@@ -63,6 +64,7 @@ class _InternalMaintenanceFormPageState
   String? _selectedAdminNotification;
   String? _selectedStaffNotification;
   String? _selectedStaffUserId; // Store the actual staff UID
+  bool _isAutoAssigning = false; // Loading state for auto-assign
 
   DateTime? _dateCreated;
   DateTime? _startDate;
@@ -75,6 +77,7 @@ class _InternalMaintenanceFormPageState
   List<Map<String, dynamic>> _selectedInventoryItems = [];
   final _apiService = ApiService();
   final _mainApiService = main_api.APIService();
+  final _roundRobinService = RoundRobinAssignmentService();
 
   // -------------------- NAV --------------------
   String? _getRoutePath(String routeKey) {
@@ -253,10 +256,24 @@ class _InternalMaintenanceFormPageState
       return;
     }
 
+    // Filter items based on selected location
+    List<Map<String, dynamic>> filteredItems = _availableInventoryItems;
+    if (_selectedLocation != null && _selectedLocation!.isNotEmpty) {
+      filteredItems = _availableInventoryItems.where((item) {
+        final recommendedOn = item['recommended_on'];
+        if (recommendedOn == null) return true; // Show items without recommendations
+        if (recommendedOn is List) {
+          return recommendedOn.contains(_selectedLocation);
+        }
+        return true;
+      }).toList();
+    }
+
     showDialog(
       context: context,
       builder: (context) => _InventorySelectionDialog(
-        availableItems: _availableInventoryItems,
+        availableItems: filteredItems,
+        selectedLocation: _selectedLocation,
         onItemSelected: (item, quantity) {
           setState(() {
             _selectedInventoryItems.add({
@@ -276,6 +293,172 @@ class _InternalMaintenanceFormPageState
     setState(() {
       _selectedInventoryItems.removeAt(index);
     });
+  }
+
+  // Auto-assign staff based on selected department using round-robin
+  Future<void> _handleAutoAssignStaff() async {
+    if (_selectedDepartment == null || _selectedDepartment!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a department first'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    // Set loading state
+    setState(() {
+      _isAutoAssigning = true;
+    });
+
+    try {
+      // Map UI department names to backend department values
+      String departmentKey;
+      switch (_selectedDepartment!.toLowerCase()) {
+        case 'carpentry':
+          departmentKey = 'carpentry';
+          break;
+        case 'electrical':
+          departmentKey = 'electrical';
+          break;
+        case 'masonry':
+          departmentKey = 'masonry';
+          break;
+        case 'plumbing':
+          departmentKey = 'plumbing';
+          break;
+        default:
+          departmentKey = 'general_maintenance';
+      }
+
+      final nextStaff = await _roundRobinService.getNextStaffForDepartment(departmentKey);
+
+      if (nextStaff != null) {
+        final firstName = nextStaff['first_name'] ?? '';
+        final lastName = nextStaff['last_name'] ?? '';
+        final staffName = '$firstName $lastName'.trim();
+        final staffId = nextStaff['user_id'] ?? nextStaff['id'];
+
+        // Update the text field and selected staff ID
+        if (mounted) {
+          setState(() {
+            _assignedStaffController.text = staffName;
+            _selectedStaffUserId = staffId;
+            _isAutoAssigning = false;
+          });
+
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text('Auto-assigned to $staffName'),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isAutoAssigning = false;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text('No available staff found in $_selectedDepartment department'),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('[AutoAssign] Error auto-assigning staff: $e');
+      if (mounted) {
+        setState(() {
+          _isAutoAssigning = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('Failed to auto-assign staff: $e'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  // Auto-populate recommended inventory items for selected location
+  void _autoPopulateInventoryForLocation(String? location) {
+    if (location == null || location.isEmpty) return;
+    if (_availableInventoryItems.isEmpty) return;
+
+    // Find items recommended for this location
+    final recommendedItems = _availableInventoryItems.where((item) {
+      final recommendedOn = item['recommended_on'];
+      if (recommendedOn == null) return false;
+      if (recommendedOn is List) {
+        return recommendedOn.contains(location);
+      }
+      return false;
+    }).toList();
+
+    // Add recommended items that aren't already selected
+    for (final item in recommendedItems) {
+      final itemId = item['id'] ?? item['_doc_id'];
+      final alreadyAdded = _selectedInventoryItems.any((selected) =>
+          selected['inventory_id'] == itemId);
+
+      if (!alreadyAdded) {
+        setState(() {
+          _selectedInventoryItems.add({
+            'inventory_id': itemId,
+            'item_name': item['item_name'],
+            'item_code': item['item_code'],
+            'quantity': 1, // Default quantity
+            'available_stock': item['current_stock'],
+          });
+        });
+      }
+    }
+
+    // Show feedback to user
+    if (recommendedItems.isNotEmpty && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Added ${recommendedItems.length} recommended item(s) for $location'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Future<List<String>> _createInventoryRequests(String taskId) async {
@@ -445,6 +628,24 @@ class _InternalMaintenanceFormPageState
         : 'Use formats like "45 mins" or "3 hrs"';
   }
 
+  // Parse duration string to minutes (e.g., "3 hrs" -> 180, "45 mins" -> 45)
+  int _parseDurationToMinutes(String durationStr) {
+    final trimmed = durationStr.trim().toLowerCase();
+    final re = RegExp(r'(\d+)\s*(min|mins|minutes|hr|hrs|hour|hours)');
+    final match = re.firstMatch(trimmed);
+
+    if (match == null) return 0;
+
+    final value = int.tryParse(match.group(1) ?? '0') ?? 0;
+    final unit = match.group(2) ?? '';
+
+    if (unit.startsWith('hr') || unit.startsWith('hour')) {
+      return value * 60; // Convert hours to minutes
+    } else {
+      return value; // Already in minutes
+    }
+  }
+
   // -------------------- INIT/DISPOSE --------------------
   @override
   void initState() {
@@ -487,6 +688,10 @@ class _InternalMaintenanceFormPageState
 
     final id = _codeIdController.text;
     final scheduledDateIso = _startDate?.toUtc().toIso8601String();
+
+    // Parse duration to minutes for backend
+    final durationInMinutes = _parseDurationToMinutes(_estimatedDurationController.text.trim());
+
     final maintenance = <String, dynamic>{
       'id': id,
       'maintenanceType': 'Internal',
@@ -525,6 +730,7 @@ class _InternalMaintenanceFormPageState
       'assigned_to': _selectedStaffUserId ?? _assignedStaffController.text.trim(),
       'assigned_staff_name': _assignedStaffController.text.trim(),
       'department': _selectedDepartment,
+      'estimated_duration': durationInMinutes, // Backend expects integer in minutes
       'checklist_completed': _checklistItems,
       'parts_used': <Map<String, dynamic>>[],
       'tools_used': <String>[],
@@ -721,99 +927,167 @@ class _InternalMaintenanceFormPageState
                       ),
                       const SizedBox(height: 24),
 
+                      // ===== Responsible Team (moved before Assign Staff) =====
+                      const Text(
+                        "Responsible Team",
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
                       Row(
                         children: [
-                          // Created By (auto, read-only) - REMOVED AS IT'S NOW DONE VIA AUTH TOKEN
-                          // Expanded(
-                          //   child: _fieldBox(
-                          //     child: TextFormField(
-                          //       controller: _createdByController,
-                          //       enabled: false, // not editable
-                          //       decoration: _decoration('Automated Name').copyWith(
-                          //         disabledBorder: OutlineInputBorder(
-                          //           borderRadius: BorderRadius.circular(8),
-                          //           borderSide: BorderSide(color: Colors.grey[300]!),
-                          //         ),
-                          //       ),
-                          //     ),
-                          //   ),
-                          // ),
-                          // const SizedBox(width: 24),
                           Expanded(
                             child: _fieldBox(
-                              child: Autocomplete<Map<String, dynamic>>(
-                                optionsBuilder: (textEditingValue) {
-                                  if (textEditingValue.text.isEmpty) {
-                                    return _staffMembers;
-                                  }
-                                  return _staffMembers.where((staff) {
-                                    final name =
-                                        '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'
-                                            .toLowerCase();
-                                    return name.contains(
-                                      textEditingValue.text.toLowerCase(),
-                                    );
-                                  });
-                                },
-                                displayStringForOption:
-                                    (staff) =>
-                                        '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'
-                                            .trim(),
-                                onSelected: (staff) {
-                                  // Directly update the controller text for consistency
-                                  _assignedStaffController.text =
-                                      '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'
-                                          .trim();
-                                },
-                                fieldViewBuilder: (
-                                  context,
-                                  controller,
-                                  focusNode,
-                                  onFieldSubmitted,
-                                ) {
-                                  return TextFormField(
-                                    controller:
-                                        controller, // Use the controller passed to fieldViewBuilder
-                                    focusNode: focusNode,
-                                    validator: _req,
-                                    decoration: _decoration('Assign Staff...'),
-                                    // onChanged is crucial to update the _assignedStaffController if Autocomplete's controller is used directly
-                                    onChanged: (value) {
-                                      _assignedStaffController.text = value;
-                                    },
-                                  );
-                                },
+                              child: DropdownButtonFormField<String>(
+                                value: _selectedDepartment,
+                                validator: _reqDropdown,
+                                decoration: _decoration('Select department...'),
+                                items:
+                                    const [
+                                          'Carpentry',
+                                          'Electrical',
+                                          'Masonry',
+                                          'Plumbing',
+                                        ]
+                                        .map(
+                                          (v) => DropdownMenuItem(
+                                            value: v,
+                                            child: Text(v),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged:
+                                    (v) => setState(() => _selectedDepartment = v),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 24),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue[100]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline, size: 16, color: Colors.blue[700]),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Tip: Select a department first, then use "Auto-Assign" to automatically assign the next available staff member',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.blue[700],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 32),
 
-                          // Date Created (editable with picker + validation)
+                      // ===== Assign Staff =====
+                      const Text(
+                        "Assign Staff",
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Assign Staff Row with Auto-Assign button
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Expanded(
                             child: _fieldBox(
                               child: TextFormField(
-                                controller: _dateCreatedController,
-                                readOnly:
-                                    true, // prevent typing, open picker instead
+                                controller: _assignedStaffController,
                                 validator: _req,
-                                onTap:
-                                    () => _pickDate(
+                                decoration: _decoration('Assign Staff...'),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+
+                          // Auto-Assign Button
+                          SizedBox(
+                            height: _kFieldHeight,
+                            child: OutlinedButton.icon(
+                              onPressed: _isAutoAssigning ? null : _handleAutoAssignStaff,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.orange[700],
+                                side: BorderSide(color: Colors.orange[600]!),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                disabledForegroundColor: Colors.grey[400],
+                                disabledBackgroundColor: Colors.transparent,
+                              ),
+                              icon: _isAutoAssigning
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                                      ),
+                                    )
+                                  : const Icon(Icons.autorenew, size: 18),
+                              label: Text(
+                                _isAutoAssigning ? 'Assigning...' : 'Auto-Assign',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Date Created (editable with picker + validation)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Date Created'),
+                                _fieldBox(
+                                  child: TextFormField(
+                                    controller: _dateCreatedController,
+                                    readOnly: true,
+                                    validator: _req,
+                                    onTap: () => _pickDate(
                                       initial: _dateCreated ?? DateTime.now(),
                                       onPick: (d) {
                                         setState(() {
                                           _dateCreated = d;
-                                          _dateCreatedController
-                                              .text = _fmtDate(d);
+                                          _dateCreatedController.text = _fmtDate(d);
                                         });
                                       },
                                     ),
-                                decoration: _decoration('YYYY-MM-DD').copyWith(
-                                  suffixIcon: const Icon(
-                                    Icons.calendar_today,
-                                    size: 18,
+                                    decoration: _decoration('YYYY-MM-DD').copyWith(
+                                      suffixIcon: const Icon(
+                                        Icons.calendar_today,
+                                        size: 18,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
+                              ],
                             ),
                           ),
                         ],
@@ -850,15 +1124,12 @@ class _InternalMaintenanceFormPageState
                           Expanded(
                             child: _fieldBox(
                               child: DropdownButtonFormField<String>(
-                                value: _selectedStatus,
+                                value: 'New',
                                 validator: _reqDropdown,
                                 decoration: _decoration('Select Status...'),
                                 items:
                                     const [
                                           'New',
-                                          'In Progress',
-                                          'Completed',
-                                          'On Hold',
                                         ]
                                         .map(
                                           (v) => DropdownMenuItem(
@@ -914,10 +1185,12 @@ class _InternalMaintenanceFormPageState
                                     ),
                                   )
                                   .toList(),
-                          onChanged:
-                              (v) => setState(() {
-                                _selectedLocation = v;
-                              }),
+                          onChanged: (v) {
+                            setState(() {
+                              _selectedLocation = v;
+                            });
+                            _autoPopulateInventoryForLocation(v);
+                          },
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -1116,47 +1389,6 @@ class _InternalMaintenanceFormPageState
                       _buildRecurrenceSummary(),
                       const SizedBox(height: 40),
 
-                      const Text(
-                        "Responsible Team",
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _fieldBox(
-                              child: DropdownButtonFormField<String>(
-                                value: _selectedDepartment,
-                                validator: _reqDropdown,
-                                decoration: _decoration('Select department...'),
-                                items:
-                                    const [
-                                          'Maintenance',
-                                          'Engineering',
-                                          'Facilities',
-                                          'IT Support',
-                                        ]
-                                        .map(
-                                          (v) => DropdownMenuItem(
-                                            value: v,
-                                            child: Text(v),
-                                          ),
-                                        )
-                                        .toList(),
-                                onChanged:
-                                    (v) => setState(() => _selectedDepartment = v),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 40),
-                      
                       // ===== Inventory Items =====
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1218,80 +1450,140 @@ class _InternalMaintenanceFormPageState
                                 Divider(height: 1, color: Colors.grey[300]),
                             itemBuilder: (context, index) {
                               final item = _selectedInventoryItems[index];
-                              return ListTile(
-                                dense: true,
-                                leading: Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFE8F5E8),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Icon(
-                                    Icons.inventory_2,
-                                    color: Color(0xFF2E7D32),
-                                    size: 20,
-                                  ),
-                                ),
-                                title: Text(
-                                  item['item_name'] ?? 'Unknown Item',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                child: Row(
                                   children: [
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Code: ${item['item_code'] ?? 'N/A'}',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[600],
+                                    // Icon
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE8F5E8),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Icon(
+                                        Icons.inventory_2,
+                                        color: Color(0xFF2E7D32),
+                                        size: 20,
                                       ),
                                     ),
-                                    const SizedBox(height: 2),
-                                    Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFE8F5E8),
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          child: Text(
-                                            'Qty: ${item['quantity']}',
+                                    const SizedBox(width: 12),
+
+                                    // Item details
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            item['item_name'] ?? 'Unknown Item',
                                             style: const TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w500,
-                                              color: Color(0xFF2E7D32),
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 14,
                                             ),
                                           ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          'Available: ${item['available_stock']}',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.grey[600],
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Code: ${item['item_code'] ?? 'N/A'}',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[600],
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Available: ${item['available_stock']}',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    // Quantity controls
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: Colors.grey[300]!),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          // Decrement button
+                                          IconButton(
+                                            icon: const Icon(Icons.remove, size: 16),
+                                            padding: const EdgeInsets.all(4),
+                                            constraints: const BoxConstraints(
+                                              minWidth: 32,
+                                              minHeight: 32,
+                                            ),
+                                            onPressed: () {
+                                              setState(() {
+                                                final currentQty = item['quantity'] as int;
+                                                if (currentQty > 1) {
+                                                  _selectedInventoryItems[index]['quantity'] = currentQty - 1;
+                                                }
+                                              });
+                                            },
+                                            color: Colors.grey[700],
+                                          ),
+
+                                          // Quantity display
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                                            child: Text(
+                                              '${item['quantity']}',
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+
+                                          // Increment button
+                                          IconButton(
+                                            icon: const Icon(Icons.add, size: 16),
+                                            padding: const EdgeInsets.all(4),
+                                            constraints: const BoxConstraints(
+                                              minWidth: 32,
+                                              minHeight: 32,
+                                            ),
+                                            onPressed: () {
+                                              setState(() {
+                                                final currentQty = item['quantity'] as int;
+                                                final availableStock = item['available_stock'] as int;
+                                                if (currentQty < availableStock) {
+                                                  _selectedInventoryItems[index]['quantity'] = currentQty + 1;
+                                                } else {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text('Cannot exceed available stock'),
+                                                      duration: Duration(seconds: 2),
+                                                    ),
+                                                  );
+                                                }
+                                              });
+                                            },
+                                            color: const Color(0xFF2E7D32),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+
+                                    // Delete button
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.delete_outline,
+                                        size: 20,
+                                      ),
+                                      color: Colors.red[400],
+                                      onPressed: () => _removeInventoryItem(index),
+                                      tooltip: 'Remove',
                                     ),
                                   ],
-                                ),
-                                trailing: IconButton(
-                                  icon: const Icon(
-                                    Icons.delete_outline,
-                                    size: 20,
-                                  ),
-                                  color: Colors.red[400],
-                                  onPressed: () => _removeInventoryItem(index),
-                                  tooltip: 'Remove',
                                 ),
                               );
                             },
@@ -1538,10 +1830,12 @@ class _InternalMaintenanceFormPageState
 // Inventory Selection Dialog
 class _InventorySelectionDialog extends StatefulWidget {
   final List<Map<String, dynamic>> availableItems;
+  final String? selectedLocation;
   final Function(Map<String, dynamic> item, int quantity) onItemSelected;
 
   const _InventorySelectionDialog({
     required this.availableItems,
+    this.selectedLocation,
     required this.onItemSelected,
   });
 
@@ -1587,11 +1881,37 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Select Inventory Item',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Select Inventory Item',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (widget.selectedLocation != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.blue[50],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              'Filtered for: ${widget.selectedLocation}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.blue[700],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 IconButton(

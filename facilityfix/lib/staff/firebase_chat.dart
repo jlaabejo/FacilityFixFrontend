@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:facilityfix/services/firebase_chat_service.dart';
 import 'package:facilityfix/models/chat_models.dart';
 import 'package:facilityfix/services/auth_storage.dart';
+import 'package:facilityfix/services/facilityfix_api_service.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
@@ -279,6 +280,7 @@ class _StaffChatDetailPageState extends State<StaffChatDetailPage> {
   final FirebaseChatService _chatService = FirebaseChatService();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final FacilityFixAPIService _apiService = FacilityFixAPIService();
   String? _currentUserId;
 
   @override
@@ -289,9 +291,16 @@ class _StaffChatDetailPageState extends State<StaffChatDetailPage> {
 
   Future<void> _loadCurrentUser() async {
     final profile = await AuthStorage.getProfile();
+    final token = await AuthStorage.getToken();
+
     setState(() {
       _currentUserId = profile?['uid'] ?? profile?['user_id'] ?? '';
     });
+
+    // Set auth token for API service
+    if (token != null) {
+      _apiService.setAuthToken(token);
+    }
 
     if (_currentUserId != null && _currentUserId!.isNotEmpty) {
       // Mark messages as read when entering the chat
@@ -374,7 +383,7 @@ class _StaffChatDetailPageState extends State<StaffChatDetailPage> {
     
     // Append room code to title if available
     if (widget.room.roomCode.isNotEmpty) {
-      return '$baseTitle (${widget.room.roomCode})';
+      return '$baseTitle';
     }
     return baseTitle;
   }
@@ -404,35 +413,122 @@ class _StaffChatDetailPageState extends State<StaffChatDetailPage> {
     }
   }
 
-  void _showRoomInfo() {
+  Future<void> _showRoomInfo() async {
+    Map<String, dynamic>? concernSlipDetails;
+    bool isLoading = true;
+    String? errorMessage;
+
+    // Fetch concern slip details if available
+    if (widget.room.concernSlipId != null) {
+      try {
+        concernSlipDetails = await _apiService.getConcernSlipById(widget.room.concernSlipId!);
+        isLoading = false;
+      } catch (e) {
+        print('[StaffChat] Error fetching concern slip details: $e');
+        errorMessage = 'Failed to load concern slip details';
+        isLoading = false;
+      }
+    } else {
+      isLoading = false;
+    }
+
+    if (!mounted) return;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(_getRoomTitle()),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (widget.room.roomCode.isNotEmpty) ...[
-              Text('Room Code: ${widget.room.roomCode}'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (widget.room.roomCode.isNotEmpty) ...[
+                Text('Room Code: ${widget.room.roomCode}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+              ],
+              Text('Participants: ${widget.room.participants.length}'),
               const SizedBox(height: 8),
+              Text('Created: ${_formatTimestamp(widget.room.createdAt)}'),
+
+              // Concern Slip Details Section
+              if (widget.room.concernSlipId != null) ...[
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+                const Text('Concern Slip Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 8),
+
+                if (isLoading)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else if (errorMessage != null)
+                  Text(errorMessage, style: const TextStyle(color: Colors.red))
+                else if (concernSlipDetails != null) ...[
+                  Text('ID: ${concernSlipDetails['formatted_id'] ?? concernSlipDetails['id'] ?? 'N/A'}'),
+                  const SizedBox(height: 8),
+                  Text('Title: ${concernSlipDetails['title'] ?? 'N/A'}'),
+                  const SizedBox(height: 8),
+                  Text('Description: ${concernSlipDetails['description'] ?? 'N/A'}'),
+                  const SizedBox(height: 8),
+                  Text('Location: ${concernSlipDetails['location'] ?? 'N/A'}'),
+                  const SizedBox(height: 8),
+                  Text('Category: ${concernSlipDetails['category'] ?? 'N/A'}'),
+                  const SizedBox(height: 8),
+                  Text('Priority: ${concernSlipDetails['priority'] ?? 'N/A'}',
+                    style: TextStyle(
+                      color: _getPriorityColor(concernSlipDetails['priority']),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Status: ${concernSlipDetails['status'] ?? 'N/A'}',
+                    style: TextStyle(
+                      color: _getStatusColor(concernSlipDetails['status']),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (concernSlipDetails['staff_assessment'] != null) ...[
+                    const SizedBox(height: 8),
+                    Text('Staff Assessment: ${concernSlipDetails['staff_assessment']}'),
+                  ],
+                  if (concernSlipDetails['staff_recommendation'] != null) ...[
+                    const SizedBox(height: 8),
+                    Text('Staff Recommendation: ${concernSlipDetails['staff_recommendation']}'),
+                  ],
+                  if (concernSlipDetails['admin_notes'] != null) ...[
+                    const SizedBox(height: 8),
+                    Text('Admin Notes: ${concernSlipDetails['admin_notes']}'),
+                  ],
+                ] else
+                  Text('Concern Slip ID: ${widget.room.concernSlipId}'),
+              ],
+
+              // Maintenance Details Section
+              if (widget.room.maintenanceId != null) ...[
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+                const Text('Maintenance Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 8),
+                Text('Maintenance ID: ${widget.room.maintenanceId}'),
+              ],
+
+              // Job Service Details Section
+              if (widget.room.jobServiceId != null) ...[
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+                const Text('Job Service Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 8),
+                Text('Job Service ID: ${widget.room.jobServiceId}'),
+              ],
             ],
-            Text('Participants: ${widget.room.participants.length}'),
-            const SizedBox(height: 8),
-            Text('Created: ${_formatTimestamp(widget.room.createdAt)}'),
-            if (widget.room.concernSlipId != null) ...[
-              const SizedBox(height: 8),
-              Text('Concern Slip ID: ${widget.room.concernSlipId}'),
-            ],
-            if (widget.room.maintenanceId != null) ...[
-              const SizedBox(height: 8),
-              Text('Maintenance ID: ${widget.room.maintenanceId}'),
-            ],
-            if (widget.room.jobServiceId != null) ...[
-              const SizedBox(height: 8),
-              Text('Job Service ID: ${widget.room.jobServiceId}'),
-            ],
-          ],
+          ),
         ),
         actions: [
           TextButton(
@@ -442,6 +538,40 @@ class _StaffChatDetailPageState extends State<StaffChatDetailPage> {
         ],
       ),
     );
+  }
+
+  Color _getPriorityColor(String? priority) {
+    switch (priority?.toLowerCase()) {
+      case 'critical':
+        return Colors.red;
+      case 'high':
+        return Colors.orange;
+      case 'medium':
+        return Colors.blue;
+      case 'low':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Color _getStatusColor(String? status) {
+    switch (status?.toLowerCase()) {
+      case 'pending':
+        return Colors.orange;
+      case 'assigned':
+        return Colors.blue;
+      case 'assessed':
+        return Colors.purple;
+      case 'sent':
+        return Colors.teal;
+      case 'completed':
+        return Colors.green;
+      case 'rejected':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
   }
 
   @override
@@ -734,6 +864,7 @@ class _StaffChatDetailPageState extends State<StaffChatDetailPage> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
+    _apiService.dispose();
     super.dispose();
   }
 }

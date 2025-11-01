@@ -276,20 +276,7 @@ class _InventoryItemDetailsPageState extends State<InventoryItemDetailsPage> {
                               ],
                             ),
                           ),
-                          ElevatedButton.icon(
-                            onPressed: _showStockManagementDialog,
-                            icon: const Icon(Icons.inventory, size: 20),
-                            label: const Text('Manage Stock'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF4F46E5),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 16,
-                              ),
-                            ),
-                          ),
-                        ],
+                            ],
                       ),
                       const SizedBox(height: 32),
 

@@ -52,6 +52,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
   String? _selectedDepartment;
   String? _selectedUnit;
   bool _isCritical = false;
+  List<String> _selectedRecommendedLocations = [];
 
   // State
   bool _isLoading = false;
@@ -59,6 +60,43 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
 
   // TODO: Replace with actual building ID from user session
   final String _buildingId = 'default_building_id';
+
+  // Helper function to get classification code
+  String _getClassificationCode(String classification) {
+    final codes = {
+      'consumable': 'CON',
+      'equipment': 'EQP',
+      'tool': 'TOL',
+      'spare_part': 'SPR',
+    };
+    return codes[classification] ?? 'ITM';
+  }
+
+  // Helper function to get department code
+  String _getDepartmentCode(String department) {
+    final codes = {
+      'electrical': 'ELC',
+      'plumbing': 'PLB',
+      'masonry': 'MSN',
+      'carpentry': 'CRP',
+      'maintenance': 'MNT',
+    };
+    return codes[department] ?? 'GEN';
+  }
+
+  // Generate item code based on classification and department
+  void _generateItemCode() {
+    if (_selectedClassification != null && _selectedDepartment != null) {
+      final classCode = _getClassificationCode(_selectedClassification!);
+      final deptCode = _getDepartmentCode(_selectedDepartment!);
+      final timestamp = DateTime.now().millisecondsSinceEpoch % 10000; // Last 4 digits
+      final itemCode = '$classCode-$deptCode-${timestamp.toString().padLeft(4, '0')}';
+
+      setState(() {
+        _itemCodeController.text = itemCode;
+      });
+    }
+  }
 
   // Dropdown options
   final List<String> _classifications = [
@@ -83,6 +121,18 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
     'meters',
     'boxes',
     'sets',
+  ];
+
+  final List<String> _locations = [
+    'Swimming pool',
+    'Basketball Court',
+    'Gym',
+    'Parking area',
+    'Lobby',
+    'Elevators',
+    'Halls',
+    'Garden',
+    'Corridors',
   ];
 
   @override
@@ -176,6 +226,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
         'is_critical': _isCritical,
         'supplier': _supplierController.text.trim(),
         'description': _descriptionController.text.trim(),
+        'recommended_on': _selectedRecommendedLocations,
       };
 
       final response = await _apiService.createInventoryItem(itemData);
@@ -365,16 +416,27 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                         Expanded(
                           child: TextFormField(
                             controller: _itemCodeController,
+                            readOnly: true,
                             decoration: InputDecoration(
-                              labelText: 'Item Code *',
-                              hintText: 'SKU or barcode',
+                              labelText: 'Item Code (Auto-generated) *',
+                              hintText: 'Select classification & department',
                               labelStyle: TextStyle(color: Colors.grey[700]),
                               hintStyle: TextStyle(color: Colors.grey[400]),
+                              suffixIcon: const Tooltip(
+                                message: 'Auto-generated based on classification and department',
+                                child: Icon(Icons.auto_awesome, size: 18, color: Colors.blue),
+                              ),
+                              filled: true,
+                              fillColor: Colors.grey[50],
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(color: Colors.grey[300]!),
                               ),
                               enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey[300]!),
+                              ),
+                              disabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(color: Colors.grey[300]!),
                               ),
@@ -385,7 +447,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                             ),
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
-                                return 'Item code is required';
+                                return 'Please select classification & department';
                               }
                               return null;
                             },
@@ -451,6 +513,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                               setState(() {
                                 _selectedClassification = value;
                               });
+                              _generateItemCode(); // Auto-generate item code
                             },
                             validator: (value) {
                               if (value == null) {
@@ -475,6 +538,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                               setState(() {
                                 _selectedDepartment = value;
                               });
+                              _generateItemCode(); // Auto-generate item code
                             },
                             validator: (value) {
                               if (value == null) {
@@ -486,6 +550,34 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                         ),
                       ],
                     ),
+
+                    // Item Code Format Info
+                    if (_itemCodeController.text.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue[100]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline, size: 16, color: Colors.blue[700]),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Item code format: [Classification]-[Department]-[Unique ID]',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.blue[700],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
                     const SizedBox(height: 24),
 
                     // Stock Information Section
@@ -590,6 +682,69 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                       controller: _descriptionController,
                       decoration: _getInputDecoration('Description', hint: 'Enter item description'),
                       maxLines: 3,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Recommended On (Multi-select)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Recommend On (Locations)',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF2D3748),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.all(12),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _locations.map((location) {
+                              final isSelected = _selectedRecommendedLocations.contains(location);
+                              return FilterChip(
+                                label: Text(location),
+                                selected: isSelected,
+                                onSelected: (selected) {
+                                  setState(() {
+                                    if (selected) {
+                                      _selectedRecommendedLocations.add(location);
+                                    } else {
+                                      _selectedRecommendedLocations.remove(location);
+                                    }
+                                  });
+                                },
+                                selectedColor: const Color(0xFF1976D2).withOpacity(0.2),
+                                checkmarkColor: const Color(0xFF1976D2),
+                                backgroundColor: Colors.grey[50],
+                                labelStyle: TextStyle(
+                                  fontSize: 13,
+                                  color: isSelected ? const Color(0xFF1976D2) : Colors.grey[700],
+                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        if (_selectedRecommendedLocations.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              '${_selectedRecommendedLocations.length} location(s) selected',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 16),
 

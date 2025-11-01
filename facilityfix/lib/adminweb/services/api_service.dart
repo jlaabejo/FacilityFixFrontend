@@ -1588,6 +1588,8 @@ class ApiService {
         'is_critical': itemData['is_critical'] ?? false,
         'supplier_name':
             itemData['supplier'], // Map 'supplier' to 'supplier_name'
+        'description': itemData['description'],
+        'recommended_on': itemData['recommended_on'] ?? [], // Include recommended locations
         if (itemData['warranty_until'] != null)
           'warranty_until': itemData['warranty_until'],
       };

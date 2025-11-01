@@ -119,13 +119,13 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       case 'pending':
         return 'Pending';
       case 'assigned':
-        return 'Assigned';
+        return 'To Inspect';
       case 'in_progress':
         return 'In Progress';
       case 'assessed':
         return 'Assessed';
       case 'sent':
-        return 'Sent';
+        return 'Sent to Client';
       case 'approved':
         return 'Approved';
       case 'rejected':
@@ -1214,7 +1214,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
         bgColor = Colors.grey[100]!;
         textColor = Colors.grey[700]!;
         break;
-      case 'Assigned':
+      case 'To Inspect':
         bgColor = const Color(0xFFE3F2FD);
         textColor = const Color(0xFF1976D2);
         break;
@@ -1222,7 +1222,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
         bgColor = const Color(0xFFF3E5F5);
         textColor = const Color(0xFF7B1FA2);
         break;
-      case 'Sent':
+      case 'Sent to Client':
         bgColor = const Color(0xFFE0F2F1);
         textColor = const Color(0xFF00695C);
         break;

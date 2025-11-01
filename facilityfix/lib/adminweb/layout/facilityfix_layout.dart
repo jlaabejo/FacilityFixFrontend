@@ -228,8 +228,8 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                   child: Row(
                     children: [
                       Image.asset(
-                        'images/logo.png',
-                        height: 50,
+                        'images/leftgraphicsP2.png',
+                        height: 40,
                       ),
                       const SizedBox(width: 8),
                       const Text(
@@ -431,9 +431,18 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
 
                 // Main content area with background
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
-                    child: widget.body,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      image: DecorationImage(
+                        image: AssetImage('images/bglayout.png'), // Make sure this image exists in your assets
+                        fit: BoxFit.cover,
+                        opacity: 1, 
+                      ),
+                    ),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: widget.body,
+                    ),
                   ),
                 ),
               ],

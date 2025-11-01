@@ -494,6 +494,30 @@ class FacilityFixAPIService {
     }
   }
 
+  Future<Map<String, dynamic>> getConcernSlipById(String concernSlipId) async {
+    try {
+      final response = await _client.get(
+        Uri.parse('$baseUrl/concern-slips/$concernSlipId'),
+        headers: _headers,
+      );
+
+      print(
+        '[FacilityFix] Get concern slip by ID response: ${response.statusCode}',
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return data;
+      }
+      throw Exception(
+        'Failed to get concern slip: ${response.statusCode} ${response.body}',
+      );
+    } catch (e) {
+      print('[FacilityFix] Error getting concern slip by ID: $e');
+      rethrow;
+    }
+  }
+
   void dispose() {
     _client.close();
   }

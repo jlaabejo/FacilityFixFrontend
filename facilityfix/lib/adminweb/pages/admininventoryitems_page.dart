@@ -238,7 +238,8 @@ class _InventoryManagementItemsPageState
 
   // View item method
   void _viewItem(Map<String, dynamic> item) {
-    final itemId = item['id'] ?? item['item_code'];
+    print('[v0] Viewing item: ${item}');
+    final itemId = item['id'] ?? item['_doc_id'];
     context.go('/inventory/item/$itemId');
   }
 
@@ -247,7 +248,7 @@ class _InventoryManagementItemsPageState
     // Implement edit functionality
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Edit item: ${item['id']}'),
+        content: Text('Edit item: ${item['_doc_id']}'),
         backgroundColor: Colors.blue,
       ),
     );
@@ -328,7 +329,7 @@ class _InventoryManagementItemsPageState
               onPressed: () async {
                 Navigator.of(context).pop();
                 try {
-                  await _apiService.deleteInventoryItem(item['id']);
+                  await _apiService.deleteInventoryItem(item['_doc_id']);
                   // Reload the list
                   _loadInventoryItems();
                   if (mounted) {
