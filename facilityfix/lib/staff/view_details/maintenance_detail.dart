@@ -1,169 +1,232 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:facilityfix/services/api_services.dart';
-import 'package:facilityfix/config/env.dart';
-import 'package:facilityfix/widgets/app&nav_bar.dart';
-import 'package:facilityfix/widgets/buttons.dart' as custom_buttons;
-import 'package:facilityfix/widgets/cards.dart';
-import 'package:facilityfix/widgets/tag.dart';
-import 'package:facilityfix/widgets/modals.dart';
 import 'package:facilityfix/services/auth_storage.dart';
+import 'package:facilityfix/config/env.dart';
+import 'package:facilityfix/staff/form/assessment_form.dart';
+import 'package:facilityfix/widgets/app&nav_bar.dart';
+import 'package:facilityfix/widgets/view_details.dart';
+import 'package:facilityfix/widgets/modals.dart';
 import 'package:flutter/material.dart';
 
+// Maintenance Detail Screen using MaintenanceDetails widget
 class MaintenanceDetailPage extends StatefulWidget {
-  final String maintenanceTaskId;
+  final Map<String, dynamic> task;
+  final String currentStaffId;
 
   const MaintenanceDetailPage({
-    super.key,
-    required this.maintenanceTaskId,
-  });
+    Key? key,
+    required this.task,
+    required this.currentStaffId,
+  }) : super(key: key);
 
   @override
   State<MaintenanceDetailPage> createState() => _MaintenanceDetailPageState();
 }
 
 class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
-  Map<String, dynamic>? _maintenanceTask;
-  bool _isLoading = true;
+  late List<Map<String, dynamic>> _checklistItems;
   bool _isUpdating = false;
-
-  // Status update form
-  String _selectedStatus = '';
-  final TextEditingController _notesController = TextEditingController();
-  final TextEditingController _completionNotesController = TextEditingController();
+  List<Map<String, dynamic>> _inventoryRequests = [];
+  Map<String, dynamic> holdMeta = {};
 
   @override
   void initState() {
     super.initState();
-    _loadMaintenanceTaskDetails();
+    print('DEBUG: MaintenanceDetailScreen initState called');
+    print('DEBUG: Task data keys: ${widget.task.keys.toList()}');
+    print('DEBUG: Raw checklist_completed value: ${widget.task['checklist_completed']}');
+    print('DEBUG: Raw checklist_completed type: ${widget.task['checklist_completed'].runtimeType}');
+    _checklistItems = _convertChecklistToMap(widget.task['checklist_completed'], widget.task['category'] ?? 'general');
+    print('DEBUG: Converted checklist items: $_checklistItems');
+    print('DEBUG: Checklist items count: ${_checklistItems.length}');
+
+    // Load inventory requests for this task
+    _loadInventoryRequests();
   }
 
-  Future<void> _loadMaintenanceTaskDetails() async {
-    setState(() => _isLoading = true);
-
+  Future<void> _loadInventoryRequests() async {
     try {
       final apiService = APIService(roleOverride: AppRole.staff);
-      
-      // Get maintenance task details by ID
-      final task = await apiService.getMaintenanceTaskById(widget.maintenanceTaskId);
-      
-      if (mounted) {
+      final taskId = widget.task['id'];
+
+      if (taskId == null || taskId.isEmpty) {
+        print('DEBUG: No task ID available for loading inventory requests');
+        return;
+      }
+
+      print('DEBUG: Loading inventory requests for task $taskId');
+      final response = await apiService.getInventoryRequestsByMaintenanceTask(taskId);
+
+      if (response['success'] == true && response['data'] != null) {
+        final requests = List<Map<String, dynamic>>.from(response['data']);
+
+        // Enrich with item details and stock information
+        for (var request in requests) {
+          if (request['inventory_id'] != null) {
+            try {
+              final itemData = await apiService.getInventoryItemById(request['inventory_id']);
+              if (itemData != null) {
+                request['item_name'] = itemData['item_name'];
+                request['item_code'] = itemData['item_code'];
+                // Add stock information
+                request['stock_quantity'] = itemData['quantity'] ?? itemData['stock_quantity'] ?? 'N/A';
+                request['stock_status'] = itemData['status'] ?? itemData['stock_status'] ?? 'Unknown';
+              }
+            } catch (e) {
+              print('DEBUG: Error loading item details: $e');
+            }
+          }
+        }
+
         setState(() {
-          _maintenanceTask = task;
-          // Normalize status to match dropdown values
-          final apiStatus = task['status'] ?? 'scheduled';
-          _selectedStatus = _normalizeStatusForDropdown(apiStatus);
-          _isLoading = false;
+          _inventoryRequests = requests;
         });
+
+        print('DEBUG: Loaded ${_inventoryRequests.length} inventory requests');
       }
     } catch (e) {
-      print('Error loading maintenance task details: $e');
-      if (mounted) {
-        setState(() {
-          _maintenanceTask = null;
-          _isLoading = false;
-        });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading maintenance task: $e'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      print('DEBUG: Error loading inventory requests: $e');
+    }
+  }
+  
+  // Computed properties for checklist progress
+  // Only count items visible to current user
+  int get completedCount => _checklistItems.where((item) {
+    final assignedTo = item['assigned_to']?.toString() ?? '';
+    final isVisibleToMe = assignedTo.isEmpty || assignedTo == widget.currentStaffId;
+    return isVisibleToMe && item['completed'] == true;
+  }).length;
+
+  int get totalCount => _checklistItems.where((item) {
+    final assignedTo = item['assigned_to']?.toString() ?? '';
+    return assignedTo.isEmpty || assignedTo == widget.currentStaffId;
+  }).length;
+
+  DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
+  String _formatTimestamp(dynamic timestamp) {
+    if (timestamp == null) return '';
+    
+    DateTime? date;
+    if (timestamp is DateTime) {
+      date = timestamp;
+    } else if (timestamp is String) {
+      date = DateTime.tryParse(timestamp);
+    } else if (timestamp.runtimeType.toString().contains('Timestamp')) {
+      // Handle Firestore Timestamp
+      try {
+        date = (timestamp as dynamic).toDate();
+      } catch (e) {
+        print('Error converting Timestamp: $e');
       }
     }
+    
+    return date?.toIso8601String() ?? '';
   }
 
-  // Helper method to normalize status values between API and dropdown
-  String _normalizeStatusForDropdown(String apiStatus) {
-    switch (apiStatus.toLowerCase().trim()) {
-      case 'in progress':
-      case 'in_progress':
-        return 'in_progress';
-      case 'completed':
-      case 'done':
-        return 'completed';
-      case 'scheduled':
-      case 'new':
-        return 'scheduled';
-      case 'on hold':
-      case 'on_hold':
-        return 'on_hold';
-      case 'cancelled':
-      case 'canceled':
-        return 'cancelled';
-      default:
-        return 'scheduled';
+  List<Map<String, dynamic>> _convertChecklistToMap(dynamic checklist, String category) {
+    print('DEBUG _convertChecklistToMap: Input checklist: $checklist');
+    print('DEBUG _convertChecklistToMap: Input type: ${checklist.runtimeType}');
+    
+    if (checklist == null) {
+      print('DEBUG _convertChecklistToMap: checklist is null, returning empty list');
+      return [];
     }
-  }
-
-  // Helper method to convert dropdown value back to API format
-  String _normalizeStatusForAPI(String dropdownStatus) {
-    switch (dropdownStatus) {
-      case 'in_progress':
-        return 'In Progress';
-      case 'completed':
-        return 'Completed';
-      case 'scheduled':
-        return 'Scheduled';
-      case 'on_hold':
-        return 'On Hold';
-      case 'cancelled':
-        return 'Cancelled';
-      default:
-        return 'Scheduled';
+    
+    if (checklist is! List) {
+      print('DEBUG _convertChecklistToMap: checklist is not a List (is ${checklist.runtimeType}), returning empty list');
+      return [];
     }
+    
+    print('DEBUG _convertChecklistToMap: checklist is a List with ${checklist.length} items');
+    
+    final result = checklist
+        .where((item) {
+          final isMap = item is Map;
+          print('DEBUG _convertChecklistToMap: Item is Map? $isMap, item: $item');
+          return isMap;
+        })
+
+
+        .map<Map<String, dynamic>>((item) {
+          final converted = <String, dynamic>{
+            'id': item['id']?.toString() ?? '',
+            'task': item['task']?.toString() ?? '',
+            'completed': item['completed'] == true,
+          };
+          final assigned = item['assigned_to'];
+
+          if (assigned != null && assigned.toString().trim().isNotEmpty && category == 'safety') {
+            converted['assigned_to'] = assigned.toString();
+          }
+          return converted;
+        })
+        .where((item) {
+          final hasId = item['id'].toString().isNotEmpty;
+          print('DEBUG _convertChecklistToMap: Item has ID? $hasId');
+          return hasId;
+        })
+        .toList();
+    
+    print('DEBUG _convertChecklistToMap: Final result count: ${result.length}');
+    return result;
   }
 
-  Future<void> _updateMaintenanceTask() async {
-    if (_maintenanceTask == null) return;
+  Future<void> _toggleChecklistItem(int index) async {
+    if (_isUpdating) return;
 
     setState(() => _isUpdating = true);
 
     try {
+      final item = _checklistItems[index];
+      final newCompletedStatus = !item['completed'];
+
+      // Optimistically update UI
+      setState(() {
+        _checklistItems[index]['completed'] = newCompletedStatus;
+      });
+
+      // Update via API
       final apiService = APIService(roleOverride: AppRole.staff);
-      
-      // Prepare update data
-      final updateData = <String, dynamic>{
-        'status': _normalizeStatusForAPI(_selectedStatus),
-      };
+      await apiService.updateChecklistItem(
+        taskId: widget.task['id'],
+        itemId: item['id'],
+        completed: newCompletedStatus,
+      );
 
-      // Add notes if provided
-      if (_notesController.text.trim().isNotEmpty) {
-        updateData['completion_notes'] = _notesController.text.trim();
-      }
-
-      // Add completion notes if status is completed
-      if (_selectedStatus == 'completed' && _completionNotesController.text.trim().isNotEmpty) {
-        updateData['completion_notes'] = _completionNotesController.text.trim();
-      }
-
-      // Add timestamps based on status
-      final now = DateTime.now().toIso8601String();
-      if (_selectedStatus == 'in_progress' && _maintenanceTask!['started_at'] == null) {
-        updateData['started_at'] = now;
-      } else if (_selectedStatus == 'completed' && _maintenanceTask!['completed_at'] == null) {
-        updateData['completed_at'] = now;
-      }
-
-      await apiService.updateMaintenanceTask(widget.maintenanceTaskId, updateData);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Maintenance task updated successfully'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-
-        // Refresh the task details
-        await _loadMaintenanceTaskDetails();
-      }
-    } catch (e) {
-      print('Error updating maintenance task: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error updating task: $e'),
+            content: Text(
+              newCompletedStatus
+                ? 'Task marked as completed'
+                : 'Task marked as incomplete'
+            ),
+            duration: const Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error updating checklist item: $e');
+
+      // Revert optimistic update on error
+      setState(() {
+        _checklistItems[index]['completed'] = !_checklistItems[index]['completed'];
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating checklist: ${e.toString()}'),
+            backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -175,411 +238,487 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
     }
   }
 
-  void _showUpdateDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Update Maintenance Task'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                value: _selectedStatus,
-                decoration: const InputDecoration(
-                  labelText: 'Status',
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'scheduled', child: Text('Scheduled')),
-                  DropdownMenuItem(value: 'in_progress', child: Text('In Progress')),
-                  DropdownMenuItem(value: 'completed', child: Text('Completed')),
-                  DropdownMenuItem(value: 'on_hold', child: Text('On Hold')),
-                  DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    _selectedStatus = value ?? 'scheduled';
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _notesController,
-                decoration: const InputDecoration(
-                  labelText: 'Work Notes (optional)',
-                  border: OutlineInputBorder(),
-                  hintText: 'Add work progress notes...',
-                ),
-                maxLines: 3,
-              ),
-              if (_selectedStatus == 'completed') ...[
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _completionNotesController,
-                  decoration: const InputDecoration(
-                    labelText: 'Completion Notes',
-                    border: OutlineInputBorder(),
-                    hintText: 'Describe work completed...',
-                  ),
-                  maxLines: 3,
-                ),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: _isUpdating 
-                ? null 
-                : () {
-                    Navigator.of(context).pop();
-                    _updateMaintenanceTask();
-                  },
-            child: _isUpdating 
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Update'),
-          ),
-        ],
-      ),
-    );
-  }
+  Future<void> _onHoldPressed() async {
+    // Check if currently on hold
+    bool isOnHold = widget.task['status'] == 'on_hold';
 
-  Widget _buildInfoRow(String label, String value, {IconData? icon}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 20, color: const Color(0xFF6B7280)),
-            const SizedBox(width: 12),
-          ],
-          Expanded(
-            flex: 2,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF6B7280),
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              value.isEmpty ? '—' : value,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1F2937),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    if (isOnHold) {
+      // Resume task - set status back to assigned
+      try {
+        final apiService = APIService(roleOverride: AppRole.staff);
+        final token = await AuthStorage.getToken();
+        if (token == null) {
+          throw Exception('Authentication required');
+        }
 
-  Widget _buildSection(String title, List<Widget> children) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: Color(0xFFE5E7EB)),
-              ),
-            ),
-            child: Text(
-              title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1F2937),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: children,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        final response = await http.patch(
+          Uri.parse('${apiService.baseUrl}/maintenance-tasks/${widget.task['id']}'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'status': 'assigned'}),
+        );
 
-  String _formatDate(String? dateStr) {
-    if (dateStr == null || dateStr.isEmpty) return '—';
-    try {
-      final date = DateTime.parse(dateStr);
-      return '${date.day}/${date.month}/${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-    } catch (e) {
-      return dateStr;
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw Exception('Failed to resume task: ${response.body}');
+        }
+        
+        setState(() {
+          widget.task['status'] = 'assigned';
+          holdMeta = {};
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Task resumed successfully'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to resume task: ${e.toString()}'),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } else {
+      // Put on hold - show bottom sheet
+      final result = await showHoldSheet(context);
+      
+      if (result == null) return; // User cancelled
+      
+      try {
+        final apiService = APIService(roleOverride: AppRole.staff);
+        final token = await AuthStorage.getToken();
+        if (token == null) {
+          throw Exception('Authentication required');
+        }
+
+        final body = <String, dynamic>{
+          'status': 'on_hold',
+          'hold_reason': result.reason,
+        };
+        
+        if (result.note != null && result.note!.isNotEmpty) {
+          body['hold_notes'] = result.note;
+        }
+        
+        if (result.resumeAt != null) {
+          body['resume_at'] = result.resumeAt!.toIso8601String();
+        }
+
+        final response = await http.patch(
+          Uri.parse('${apiService.baseUrl}/maintenance-tasks/${widget.task['id']}'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode(body),
+        );
+
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw Exception('Failed to put task on hold: ${response.body}');
+        }
+        
+        setState(() {
+          widget.task['status'] = 'on_hold';
+          holdMeta = {
+            'reason': result.reason,
+            'notes': result.note,
+            'resume_at': result.resumeAt?.toIso8601String(),
+            'timestamp': DateTime.now().toIso8601String(),
+          };
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Task put on hold'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to put task on hold: ${e.toString()}'),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 
-  String _formatDuration(int? minutes) {
-    if (minutes == null || minutes <= 0) return '—';
-    if (minutes < 60) return '${minutes}m';
-    final hours = minutes ~/ 60;
-    final remainingMinutes = minutes % 60;
-    if (remainingMinutes == 0) return '${hours}h';
-    return '${hours}h ${remainingMinutes}m';
+  Future<void> _createAssessment() async {
+    // Navigate to the assessment form page with maintenance task data
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AssessmentForm(
+          concernSlipId: widget.task['id'] ?? '',
+          concernSlipData: widget.task,
+          requestType: 'Maintenance Task',
+        ),
+      ),
+    ).then((_) {
+      // Refresh data when returning from assessment form
+      _loadInventoryRequests();
+    });
   }
 
-  @override
-  void dispose() {
-    _notesController.dispose();
-    _completionNotesController.dispose();
-    super.dispose();
+  void _showInventoryItemModal(Map<String, dynamic> request) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) {
+            final itemName = request['item_name'] ?? 'Unknown Item';
+            final itemCode = request['item_code'] ?? 'N/A';
+            final quantityRequested = request['quantity_requested'] ?? 0;
+            final status = request['status'] ?? 'pending';
+            final notes = request['notes'] ?? '';
+            
+            // Stock information (if available)
+            final stockQuantity = request['stock_quantity'] ?? 'N/A';
+            final stockStatus = request['stock_status'] ?? 'Unknown';
+
+            return SingleChildScrollView(
+              controller: scrollController,
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Drag handle
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE5E7EB),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  
+                  // Header
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              itemName,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1F2937),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Item Code: $itemCode',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF6B7280),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Request Information
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9FAFB),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Request Details',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1F2937),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildInfoRow('Quantity Requested', '$quantityRequested'),
+                        const SizedBox(height: 8),
+                        _buildInfoRow('Status', status.toUpperCase()),
+                      ],
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Stock Information
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9FAFB),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Stock Information',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1F2937),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildInfoRow('Available Stock', stockQuantity.toString()),
+                        const SizedBox(height: 8),
+                        _buildInfoRow('Stock Status', stockStatus),
+                      ],
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Additional Notes
+                  if (notes.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Additional Notes',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1F2937),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            notes,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF374151),
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            color: Color(0xFF6B7280),
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1F2937),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: Colors.white,
       appBar: CustomAppBar(
+        leading: const BackButton(),
         title: 'Maintenance Details',
-        actions: [
-          if (_maintenanceTask != null && !_isLoading)
-            IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: _showUpdateDialog,
-            ),
-        ],
+        actions: null,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _maintenanceTask == null
-              ? const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Checklist Progress Banner
+              if (_checklistItems.isNotEmpty) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: completedCount == totalCount 
+                        ? const Color(0xFFECFDF5)
+                        : const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: completedCount == totalCount
+                          ? const Color(0xFF10B981)
+                          : const Color(0xFFE5E7EB),
+                    ),
+                  ),
+                  child: Row(
                     children: [
                       Icon(
-                        Icons.error_outline,
-                        size: 64,
-                        color: Color(0xFF9CA3AF),
+                        completedCount == totalCount
+                            ? Icons.check_circle
+                            : Icons.pending_actions,
+                        size: 20,
+                        color: completedCount == totalCount
+                            ? const Color(0xFF10B981)
+                            : const Color(0xFF6B7280),
                       ),
-                      SizedBox(height: 16),
+                      const SizedBox(width: 8),
                       Text(
-                        'Maintenance task not found',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF374151),
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'The requested maintenance task could not be loaded.',
+                        completedCount == totalCount
+                            ? 'All tasks completed! 🎉'
+                            : 'Checklist Progress: $completedCount of $totalCount completed',
                         style: TextStyle(
                           fontSize: 14,
-                          color: Color(0xFF6B7280),
+                          fontWeight: FontWeight.w500,
+                          color: completedCount == totalCount
+                              ? const Color(0xFF047857)
+                              : const Color(0xFF374151),
                         ),
-                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadMaintenanceTaskDetails,
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Task Header
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFE5E7EB)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          _maintenanceTask!['task_title'] ?? 
-                                          _maintenanceTask!['title'] ?? 
-                                          'Maintenance Task',
-                                          style: const TextStyle(
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.w700,
-                                            color: Color(0xFF1F2937),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          _maintenanceTask!['formatted_id'] ?? 
-                                          _maintenanceTask!['id'] ?? '',
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            color: Color(0xFF6B7280),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Column(
-                                    children: [
-                                      StatusTag(status: _maintenanceTask!['status'] ?? 'scheduled'),
-                                      const SizedBox(height: 8),
-                                      if (_maintenanceTask!['priority'] != null)
-                                        PriorityTag(priority: _maintenanceTask!['priority']),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        // Task Information
-                        _buildSection(
-                          'Task Information',
-                          [
-                            _buildInfoRow(
-                              'Description',
-                              _maintenanceTask!['task_description'] ?? 
-                              _maintenanceTask!['description'] ?? '',
-                              icon: Icons.description,
-                            ),
-                            _buildInfoRow(
-                              'Location',
-                              _maintenanceTask!['location'] ?? '',
-                              icon: Icons.place,
-                            ),
-                            _buildInfoRow(
-                              'Category',
-                              _maintenanceTask!['category'] ?? '',
-                              icon: Icons.category,
-                            ),
-                            _buildInfoRow(
-                              'Type',
-                              _maintenanceTask!['maintenanceType'] ?? 
-                              _maintenanceTask!['maintenance_type'] ?? '',
-                              icon: Icons.build,
-                            ),
-                            _buildInfoRow(
-                              'Recurrence',
-                              _maintenanceTask!['recurrence_type'] ?? 'none',
-                              icon: Icons.repeat,
-                            ),
-                          ],
-                        ),
-
-                        // Scheduling Information
-                        _buildSection(
-                          'Scheduling',
-                          [
-                            _buildInfoRow(
-                              'Scheduled Date',
-                              _formatDate(_maintenanceTask!['scheduled_date']),
-                              icon: Icons.schedule,
-                            ),
-                            _buildInfoRow(
-                              'Started At',
-                              _formatDate(_maintenanceTask!['started_at']),
-                              icon: Icons.play_arrow,
-                            ),
-                            _buildInfoRow(
-                              'Completed At',
-                              _formatDate(_maintenanceTask!['completed_at']),
-                              icon: Icons.check_circle,
-                            ),
-                            _buildInfoRow(
-                              'Estimated Duration',
-                              _formatDuration(_maintenanceTask!['estimated_duration']),
-                              icon: Icons.timer,
-                            ),
-                            _buildInfoRow(
-                              'Actual Duration',
-                              _formatDuration(_maintenanceTask!['actual_duration']),
-                              icon: Icons.timer_outlined,
-                            ),
-                          ],
-                        ),
-
-                        // Work Details
-                        if (_maintenanceTask!['completion_notes'] != null ||
-                            (_maintenanceTask!['parts_used'] as List?)?.isNotEmpty == true ||
-                            (_maintenanceTask!['tools_used'] as List?)?.isNotEmpty == true)
-                          _buildSection(
-                            'Work Details',
-                            [
-                              if (_maintenanceTask!['completion_notes'] != null)
-                                _buildInfoRow(
-                                  'Completion Notes',
-                                  _maintenanceTask!['completion_notes'] ?? '',
-                                  icon: Icons.note,
-                                ),
-                              if ((_maintenanceTask!['parts_used'] as List?)?.isNotEmpty == true)
-                                _buildInfoRow(
-                                  'Parts Used',
-                                  (_maintenanceTask!['parts_used'] as List)
-                                      .map((part) => part.toString())
-                                      .join(', '),
-                                  icon: Icons.engineering,
-                                ),
-                              if ((_maintenanceTask!['tools_used'] as List?)?.isNotEmpty == true)
-                                _buildInfoRow(
-                                  'Tools Used',
-                                  (_maintenanceTask!['tools_used'] as List)
-                                      .join(', '),
-                                  icon: Icons.handyman,
-                                ),
-                            ],
-                          ),
-
-                        const SizedBox(height: 32),
-
-                        // Update Button
-                        if (_maintenanceTask!['status'] != 'completed')
-                          SizedBox(
-                            width: double.infinity,
-                            child: custom_buttons.FilledButton(
-                              label: 'Update Task Status',
-                              onPressed: _showUpdateDialog,
-                              leadingIcon: Icons.edit,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
                 ),
+                const SizedBox(height: 16),
+              ],
+              
+              // Use MaintenanceDetails widget - it has its own SingleChildScrollView
+              MaintenanceDetails(
+                // Basic Information
+                id: widget.task['id'] ?? '',
+                createdAt: _parseDate(widget.task['created_at']) ?? DateTime.now(),
+                updatedAt: _parseDate(widget.task['updated_at']),
+                departmentTag: widget.task['category'] ?? widget.task['department'],
+                requestTypeTag: widget.task['maintenance_type'] ?? widget.task['maintenanceType'] ?? 'internal',
+                priority: widget.task['priority'],
+                statusTag: widget.task['status'] ?? 'scheduled',
+                
+                // Tenant / Requester
+                requestedBy: widget.task['created_by'] ?? widget.task['assigned_to'] ?? '',
+                scheduleDate: _formatTimestamp(widget.task['scheduled_date']),
+                
+                // Request Details
+                title: widget.task['task_title'] ?? widget.task['title'] ?? 'Maintenance Task',
+                startedAt: _parseDate(widget.task['started_at']),
+                completedAt: _parseDate(widget.task['completed_at']),
+                location: widget.task['location'],
+                description: widget.task['task_description'] ?? widget.task['description'],
+                attachments: widget.task['photos'] is List 
+                    ? (widget.task['photos'] as List).map((e) => e.toString()).toList()
+                    : null,
+                adminNote: widget.task['completion_notes'],
+                
+                // Staff
+                assignedStaff: widget.task['assigned_staff_name'] ?? widget.task['assigned_to'],
+                staffDepartment: widget.task['department'],
+                staffPhotoUrl: null,
+                assessedAt: _parseDate(widget.task['updated_at']),
+                assessment: widget.task['completion_notes'],
+                staffAttachments: widget.task['photos'] is List 
+                    ? (widget.task['photos'] as List).map((e) => e.toString()).toList()
+                    : null,
+                
+                // Tracking
+                materialsUsed: widget.task['parts_used'] is List 
+                    ? (widget.task['parts_used'] as List).map((e) => e.toString()).toList()
+                    : null,
+                
+                // Interactive checklist and inventory
+                checklistItems: _checklistItems,
+                inventoryRequests: _inventoryRequests,
+                completedCount: completedCount,
+                totalCount: totalCount,
+                isUpdating: _isUpdating,
+                onToggleChecklistItem: _toggleChecklistItem,
+                onInventoryItemTap: _showInventoryItemModal,
+                currentStaffId: widget.currentStaffId,
+                taskCategory: widget.task['category'],
+                
+                // Action callbacks
+                onHold: (widget.task['status'] == 'pending' ||
+                        widget.task['status'] == 'scheduled' || 
+                        widget.task['status'] == 'assigned' ||
+                        widget.task['status'] == 'new' ||
+                        widget.task['status'] == 'in_progress' || 
+                        widget.task['status'] == 'on_hold')
+                    ? _onHoldPressed
+                    : null,
+                onCreateAssessment: (widget.task['status'] == 'pending' ||
+                                    widget.task['status'] == 'scheduled' || 
+                                    widget.task['status'] == 'assigned' ||
+                                    widget.task['status'] == 'new' ||
+                                    widget.task['status'] == 'in_progress' || 
+                                    widget.task['status'] == 'on_hold')
+                    ? _createAssessment
+                    : null,
+              ),
+            
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

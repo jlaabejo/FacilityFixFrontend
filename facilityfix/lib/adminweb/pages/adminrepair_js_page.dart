@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../popupwidgets/js_viewdetails_popup.dart';
+import '../popupwidgets/assignstaff_popup.dart' as assign_popup;
 import '../services/api_service.dart';
-import '../../widgets/modals.dart';
 
 class RepairJobServicePage extends StatefulWidget {
   const RepairJobServicePage({super.key});
@@ -18,10 +18,6 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   
   // Dynamic data from API
   List<Map<String, dynamic>> _repairTasks = [];
-  
-  // Staff data for assignment
-  List<Map<String, dynamic>> _staffMembers = [];
-  bool _isLoadingStaff = false;
   
   // Error handling
   String? _errorMessage;
@@ -119,8 +115,16 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       if (mounted) {
         setState(() {
           _repairTasks = tasks;
+          // Sort by priority: High/Critical first, then Medium, then Low
+          _repairTasks.sort((a, b) {
+            final priorityOrder = {'High': 0, 'Critical': 0, 'Medium': 1, 'Low': 2};
+            final priorityA = priorityOrder[a['priority']] ?? 3;
+            final priorityB = priorityOrder[b['priority']] ?? 3;
+            return priorityA.compareTo(priorityB);
+          });
           _isLoading = false;
           _errorMessage = null;
+          _currentPage = 1; // Reset to first page when loading new data
         });
       }
     } catch (e) {
@@ -205,29 +209,57 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   }
 
   String _mapCategoryToDepartment(String? category) {
-    if (category == null) return 'General';
+    if (category == null) return 'Other';
     switch (category.toLowerCase()) {
       case 'electrical':
         return 'Electrical';
       case 'plumbing':
         return 'Plumbing';
-      case 'hvac':
-        return 'HVAC';
       case 'carpentry':
         return 'Carpentry';
-      case 'maintenance':
-        return 'Maintenance';
       case 'masonry':
         return 'Masonry';
       default:
-        return 'General';
+        return category; // Return the original category
     }
   }
 
   // Dropdown values for filtering
-  String _selectedRole = 'All Roles';
+  String _selectedDepartment = 'All Departments';
   String _selectedStatus = 'All Status';
   String _selectedConcernType = 'Job Service';
+  String _searchQuery = '';
+
+  // Sorting
+  bool _sortAscending = true;
+
+  void _toggleSortOrder() {
+    setState(() {
+      _sortAscending = !_sortAscending;
+      
+      // Sort the repair tasks by date requested
+      _repairTasks.sort((a, b) {
+        final dateA = _parseDateForSort(a['dateRequested']);
+        final dateB = _parseDateForSort(b['dateRequested']);
+        
+        if (_sortAscending) {
+          return dateA.compareTo(dateB);
+        } else {
+          return dateB.compareTo(dateA);
+        }
+      });
+    });
+  }
+
+  DateTime _parseDateForSort(String dateStr) {
+    if (dateStr == 'N/A') return DateTime(1970);
+    
+    try {
+      return DateTime.parse(dateStr);
+    } catch (e) {
+      return DateTime(1970);
+    }
+  }
 
   // Action dropdown menu methods
   void _showActionMenu(
@@ -358,121 +390,16 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   }
 
   // Assign task method
-  void _assignTask(Map<String, dynamic> task) async {
-    await _loadStaffMembers();
-    
-    if (!mounted) return;
-
-    // Prepare staff names for the modal
-    final staffNames = _staffMembers.map((staff) {
-      final firstName = staff['first_name'] ?? '';
-      final lastName = staff['last_name'] ?? '';
-      final department = staff['department'] ?? '';
-      
-      String displayName = '$firstName $lastName';
-      if (department.isNotEmpty) {
-        displayName += ' ($department)';
-      }
-      return displayName;
-    }).toList();
-
-    // Show assign staff modal
-    final result = await showModalBottomSheet<AssignResult>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => AssignStaffBottomSheet(
-        staff: staffNames,
-        busyByStaff: {}, // You can implement availability checking here
-      ),
+  void _assignTask(Map<String, dynamic> task) {
+    assign_popup.AssignScheduleWorkDialog.show(
+      context,
+      task,
+      onAssignmentComplete: () {
+        // Reload job services after assignment
+        _loadJobServices();
+      },
+      isMaintenanceTask: false, // This is a job service, not a maintenance task
     );
-
-    if (result != null && mounted) {
-      // Find the selected staff member's user ID
-      final selectedStaffIndex = staffNames.indexOf(result.staffName);
-      if (selectedStaffIndex >= 0 && selectedStaffIndex < _staffMembers.length) {
-        final staffUserId = _staffMembers[selectedStaffIndex]['user_id'] ?? _staffMembers[selectedStaffIndex]['id'];
-        
-        if (staffUserId != null) {
-          await _assignStaffToJobService(task, staffUserId, result.note);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Error: Could not find staff member ID'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  // Load staff members from API
-  Future<void> _loadStaffMembers() async {
-    if (_isLoadingStaff) return;
-    
-    setState(() => _isLoadingStaff = true);
-    
-    try {
-      final apiService = ApiService();
-      final staffData = await apiService.getStaffMembers();
-      
-      if (mounted) {
-        setState(() {
-          _staffMembers = List<Map<String, dynamic>>.from(staffData);
-          _isLoadingStaff = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading staff members: $e');
-      if (mounted) {
-        setState(() => _isLoadingStaff = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load staff members: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  // Assign staff to job service
-  Future<void> _assignStaffToJobService(
-    Map<String, dynamic> task,
-    String staffUserId,
-    String? note,
-  ) async {
-    try {
-      final apiService = ApiService();
-      
-      // Use the serviceId (which should be the actual job service ID)
-      final jobServiceId = task['serviceId'] ?? task['id'];
-      
-      await apiService.assignStaffToJobService(jobServiceId, staffUserId);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Staff assigned successfully to ${task['serviceId']}'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        
-        // Reload the job services to reflect the changes
-        await _loadJobServices();
-      }
-    } catch (e) {
-      debugPrint('Error assigning staff to job service: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to assign staff: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
   }
 
   // Delete task method
@@ -514,14 +441,19 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     );
   }
 
+  // Pagination
+  int _currentPage = 1;
+  int _itemsPerPage = 10;
+
   final List<double> _colW = <double>[
-    140, // SERVICE ID
-    140, // CONCERN ID
-    140, // BUILDING & UNIT
-    130, // SCHEDULE
-    110, // STATUS
-    100, // PRIORITY
-    38, // ACTION
+    110, // JOB SERVICE ID
+    130, // TITLE
+    110, // BUILDING & UNIT
+    130, // DATE REQUESTED
+    70, // PRIORITY
+    100, // DEPARTMENT
+    90, // STATUS
+    90, // ACTION
   ];
 
   Widget _fixedCell(
@@ -542,6 +474,173 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     softWrap: false,
     style: style,
   );
+
+  // Pagination helper methods
+  List<Map<String, dynamic>> _getPaginatedTasks() {
+    // Apply filters first
+    List<Map<String, dynamic>> filteredTasks = _repairTasks.where((task) {
+      // Search filter - search in ID, title, and building & unit
+      bool matchesSearch = true;
+      if (_searchQuery.isNotEmpty) {
+        final searchLower = _searchQuery.toLowerCase();
+        final id = task['id']?.toString().toLowerCase() ?? '';
+        final title = task['title']?.toString().toLowerCase() ?? '';
+        final buildingUnit = task['buildingUnit']?.toString().toLowerCase() ?? '';
+        
+        matchesSearch = id.contains(searchLower) ||
+                       title.contains(searchLower) ||
+                       buildingUnit.contains(searchLower);
+      }
+      
+      // Department filter
+      bool matchesDepartment = true;
+      if (_selectedDepartment != 'All Departments') {
+        final taskDepartment = _mapCategoryToDepartment(task['category']?.toString() ?? '');
+        final mainDepartments = ['Electrical', 'Plumbing', 'Carpentry', 'Masonry'];
+        
+        if (_selectedDepartment == 'Other') {
+          // If "Other" is selected, match departments not in the main list
+          matchesDepartment = !mainDepartments.contains(taskDepartment);
+        } else {
+          // Match exact department
+          matchesDepartment = taskDepartment == _selectedDepartment;
+        }
+      }
+      
+      // Status filter
+      bool matchesStatus = true;
+      if (_selectedStatus != 'All Status') {
+        final taskStatus = task['status']?.toString() ?? '';
+        matchesStatus = taskStatus.toLowerCase() == _selectedStatus.toLowerCase();
+      }
+      
+      return matchesSearch && matchesDepartment && matchesStatus;
+    }).toList();
+    
+    final startIndex = (_currentPage - 1) * _itemsPerPage;
+    final endIndex = startIndex + _itemsPerPage;
+    
+    if (startIndex >= filteredTasks.length) return [];
+    
+    return filteredTasks.sublist(
+      startIndex,
+      endIndex > filteredTasks.length ? filteredTasks.length : endIndex,
+    );
+  }
+
+  int get _totalPages {
+    // Apply same filters for total page calculation
+    List<Map<String, dynamic>> filteredTasks = _repairTasks.where((task) {
+      bool matchesSearch = true;
+      if (_searchQuery.isNotEmpty) {
+        final searchLower = _searchQuery.toLowerCase();
+        final id = task['id']?.toString().toLowerCase() ?? '';
+        final title = task['title']?.toString().toLowerCase() ?? '';
+        final buildingUnit = task['buildingUnit']?.toString().toLowerCase() ?? '';
+        
+        matchesSearch = id.contains(searchLower) ||
+                       title.contains(searchLower) ||
+                       buildingUnit.contains(searchLower);
+      }
+      
+      bool matchesDepartment = true;
+      if (_selectedDepartment != 'All Departments') {
+        final taskDepartment = _mapCategoryToDepartment(task['category']?.toString() ?? '');
+        final mainDepartments = ['Electrical', 'Plumbing', 'Carpentry', 'Masonry'];
+        
+        if (_selectedDepartment == 'Other') {
+          // If "Other" is selected, match departments not in the main list
+          matchesDepartment = !mainDepartments.contains(taskDepartment);
+        } else {
+          // Match exact department
+          matchesDepartment = taskDepartment == _selectedDepartment;
+        }
+      }
+      
+      bool matchesStatus = true;
+      if (_selectedStatus != 'All Status') {
+        final taskStatus = task['status']?.toString() ?? '';
+        matchesStatus = taskStatus.toLowerCase() == _selectedStatus.toLowerCase();
+      }
+      
+      return matchesSearch && matchesDepartment && matchesStatus;
+    }).toList();
+    
+    return (filteredTasks.length / _itemsPerPage).ceil();
+  }
+
+  void _goToPage(int page) {
+    if (page >= 1 && page <= _totalPages) {
+      setState(() {
+        _currentPage = page;
+      });
+    }
+  }
+
+  void _previousPage() {
+    if (_currentPage > 1) {
+      setState(() {
+        _currentPage--;
+      });
+    }
+  }
+
+  void _nextPage() {
+    if (_currentPage < _totalPages) {
+      setState(() {
+        _currentPage++;
+      });
+    }
+  }
+
+  List<Widget> _buildPageNumbers() {
+    List<Widget> pageButtons = [];
+    
+    // Show max 5 page numbers at a time
+    int startPage = _currentPage - 2;
+    int endPage = _currentPage + 2;
+    
+    if (startPage < 1) {
+      startPage = 1;
+      endPage = 5;
+    }
+    
+    if (endPage > _totalPages) {
+      endPage = _totalPages;
+      startPage = _totalPages - 4;
+    }
+    
+    if (startPage < 1) startPage = 1;
+    
+    for (int i = startPage; i <= endPage; i++) {
+      pageButtons.add(
+        GestureDetector(
+          onTap: () => _goToPage(i),
+          child: Container(
+            width: 32,
+            height: 32,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              color: i == _currentPage ? const Color(0xFF1976D2) : Colors.grey[100],
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Center(
+              child: Text(
+                i.toString().padLeft(2, '0'),
+                style: TextStyle(
+                  color: i == _currentPage ? Colors.white : Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    
+    return pageButtons;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -698,6 +797,12 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: TextField(
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                    _currentPage = 1; // Reset to first page when searching
+                  });
+                },
                 decoration: InputDecoration(
                   prefixIcon: Icon(
                     Icons.search,
@@ -717,7 +822,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
           ),
           const SizedBox(width: 16),
 
-          // Role Dropdown
+          // Department Dropdown
           Expanded(
             child: Container(
               height: 40,
@@ -729,23 +834,26 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
-                  value: _selectedRole,
+                  value: _selectedDepartment,
                   onChanged: (String? newValue) {
                     setState(() {
-                      _selectedRole = newValue!;
+                      _selectedDepartment = newValue!;
+                      _currentPage = 1;
                     });
                   },
                   items:
                       <String>[
-                        'All Roles',
-                        'Admin',
-                        'Technician',
-                        'Manager',
+                        'All Departments',
+                        'Carpentry',
+                        'Electrical',
+                        'Masonry',
+                        'Plumbing',
+                        'Other',
                       ].map<DropdownMenuItem<String>>((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
                           child: Text(
-                            'Role: $value',
+                            value == 'All Departments' ? value : 'Dept: $value',
                             style: const TextStyle(fontSize: 14),
                           ),
                         );
@@ -946,7 +1054,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
-                  columnSpacing: 50,
+                  columnSpacing: 40,
                   headingRowHeight: 56,
                   dataRowHeight: 64,
                   headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
@@ -961,18 +1069,19 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                     color: Colors.black87,
                   ),
                   columns: [
-                    DataColumn(label: _fixedCell(0, const Text("SERVICE ID"))),
-                    DataColumn(label: _fixedCell(1, const Text("CONCERN ID"))),
+                    DataColumn(label: _fixedCell(0, const Text("JOB SERVICE ID"))),
+                    DataColumn(label: _fixedCell(1, const Text("TITLE"))),
                     DataColumn(
                       label: _fixedCell(2, const Text("BUILDING & UNIT")),
                     ),
-                    DataColumn(label: _fixedCell(3, const Text("SCHEDULE"))),
-                    DataColumn(label: _fixedCell(4, const Text("STATUS"))),
-                    DataColumn(label: _fixedCell(5, const Text("PRIORITY"))),
-                    DataColumn(label: _fixedCell(6, const Text(""))),
+                    DataColumn(label: _fixedCell(3, const Text("DATE REQUESTED"))),
+                    DataColumn(label: _fixedCell(4, const Text("PRIORITY"))),
+                    DataColumn(label: _fixedCell(5, const Text("DEPARTMENT"))),
+                    DataColumn(label: _fixedCell(6, const Text("STATUS"))),
+                    DataColumn(label: _fixedCell(7, const Text("ACTION"))),
                   ],
                   rows:
-                      _repairTasks.map((task) {
+                      _getPaginatedTasks().map((task) {
                         return DataRow(
                           cells: [
                             DataCell(
@@ -988,39 +1097,34 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                               ),
                             ),
                             DataCell(
-                              _fixedCell(
-                                1,
-                                _ellipsis(
-                                  task['concernId'],
-                                  style: TextStyle(
-                                    color: Colors.grey[700],
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
+                              _fixedCell(1, _ellipsis(task['title'])),
                             ),
                             DataCell(
                               _fixedCell(2, _ellipsis(task['buildingUnit'])),
                             ),
                             DataCell(
-                              _fixedCell(3, _ellipsis(task['schedule'])),
+                              _fixedCell(3, _ellipsis(task['dateRequested'])),
                             ),
 
-                            // Chips get a fixed box too (and aligned left)
+                            // Priority chip
                             DataCell(
-                              _fixedCell(4, _buildStatusChip(task['status'])),
+                              _fixedCell(4, _buildPriorityChip(task['priority'])),
                             ),
+                            
+                            // Department
                             DataCell(
-                              _fixedCell(
-                                5,
-                                _buildPriorityChip(task['priority']),
-                              ),
+                              _fixedCell(5, _ellipsis(task['department'])),
+                            ),
+
+                            // Status chip
+                            DataCell(
+                              _fixedCell(6, _buildStatusChip(task['status'])),
                             ),
 
                             // Action menu cell (narrow, centered)
                             DataCell(
                               _fixedCell(
-                                6,
+                                7,
                                 Builder(
                                   builder: (context) {
                                     return IconButton(
@@ -1066,55 +1170,25 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                 Text(
                   _repairTasks.isEmpty 
                     ? "No entries found"
-                    : "Showing 1 to ${_repairTasks.length} of ${_repairTasks.length} entries",
+                    : "Showing ${(_currentPage - 1) * _itemsPerPage + 1} to ${(_currentPage * _itemsPerPage) > _repairTasks.length ? _repairTasks.length : _currentPage * _itemsPerPage} of ${_repairTasks.length} entries",
                   style: TextStyle(color: Colors.grey[600], fontSize: 14),
                 ),
                 Row(
                   children: [
                     IconButton(
-                      onPressed: null,
-                      icon: Icon(Icons.chevron_left, color: Colors.grey[400]),
-                    ),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1976D2),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          "01",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                        ),
+                      onPressed: _currentPage > 1 ? _previousPage : null,
+                      icon: Icon(
+                        Icons.chevron_left,
+                        color: _currentPage > 1 ? Colors.grey[600] : Colors.grey[400],
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Center(
-                        child: Text(
-                          "02",
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ),
+                    ..._buildPageNumbers(),
                     IconButton(
-                      onPressed: () {},
-                      icon: Icon(Icons.chevron_right, color: Colors.grey[600]),
+                      onPressed: _currentPage < _totalPages ? _nextPage : null,
+                      icon: Icon(
+                        Icons.chevron_right,
+                        color: _currentPage < _totalPages ? Colors.grey[600] : Colors.grey[400],
+                      ),
                     ),
                   ],
                 ),

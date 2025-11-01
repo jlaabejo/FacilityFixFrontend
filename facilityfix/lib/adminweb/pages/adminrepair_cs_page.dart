@@ -21,10 +21,17 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   String _errorMessage = '';
 
   // Dropdown values for filtering
-  String _selectedRole = 'All Roles';
+  String _selectedDepartment = 'All Departments';
   String _selectedStatus = 'All Status';
   String _selectedConcernType = 'Concern Slip';
   String _searchQuery = '';
+
+  // Pagination
+  int _currentPage = 1;
+  int _itemsPerPage = 10;
+
+  // Sorting
+  bool _sortAscending = true;
 
   @override
   void initState() {
@@ -59,6 +66,15 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                 'rawData': slip, // Store raw data for detailed view
               };
             }).toList();
+        
+        // Sort by priority: High > Medium > Low
+        _repairTasks.sort((a, b) {
+          final priorityOrder = {'High': 0, 'Critical': 0, 'Medium': 1, 'Low': 2};
+          final priorityA = priorityOrder[a['priority']] ?? 3;
+          final priorityB = priorityOrder[b['priority']] ?? 3;
+          return priorityA.compareTo(priorityB);
+        });
+        
         _filteredTasks = List.from(_repairTasks);
         _isLoading = false;
       });
@@ -145,21 +161,12 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
         return 'Electrical';
       case 'plumbing':
         return 'Plumbing';
-      case 'hvac':
-        return 'HVAC';
       case 'carpentry':
         return 'Carpentry';
-      case 'maintenance':
-        return 'Maintenance';
-      case 'security':
-        return 'Security';
-      case 'fire_safety':
-        return 'Fire Safety';
-      case 'pest control':
-        return 'Pest Control';
-
+      case 'masonry':
+        return 'Masonry';
       default:
-        return 'General';
+        return category ?? 'Other'; // Return the original category or 'Other'
     }
   }
 
@@ -167,13 +174,14 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     setState(() {
       _filteredTasks =
           _repairTasks.where((task) {
-            // Search filter
+            // Search filter - search in ID, title, building & unit
             bool matchesSearch =
                 _searchQuery.isEmpty ||
                 task['title'].toLowerCase().contains(
                   _searchQuery.toLowerCase(),
                 ) ||
                 task['id'].toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                task['buildingUnit'].toLowerCase().contains(_searchQuery.toLowerCase()) ||
                 task['location'].toLowerCase().contains(
                   _searchQuery.toLowerCase(),
                 );
@@ -183,14 +191,60 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                 _selectedStatus == 'All Status' ||
                 task['status'] == _selectedStatus;
 
-            return matchesSearch && matchesStatus;
+            // Department filter
+            bool matchesDepartment = _selectedDepartment == 'All Departments';
+            if (!matchesDepartment) {
+              final taskDepartment = task['department'] ?? '';
+              final mainDepartments = ['Electrical', 'Plumbing', 'Carpentry', 'Masonry'];
+              
+              if (_selectedDepartment == 'Other') {
+                // If "Other" is selected, match departments not in the main list
+                matchesDepartment = !mainDepartments.contains(taskDepartment);
+              } else {
+                // Match exact department
+                matchesDepartment = taskDepartment == _selectedDepartment;
+              }
+            }
+
+            return matchesSearch && matchesStatus && matchesDepartment;
           }).toList();
+
+      // Reset to first page when filters change
+      _currentPage = 1;
     });
   }
 
   void _onSearchChanged(String query) {
     _searchQuery = query;
     _applyFilters();
+  }
+
+  void _toggleSortOrder() {
+    setState(() {
+      _sortAscending = !_sortAscending;
+      
+      // Sort the filtered tasks by date requested
+      _filteredTasks.sort((a, b) {
+        final dateA = _parseDateForSort(a['dateRequested']);
+        final dateB = _parseDateForSort(b['dateRequested']);
+        
+        if (_sortAscending) {
+          return dateA.compareTo(dateB);
+        } else {
+          return dateB.compareTo(dateA);
+        }
+      });
+    });
+  }
+
+  DateTime _parseDateForSort(String dateStr) {
+    if (dateStr == 'N/A') return DateTime(1970);
+    
+    try {
+      return DateTime.parse(dateStr);
+    } catch (e) {
+      return DateTime(1970);
+    }
   }
 
   // Helper function to convert routeKey to actual route path
@@ -479,14 +533,14 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   }
 
   final List<double> _colW = <double>[
-    100, // CONCERN ID
-    140, // TITLE
-    110, // DATE REQUESTED
-    100, // BUILDING & UNIT
-    80, // PRIORITY
-    90, // DEPARTMENT
+    110, // CONCERN SLIP ID
+    130, // TITLE
+    110, // BUILDING & UNIT
+    130, // DATE REQUESTED
+    70, // PRIORITY
+    100, // DEPARTMENT
     90, // STATUS
-    38, // ACTION
+    90, // ACTION
   ];
 
   Widget _fixedCell(
@@ -507,6 +561,94 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     softWrap: false,
     style: style,
   );
+
+  // Pagination helper methods
+  List<Map<String, dynamic>> _getPaginatedTasks() {
+    final startIndex = (_currentPage - 1) * _itemsPerPage;
+    final endIndex = startIndex + _itemsPerPage;
+    
+    if (startIndex >= _filteredTasks.length) return [];
+    
+    return _filteredTasks.sublist(
+      startIndex,
+      endIndex > _filteredTasks.length ? _filteredTasks.length : endIndex,
+    );
+  }
+
+  int get _totalPages => _filteredTasks.isEmpty ? 1 : (_filteredTasks.length / _itemsPerPage).ceil();
+
+  void _goToPage(int page) {
+    if (page >= 1 && page <= _totalPages) {
+      setState(() {
+        _currentPage = page;
+      });
+    }
+  }
+
+  void _previousPage() {
+    if (_currentPage > 1) {
+      setState(() {
+        _currentPage--;
+      });
+    }
+  }
+
+  void _nextPage() {
+    if (_currentPage < _totalPages) {
+      setState(() {
+        _currentPage++;
+      });
+    }
+  }
+
+  List<Widget> _buildPageNumbers() {
+    List<Widget> pageButtons = [];
+    
+    // Show max 5 page numbers at a time
+    int startPage = _currentPage - 2;
+    int endPage = _currentPage + 2;
+    
+    if (startPage < 1) {
+      startPage = 1;
+      endPage = 5;
+    }
+    
+    if (endPage > _totalPages) {
+      endPage = _totalPages;
+      startPage = _totalPages - 4;
+    }
+    
+    if (startPage < 1) startPage = 1;
+    
+    for (int i = startPage; i <= endPage; i++) {
+      pageButtons.add(
+        GestureDetector(
+          onTap: () => _goToPage(i),
+          child: Container(
+            width: 32,
+            height: 32,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              color: i == _currentPage ? const Color(0xFF1976D2) : Colors.grey[100],
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Center(
+              child: Text(
+                i.toString().padLeft(2, '0'),
+                style: TextStyle(
+                  color: i == _currentPage ? Colors.white : Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    
+    return pageButtons;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -636,7 +778,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
           ),
           const SizedBox(width: 16),
 
-          // Role Dropdown
+          // Department Dropdown
           Expanded(
             child: Container(
               height: 40,
@@ -648,23 +790,26 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
-                  value: _selectedRole,
+                  value: _selectedDepartment,
                   onChanged: (String? newValue) {
                     setState(() {
-                      _selectedRole = newValue!;
+                      _selectedDepartment = newValue!;
+                      _applyFilters();
                     });
                   },
                   items:
                       <String>[
-                        'All Roles',
-                        'Admin',
-                        'Technician',
-                        'Manager',
+                        'All Departments',
+                        'Carpentry',
+                        'Electrical',
+                        'Masonry',
+                        'Plumbing',
+                        'Other',
                       ].map<DropdownMenuItem<String>>((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
                           child: Text(
-                            'Role: $value',
+                            value == 'All Departments' ? value : 'Dept: $value',
                             style: const TextStyle(fontSize: 14),
                           ),
                         );
@@ -891,11 +1036,11 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                       ],
                     ),
                     )
-                    : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
+                    : ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
                       child: SingleChildScrollView(
                         child: DataTable(
-                          columnSpacing: 50,
+                          columnSpacing: 40,
                           headingRowHeight: 56,
                           dataRowHeight: 64,
                           headingRowColor: WidgetStateProperty.all(
@@ -913,22 +1058,37 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                           ),
                           columns: [
                             DataColumn(
-                              label: _fixedCell(0, const Text("CONCERN ID")),
+                              label: _fixedCell(0, const Text("CONCERN SLIP ID")),
                             ),
                             DataColumn(
-                              label: _fixedCell(1, const Text("CONCERN TITLE")),
+                              label: _fixedCell(1, const Text("TITLE")),
                             ),
                             DataColumn(
                               label: _fixedCell(
                                 2,
-                                const Text("DATE REQUESTED"),
+                                const Text("BUILDING & UNIT"),
                               ),
                             ),
                             DataColumn(
                               label: _fixedCell(
                                 3,
-                                const Text("BUILDING & UNIT"),
+                                Row(
+                                  children: [
+                                    const Text("DATE REQUESTED"),
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      _sortAscending 
+                                        ? Icons.arrow_upward 
+                                        : Icons.arrow_downward,
+                                      size: 16,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ],
+                                ),
                               ),
+                              onSort: (columnIndex, ascending) {
+                                _toggleSortOrder();
+                              },
                             ),
                             DataColumn(
                               label: _fixedCell(4, const Text("PRIORITY")),
@@ -939,10 +1099,10 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                             DataColumn(
                               label: _fixedCell(6, const Text("STATUS")),
                             ),
-                            DataColumn(label: _fixedCell(7, const Text(""))),
+                            DataColumn(label: _fixedCell(7, const Text("ACTION"))),
                           ],
                           rows:
-                              _filteredTasks.map((task) {
+                              _getPaginatedTasks().map((task) {
                                 return DataRow(
                                   cells: [
                                     DataCell(
@@ -963,13 +1123,13 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                                     DataCell(
                                       _fixedCell(
                                         2,
-                                        _ellipsis(task['dateRequested']),
+                                        _ellipsis(task['buildingUnit']),
                                       ),
                                     ),
                                     DataCell(
                                       _fixedCell(
                                         3,
-                                        _ellipsis(task['buildingUnit']),
+                                        _ellipsis(task['dateRequested']),
                                       ),
                                     ),
 
@@ -1022,7 +1182,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                                             );
                                           },
                                         ),
-                                        align: Alignment.center,
+                                        align: Alignment.centerLeft,
                                       ),
                                     ),
                                   ],
@@ -1041,55 +1201,27 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  "Showing ${_filteredTasks.length} of ${_repairTasks.length} entries",
+                  _filteredTasks.isEmpty 
+                    ? "No entries found"
+                    : "Showing ${(_currentPage - 1) * _itemsPerPage + 1} to ${(_currentPage * _itemsPerPage) > _filteredTasks.length ? _filteredTasks.length : _currentPage * _itemsPerPage} of ${_filteredTasks.length} entries",
                   style: TextStyle(color: Colors.grey[600], fontSize: 14),
                 ),
                 Row(
                   children: [
                     IconButton(
-                      onPressed: null,
-                      icon: Icon(Icons.chevron_left, color: Colors.grey[400]),
-                    ),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1976D2),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          "01",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                        ),
+                      onPressed: _currentPage > 1 ? _previousPage : null,
+                      icon: Icon(
+                        Icons.chevron_left,
+                        color: _currentPage > 1 ? Colors.grey[600] : Colors.grey[400],
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Center(
-                        child: Text(
-                          "02",
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ),
+                    ..._buildPageNumbers(),
                     IconButton(
-                      onPressed: () {},
-                      icon: Icon(Icons.chevron_right, color: Colors.grey[600]),
+                      onPressed: _currentPage < _totalPages ? _nextPage : null,
+                      icon: Icon(
+                        Icons.chevron_right,
+                        color: _currentPage < _totalPages ? Colors.grey[600] : Colors.grey[400],
+                      ),
                     ),
                   ],
                 ),
@@ -1150,10 +1282,6 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     Color fg = Colors.grey[800]!;
 
     switch (departmentLower) {
-      case 'maintenance':
-        bg = const Color(0xFF19B36E);
-        fg = Colors.white;
-        break;
       case 'carpentry':
         bg = const Color(0xFFF79009);
         fg = Colors.white;

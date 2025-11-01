@@ -2,8 +2,8 @@ import 'dart:async';
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/services/auth_storage.dart';
 import 'package:facilityfix/config/env.dart';
-import 'package:facilityfix/staff/view_details.dart';
-import 'package:facilityfix/staff/job_service_detail.dart';
+import 'package:facilityfix/staff/view_details/concern_slip.dart';
+import 'package:facilityfix/staff/view_details/job_service_detail.dart';
 import 'package:facilityfix/staff/maintenance.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
@@ -11,7 +11,6 @@ import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/services/chat_helper.dart';
 import 'package:facilityfix/staff/notification.dart';
 import 'package:facilityfix/staff/home.dart';
-import 'package:facilityfix/staff/profile.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:facilityfix/widgets/cards.dart';
@@ -75,8 +74,9 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                   'priority': request['priority'] ?? 'medium',
                   'request_type': request['request_type'] ?? 'Concern Slip',
                   'unit_id': request['unit_id'] ?? '',
-                  'assigned_staff':
-                      request['assigned_to'] ?? request['assigned_staff'],
+                  // Prefer explicit assigned staff name fields if available; keep assigned_to id separately
+                  'assigned_staff': request['assigned_staff_name'] ?? request['assigned_staff'] ?? '',
+                  'assigned_to_id': request['assigned_to'] ?? '',
                   'staff_department':
                       request['staff_department'] ?? request['category'],
                   'description': request['description'] ?? '',
@@ -275,14 +275,18 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   }
 
   bool _departmentMatches(Map<String, dynamic> w) {
-    if (_selectedDepartment == 'All') return true;
-    return _norm(w['category']) == _norm(_selectedDepartment);
+    // Department filter removed — always match
+    return true;
   }
 
   bool _assignmentMatches(Map<String, dynamic> w) {
     if (!_showOnlyMyAssignments || _currentUserId == null) return true;
-    final assignedStaff = w['assigned_staff'] ?? w['assigned_to'];
-    return assignedStaff == _currentUserId;
+    // Prefer explicit assigned_to_id (internal id) for matching against current user
+    final assignedId = (w['assigned_to_id'] ?? w['assigned_to'] ?? '').toString();
+    if (assignedId.isNotEmpty) return assignedId == (_currentUserId ?? '');
+    // fallback to name comparison (unlikely) — compare raw assigned_staff string
+    final assignedStaff = w['assigned_staff'] ?? '';
+    return assignedStaff == (_currentUserId ?? '');
   }
 
   bool _searchMatches(Map<String, dynamic> w) {
@@ -324,43 +328,21 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   }
 
   List<String> get _statusOptions {
-    final base = _allRequests
-        .where(_tabMatchesByRequestType)
-        .where(_departmentMatches)
-        .where(_searchMatches);
-    final set = <String>{};
-    for (final w in base) {
-      final s = (w['status'] ?? '').toString().trim();
-      if (s.isNotEmpty) set.add(s);
-    }
-    final list = set.toList()..sort();
-    return ['All', ...list];
+    // Use fixed status options per product requirement
+    return [
+      'All',
+      'Pending',
+      'To be Inspect',
+      'Inspected',
+      'Assigned',
+      'In Progress',
+      'On Hold',
+    ];
   }
 
   List<String> get _deptOptions {
-    // predefined departments
-    final predefined = {
-      'Maintenance',
-      'Carpentry',
-      'Plumbing',
-      'Electrical',
-      'Masonry',
-    };
-
-    final base = _allRequests
-        .where(_tabMatchesByRequestType)
-        .where(_statusMatches)
-        .where(_searchMatches);
-
-    final set = <String>{};
-    for (final w in base) {
-      final d = (w['category'] ?? '').toString().trim();
-      if (d.isNotEmpty) set.add(d);
-    }
-
-    // merge both sets
-    final list = {...predefined, ...set}.toList()..sort();
-    return ['All', ...list];
+    // Department filter removed per request — keep only 'All' to preserve UI
+    return ['All'];
   }
 
   List<TabItem> get _tabs {

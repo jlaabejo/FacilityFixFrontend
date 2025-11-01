@@ -601,17 +601,8 @@ class _ExternalMaintenanceFormPageState
                         children: [
                           Expanded(
                             child: _buildTextField(
-                              label: "Contractor Name",
+                              label: "Contractor (Company) Name",
                               controller: _contractorNameController,
-                              placeholder: "Enter Name",
-                              validator: _req,
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: _buildTextField(
-                              label: "Contact Person",
-                              controller: _contactPersonController,
                               placeholder: "Enter Name",
                               validator: _req,
                             ),
@@ -859,48 +850,48 @@ class _ExternalMaintenanceFormPageState
                       ),
                       const SizedBox(height: 40),
 
-                      // Attachments
-                      _buildSectionTitle("Attachments"),
-                      const SizedBox(height: 24),
+                      // // Attachments
+                      // _buildSectionTitle("Attachments"),
+                      // const SizedBox(height: 24),
 
-                      Container(
-                        height: 120,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: Colors.grey[300]!,
-                            width: 2,
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.cloud_upload_outlined,
-                              size: 32,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              "Drop files here or click to upload",
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.black54,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              "PDF, PNG, JPG up to 10MB",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[500],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 40),
+                      // Container(
+                      //   height: 120,
+                      //   width: double.infinity,
+                      //   decoration: BoxDecoration(
+                      //     border: Border.all(
+                      //       color: Colors.grey[300]!,
+                      //       width: 2,
+                      //     ),
+                      //     borderRadius: BorderRadius.circular(8),
+                      //   ),
+                      //   child: Column(
+                      //     mainAxisAlignment: MainAxisAlignment.center,
+                      //     children: [
+                      //       Icon(
+                      //         Icons.cloud_upload_outlined,
+                      //         size: 32,
+                      //         color: Colors.grey[400],
+                      //       ),
+                      //       const SizedBox(height: 8),
+                      //       const Text(
+                      //         "Drop files here or click to upload",
+                      //         style: TextStyle(
+                      //           fontSize: 14,
+                      //           color: Colors.black54,
+                      //         ),
+                      //       ),
+                      //       const SizedBox(height: 4),
+                      //       Text(
+                      //         "PDF, PNG, JPG up to 10MB",
+                      //         style: TextStyle(
+                      //           fontSize: 12,
+                      //           color: Colors.grey[500],
+                      //         ),
+                      //       ),
+                      //     ],
+                      //   ),
+                      // ),
+                      // const SizedBox(height: 40),
 
                       // Notifications
                       _buildSectionTitle("Notifications"),

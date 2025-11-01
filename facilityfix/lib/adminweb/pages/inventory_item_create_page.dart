@@ -83,7 +83,17 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
     'meters',
     'boxes',
     'sets',
+    'others',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Generate item code automatically
+    final now = DateTime.now();
+    final timestamp = now.millisecondsSinceEpoch.toString().substring(7);
+    _itemCodeController.text = 'INV-${now.year}-$timestamp';
+  }
 
   @override
   void dispose() {
@@ -365,9 +375,10 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                         Expanded(
                           child: TextFormField(
                             controller: _itemCodeController,
+                            readOnly: true,
+                            enabled: false,
                             decoration: InputDecoration(
-                              labelText: 'Item Code *',
-                              hintText: 'SKU or barcode',
+                              labelText: 'Item Code',
                               labelStyle: TextStyle(color: Colors.grey[700]),
                               hintStyle: TextStyle(color: Colors.grey[400]),
                               border: OutlineInputBorder(
@@ -382,13 +393,9 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(color: Colors.grey[400]!),
                               ),
+                              filled: true,
+                              fillColor: Colors.grey[100],
                             ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Item code is required';
-                              }
-                              return null;
-                            },
                           ),
                         ),
                         const SizedBox(width: 16),

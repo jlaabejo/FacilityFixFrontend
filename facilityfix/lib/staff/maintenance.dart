@@ -1,20 +1,17 @@
 import 'dart:async';
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/config/env.dart';
-import 'package:facilityfix/services/auth_service.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
-import 'package:facilityfix/services/chat_helper.dart';
 import 'package:facilityfix/staff/notification.dart';
 import 'package:facilityfix/staff/home.dart';
+import 'package:facilityfix/staff/view_details/maintenance_detail.dart';
 import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/staff/inventory.dart';
-import 'package:facilityfix/staff/profile.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/helper_models.dart';
-import 'package:facilityfix/widgets/view_details.dart';
 import 'package:facilityfix/services/auth_storage.dart';
 import 'package:flutter/material.dart';
 
@@ -26,12 +23,8 @@ class MaintenancePage extends StatefulWidget {
 }
 
 class _MaintenancePageState extends State<MaintenancePage> {
-  // ─────────────── Tabs (by status) ───────────────
-  String _selectedTabLabel = "All";
-
   // ─────────────── Filters ───────────────
   String _selectedStatus = 'All';
-  String _selectedCategory = 'All';
   final TextEditingController _searchController = TextEditingController();
 
   // ─────────────── Dynamic data from API ───────────────
@@ -256,39 +249,9 @@ class _MaintenancePageState extends State<MaintenancePage> {
   String shortDate(DateTime d) => '${_months[d.month - 1]} ${d.day}';
   String _norm(String? s) => (s ?? '').toLowerCase().trim();
 
-  bool _tabMatchesByStatus(Map<String, dynamic> task) {
-    final status = _norm(task['status']);
-    switch (_norm(_selectedTabLabel)) {
-      case 'all':
-        return true;
-      case 'scheduled':
-        return status == 'scheduled';
-      case 'in progress':
-        return status == 'in_progress' || status == 'in progress';
-      case 'completed':
-        return status == 'completed' || status == 'done';
-      case 'overdue':
-        if (status == 'completed' || status == 'done') return false;
-        try {
-          final scheduledDate = DateTime.tryParse(task['scheduled_date'] ?? '');
-          if (scheduledDate == null) return false;
-          return scheduledDate.isBefore(DateTime.now());
-        } catch (e) {
-          return false;
-        }
-      default:
-        return true;
-    }
-  }
-
   bool _statusMatches(Map<String, dynamic> task) {
     if (_selectedStatus == 'All') return true;
     return _norm(task['status']) == _norm(_selectedStatus);
-  }
-
-  bool _categoryMatches(Map<String, dynamic> task) {
-    if (_selectedCategory == 'All') return true;
-    return _norm(task['category']) == _norm(_selectedCategory);
   }
 
   bool _searchMatches(Map<String, dynamic> task) {
@@ -313,19 +276,15 @@ class _MaintenancePageState extends State<MaintenancePage> {
 
   List<Map<String, dynamic>> get _filtered {
     final filtered = _allMaintenanceTasks
-        .where(_tabMatchesByStatus)
         .where(_statusMatches)
-        .where(_categoryMatches)
         .where(_searchMatches)
         .toList();
     
     print('DEBUG: Filtering results:');
     print('  Total tasks: ${_allMaintenanceTasks.length}');
-    print('  After tab filter: ${_allMaintenanceTasks.where(_tabMatchesByStatus).length}');
-    print('  After status filter: ${_allMaintenanceTasks.where(_tabMatchesByStatus).where(_statusMatches).length}');
-    print('  After category filter: ${_allMaintenanceTasks.where(_tabMatchesByStatus).where(_statusMatches).where(_categoryMatches).length}');
+    print('  After status filter: ${_allMaintenanceTasks.where(_statusMatches).length}');
     print('  After search filter: ${filtered.length}');
-    print('  Current filters: tab="$_selectedTabLabel", status="$_selectedStatus", category="$_selectedCategory", search="${_searchController.text}"');
+    print('  Current filters: status="$_selectedStatus", search="${_searchController.text}"');
     
     return filtered;
   }
@@ -341,118 +300,8 @@ class _MaintenancePageState extends State<MaintenancePage> {
   }
 
   List<String> get _statusOptions {
-    final base = _allMaintenanceTasks
-        .where(_tabMatchesByStatus)
-        .where(_categoryMatches)
-        .where(_searchMatches);
-    final set = <String>{};
-    for (final task in base) {
-      final s = (task['status'] ?? '').toString().trim();
-      if (s.isNotEmpty) set.add(s);
-    }
-    final list = set.toList()..sort();
-    return ['All', ...list];
-  }
-
-  List<String> get _categoryOptions {
-    // Predefined maintenance categories
-    final predefined = {
-      'preventive',
-      'corrective',
-      'emergency',
-      'predictive',
-      'routine',
-    };
-
-    final base = _allMaintenanceTasks
-        .where(_tabMatchesByStatus)
-        .where(_statusMatches)
-        .where(_searchMatches);
-
-    final set = <String>{};
-    for (final task in base) {
-      final c = (task['category'] ?? '').toString().trim();
-      if (c.isNotEmpty) set.add(c);
-    }
-
-    // Merge both sets
-    final list = {...predefined, ...set}.toList()..sort();
-    return ['All', ...list];
-  }
-
-  List<TabItem> get _tabs {
-    final visible = _allMaintenanceTasks
-        .where(_statusMatches)
-        .where(_categoryMatches)
-        .where(_searchMatches)
-        .toList();
-
-    int countFor(String type) {
-      switch (type.toLowerCase()) {
-        case 'scheduled':
-          return visible.where((t) => _norm(t['status']) == 'scheduled').length;
-        case 'in progress':
-          return visible.where((t) => _norm(t['status']) == 'in_progress' || _norm(t['status']) == 'in progress').length;
-        case 'completed':
-          return visible.where((t) => _norm(t['status']) == 'completed' || _norm(t['status']) == 'done').length;
-        case 'overdue':
-          return visible.where((t) {
-            if (_norm(t['status']) == 'completed' || _norm(t['status']) == 'done') return false;
-            try {
-              final scheduledDate = DateTime.tryParse(t['scheduled_date'] ?? '');
-              if (scheduledDate == null) return false;
-              return scheduledDate.isBefore(DateTime.now());
-            } catch (e) {
-              return false;
-            }
-          }).length;
-        default:
-          return visible.length;
-      }
-    }
-
-    return [
-      TabItem(label: 'All', count: visible.length),
-      TabItem(label: 'Scheduled', count: countFor('scheduled')),
-      TabItem(label: 'In Progress', count: countFor('in progress')),
-      TabItem(label: 'Completed', count: countFor('completed')),
-      TabItem(label: 'Overdue', count: countFor('overdue')),
-    ];
-  }
-
-  // ===== Chat Navigation =====================================================
-  Future<void> _handleMaintenanceChatNavigation(Map<String, dynamic> task) async {
-    try {
-      final taskId = task['id'] ?? '';
-      
-      if (taskId.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error: Unable to start chat - Invalid task ID'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        return;
-      }
-
-      // Navigate to maintenance chat - filtered by maintenance ID
-      await ChatHelper.navigateToMaintenanceChat(
-        context: context,
-        maintenanceId: taskId,
-        isStaff: true,
-      );
-    } catch (e) {
-      print('Error navigating to maintenance chat: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error starting chat: ${e.toString()}'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+    // Fixed status list matching the filter design
+    return ['All', 'Assessed', 'Assigned', 'Completed', 'Sent'];
   }
 
   Widget buildMaintenanceCard(Map<String, dynamic> task) {
@@ -474,7 +323,7 @@ class _MaintenancePageState extends State<MaintenancePage> {
       statusTag: status,
       title: title,
       location: location,
-      assignedStaff: task['assigned_staff'],
+      assignedStaff: task['assigned_staff_name'] ?? task['assigned_staff'],
       staffDepartment: task['category'],
       onTap: () {
         final maintenanceTaskId = task['id'] ?? '';
@@ -492,7 +341,7 @@ class _MaintenancePageState extends State<MaintenancePage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => _MaintenanceDetailScreen(
+            builder: (_) => MaintenanceDetailPage(
               task: task,
               currentStaffId: _currentStaffId,
             ),
@@ -502,9 +351,8 @@ class _MaintenancePageState extends State<MaintenancePage> {
           _loadAllMaintenanceTasks();
         });
       },
-      onChatTap: () {
-        _handleMaintenanceChatNavigation(task);
-      },
+      // Chat removed as requested
+      onChatTap: null,
     );
   }
 
@@ -548,37 +396,22 @@ class _MaintenancePageState extends State<MaintenancePage> {
                       searchController: _searchController,
                       selectedStatus: _selectedStatus,
                       statuses: _statusOptions,
-                      selectedClassification: _selectedCategory,
-                      classifications: _categoryOptions,
                       onStatusChanged: (status) {
                         setState(() {
                           _selectedStatus = status.trim().isEmpty ? 'All' : status;
-                        });
-                      },
-                      onClassificationChanged: (category) {
-                        setState(() {
-                          _selectedCategory = category.trim().isEmpty ? 'All' : category;
                         });
                       },
                       onSearchChanged: (_) {
                         setState(() {});
                       },
                     ),
-                    const SizedBox(height: 16),
-
-                    // Mobile-friendly tab selector
-                    MobileTabSelector(
-                      tabs: _tabs,
-                      selectedLabel: _selectedTabLabel,
-                      onTabSelected: (label) => setState(() => _selectedTabLabel = label),
-                    ),
                     const SizedBox(height: 20),
 
                     Row(
                       children: [
-                        Text(
-                          'Maintenance $_selectedTabLabel',
-                          style: const TextStyle(
+                        const Text(
+                          'Maintenance Tasks',
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
@@ -713,798 +546,6 @@ class MobileTabSelector extends StatelessWidget {
               ),
             );
           }).toList(),
-        ),
-      ),
-    );
-  }
-}
-
-// Maintenance Detail Screen using MaintenanceDetails widget
-class _MaintenanceDetailScreen extends StatefulWidget {
-  final Map<String, dynamic> task;
-  final String currentStaffId;
-
-  const _MaintenanceDetailScreen({
-    required this.task,
-    required this.currentStaffId,
-  });
-
-  @override
-  State<_MaintenanceDetailScreen> createState() => _MaintenanceDetailScreenState();
-}
-
-class _MaintenanceDetailScreenState extends State<_MaintenanceDetailScreen> {
-  late List<Map<String, dynamic>> _checklistItems;
-  bool _isUpdating = false;
-  late TextEditingController _notesController;
-  bool _isSubmitting = false;
-  List<Map<String, dynamic>> _inventoryRequests = [];
-  bool _isLoadingInventoryRequests = true;
-
-  @override
-  void initState() {
-    super.initState();
-    print('DEBUG: MaintenanceDetailScreen initState called');
-    print('DEBUG: Task data keys: ${widget.task.keys.toList()}');
-    print('DEBUG: Raw checklist_completed value: ${widget.task['checklist_completed']}');
-    print('DEBUG: Raw checklist_completed type: ${widget.task['checklist_completed'].runtimeType}');
-    _checklistItems = _convertChecklistToMap(widget.task['checklist_completed'], widget.task['category'] ?? 'general');
-    print('DEBUG: Converted checklist items: $_checklistItems');
-    print('DEBUG: Checklist items count: ${_checklistItems.length}');
-
-    // Initialize notes controller with existing notes if available
-    _notesController = TextEditingController(
-      text: widget.task['completion_notes'] ?? '',
-    );
-
-    // Load inventory requests for this task
-    _loadInventoryRequests();
-  }
-
-  @override
-  void dispose() {
-    _notesController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadInventoryRequests() async {
-    setState(() {
-      _isLoadingInventoryRequests = true;
-    });
-
-    try {
-      final apiService = APIService(roleOverride: AppRole.staff);
-      final taskId = widget.task['id'];
-
-      if (taskId == null || taskId.isEmpty) {
-        print('DEBUG: No task ID available for loading inventory requests');
-        return;
-      }
-
-      print('DEBUG: Loading inventory requests for task $taskId');
-      final response = await apiService.getInventoryRequestsByMaintenanceTask(taskId);
-
-      if (response['success'] == true && response['data'] != null) {
-        final requests = List<Map<String, dynamic>>.from(response['data']);
-
-        // Enrich with item details
-        for (var request in requests) {
-          if (request['inventory_id'] != null) {
-            try {
-              final itemData = await apiService.getInventoryItemById(request['inventory_id']);
-              if (itemData != null) {
-                request['item_name'] = itemData['item_name'];
-                request['item_code'] = itemData['item_code'];
-              }
-            } catch (e) {
-              print('DEBUG: Error loading item details: $e');
-            }
-          }
-        }
-
-        setState(() {
-          _inventoryRequests = requests;
-        });
-
-        print('DEBUG: Loaded ${_inventoryRequests.length} inventory requests');
-      }
-    } catch (e) {
-      print('DEBUG: Error loading inventory requests: $e');
-    } finally {
-      setState(() {
-        _isLoadingInventoryRequests = false;
-      });
-    }
-  }
-  
-  // Computed properties for checklist progress
-  // Only count items visible to current user
-  int get completedCount => _checklistItems.where((item) {
-    final assignedTo = item['assigned_to']?.toString() ?? '';
-    final isVisibleToMe = assignedTo.isEmpty || assignedTo == widget.currentStaffId;
-    return isVisibleToMe && item['completed'] == true;
-  }).length;
-
-  int get totalCount => _checklistItems.where((item) {
-    final assignedTo = item['assigned_to']?.toString() ?? '';
-    return assignedTo.isEmpty || assignedTo == widget.currentStaffId;
-  }).length;
-
-  DateTime? _parseDate(dynamic value) {
-    if (value == null) return null;
-    if (value is DateTime) return value;
-    if (value is String) return DateTime.tryParse(value);
-    return null;
-  }
-
-  String _formatTimestamp(dynamic timestamp) {
-    if (timestamp == null) return '';
-    
-    DateTime? date;
-    if (timestamp is DateTime) {
-      date = timestamp;
-    } else if (timestamp is String) {
-      date = DateTime.tryParse(timestamp);
-    } else if (timestamp.runtimeType.toString().contains('Timestamp')) {
-      // Handle Firestore Timestamp
-      try {
-        date = (timestamp as dynamic).toDate();
-      } catch (e) {
-        print('Error converting Timestamp: $e');
-      }
-    }
-    
-    return date?.toIso8601String() ?? '';
-  }
-
-  List<Map<String, dynamic>> _convertChecklistToMap(dynamic checklist, String category) {
-    print('DEBUG _convertChecklistToMap: Input checklist: $checklist');
-    print('DEBUG _convertChecklistToMap: Input type: ${checklist.runtimeType}');
-    
-    if (checklist == null) {
-      print('DEBUG _convertChecklistToMap: checklist is null, returning empty list');
-      return [];
-    }
-    
-    if (checklist is! List) {
-      print('DEBUG _convertChecklistToMap: checklist is not a List (is ${checklist.runtimeType}), returning empty list');
-      return [];
-    }
-    
-    print('DEBUG _convertChecklistToMap: checklist is a List with ${checklist.length} items');
-    
-    final result = checklist
-        .where((item) {
-          final isMap = item is Map;
-          print('DEBUG _convertChecklistToMap: Item is Map? $isMap, item: $item');
-          return isMap;
-        })
-
-
-        .map<Map<String, dynamic>>((item) {
-          final converted = <String, dynamic>{
-            'id': item['id']?.toString() ?? '',
-            'task': item['task']?.toString() ?? '',
-            'completed': item['completed'] == true,
-          };
-          final assigned = item['assigned_to'];
-
-          if (assigned != null && assigned.toString().trim().isNotEmpty && category == 'safety') {
-            converted['assigned_to'] = assigned.toString();
-          }
-          return converted;
-        })
-        .where((item) {
-          final hasId = item['id'].toString().isNotEmpty;
-          print('DEBUG _convertChecklistToMap: Item has ID? $hasId');
-          return hasId;
-        })
-        .toList();
-    
-    print('DEBUG _convertChecklistToMap: Final result count: ${result.length}');
-    return result;
-  }
-
-  Future<void> _toggleChecklistItem(int index) async {
-    if (_isUpdating) return;
-
-    setState(() => _isUpdating = true);
-
-    try {
-      final item = _checklistItems[index];
-      final newCompletedStatus = !item['completed'];
-
-      // Optimistically update UI
-      setState(() {
-        _checklistItems[index]['completed'] = newCompletedStatus;
-      });
-
-      // Update via API
-      final apiService = APIService(roleOverride: AppRole.staff);
-      await apiService.updateChecklistItem(
-        taskId: widget.task['id'],
-        itemId: item['id'],
-        completed: newCompletedStatus,
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              newCompletedStatus
-                ? 'Task marked as completed'
-                : 'Task marked as incomplete'
-            ),
-            duration: const Duration(seconds: 1),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      print('Error updating checklist item: $e');
-
-      // Revert optimistic update on error
-      setState(() {
-        _checklistItems[index]['completed'] = !_checklistItems[index]['completed'];
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error updating checklist: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isUpdating = false);
-      }
-    }
-  }
-
-  Future<void> _saveCompletionNotes() async {
-    if (_isSubmitting) return;
-
-    setState(() => _isSubmitting = true);
-
-    try {
-      final apiService = APIService(roleOverride: AppRole.staff);
-      await apiService.updateMaintenanceTask(
-        widget.task['id'],
-        {
-          'completion_notes': _notesController.text,
-        },
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Notes saved successfully'),
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      print('Error saving completion notes: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving notes: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: CustomAppBar(
-        title: 'Maintenance Details',
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Checklist Progress Banner
-              if (_checklistItems.isNotEmpty) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: completedCount == totalCount 
-                        ? const Color(0xFFECFDF5)
-                        : const Color(0xFFF3F4F6),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: completedCount == totalCount
-                          ? const Color(0xFF10B981)
-                          : const Color(0xFFE5E7EB),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        completedCount == totalCount
-                            ? Icons.check_circle
-                            : Icons.pending_actions,
-                        size: 20,
-                        color: completedCount == totalCount
-                            ? const Color(0xFF10B981)
-                            : const Color(0xFF6B7280),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        completedCount == totalCount
-                            ? 'All tasks completed! 🎉'
-                            : 'Checklist Progress: $completedCount of $totalCount completed',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: completedCount == totalCount
-                              ? const Color(0xFF047857)
-                              : const Color(0xFF374151),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-              
-              // Basic task information (non-checklist fields)
-              MaintenanceDetails(
-                // Basic Information
-                id: widget.task['id'] ?? '',
-                createdAt: _parseDate(widget.task['created_at']) ?? DateTime.now(),
-                updatedAt: _parseDate(widget.task['updated_at']),
-                departmentTag: widget.task['category'] ?? widget.task['department'],
-                requestTypeTag: widget.task['maintenance_type'] ?? widget.task['maintenanceType'] ?? 'internal',
-                priority: widget.task['priority'],
-                statusTag: widget.task['status'] ?? 'scheduled',
-                resolutionType: null,
-                
-                // Tenant / Requester
-                requestedBy: widget.task['created_by'] ?? widget.task['assigned_to'] ?? '',
-                scheduleDate: _formatTimestamp(widget.task['scheduled_date']),
-                
-                // Request Details
-                title: widget.task['task_title'] ?? widget.task['title'] ?? 'Maintenance Task',
-                startedAt: _parseDate(widget.task['started_at']),
-                completedAt: _parseDate(widget.task['completed_at']),
-                location: widget.task['location'],
-                description: widget.task['task_description'] ?? widget.task['description'],
-                checklist_complete: null, // We'll render checklist separately
-                attachments: widget.task['photos'] is List 
-                    ? (widget.task['photos'] as List).map((e) => e.toString()).toList()
-                    : null,
-                adminNote: widget.task['completion_notes'],
-                
-                // Staff
-                assignedStaff: widget.task['assigned_staff_name'] ?? widget.task['assigned_to'],
-                staffDepartment: widget.task['department'],
-                staffPhotoUrl: null,
-                assessedAt: _parseDate(widget.task['updated_at']),
-                assessment: widget.task['completion_notes'],
-                staffAttachments: widget.task['photos'] is List 
-                    ? (widget.task['photos'] as List).map((e) => e.toString()).toList()
-                    : null,
-                
-                // Tracking
-                materialsUsed: widget.task['parts_used'] is List 
-                    ? (widget.task['parts_used'] as List).map((e) => e.toString()).toList()
-                    : null,
-              ),
-              
-              // Interactive Checklist Section
-              if (_checklistItems.isNotEmpty) ...[
-                const SizedBox(height: 24),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: const BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(color: Color(0xFFE5E7EB)),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.checklist,
-                              size: 20,
-                              color: Color(0xFF6B7280),
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Task Checklist',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1F2937),
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              '$completedCount of $totalCount completed',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF6B7280),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      
-                      // Checklist Items
-                      ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _checklistItems.length,
-                        separatorBuilder: (_, __) => const Divider(
-                          height: 1,
-                          thickness: 1,
-                          color: Color(0xFFE5E7EB),
-                        ),
-                        itemBuilder: (context, index) {
-                          final item = _checklistItems[index];
-                          final isCompleted = item['completed'] == true;
-                          final assignedTo = item['assigned_to']?.toString() ?? '';
-
-                          // If there's an assigned_to field, check if it matches current user
-                          // If no assigned_to field (empty string), show the item (it's a general task)
-                          print("CURRENT STAFF ID: ${widget.currentStaffId}, ITEM ASSIGNED TO: $assignedTo");
-                          print("CATEGORY: ${widget.task['category']}");
-                          if (assignedTo != widget.currentStaffId && widget.task['category'] == 'safety') {
-                            // Skip items assigned to someone else
-                            return const SizedBox.shrink();
-                          } 
-
-                          return InkWell(
-                            onTap: _isUpdating ? null : () => _toggleChecklistItem(index),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Icon(
-                                    isCompleted
-                                        ? Icons.check_box
-                                        : Icons.check_box_outline_blank,
-                                    size: 24,
-                                    color: isCompleted
-                                        ? Colors.green
-                                        : const Color(0xFF9CA3AF),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      item['task'] ?? '',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: isCompleted
-                                            ? const Color(0xFF6B7280)
-                                            : const Color(0xFF1F2937),
-                                        decoration: isCompleted
-                                            ? TextDecoration.lineThrough
-                                            : TextDecoration.none,
-                                        fontWeight: isCompleted
-                                            ? FontWeight.w400
-                                            : FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                  if (_isUpdating)
-                                    const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              // Completion Notes Section
-              const SizedBox(height: 24),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(color: Color(0xFFE5E7EB)),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.note_outlined,
-                            size: 20,
-                            color: Color(0xFF6B7280),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Completion Notes',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1F2937),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Notes Input
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextField(
-                            controller: _notesController,
-                            maxLines: 4,
-                            decoration: InputDecoration(
-                              hintText: 'Add any notes about the completion of this task...',
-                              hintStyle: const TextStyle(
-                                color: Color(0xFF9CA3AF),
-                                fontSize: 14,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFFE5E7EB),
-                                ),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFFE5E7EB),
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFF3B82F6),
-                                  width: 2,
-                                ),
-                              ),
-                              contentPadding: const EdgeInsets.all(12),
-                            ),
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Color(0xFF1F2937),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _isUpdating ? null : _saveCompletionNotes,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF3B82F6),
-                                disabledBackgroundColor: const Color(0xFFD1D5DB),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              child: _isUpdating
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          Colors.white,
-                                        ),
-                                      ),
-                                    )
-                                  : const Text(
-                                      'Save Notes',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Inventory Requests Section
-              if (_inventoryRequests.isNotEmpty) ...[
-                const SizedBox(height: 24),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: const BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(color: Color(0xFFE5E7EB)),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.inventory_2_outlined,
-                              size: 20,
-                              color: Color(0xFF6B7280),
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Inventory Requests',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1F2937),
-                              ),
-                            ),
-                            const Spacer(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF3F4F6),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '${_inventoryRequests.length} ${_inventoryRequests.length == 1 ? 'Request' : 'Requests'}',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF6B7280),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Request Items
-                      ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _inventoryRequests.length,
-                        separatorBuilder: (_, __) => const Divider(
-                          height: 1,
-                          thickness: 1,
-                          color: Color(0xFFE5E7EB),
-                        ),
-                        itemBuilder: (context, index) {
-                          final request = _inventoryRequests[index];
-                          final itemName = request['item_name'] ?? 'Unknown Item';
-                          final quantity = request['quantity_requested'] ?? 0;
-                          final status = request['status'] ?? 'pending';
-
-                          Color statusColor;
-                          Color statusBgColor;
-                          switch (status.toLowerCase()) {
-                            case 'approved':
-                              statusColor = const Color(0xFF059669);
-                              statusBgColor = const Color(0xFFECFDF5);
-                              break;
-                            case 'fulfilled':
-                              statusColor = const Color(0xFF10B981);
-                              statusBgColor = const Color(0xFFD1FAE5);
-                              break;
-                            case 'denied':
-                              statusColor = const Color(0xFFDC2626);
-                              statusBgColor = const Color(0xFFFEE2E2);
-                              break;
-                            default:
-                              statusColor = const Color(0xFF6B7280);
-                              statusBgColor = const Color(0xFFF3F4F6);
-                          }
-
-                          return Container(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        itemName,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF1F2937),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Quantity: $quantity',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Color(0xFF6B7280),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: statusBgColor,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    status.toUpperCase(),
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
-                                      color: statusColor,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
         ),
       ),
     );

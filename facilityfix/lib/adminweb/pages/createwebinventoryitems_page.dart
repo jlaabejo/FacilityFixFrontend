@@ -60,6 +60,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
     'liter',
     'meter',
     'pack',
+    'others',
   ];
 
   final List<String> _tags = [

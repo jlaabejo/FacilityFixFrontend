@@ -5,7 +5,6 @@ import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/staff/maintenance.dart';
 import 'package:facilityfix/staff/notification.dart';
-import 'package:facilityfix/staff/view_details/workorder.dart';
 import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/services/auth_storage.dart';
@@ -405,10 +404,6 @@ class _CalendarPageState extends State<CalendarPage> {
                 MaterialPageRoute(builder: (_) => const NotificationPage()),
               );
             },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadCalendarData,
           ),
         ],
       ),

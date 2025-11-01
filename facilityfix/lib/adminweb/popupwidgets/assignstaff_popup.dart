@@ -76,6 +76,9 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
       String? taskCategory = widget.task['category']?.toString().toLowerCase();
       String? department;
 
+      // Map AI-classified categories to main departments
+      // Only 4 departments available: carpentry, electrical, masonry, plumbing
+      // API expects lowercase department names
       switch (taskCategory) {
         case 'electrical':
           department = 'electrical';
@@ -83,23 +86,30 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
         case 'plumbing':
           department = 'plumbing';
           break;
-        case 'hvac':
-          department = 'hvac';
-          break;
         case 'carpentry':
           department = 'carpentry';
           break;
+        case 'masonry':
+          department = 'masonry';
+          break;
+        // Map HVAC (others) to electrical - HVAC work often involves electrical systems
+        case 'hvac':
+          department = 'electrical';
+          break;
+        // Map pest control (others) to masonry - structural issues
+        case 'pest control':
+        case 'pest_control':
+          department = 'masonry';
+          break;
+        // Map maintenance/general to null to show all available staff
         case 'maintenance':
-          department = 'maintenance';
+        case 'general':
+        case 'other':
+          department = null; // Show all available staff from all 4 departments
           break;
-        case 'security':
-          department = 'security';
-          break;
-        case 'fire_safety':
-          department = 'fire_safety';
-          break;
+        // For unknown categories, show all available staff
         default:
-          department = null;
+          department = null; // Will fetch all available staff from all departments
       }
 
       final staffData = await _apiService.getStaffMembers(
@@ -516,54 +526,56 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
           OutlinedButton(
             onPressed: _isAssigning ? null : () => Navigator.of(context).pop(),
             style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.blue[600],
-              side: BorderSide(color: Colors.blue[600]!),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              foregroundColor: Colors.blue[600], 
+              side: BorderSide(color: Colors.blue[600]!), 
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), 
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
             ),
             child: const Text('Back', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
           ),
           Row(
             children: [
               // Auto-Assign Button
-              OutlinedButton.icon(
+              ElevatedButton(
                 onPressed: _isAssigning ? null : _handleAutoAssign,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.orange[600],
-                  side: BorderSide(color: Colors.orange[600]!),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange[600], 
+                  foregroundColor: Colors.white, 
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), 
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), 
+                  elevation: 0
                 ),
-                icon: const Icon(Icons.autorenew, size: 18),
-                label: const Text('Auto-Assign', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                child: _isAssigning
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
+                    : const Row(
+                        mainAxisSize: MainAxisSize.min, 
+                        children: [
+                          Icon(Icons.autorenew, size: 18), 
+                          SizedBox(width: 8), 
+                          Text('Auto-Assign', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500))
+                        ]
+                      ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 16),
               // Manual Assign Button
               ElevatedButton(
                 onPressed: (_formValid && !_isAssigning) ? _handleSaveAndAssign : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[600],
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
+                  backgroundColor: Colors.green[600], 
+                  foregroundColor: Colors.white, 
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), 
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), 
+                  elevation: 0
                 ),
                 child: _isAssigning
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
                     : const Row(
-                        mainAxisSize: MainAxisSize.min,
+                        mainAxisSize: MainAxisSize.min, 
                         children: [
-                          Icon(Icons.save, size: 18),
-                          SizedBox(width: 8),
-                          Text('Save & Assign Staff', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                        ],
+                          Icon(Icons.save, size: 18), 
+                          SizedBox(width: 8), 
+                          Text('Save & Assign Staff', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500))
+                        ]
                       ),
               ),
             ],
@@ -578,61 +590,73 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
     if (picked != null && picked != selectedDate) setState(() => selectedDate = picked);
   }
 
-  /// Handle auto-assignment using round-robin algorithm
+  // Auto-assign handler using Round Robin
   Future<void> _handleAutoAssign() async {
     setState(() => _isAssigning = true);
 
     try {
-      // Determine task type and department
-      String? taskCategory = widget.task['category']?.toString().toLowerCase();
+      // Get the department/category from the task
+      final category = widget.task['category']?.toString().toLowerCase() ?? 
+                      widget.task['department']?.toString().toLowerCase();
+      
+      // Map category to department (same logic as in _loadStaffMembers)
       String? department;
-
-      switch (taskCategory) {
+      switch (category) {
         case 'electrical':
           department = 'electrical';
           break;
         case 'plumbing':
           department = 'plumbing';
           break;
-        case 'hvac':
-          department = 'hvac';
-          break;
         case 'carpentry':
           department = 'carpentry';
           break;
-        case 'maintenance':
-          department = 'maintenance';
+        case 'masonry':
+          department = 'masonry';
           break;
-        case 'security':
-          department = 'security';
+        case 'hvac':
+          department = 'electrical';
           break;
-        case 'fire_safety':
-          department = 'fire_safety';
+        case 'pest control':
+        case 'pest_control':
+          department = 'masonry';
           break;
         default:
-          department = 'maintenance'; // Default fallback
+          department = null;
       }
 
-      // Determine task type
+      if (department == null) {
+        throw Exception('Cannot auto-assign: No valid department found for this task');
+      }
+
+      print('[AssignStaff] Auto-assigning task with department: $department');
+
+      // Determine task type and ID
       String taskType;
-      String? taskId;
+      String taskId;
       
       if (widget.isMaintenanceTask) {
         taskType = 'maintenance';
-        taskId = widget.task['id'] ?? widget.task['task_id'];
+        taskId = widget.task['id'] ?? widget.task['task_id'] ?? '';
       } else {
-        taskType = 'concern_slip';
-        taskId = widget.task['rawData']?['id'] ?? 
-                 widget.task['rawData']?['_doc_id'] ?? 
-                 widget.task['id'];
+        // Check if it's a job service or concern slip
+        final serviceId = widget.task['serviceId'];
+        if (serviceId != null && serviceId.toString().isNotEmpty) {
+          taskType = 'job_service';
+          taskId = serviceId.toString();
+        } else {
+          taskType = 'concern_slip';
+          taskId = widget.task['rawData']?['id'] ?? 
+                  widget.task['rawData']?['_doc_id'] ?? 
+                  widget.task['id'] ?? '';
+        }
       }
 
-      if (taskId == null || taskId.isEmpty) {
+      if (taskId.isEmpty) {
         throw Exception('Task ID not found');
       }
 
-      print('[AutoAssign] Starting auto-assignment for $taskType: $taskId');
-      print('[AutoAssign] Department: $department');
+      print('[AssignStaff] Auto-assigning $taskType: $taskId to department: $department');
 
       // Use round-robin service to auto-assign
       final assignedStaff = await _roundRobinService.autoAssignTask(
@@ -642,30 +666,32 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
         notes: notesController.text.trim().isNotEmpty ? notesController.text.trim() : null,
       );
 
-      if (assignedStaff != null) {
-        final staffName = '${assignedStaff['first_name'] ?? ''} ${assignedStaff['last_name'] ?? ''}'.trim();
-        
-        if (mounted) {
-          Navigator.of(context).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Auto-assigned to $staffName successfully!'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-          widget.onAssignmentComplete?.call();
-        }
-      } else {
+      if (assignedStaff == null) {
         throw Exception('No available staff found in $department department');
       }
+
+      final staffName = '${assignedStaff['first_name'] ?? ''} ${assignedStaff['last_name'] ?? ''}'.trim();
+
+      print('[AssignStaff] Auto-assigned to: $staffName');
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Auto-assigned to $staffName successfully!'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        widget.onAssignmentComplete?.call();
+      }
     } catch (e) {
-      print('[AutoAssign] Auto-assignment failed: $e');
+      print('[AssignStaff] Auto-assignment failed: $e');
       if (mounted) {
         setState(() => _isAssigning = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Auto-assignment failed: $e'),
+            content: Text('Auto-assign failed: $e'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
           ),

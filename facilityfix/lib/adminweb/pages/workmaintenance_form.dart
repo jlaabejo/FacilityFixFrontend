@@ -43,6 +43,7 @@ class _InternalMaintenanceFormPageState
   final _taskTitleController = TextEditingController();
   final _codeIdController =
       TextEditingController(); // Auto-generated, read-only
+  final TextEditingController _createdByController = TextEditingController();
   final _assignedStaffController = TextEditingController(); // Now editable
   final _dateCreatedController = TextEditingController(); // read-only display
   final _descriptionController = TextEditingController();
@@ -56,7 +57,7 @@ class _InternalMaintenanceFormPageState
 
   // -------------------- STATE --------------------
   String? _selectedPriority;
-  String? _selectedStatus;
+  String _selectedStatus = 'New';
   String? _selectedLocation;
   String? _selectedRecurrence;
   String? _selectedDepartment;
@@ -159,38 +160,48 @@ class _InternalMaintenanceFormPageState
       final codeId = await _apiService.getNextIPMCode();
       _codeIdController.text = codeId;
       print('[v0] Generated IPM code: $codeId');
+      final profile = await AuthStorage.getProfile();
+      if (profile != null && profile['full_name'] != null) {
+        _createdByController.text = profile['full_name'];
+      } else {
+        _createdByController.text = 'Admin User';
+      }
     } catch (e) {
       print('[v0] Error fetching IPM code: $e');
       // Fallback to timestamp-based code if backend fails
       final year = DateTime.now().year;
       final number = DateTime.now().millisecondsSinceEpoch % 100000;
       _codeIdController.text = 'IPM-$year-${number.toString().padLeft(5, '0')}';
+      _createdByController.text = 'Admin User';
     }
 
     // Date Created (default to now)
     _dateCreated = DateTime.now();
     _dateCreatedController.text = _fmtDate(_dateCreated!);
 
-  _startDate = DateTime.now();
-  _startDateController.text = _fmtDate(_startDate!);
+    _startDate = DateTime.now();
+    _startDateController.text = _fmtDate(_startDate!);
 
     // Load staff members
     await _loadStaffMembers();
-    
+
     // Load inventory items
     await _loadInventoryItems();
   }
 
   Future<void> _loadInventoryItems() async {
     try {
-      // TODO: Replace with actual building ID from user session
-      const buildingId = 'default_building_id';
-      
+      // TODO: Replace with actual building ID from user session or update
+      // the parameter name to match the API (e.g., buildingId/building/building_id).
+
+      // Call without named parameter because `buildingId` is not defined on the API method.
       final response = await _mainApiService.getInventoryItems();
-      
+
       if (response['success'] == true && response['data'] != null) {
         setState(() {
-          _availableInventoryItems = List<Map<String, dynamic>>.from(response['data']);
+          _availableInventoryItems = List<Map<String, dynamic>>.from(
+            response['data'],
+          );
         });
       }
     } catch (e) {
@@ -255,20 +266,21 @@ class _InternalMaintenanceFormPageState
 
     showDialog(
       context: context,
-      builder: (context) => _InventorySelectionDialog(
-        availableItems: _availableInventoryItems,
-        onItemSelected: (item, quantity) {
-          setState(() {
-            _selectedInventoryItems.add({
-              'inventory_id': item['id'] ?? item['_doc_id'],
-              'item_name': item['item_name'],
-              'item_code': item['item_code'],
-              'quantity': quantity,
-              'available_stock': item['current_stock'],
-            });
-          });
-        },
-      ),
+      builder:
+          (context) => _InventorySelectionDialog(
+            availableItems: _availableInventoryItems,
+            onItemSelected: (item, quantity) {
+              setState(() {
+                _selectedInventoryItems.add({
+                  'inventory_id': item['id'] ?? item['_doc_id'],
+                  'item_name': item['item_name'],
+                  'item_code': item['item_code'],
+                  'quantity': quantity,
+                  'available_stock': item['current_stock'],
+                });
+              });
+            },
+          ),
     );
   }
 
@@ -290,7 +302,10 @@ class _InternalMaintenanceFormPageState
           buildingId: 'default_building_id', // TODO: Use actual building ID
           quantityRequested: item['quantity'],
           purpose: 'Maintenance Task: $taskId',
-          requestedBy: _assignedStaffController.text.isNotEmpty ? _assignedStaffController.text : 'system',
+          requestedBy:
+              _assignedStaffController.text.isNotEmpty
+                  ? _assignedStaffController.text
+                  : 'system',
           maintenanceTaskId: taskId, // Link to maintenance task
         );
 
@@ -300,7 +315,9 @@ class _InternalMaintenanceFormPageState
           print('[v0] Created inventory request: ${response['request_id']}');
         }
       }
-      print('[v0] Created ${createdRequestIds.length} inventory requests linked to task $taskId');
+      print(
+        '[v0] Created ${createdRequestIds.length} inventory requests linked to task $taskId',
+      );
       return createdRequestIds;
     } catch (e) {
       print('[v0] Error creating inventory requests: $e');
@@ -336,9 +353,11 @@ class _InternalMaintenanceFormPageState
   int _daysInMonth(int year, int month) {
     final nextMonth = month == 12 ? 1 : month + 1;
     final nextMonthYear = month == 12 ? year + 1 : year;
-    return DateTime(nextMonthYear, nextMonth, 1)
-        .subtract(const Duration(days: 1))
-        .day;
+    return DateTime(
+      nextMonthYear,
+      nextMonth,
+      1,
+    ).subtract(const Duration(days: 1)).day;
   }
 
   void _handleRecurrenceChange(String? value) {
@@ -390,7 +409,9 @@ class _InternalMaintenanceFormPageState
   }
 
   String? _recurrenceSummaryText() {
-    if (_selectedRecurrence == null || _startDate == null || _nextDueDate == null) {
+    if (_selectedRecurrence == null ||
+        _startDate == null ||
+        _nextDueDate == null) {
       return null;
     }
 
@@ -464,6 +485,7 @@ class _InternalMaintenanceFormPageState
     _startDateController.dispose();
     _nextDueDateController.dispose();
     _checklistItemController.dispose(); // Dispose new controller
+    _createdByController.dispose();
     super.dispose();
   }
 
@@ -492,10 +514,11 @@ class _InternalMaintenanceFormPageState
       'maintenanceType': 'Internal',
       'taskTitle': _taskTitleController.text.trim(),
       'taskCode': id,
+      'created_by': _createdByController.text.trim(),
       'dateCreated': _dateCreatedController.text,
-  'priority': _selectedPriority ?? 'medium',
-  'status': _selectedStatus ?? 'scheduled',
-  'location': _selectedLocation ?? '',
+      'priority': _selectedPriority ?? 'medium',
+      'status': _selectedStatus,
+      'location': _selectedLocation ?? '',
       'description': _descriptionController.text.trim(),
       'recurrence': _selectedRecurrence,
       'estimatedDuration': _estimatedDurationController.text.trim(),
@@ -522,7 +545,8 @@ class _InternalMaintenanceFormPageState
           _selectedRecurrence != null
               ? _selectedRecurrence!.toLowerCase()
               : 'none',
-      'assigned_to': _selectedStaffUserId ?? _assignedStaffController.text.trim(),
+      'assigned_to':
+          _selectedStaffUserId ?? _assignedStaffController.text.trim(),
       'assigned_staff_name': _assignedStaffController.text.trim(),
       'department': _selectedDepartment,
       'checklist_completed': _checklistItems,
@@ -540,7 +564,8 @@ class _InternalMaintenanceFormPageState
       // Extract the actual task ID from the response
       String actualTaskId = id;
       if (result['task'] != null) {
-        actualTaskId = result['task']['id'] ?? result['task']['formatted_id'] ?? id;
+        actualTaskId =
+            result['task']['id'] ?? result['task']['formatted_id'] ?? id;
       }
       print('[v0] Using task ID for inventory requests: $actualTaskId');
 
@@ -550,23 +575,23 @@ class _InternalMaintenanceFormPageState
       // Update the maintenance task with the inventory request IDs
       if (inventoryRequestIds.isNotEmpty) {
         try {
-          await _apiService.updateMaintenanceTask(
-            actualTaskId,
-            {'inventory_request_ids': inventoryRequestIds},
+          await _apiService.updateMaintenanceTask(actualTaskId, {
+            'inventory_request_ids': inventoryRequestIds,
+          });
+          print(
+            '[v0] Updated maintenance task with inventory request IDs: $inventoryRequestIds',
           );
-          print('[v0] Updated maintenance task with inventory request IDs: $inventoryRequestIds');
         } catch (e) {
-          print('[v0] Warning: Failed to update maintenance task with inventory request IDs: $e');
+          print(
+            '[v0] Warning: Failed to update maintenance task with inventory request IDs: $e',
+          );
           // Don't fail the whole operation if this update fails
         }
       }
 
       // Navigate to view page with the data
       if (mounted) {
-        context.push(
-          '/work/maintenance/',
-          extra: maintenance,
-        );
+        context.push('/work/maintenance/', extra: maintenance);
       }
     } catch (e) {
       print('[v0] Error saving maintenance task: $e');
@@ -688,33 +713,41 @@ class _InternalMaintenanceFormPageState
                         children: [
                           // Task Title
                           Expanded(
-                            child: _fieldBox(
-                              child: TextFormField(
-                                controller: _taskTitleController,
-                                validator: _req,
-                                decoration: _decoration('Enter Task Title'),
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Task Title'),
+                                _fieldBox(
+                                  child: TextFormField(
+                                    controller: _taskTitleController,
+                                    validator: _req,
+                                    decoration: _decoration('Enter Task Title'),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 24),
 
+                          // Task Code
                           Expanded(
-                            child: _fieldBox(
-                              child: TextFormField(
-                                controller: _codeIdController,
-                                enabled: false,
-                                decoration: _decoration('Code Id').copyWith(
-                                  disabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: BorderSide(
-                                      color: Colors.grey[300]!,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Task Code'),
+                                _fieldBox(
+                                  child: TextFormField(
+                                    controller: _codeIdController,
+                                    enabled: false,
+                                    decoration: _decoration(
+                                      'Auto-generated',
+                                    ).copyWith(
+                                      filled: true,
+                                      fillColor: Colors.grey[50],
                                     ),
                                   ),
-                                  filled: true, // Added for background color
-                                  fillColor:
-                                      Colors.grey[50], // Light gray background
                                 ),
-                              ),
+                              ],
                             ),
                           ),
                         ],
@@ -723,97 +756,64 @@ class _InternalMaintenanceFormPageState
 
                       Row(
                         children: [
-                          // Created By (auto, read-only) - REMOVED AS IT'S NOW DONE VIA AUTH TOKEN
-                          // Expanded(
-                          //   child: _fieldBox(
-                          //     child: TextFormField(
-                          //       controller: _createdByController,
-                          //       enabled: false, // not editable
-                          //       decoration: _decoration('Automated Name').copyWith(
-                          //         disabledBorder: OutlineInputBorder(
-                          //           borderRadius: BorderRadius.circular(8),
-                          //           borderSide: BorderSide(color: Colors.grey[300]!),
-                          //         ),
-                          //       ),
-                          //     ),
-                          //   ),
-                          // ),
-                          // const SizedBox(width: 24),
+                          // Created By
                           Expanded(
-                            child: _fieldBox(
-                              child: Autocomplete<Map<String, dynamic>>(
-                                optionsBuilder: (textEditingValue) {
-                                  if (textEditingValue.text.isEmpty) {
-                                    return _staffMembers;
-                                  }
-                                  return _staffMembers.where((staff) {
-                                    final name =
-                                        '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'
-                                            .toLowerCase();
-                                    return name.contains(
-                                      textEditingValue.text.toLowerCase(),
-                                    );
-                                  });
-                                },
-                                displayStringForOption:
-                                    (staff) =>
-                                        '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'
-                                            .trim(),
-                                onSelected: (staff) {
-                                  // Directly update the controller text for consistency
-                                  _assignedStaffController.text =
-                                      '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'
-                                          .trim();
-                                },
-                                fieldViewBuilder: (
-                                  context,
-                                  controller,
-                                  focusNode,
-                                  onFieldSubmitted,
-                                ) {
-                                  return TextFormField(
-                                    controller:
-                                        controller, // Use the controller passed to fieldViewBuilder
-                                    focusNode: focusNode,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Created By'),
+                                _fieldBox(
+                                  child: TextFormField(
+                                    controller: _createdByController,
+                                    enabled: false,
                                     validator: _req,
-                                    decoration: _decoration('Assign Staff...'),
-                                    // onChanged is crucial to update the _assignedStaffController if Autocomplete's controller is used directly
-                                    onChanged: (value) {
-                                      _assignedStaffController.text = value;
-                                    },
-                                  );
-                                },
-                              ),
+                                    decoration: _decoration(
+                                      'User Name',
+                                    ).copyWith(
+                                      filled: true,
+                                      fillColor: Colors.grey[50],
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 24),
 
-                          // Date Created (editable with picker + validation)
+                          // Date Created
                           Expanded(
-                            child: _fieldBox(
-                              child: TextFormField(
-                                controller: _dateCreatedController,
-                                readOnly:
-                                    true, // prevent typing, open picker instead
-                                validator: _req,
-                                onTap:
-                                    () => _pickDate(
-                                      initial: _dateCreated ?? DateTime.now(),
-                                      onPick: (d) {
-                                        setState(() {
-                                          _dateCreated = d;
-                                          _dateCreatedController
-                                              .text = _fmtDate(d);
-                                        });
-                                      },
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Date Created'),
+                                _fieldBox(
+                                  child: TextFormField(
+                                    controller: _dateCreatedController,
+                                    readOnly: true,
+                                    validator: _req,
+                                    onTap:
+                                        () => _pickDate(
+                                          initial:
+                                              _dateCreated ?? DateTime.now(),
+                                          onPick: (d) {
+                                            setState(() {
+                                              _dateCreated = d;
+                                              _dateCreatedController
+                                                  .text = _fmtDate(d);
+                                            });
+                                          },
+                                        ),
+                                    decoration: _decoration(
+                                      'YYYY-MM-DD',
+                                    ).copyWith(
+                                      suffixIcon: const Icon(
+                                        Icons.calendar_today,
+                                        size: 18,
+                                      ),
                                     ),
-                                decoration: _decoration('YYYY-MM-DD').copyWith(
-                                  suffixIcon: const Icon(
-                                    Icons.calendar_today,
-                                    size: 18,
                                   ),
                                 ),
-                              ),
+                              ],
                             ),
                           ),
                         ],
@@ -824,52 +824,69 @@ class _InternalMaintenanceFormPageState
                         children: [
                           // Priority
                           Expanded(
-                            child: _fieldBox(
-                              child: DropdownButtonFormField<String>(
-                                value: _selectedPriority,
-                                validator: _reqDropdown,
-                                decoration: _decoration('Select Priority...'),
-                                items:
-                                    const ['High', 'Medium', 'Low']
-                                        .map(
-                                          (v) => DropdownMenuItem(
-                                            value: v,
-                                            child: Text(v),
-                                          ),
-                                        )
-                                        .toList(),
-                                onChanged:
-                                    (v) =>
-                                        setState(() => _selectedPriority = v),
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Priority'),
+                                _fieldBox(
+                                  child: DropdownButtonFormField<String>(
+                                    value: _selectedPriority,
+                                    validator: _reqDropdown,
+                                    decoration: _decoration(
+                                      'Select Priority...',
+                                    ),
+                                    items:
+                                        const ['High', 'Medium', 'Low']
+                                            .map(
+                                              (v) => DropdownMenuItem(
+                                                value: v,
+                                                child: Text(v),
+                                              ),
+                                            )
+                                            .toList(),
+                                    onChanged:
+                                        (v) => setState(
+                                          () => _selectedPriority = v,
+                                        ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 24),
 
                           // Status
                           Expanded(
-                            child: _fieldBox(
-                              child: DropdownButtonFormField<String>(
-                                value: _selectedStatus,
-                                validator: _reqDropdown,
-                                decoration: _decoration('Select Status...'),
-                                items:
-                                    const [
-                                          'New',
-                                          'In Progress',
-                                          'Completed',
-                                          'On Hold',
-                                        ]
-                                        .map(
-                                          (v) => DropdownMenuItem(
-                                            value: v,
-                                            child: Text(v),
-                                          ),
-                                        )
-                                        .toList(),
-                                onChanged:
-                                    (v) => setState(() => _selectedStatus = v),
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Status'),
+                                _fieldBox(
+                                  child: DropdownButtonFormField<String>(
+                                    value: _selectedStatus,
+                                    validator: _reqDropdown,
+                                    decoration: _decoration('Select Status...'),
+                                    items:
+                                        const [
+                                              'New',
+                                              'In Progress',
+                                              'Completed',
+                                              'On Hold',
+                                            ]
+                                            .map(
+                                              (v) => DropdownMenuItem(
+                                                value: v,
+                                                child: Text(v),
+                                              ),
+                                            )
+                                            .toList(),
+                                    onChanged:
+                                        (v) => setState(
+                                          () => _selectedStatus = v!,
+                                        ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -1033,82 +1050,125 @@ class _InternalMaintenanceFormPageState
                       ),
                       const SizedBox(height: 24),
 
+                      // Row 1: Recurrence and Estimated Duration
                       Row(
                         children: [
+                          // Recurrence
                           Expanded(
-                            child: _fieldBox(
-                              child: DropdownButtonFormField<String>(
-                                value: _selectedRecurrence,
-                                validator: _reqDropdown,
-                                decoration: _decoration('Select frequency...'),
-                                items:
-                                    const [
-                                          'Daily',
-                                          'Weekly',
-                                          'Monthly',
-                                          'Quarterly',
-                                          'Annually',
-                                        ]
-                                        .map(
-                                          (v) => DropdownMenuItem(
-                                            value: v,
-                                            child: Text(v),
-                                          ),
-                                        )
-                                        .toList(),
-                                onChanged: _handleRecurrenceChange,
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Recurrence Frequency'),
+                                _fieldBox(
+                                  child: DropdownButtonFormField<String>(
+                                    value: _selectedRecurrence,
+                                    validator: _reqDropdown,
+                                    decoration: _decoration(
+                                      'Select frequency...',
+                                    ),
+                                    items:
+                                        const [
+                                              'Daily',
+                                              'Weekly',
+                                              'Monthly',
+                                              'Quarterly',
+                                              'Annually',
+                                            ]
+                                            .map(
+                                              (v) => DropdownMenuItem(
+                                                value: v,
+                                                child: Text(v),
+                                              ),
+                                            )
+                                            .toList(),
+                                    onChanged: _handleRecurrenceChange,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 24),
+
+                          // Estimated Duration
                           Expanded(
-                            child: _fieldBox(
-                              child: TextFormField(
-                                controller: _estimatedDurationController,
-                                validator: _durationValidator,
-                                decoration: _decoration('e.g., 3 hrs / 45 mins'),
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Estimated Duration'),
+                                _fieldBox(
+                                  child: TextFormField(
+                                    controller: _estimatedDurationController,
+                                    validator: _durationValidator,
+                                    decoration: _decoration(
+                                      'e.g., 3 hrs / 45 mins',
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 24),
 
+                      // Row 2: Start Date and Next Due Date
                       Row(
                         children: [
+                          // Start Date
                           Expanded(
-                            child: _fieldBox(
-                              child: TextFormField(
-                                controller: _startDateController,
-                                validator: _req,
-                                readOnly: true,
-                                onTap: () => _pickDate(
-                                  initial: _startDate ?? DateTime.now(),
-                                  onPick: _handleStartDateChange,
-                                ),
-                                decoration: _decoration('YYYY-MM-DD').copyWith(
-                                  suffixIcon: const Icon(
-                                    Icons.calendar_today,
-                                    size: 18,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Start Date'),
+                                _fieldBox(
+                                  child: TextFormField(
+                                    controller: _startDateController,
+                                    validator: _req,
+                                    readOnly: true,
+                                    onTap:
+                                        () => _pickDate(
+                                          initial: _startDate ?? DateTime.now(),
+                                          onPick: _handleStartDateChange,
+                                        ),
+                                    decoration: _decoration(
+                                      'YYYY-MM-DD',
+                                    ).copyWith(
+                                      suffixIcon: const Icon(
+                                        Icons.calendar_today,
+                                        size: 18,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 24),
+
+                          // Next Due Date
                           Expanded(
-                            child: _fieldBox(
-                              child: TextFormField(
-                                controller: _nextDueDateController,
-                                validator: _req,
-                                readOnly: true,
-                                decoration: _decoration('YYYY-MM-DD').copyWith(
-                                  suffixIcon: const Icon(
-                                    Icons.calendar_today,
-                                    size: 18,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Next Due Date'),
+                                _fieldBox(
+                                  child: TextFormField(
+                                    controller: _nextDueDateController,
+                                    validator: _req,
+                                    readOnly: true,
+                                    decoration: _decoration(
+                                      'YYYY-MM-DD',
+                                    ).copyWith(
+                                      suffixIcon: const Icon(
+                                        Icons.calendar_today,
+                                        size: 18,
+                                      ),
+                                      filled: true,
+                                      fillColor: Colors.grey[50],
+                                    ),
                                   ),
                                 ),
-                              ),
+                              ],
                             ),
                           ),
                         ],
@@ -1117,7 +1177,7 @@ class _InternalMaintenanceFormPageState
                       const SizedBox(height: 40),
 
                       const Text(
-                        "Responsible Team",
+                        "Assign Staff",
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w600,
@@ -1128,35 +1188,112 @@ class _InternalMaintenanceFormPageState
 
                       Row(
                         children: [
+                          // Department dropdown
                           Expanded(
-                            child: _fieldBox(
-                              child: DropdownButtonFormField<String>(
-                                value: _selectedDepartment,
-                                validator: _reqDropdown,
-                                decoration: _decoration('Select department...'),
-                                items:
-                                    const [
-                                          'Maintenance',
-                                          'Engineering',
-                                          'Facilities',
-                                          'IT Support',
-                                        ]
-                                        .map(
-                                          (v) => DropdownMenuItem(
-                                            value: v,
-                                            child: Text(v),
-                                          ),
-                                        )
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Department'),
+                                _fieldBox(
+                                  child: DropdownButtonFormField<String>(
+                                    value: _selectedDepartment,
+                                    validator: _reqDropdown,
+                                    decoration: _decoration(
+                                      'Select department...',
+                                    ),
+                                    items: ['Carpentry', 'Electrical', 'Masonry', 'Plumbing']
+                                        .map((v) => DropdownMenuItem<String>(
+                                              value: v,
+                                              child: Text(v),
+                                            ))
                                         .toList(),
-                                onChanged:
-                                    (v) => setState(() => _selectedDepartment = v),
-                              ),
+                                    onChanged: (v) => setState(
+                                          () => _selectedDepartment = v,
+                                        ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 24),
+
+                          // Assigned Staff
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Assign Staff'),
+                                _fieldBox(
+                                  child: Autocomplete<Map<String, dynamic>>(
+                                    optionsBuilder: (textEditingValue) {
+                                      if (textEditingValue.text.isEmpty) {
+                                        return _staffMembers;
+                                      }
+                                      return _staffMembers.where((staff) {
+                                        final name =
+                                            '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'
+                                                .toLowerCase();
+                                        return name.contains(
+                                          textEditingValue.text.toLowerCase(),
+                                        );
+                                      });
+                                    },
+                                    displayStringForOption:
+                                        (staff) =>
+                                            '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'
+                                                .trim(),
+                                    onSelected: (staff) {
+                                      setState(() {
+                                        _selectedStaffUserId =
+                                            staff['uid'] ?? staff['id'];
+                                        _assignedStaffController.text =
+                                            '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'
+                                                .trim();
+                                      });
+                                    },
+                                    fieldViewBuilder: (
+                                      context,
+                                      controller,
+                                      focusNode,
+                                      onFieldSubmitted,
+                                    ) {
+                                      // Sync the autocomplete controller with our main controller
+                                      if (_assignedStaffController
+                                              .text
+                                              .isNotEmpty &&
+                                          controller.text !=
+                                              _assignedStaffController.text) {
+                                        controller.text =
+                                            _assignedStaffController.text;
+                                      }
+
+                                      return TextFormField(
+                                        controller: controller,
+                                        focusNode: focusNode,
+                                        validator: _req,
+                                        decoration: _decoration(
+                                          'Start typing staff name...',
+                                        ),
+                                        onChanged: (value) {
+                                          // Clear selected staff ID if user manually edits
+                                          if (value !=
+                                              _assignedStaffController.text) {
+                                            setState(() {
+                                              _selectedStaffUserId = null;
+                                            });
+                                          }
+                                        },
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 40),
-                      
+
                       // ===== Inventory Items =====
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1188,7 +1325,7 @@ class _InternalMaintenanceFormPageState
                         ],
                       ),
                       const SizedBox(height: 24),
-                      
+
                       if (_selectedInventoryItems.isEmpty)
                         Container(
                           width: double.infinity,
@@ -1214,8 +1351,9 @@ class _InternalMaintenanceFormPageState
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
                             itemCount: _selectedInventoryItems.length,
-                            separatorBuilder: (context, index) =>
-                                Divider(height: 1, color: Colors.grey[300]),
+                            separatorBuilder:
+                                (context, index) =>
+                                    Divider(height: 1, color: Colors.grey[300]),
                             itemBuilder: (context, index) {
                               final item = _selectedInventoryItems[index];
                               return ListTile(
@@ -1261,7 +1399,9 @@ class _InternalMaintenanceFormPageState
                                           ),
                                           decoration: BoxDecoration(
                                             color: const Color(0xFFE8F5E8),
-                                            borderRadius: BorderRadius.circular(12),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
                                           ),
                                           child: Text(
                                             'Qty: ${item['quantity']}',
@@ -1298,65 +1438,64 @@ class _InternalMaintenanceFormPageState
                           ),
                         ),
 
-                      const SizedBox(height: 40),
-                      const Text(
-                        "Attachments",
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Container(
-                        height: 140,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: Colors.grey[300]!,
-                            width: 2,
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: InkWell(
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'File upload - Feature coming soon!',
-                                ),
-                              ),
-                            );
-                          },
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.upload_outlined,
-                                size: 32,
-                                color: Colors.grey[400],
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                "Drop files here or click to upload",
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                "PDF, PNG, JPG up to 10MB",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
+                      //const SizedBox(height: 40),
+                      // const Text(
+                      //   "Attachments",
+                      //   style: TextStyle(
+                      //     fontSize: 20,
+                      //     fontWeight: FontWeight.w600,
+                      //     color: Colors.black87,
+                      //   ),
+                      // ),
+                      // const SizedBox(height: 24),
+                      // Container(
+                      //   height: 140,
+                      //   width: double.infinity,
+                      //   decoration: BoxDecoration(
+                      //     border: Border.all(
+                      //       color: Colors.grey[300]!,
+                      //       width: 2,
+                      //     ),
+                      //     borderRadius: BorderRadius.circular(8),
+                      //   ),
+                      //   child: InkWell(
+                      //     onTap: () {
+                      //       ScaffoldMessenger.of(context).showSnackBar(
+                      //         const SnackBar(
+                      //           content: Text(
+                      //             'File upload - Feature coming soon!',
+                      //           ),
+                      //         ),
+                      //       );
+                      //     },
+                      //     child: Column(
+                      //       mainAxisAlignment: MainAxisAlignment.center,
+                      //       children: [
+                      //         Icon(
+                      //           Icons.upload_outlined,
+                      //           size: 32,
+                      //           color: Colors.grey[400],
+                      //         ),
+                      //         const SizedBox(height: 8),
+                      //         const Text(
+                      //           "Drop files here or click to upload",
+                      //           style: TextStyle(
+                      //             fontSize: 14,
+                      //             fontWeight: FontWeight.w500,
+                      //           ),
+                      //         ),
+                      //         const SizedBox(height: 4),
+                      //         Text(
+                      //           "PDF, PNG, JPG up to 10MB",
+                      //           style: TextStyle(
+                      //             fontSize: 12,
+                      //             color: Colors.grey[600],
+                      //           ),
+                      //         ),
+                      //       ],
+                      //     ),
+                      //   ),
+                      // ),
                       const SizedBox(height: 40),
                       const Text(
                         "Remarks / Admin Notes",
@@ -1406,10 +1545,11 @@ class _InternalMaintenanceFormPageState
                                           ),
                                         )
                                         .toList(),
-                                onChanged: (v) => setState(() {
-                                  _selectedAdminNotification = v;
-                                  _selectedStaffNotification = v;
-                                }),
+                                onChanged:
+                                    (v) => setState(() {
+                                      _selectedAdminNotification = v;
+                                      _selectedStaffNotification = v;
+                                    }),
                               ),
                             ),
                           ),
@@ -1418,10 +1558,7 @@ class _InternalMaintenanceFormPageState
                       const SizedBox(height: 8),
                       Text(
                         'Applies to both admin and assigned staff reminders.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
 
                       const SizedBox(height: 40),
@@ -1546,7 +1683,8 @@ class _InventorySelectionDialog extends StatefulWidget {
   });
 
   @override
-  State<_InventorySelectionDialog> createState() => _InventorySelectionDialogState();
+  State<_InventorySelectionDialog> createState() =>
+      _InventorySelectionDialogState();
 }
 
 class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
@@ -1562,7 +1700,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
 
   List<Map<String, dynamic>> get _filteredItems {
     if (_searchQuery.isEmpty) return widget.availableItems;
-    
+
     final query = _searchQuery.toLowerCase();
     return widget.availableItems.where((item) {
       final name = (item['item_name'] ?? '').toString().toLowerCase();
@@ -1589,10 +1727,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
               children: [
                 const Text(
                   'Select Inventory Item',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
@@ -1610,7 +1745,10 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
               ),
               onChanged: (value) {
                 setState(() {
@@ -1622,94 +1760,120 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
 
             // Items list
             Expanded(
-              child: _filteredItems.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No items found',
-                        style: TextStyle(color: Colors.grey[600]),
-                      ),
-                    )
-                  : ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: _filteredItems.length,
-                      itemBuilder: (context, index) {
-                        final item = _filteredItems[index];
-                        final isSelected = _selectedItem == item;
-                        final currentStock = item['current_stock'] ?? 0;
-                        final isLowStock = currentStock <= (item['reorder_level'] ?? 0);
+              child:
+                  _filteredItems.isEmpty
+                      ? Center(
+                        child: Text(
+                          'No items found',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                      )
+                      : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _filteredItems.length,
+                        itemBuilder: (context, index) {
+                          final item = _filteredItems[index];
+                          final isSelected = _selectedItem == item;
+                          final currentStock = item['current_stock'] ?? 0;
+                          final isLowStock =
+                              currentStock <= (item['reorder_level'] ?? 0);
 
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: isSelected ? const Color(0xFFE8F5E8) : Colors.grey[50],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: isSelected ? const Color(0xFF2E7D32) : Colors.grey[200]!,
-                              width: isSelected ? 2 : 1,
-                            ),
-                          ),
-                          child: ListTile(
-                            onTap: () {
-                              setState(() {
-                                _selectedItem = item;
-                              });
-                            },
-                            title: Text(
-                              item['item_name'] ?? 'Unknown Item',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color:
+                                  isSelected
+                                      ? const Color(0xFFE8F5E8)
+                                      : Colors.grey[50],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color:
+                                    isSelected
+                                        ? const Color(0xFF2E7D32)
+                                        : Colors.grey[200]!,
+                                width: isSelected ? 2 : 1,
                               ),
                             ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Code: ${item['item_code'] ?? 'N/A'}',
-                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                            child: ListTile(
+                              onTap: () {
+                                setState(() {
+                                  _selectedItem = item;
+                                });
+                              },
+                              title: Text(
+                                item['item_name'] ?? 'Unknown Item',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
                                 ),
-                                Text(
-                                  'Department: ${item['department'] ?? 'N/A'}',
-                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: isLowStock ? Colors.orange[100] : Colors.green[100],
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        'Stock: $currentStock',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w500,
-                                          color: isLowStock ? Colors.orange[900] : Colors.green[900],
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Code: ${item['item_code'] ?? 'N/A'}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                  Text(
+                                    'Department: ${item['department'] ?? 'N/A'}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color:
+                                              isLowStock
+                                                  ? Colors.orange[100]
+                                                  : Colors.green[100],
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'Stock: $currentStock',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                            color:
+                                                isLowStock
+                                                    ? Colors.orange[900]
+                                                    : Colors.green[900],
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              trailing:
+                                  isSelected
+                                      ? const Icon(
+                                        Icons.check_circle,
+                                        color: Color(0xFF2E7D32),
+                                      )
+                                      : null,
                             ),
-                            trailing: isSelected
-                                ? const Icon(Icons.check_circle, color: Color(0xFF2E7D32))
-                                : null,
-                          ),
-                        );
-                      },
-                    ),
+                          );
+                        },
+                      ),
             ),
 
             if (_selectedItem != null) ...[
               const Divider(height: 32),
-              
+
               // Quantity input
               Row(
                 children: [
@@ -1754,27 +1918,34 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
-                  onPressed: _selectedItem == null
-                      ? null
-                      : () {
-                          final quantity = int.tryParse(_quantityController.text) ?? 1;
-                          if (quantity <= 0) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Quantity must be greater than 0'),
-                              ),
-                            );
-                            return;
-                          }
-                          widget.onItemSelected(_selectedItem!, quantity);
-                          Navigator.pop(context);
-                        },
+                  onPressed:
+                      _selectedItem == null
+                          ? null
+                          : () {
+                            final quantity =
+                                int.tryParse(_quantityController.text) ?? 1;
+                            if (quantity <= 0) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Quantity must be greater than 0',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+                            widget.onItemSelected(_selectedItem!, quantity);
+                            Navigator.pop(context);
+                          },
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Add Item'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2E7D32),
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
                   ),
                 ),
               ],

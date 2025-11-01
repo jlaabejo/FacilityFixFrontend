@@ -1270,33 +1270,33 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                     horizontal: 12,
                     vertical: 6,
                   ),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: selectedDowntimeUnit,
-                      items:
-                          ['This Month', 'Last Month', 'Last 3 Months'].map((
-                            String value,
-                          ) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(
-                                value,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            );
-                          }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          selectedDowntimeUnit = newValue!;
-                        });
-                        _fetchAnalyticsData();
-                      },
-                    ),
-                  ),
+                  // decoration: BoxDecoration(
+                  //   color: Colors.grey[100],
+                  //   borderRadius: BorderRadius.circular(16),
+                  // ),
+                  // child: DropdownButtonHideUnderline(
+                  //   child: DropdownButton<String>(
+                  //     value: selectedDowntimeUnit,
+                  //     items:
+                  //         ['This Month', 'Last Month', 'Last 3 Months'].map((
+                  //           String value,
+                  //         ) {
+                  //           return DropdownMenuItem<String>(
+                  //             value: value,
+                  //             child: Text(
+                  //               value,
+                  //               style: const TextStyle(fontSize: 12),
+                  //             ),
+                  //           );
+                  //         }).toList(),
+                  //     onChanged: (String? newValue) {
+                  //       setState(() {
+                  //         selectedDowntimeUnit = newValue!;
+                  //       });
+                  //       _fetchAnalyticsData();
+                  //     },
+                  //   ),
+                  // ),
                 ),
               ],
             ),

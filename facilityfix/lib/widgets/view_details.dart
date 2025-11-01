@@ -1335,7 +1335,6 @@ class MaintenanceDetails extends StatefulWidget {
   final String? priority; // High | Medium | Low
   final String
   statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
-  final String? resolutionType; // job_service, work_permit, rejected
 
   //  Tenant / Requester
   final String requestedBy;
@@ -1347,7 +1346,7 @@ class MaintenanceDetails extends StatefulWidget {
   final DateTime? completedAt;
   final String? location;
   final String? description;
-  final List<String>? checklist_complete;
+  final List<String>? checklist;
   final List<String>? attachments;
   final String? adminNote;
 
@@ -1362,6 +1361,21 @@ class MaintenanceDetails extends StatefulWidget {
   // Tracking
   final List<String>? materialsUsed;
 
+  // Interactive checklist and inventory
+  final List<Map<String, dynamic>>? checklistItems;
+  final List<Map<String, dynamic>>? inventoryRequests;
+  final int? completedCount;
+  final int? totalCount;
+  final bool? isUpdating;
+  final Function(int)? onToggleChecklistItem;
+  final Function(Map<String, dynamic>)? onInventoryItemTap;
+  final String? currentStaffId;
+  final String? taskCategory;
+  
+  // Action callbacks
+  final VoidCallback? onHold;
+  final VoidCallback? onCreateAssessment;
+
   const MaintenanceDetails({
     super.key,
     // Basic
@@ -1372,7 +1386,6 @@ class MaintenanceDetails extends StatefulWidget {
     required this.requestTypeTag,
     this.priority,
     required this.statusTag,
-    this.resolutionType,
     // Tenant / Requester
     required this.requestedBy,
     required this.scheduleDate,
@@ -1382,7 +1395,7 @@ class MaintenanceDetails extends StatefulWidget {
     this.completedAt,
     this.location,
     this.description,
-    this.checklist_complete,
+    this.checklist,
     this.attachments,
     this.adminNote,
     // Staff
@@ -1394,6 +1407,19 @@ class MaintenanceDetails extends StatefulWidget {
     this.staffAttachments,
     // Tracking
     this.materialsUsed,
+    // Interactive
+    this.checklistItems,
+    this.inventoryRequests,
+    this.completedCount,
+    this.totalCount,
+    this.isUpdating,
+    this.onToggleChecklistItem,
+    this.onInventoryItemTap,
+    this.currentStaffId,
+    this.taskCategory,
+    // Actions
+    this.onHold,
+    this.onCreateAssessment,
   });
 
   @override
@@ -1407,7 +1433,7 @@ class _MaintenanceState extends State<MaintenanceDetails> {
   void initState() {
     super.initState();
     _checklistState =
-        (widget.checklist_complete ?? const <String>[])
+        (widget.checklist ?? const <String>[])
             .map((item) => {"text": item, "checked": false})
             .toList();
   }
@@ -1519,16 +1545,16 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                 ],
                 if ((widget.departmentTag ?? '').trim().isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  KeyValueRow.text(
+                  KeyValueRow(
                     label: 'Department',
-                    valueText: widget.departmentTag!.trim(),
+                    value: DepartmentTag(widget.departmentTag!.trim()),
                   ),
                 ],
                 if ((widget.priority ?? '').trim().isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  KeyValueRow.text(
+                  KeyValueRow(
                     label: 'Priority',
-                    valueText: widget.priority!.trim(),
+                    value: PriorityTag(priority: widget.priority!.trim()),
                   ),
                 ],
                 if (widget.startedAt != null) ...[
@@ -1559,20 +1585,331 @@ class _MaintenanceState extends State<MaintenanceDetails> {
           ffDivider(),
           const SizedBox(height: 8),
           // Description
-          if ((widget.description ?? '').trim().isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _SectionCard(
-              title: "Task Description",
-              content: widget.description!.trim(),
-              padding: const EdgeInsets.all(14),
-              hideIfEmpty: false,
+          _SectionCard(
+            title: 'Description',
+            content: (widget.description ?? '').trim(),
+            padding: const EdgeInsets.all(14),
+            hideIfEmpty: false,
+          ),
+
+          const SizedBox(height: 10),
+
+          // Interactive Checklist Section
+          if (widget.checklistItems != null &&
+              widget.checklistItems!.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: Color(0xFFE5E7EB)),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.checklist,
+                          size: 20,
+                          color: Color(0xFF6B7280),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Task Checklist',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1F2937),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${widget.completedCount ?? 0} of ${widget.totalCount ?? 0} completed',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Checklist Items
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: widget.checklistItems!.length,
+                    separatorBuilder:
+                        (_, __) => const Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: Color(0xFFE5E7EB),
+                        ),
+                    itemBuilder: (context, index) {
+                      final item = widget.checklistItems![index];
+                      final isCompleted = item['completed'] == true;
+                      final assignedTo = item['assigned_to']?.toString() ?? '';
+
+                      // If there's an assigned_to field, check if it matches current user
+                      if (widget.currentStaffId != null &&
+                          assignedTo.isNotEmpty &&
+                          assignedTo != widget.currentStaffId &&
+                          widget.taskCategory == 'safety') {
+                        return const SizedBox.shrink();
+                      }
+
+                      return InkWell(
+                        onTap:
+                            widget.isUpdating == true ||
+                                    widget.onToggleChecklistItem == null
+                                ? null
+                                : () => widget.onToggleChecklistItem!(index),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                isCompleted
+                                    ? Icons.check_box
+                                    : Icons.check_box_outline_blank,
+                                size: 24,
+                                color:
+                                    isCompleted
+                                        ? Colors.green
+                                        : const Color(0xFF9CA3AF),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  item['task'] ?? '',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color:
+                                        isCompleted
+                                            ? const Color(0xFF6B7280)
+                                            : const Color(0xFF1F2937),
+                                    decoration:
+                                        isCompleted
+                                            ? TextDecoration.lineThrough
+                                            : TextDecoration.none,
+                                    fontWeight:
+                                        isCompleted
+                                            ? FontWeight.w400
+                                            : FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              if (widget.isUpdating == true)
+                                const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Inventory Requests Section
+          if (widget.inventoryRequests != null &&
+              widget.inventoryRequests!.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: Color(0xFFE5E7EB)),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.inventory_2_outlined,
+                          size: 20,
+                          color: Color(0xFF6B7280),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Required Materials & Tools',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1F2937),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Inventory Items
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: widget.inventoryRequests!.length,
+                    separatorBuilder:
+                        (_, __) => const Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: Color(0xFFE5E7EB),
+                        ),
+                    itemBuilder: (context, index) {
+                      final request = widget.inventoryRequests![index];
+                      final itemName = request['item_name'] ?? 'Unknown Item';
+                      final quantity =
+                          request['quantity_requested'] ??
+                          request['stock_quantity'] ??
+                          0;
+                      final status = request['status'] ?? 'pending';
+                      final unit = request['unit'] ?? '';
+                      final category = request['category'] ?? '';
+
+                      // Determine if item is received
+                      bool isReceived =
+                          status.toLowerCase() == 'fulfilled' ||
+                          status.toLowerCase() == 'received';
+
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    itemName,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF1F2937),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'RESERVE $quantity',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF1F2937),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        'STOCK $quantity',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFF6B7280),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (category.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF3F4F6),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        category.toUpperCase(),
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF6B7280),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        isReceived
+                                            ? const Color(0xFFECFDF5)
+                                            : Colors.white,
+                                    border: Border.all(
+                                      color:
+                                          isReceived
+                                              ? const Color(0xFF059669)
+                                              : const Color(0xFF005CE7),
+                                    ),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    isReceived ? 'Received' : 'Request',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color:
+                                          isReceived
+                                              ? const Color(0xFF059669)
+                                              : const Color(0xFF005CE7),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ],
 
           const SizedBox(height: 10),
 
           // Checklist (interactive)
-          if ((widget.checklist_complete ?? const <String>[]).isNotEmpty)
+          if ((widget.checklist ?? const <String>[]).isNotEmpty)
             _Section(
               title: "Checklist / Task Steps",
               child: Column(
@@ -1658,36 +1995,36 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                               : null,
                     ),
 
-                    // ===== Assessment Section =====
-                    if (widget.assessedAt != null ||
-                        (widget.assessment?.trim().isNotEmpty ?? false)) ...[
-                      const SizedBox(height: 14),
-                      _Section(
-                        title: 'Assessment',
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Date Assessed
-                            if (widget.assessedAt != null) ...[
-                              KeyValueRow.text(
-                                label: 'Assessed At',
-                                valueText: _relativeOrFullDT(widget.assessedAt),
-                              ),
-                              const SizedBox(height: 8),
-                            ],
-
-                            // Assessment Notes
-                            if ((widget.assessment ?? '').trim().isNotEmpty) ...[
-                              Text(
-                                widget.assessment!.trim(),
-                                style: const TextStyle(fontSize: 14),
-                              ),
-                            ],
+                  // ===== Assessment Section =====
+                  if (widget.assessedAt != null ||
+                      (widget.assessment?.trim().isNotEmpty ?? false)) ...[
+                    const SizedBox(height: 14),
+                    _Section(
+                      title: 'Assessment',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Date Assessed
+                          if (widget.assessedAt != null) ...[
+                            KeyValueRow.text(
+                              label: 'Assessed At',
+                              valueText: _relativeOrFullDT(widget.assessedAt),
+                            ),
+                            const SizedBox(height: 8),
                           ],
-                        ),
+
+                          // Assessment Notes
+                          if ((widget.assessment ?? '').trim().isNotEmpty) ...[
+                            Text(
+                              widget.assessment!.trim(),
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ],
+                        ],
                       ),
-                      const SizedBox(height: 14),
-                    ],
+                    ),
+                    const SizedBox(height: 14),
+                  ],
 
                   // Attachments
                   if ((widget.staffAttachments ?? const <String>[])

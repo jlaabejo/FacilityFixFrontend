@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/services/auth_storage.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
@@ -10,6 +14,8 @@ import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/modals.dart';  // <-- CustomPopup
 import 'package:flutter/material.dart' hide FilledButton;
 
+enum AssessmentFormMode { concernSlip, jobServiceCompletion, maintenanceTask }
+
 class AssessmentForm extends StatefulWidget {
   /// The concern slip ID to submit assessment for
   final String? concernSlipId;
@@ -19,12 +25,18 @@ class AssessmentForm extends StatefulWidget {
   
   /// Optional context string for where the assessment is coming from (e.g., a WO title or id)
   final String? requestType;
+  /// Which variant of the assessment form to show
+  final AssessmentFormMode mode;
+  /// Optional override for submission endpoint. If provided, this URL will be used instead of inferred endpoints.
+  final String? submitUrl;
 
   const AssessmentForm({
     super.key,
     this.concernSlipId,
     this.concernSlipData,
     this.requestType,
+    this.mode = AssessmentFormMode.concernSlip,
+    this.submitUrl,
   });
 
   @override
@@ -64,12 +76,12 @@ class _AssessmentFormState extends State<AssessmentForm> {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController dateAssessedController = TextEditingController();
   final TextEditingController assessmentController = TextEditingController();
-  final TextEditingController recommendationController = TextEditingController();
 
   // -------- Error states --------
   String? _assessmentError;
-  String? _recommendationError;
   bool _isSubmitting = false;
+  // Resolution type (only relevant for concernSlip mode) - default to job_service
+  String? _selectedResolutionType = 'job_service';
 
   @override
   void initState() {
@@ -78,20 +90,17 @@ class _AssessmentFormState extends State<AssessmentForm> {
   }
 
   Future<void> _loadUserDataAndInitialize() async {
-    // Load user profile data
-    final apiService = APIService();
-    final profile = await apiService.getUserProfile();
+    // Load user profile data from AuthStorage
+    final profile = await AuthStorage.getProfile();
     
-    if (profile != null) {
+    if (profile != null && mounted) {
       final firstName = profile['first_name'] ?? '';
       final lastName = profile['last_name'] ?? '';
       final fullName = '$firstName $lastName'.trim();
       
-      if (mounted) {
-        setState(() {
-          nameController.text = fullName.isNotEmpty ? fullName : 'Staff Member';
-        });
-      }
+      setState(() {
+        nameController.text = fullName.isNotEmpty ? fullName : 'Staff Member';
+      });
     }
     
     // Set current date/time
@@ -106,7 +115,6 @@ class _AssessmentFormState extends State<AssessmentForm> {
     nameController.dispose();
     dateAssessedController.dispose();
     assessmentController.dispose();
-    recommendationController.dispose();
     super.dispose();
   }
 
@@ -117,8 +125,8 @@ class _AssessmentFormState extends State<AssessmentForm> {
       builder: (_) => CustomPopup(
         title: 'Success',
         message:
-            'Your assessment has been submitted successfully and is now recorded under Work Orders.',
-        primaryText: 'Go to Work Orders',
+            'Your assessment has been submitted successfully and is now recorded under Repair Tasks.',
+        primaryText: 'Go to Repair Task',
         onPrimaryPressed: () {
           Navigator.of(context).pop();
           Navigator.pushReplacement(
@@ -132,21 +140,15 @@ class _AssessmentFormState extends State<AssessmentForm> {
 
   bool _validateFields() {
     String? assessErr;
-    String? recErr;
 
     if (assessmentController.text.trim().isEmpty) {
       assessErr = 'Assessment is required';
     }
-    if (recommendationController.text.trim().isEmpty) {
-      recErr = 'Recommendation is required';
-    }
-
     setState(() {
       _assessmentError = assessErr;
-      _recommendationError = recErr;
     });
 
-    return assessErr == null && recErr == null;
+    return assessErr == null;
   }
 
   Future<void> _submit() async {
@@ -175,21 +177,61 @@ class _AssessmentFormState extends State<AssessmentForm> {
     setState(() => _isSubmitting = true);
 
     try {
-      final apiService = APIService();
+      // Use staff role for API service to get baseUrl
+      final apiService = APIService(roleOverride: AppRole.staff);
       
-      // Submit assessment to backend
-      await apiService.patch(
-        '/concern-slips/${widget.concernSlipId}/submit-assessment',
+      // Get auth token
+      final token = await AuthStorage.getToken();
+      if (token == null) {
+        throw Exception('Authentication required');
+      }
+      
+      // Prepare request body based on mode
+      final Map<String, dynamic> body = {
+        'assessment': assessmentController.text.trim(),
+        'attachments': [],
+      };
+
+      // Determine endpoint and add mode-specific fields
+      final String endpoint;
+      
+      if (widget.submitUrl != null && widget.submitUrl!.isNotEmpty) {
+        // Use custom endpoint if provided
+        endpoint = widget.submitUrl!;
+        if (widget.mode == AssessmentFormMode.concernSlip) {
+          body['resolution_type'] = _selectedResolutionType;
+        }
+      } else {
+        // Use default endpoints based on mode
+        switch (widget.mode) {
+          case AssessmentFormMode.concernSlip:
+            endpoint = '/concern-slips/${widget.concernSlipId}/submit-assessment';
+            body['resolution_type'] = _selectedResolutionType;
+            break;
+          case AssessmentFormMode.jobServiceCompletion:
+            // Job service completion uses job-services endpoint
+            endpoint = '/job-services/${widget.concernSlipId}/complete';
+            break;
+          case AssessmentFormMode.maintenanceTask:
+            // Maintenance task uses maintenance-tasks endpoint
+            endpoint = '/maintenance-tasks/${widget.concernSlipId}/complete';
+            break;
+        }
+      }
+
+      // Submit assessment with HTTP PATCH
+      final response = await http.patch(
+        Uri.parse('${apiService.baseUrl}$endpoint'),
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
         },
-        body: {
-          'assessment': assessmentController.text.trim(),
-          'recommendation': recommendationController.text.trim(),
-          'attachments': [], // TODO: Add file attachments if available
-        },
+        body: jsonEncode(body),
       );
       
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('Failed to submit assessment: ${response.body}');
+      }
 
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -221,7 +263,7 @@ class _AssessmentFormState extends State<AssessmentForm> {
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
         leading: const BackButton(),
-        title: 'Assessment & Recommendation',
+        title: 'Assessment',
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -231,8 +273,16 @@ class _AssessmentFormState extends State<AssessmentForm> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Header varies slightly by mode
                 const Text('Detail Information', style: TextStyle(fontSize: 20)),
-                Text('Enter Detail Information $subtitle', style: const TextStyle(fontSize: 14)),
+                Text(
+                  widget.mode == AssessmentFormMode.concernSlip
+                      ? 'Enter Detail Information $subtitle'
+                      : (widget.mode == AssessmentFormMode.jobServiceCompletion
+                          ? 'Complete Job Service Assessment $subtitle'
+                          : 'Maintenance Task Assessment $subtitle'),
+                  style: const TextStyle(fontSize: 14),
+                ),
                 const SizedBox(height: 16),
 
                 // Show concern slip context if available
@@ -278,44 +328,141 @@ class _AssessmentFormState extends State<AssessmentForm> {
                 const Text('Basic Information',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
-
-                InputField(
-                  label: 'Full Name',
-                  controller: nameController,
-                  hintText: 'Auto-filled',
-                  isRequired: true,
-                  readOnly: true,
-                ),
-                InputField(
-                  label: 'Date Assessed',
-                  controller: dateAssessedController,
-                  hintText: 'Auto-filled',
-                  isRequired: true,
-                  readOnly: true,
-                ),
+                // Name and date are only shown for the full concern-slip flow
+                if (widget.mode == AssessmentFormMode.concernSlip) ...[
+                  InputField(
+                    label: 'Full Name',
+                    controller: nameController,
+                    hintText: 'Auto-filled',
+                    isRequired: true,
+                    readOnly: true,
+                  ),
+                  InputField(
+                    label: 'Date Assessed',
+                    controller: dateAssessedController,
+                    hintText: 'Auto-filled',
+                    isRequired: true,
+                    readOnly: true,
+                  ),
+                ],
 
                 const SizedBox(height: 16),
-                const Text('Assessment and Recommendation',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                // Title differs slightly when recommendation is not required
+                Text(
+                  widget.mode == AssessmentFormMode.concernSlip
+                      ? 'Assessment and Resolution'
+                      : 'Assessment',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
                 const SizedBox(height: 8),
 
                 InputField(
                   label: 'Assessment',
                   controller: assessmentController,
-                  hintText: 'Enter assessment',
+                  hintText: widget.mode == AssessmentFormMode.concernSlip
+                      ? 'Enter assessment'
+                      : 'Enter assessment and/or completion notes',
                   isRequired: true,
                   maxLines: 4,
                   errorText: _assessmentError,
                 ),
-                const SizedBox(height: 8),
-                InputField(
-                  label: 'Recommendation',
-                  controller: recommendationController,
-                  hintText: 'Enter recommendation',
-                  isRequired: true,
-                  maxLines: 4,
-                  errorText: _recommendationError,
-                ),
+
+                // Resolution Type only for concern slip flow
+                if (widget.mode == AssessmentFormMode.concernSlip) ...[
+                  const SizedBox(height: 8),
+                  const Text('Resolution Type', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      children: [
+                        // Job Service FIRST
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedResolutionType = 'job_service';
+                            });
+                          },
+                          child: Container(
+                            color: Colors.transparent,
+                            child: Row(
+                              children: [
+                                Radio<String>(
+                                  value: 'job_service',
+                                  groupValue: _selectedResolutionType,
+                                  activeColor: const Color(0xFF005CE7),
+                                  onChanged: (String? value) {
+                                    if (value != null) {
+                                      setState(() {
+                                        _selectedResolutionType = value;
+                                      });
+                                    }
+                                  },
+                                ),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Job Service', style: TextStyle(fontSize: 14)),
+                                      const SizedBox(height: 2),
+                                      const Text('For repairs handled by internal staff',
+                                          style: TextStyle(fontSize: 12, color: Color(0xFF667085))),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Divider(height: 1),
+                        const SizedBox(height: 8),
+                        // Work Order Permit SECOND
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedResolutionType = 'work_order';
+                            });
+                          },
+                          child: Container(
+                            color: Colors.transparent,
+                            child: Row(
+                              children: [
+                                Radio<String>(
+                                  value: 'work_order',
+                                  groupValue: _selectedResolutionType,
+                                  activeColor: const Color(0xFF005CE7),
+                                  onChanged: (String? value) {
+                                    if (value != null) {
+                                      setState(() {
+                                        _selectedResolutionType = value;
+                                      });
+                                    }
+                                  },
+                                ),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Work Order Permit', style: TextStyle(fontSize: 14)),
+                                      const SizedBox(height: 2),
+                                      const Text('For repairs requiring external contractors',
+                                          style: TextStyle(fontSize: 12, color: Color(0xFF667085))),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: 8),
                 const Text('Attachment', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
