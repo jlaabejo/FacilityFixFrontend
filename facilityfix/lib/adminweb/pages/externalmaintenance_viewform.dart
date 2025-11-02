@@ -490,7 +490,7 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
                   children: [
                     // Work Orders Title
                     const Text(
-                      "Work Orders",
+                      "Work Management",
                       style: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
@@ -599,7 +599,7 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
             foregroundColor: Colors.black,
             padding: const EdgeInsets.symmetric(horizontal: 8),
           ),
-          child: const Text('Work Orders'),
+          child: const Text('Maintenance Tasks'),
         ),
         const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
         TextButton(
@@ -608,7 +608,7 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
             foregroundColor: Colors.black,
             padding: const EdgeInsets.symmetric(horizontal: 8),
           ),
-          child: const Text('Maintenance Tasks'),
+          child: const Text('External Maintenance Tasks'),
         ),
       ],
     );

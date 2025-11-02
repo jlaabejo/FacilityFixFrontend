@@ -373,7 +373,7 @@ class _ExternalMaintenanceFormPageState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  "Work Orders",
+                  "Work Management",
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -402,7 +402,7 @@ class _ExternalMaintenanceFormPageState
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                       ),
-                      child: const Text('Work Orders'),
+                      child: const Text('Maintenance Tasks'),
                     ),
                     const Icon(
                       Icons.chevron_right,
@@ -415,7 +415,7 @@ class _ExternalMaintenanceFormPageState
                         foregroundColor: Colors.black,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                       ),
-                      child: const Text('Maintenance Tasks'),
+                      child: const Text('External Maintenance Form'),
                     ),
                   ],
                 ),

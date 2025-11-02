@@ -690,7 +690,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          "Work Orders",
+          "Work Management",
           style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.bold,
@@ -716,7 +716,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
-              child: const Text('Work Orders'),
+              child: const Text('Work Management'),
             ),
             const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
             TextButton(
