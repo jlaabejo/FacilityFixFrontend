@@ -755,7 +755,7 @@ class _AdminRolePageState extends State<AdminRolePage> {
           children: [
             // ---- Page Header ----
             const Text(
-              'User and Role Management',
+              'User Management',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -782,7 +782,7 @@ class _AdminRolePageState extends State<AdminRolePage> {
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                   ),
-                  child: const Text('User and Role Management'),
+                  child: const Text('User Management'),
                 ),
                 const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
                 TextButton(

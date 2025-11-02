@@ -268,15 +268,11 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       _navItem(Icons.home_outlined, 'Dashboard', 'dashboard'),
                       const SizedBox(height: 4),
 
-                      // User and Role Management dropdown
-                      _dropdownNav(
-                        icon: Icons.group,
-                        title: 'User and Role Management',
-                        sectionKey: 'user',
-                        children: [
-                          _subNavItem('Users', 'user_users'),
-                          //_subNavItem('Roles Management', 'user_roles'),
-                        ],
+                      // User Management navigation item
+                      _navItem(
+                        Icons.group_outlined,
+                        'User Management',
+                        'user_users',
                       ),
                       const SizedBox(height: 4),
 

@@ -27,6 +27,12 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
   String? _selectedLocation;
   bool _pinToDashboard = false;
   List<File> _attachedFiles = [];
+  
+  // Additional controllers for "Others" options
+  final TextEditingController _customTypeController = TextEditingController();
+  final TextEditingController _customLocationController = TextEditingController();
+  bool _showCustomType = false;
+  bool _showCustomLocation = false;
 
   // Dropdown options
   final List<String> _audienceOptions = ['Tenants', 'Staff', 'All'];
@@ -68,9 +74,14 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
       'icon': Icons.pest_control,
       'color': Colors.orange,
     },
+    {
+      'value': 'Others',
+      'label': 'Others',
+      'icon': Icons.more_horiz,
+      'color': Colors.grey[600],
+    },
   ];
 
-  // Sample location options - replace with actual data from backend
   final List<String> _locationOptions = [
     'Swimming pool',
     'Basketball Court',
@@ -81,6 +92,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
     'Halls',
     'Garden',
     'Corridors',
+    'Others',
   ];
 
   // Route mapping helper function
@@ -196,10 +208,94 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
     return true;
   }
 
-  // Show error snackbar
+  // Error scnackbar
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
+      SnackBar(
+        content: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.error_outline_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Flexible(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFFEF5350),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(left: 24, bottom: 24, right: MediaQuery.of(context).size.width * 0.7),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 4),
+        elevation: 2,
+      ),
+    );
+  }
+
+  // Ssuccess snackbar 
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.check_circle_outline_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Flexible(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF66BB6A),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(left: 24, bottom: 24, right: MediaQuery.of(context).size.width * 0.7),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 4),
+        elevation: 2,
+        action: SnackBarAction(
+          label: 'View',
+          textColor: Colors.white,
+          onPressed: () => context.go('/announcement'),
+        ),
+      ),
     );
   }
 
@@ -226,12 +322,21 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
   void _submitForm() async {
     if (!_validateForm()) return;
 
+    // Determine final type and location values
+    final finalType = _showCustomType && _customTypeController.text.trim().isNotEmpty
+        ? _customTypeController.text.trim()
+        : _selectedType ?? 'General Announcement';
+        
+    final finalLocation = _showCustomLocation && _customLocationController.text.trim().isNotEmpty
+        ? _customLocationController.text.trim()
+        : _selectedLocation;
+
     final announcementData = {
       'title': _titleController.text.trim(),
       'content': _detailsController.text.trim(),
-      'type': _selectedType ?? 'General Announcement',
+      'type': finalType,
       'audience': _selectedAudience?.toLowerCase() ?? 'all',
-      'location_affected': _selectedLocation,
+      'location_affected': finalLocation,
       'scheduled_publish_date':
           _startDateController.text.isNotEmpty
               ? _convertDateToISO(_startDateController.text)
@@ -271,18 +376,16 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
 
         print('[v0] Success! Announcement ID: $formattedId');
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Announcement created successfully! ID: $formattedId',
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 4),
-          ),
+        _showSuccessSnackBar(
+          'Announcement created successfully! ID: $formattedId',
         );
 
-        // Navigate back to announcement list
-        context.go('/announcement');
+        // Navigate back to announcement list after a short delay
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            context.go('/announcement');
+          }
+        });
       }
     } catch (e) {
       // Hide loading indicator
@@ -290,12 +393,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
 
       // Show error message
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to create announcement: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showErrorSnackBar('Failed to create announcement: $e');
       }
     }
   }
@@ -306,8 +404,82 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
     _detailsController.dispose();
     _startDateController.dispose();
     _endDateController.dispose();
+    _customTypeController.dispose();
+    _customLocationController.dispose();
     super.dispose();
   }
+
+  // UI Helper Methods
+  Widget _buildSectionHeader(String title, String subtitle) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 4,
+              height: 24,
+              decoration: BoxDecoration(
+                color: Colors.blue,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.only(left: 16),
+          child: Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey[600],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  InputDecoration _decoration(String hint) => InputDecoration(
+    hintText: hint,
+    hintStyle: TextStyle(color: Colors.grey[400]),
+    isDense: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(color: Colors.grey[300]!),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(color: Colors.grey[300]!),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: Colors.blue),
+    ),
+  );
+
+  Widget _fieldLabel(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: Colors.black87,
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -394,30 +566,17 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min, // shrink-wrap vertically
                     children: [
-                      // ===== Title =====
-                      const Text(
-                        "Title",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
+                      // ===== Basic Information =====
+                      _buildSectionHeader(
+                        'Basic Information',
+                        'General details about the announcement',
                       ),
-                      const SizedBox(height: 8),
-                      TextField(
+                      const SizedBox(height: 24),
+                      // ===== Title =====
+                      _fieldLabel("Title"),
+                      TextFormField(
                         controller: _titleController,
-                        decoration: InputDecoration(
-                          hintText: "e.g., Scheduled Water Interruption",
-                          hintStyle: TextStyle(color: Colors.grey[500]),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: Colors.grey[300]!),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                        ),
+                        decoration: _decoration("e.g., Scheduled Water Interruption"),
                       ),
                       const SizedBox(height: 24),
 
@@ -429,37 +588,16 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
-                                  "Audience",
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
+                                _fieldLabel("Audience"),
                                 DropdownButtonFormField<String>(
                                   value: _selectedAudience,
-                                  hint: const Text("Select recipients..."),
-                                  decoration: InputDecoration(
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(
-                                        color: Colors.grey[300]!,
-                                      ),
-                                    ),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 12,
-                                    ),
-                                  ),
-                                  items:
-                                      _audienceOptions.map((audience) {
-                                        return DropdownMenuItem(
-                                          value: audience,
-                                          child: Text(audience),
-                                        );
-                                      }).toList(),
+                                  decoration: _decoration("Select recipients..."),
+                                  items: _audienceOptions.map((audience) {
+                                    return DropdownMenuItem(
+                                      value: audience,
+                                      child: Text(audience),
+                                    );
+                                  }).toList(),
                                   onChanged: (value) {
                                     setState(() {
                                       _selectedAudience = value;
@@ -475,53 +613,33 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
-                                  "Type",
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
+                                _fieldLabel("Announcement Type"),
                                 DropdownButtonFormField<String>(
                                   value: _selectedType,
-                                  hint: const Text("Select type..."),
-                                  decoration: InputDecoration(
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(
-                                        color: Colors.grey[300]!,
-                                      ),
-                                    ),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 12,
-                                    ),
-                                  ),
-                                  items:
-                                      _typeOptions.map((type) {
-                                        return DropdownMenuItem<String>(
-                                          value: type['value'] as String,
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                type['icon'] as IconData,
-                                                color: type['color'] as Color?,
-                                                size: 18,
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Text(type['label'] as String),
-                                            ],
-                                          ),
-                                        );
-                                      }).toList(),
+                                  decoration: _decoration("Select type..."),
+                                  items: _typeOptions.map((type) {
+                                    return DropdownMenuItem<String>(
+                                      value: type['value'] as String,
+                                      child: Text(type['label'] as String),
+                                    );
+                                  }).toList(),
                                   onChanged: (value) {
                                     setState(() {
                                       _selectedType = value;
+                                      _showCustomType = value == 'Others';
+                                      if (!_showCustomType) {
+                                        _customTypeController.clear();
+                                      }
                                     });
                                   },
                                 ),
+                                if (_showCustomType) ...[
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: _customTypeController,
+                                    decoration: _decoration("Enter custom type..."),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -530,101 +648,62 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                       const SizedBox(height: 24),
 
                       // ===== Post Details =====
-                      const Text(
-                        "Post Details",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        width: double.infinity,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(8),
-                            topRight: Radius.circular(8),
-                          ),
-                          border: Border.all(color: Colors.grey[300]!),
-                        ),
-                        alignment:
-                            Alignment.centerLeft, // align label to the left
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: const Text(
-                          "Text",
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                      TextField(
+                      _fieldLabel("Announcement Details"),
+                      TextFormField(
                         controller: _detailsController,
                         maxLines: 8,
-                        decoration: InputDecoration(
-                          hintText: "Enter the full announcement details...",
-                          hintStyle: TextStyle(color: Colors.grey[500]),
-                          border: OutlineInputBorder(
-                            borderRadius: const BorderRadius.only(
-                              bottomLeft: Radius.circular(8),
-                              bottomRight: Radius.circular(8),
-                            ),
-                            borderSide: BorderSide(color: Colors.grey[300]!),
-                          ),
-                          contentPadding: const EdgeInsets.all(16),
-                        ),
+                        decoration: _decoration("Enter the full announcement details..."),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 24),
+                      const Divider(color: Color(0xFFE2E8F0), height: 1, thickness: 1),
+                      const SizedBox(height: 32),
+                      // ===== Task Scope & Description =====
+                      _buildSectionHeader(
+                        'Task Scope & Description',
+                        'Detailed description of what needs to be done',
+                      ),
+                      const SizedBox(height: 24),
 
                       // ===== Location + Schedule =====
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // Location
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
-                                  "Location Affected (Optional)",
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
+                                _fieldLabel("Location Affected (Optional)"),
                                 DropdownButtonFormField<String>(
                                   value: _selectedLocation,
-                                  hint: const Text("Select"),
-                                  decoration: InputDecoration(
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(
-                                        color: Colors.grey[300]!,
-                                      ),
+                                  decoration: _decoration("Select location..."),
+                                  items: [
+                                    const DropdownMenuItem(
+                                      value: null,
+                                      child: Text("None"),
                                     ),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 12,
-                                    ),
-                                  ),
-                                  items:
-                                      _locationOptions.map((location) {
-                                        return DropdownMenuItem(
-                                          value: location,
-                                          child: Text(location),
-                                        );
-                                      }).toList(),
+                                    ..._locationOptions.map((loc) => DropdownMenuItem(
+                                      value: loc,
+                                      child: Text(loc),
+                                    )),
+                                  ],
                                   onChanged: (value) {
                                     setState(() {
                                       _selectedLocation = value;
+                                      _showCustomLocation = value == 'Others';
+                                      if (!_showCustomLocation) {
+                                        _customLocationController.clear();
+                                      }
                                     });
                                   },
                                 ),
+                                if (_showCustomLocation) ...[
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: _customLocationController,
+                                    decoration: _decoration("Enter custom location..."),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -634,84 +713,36 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const SizedBox(height: 24),
-                                const Text(
-                                  "Schedule Visibility",
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
+                                _fieldLabel("Schedule Visibility"),
                                 Row(
                                   children: [
                                     Expanded(
-                                      child: TextField(
+                                      child: TextFormField(
                                         controller: _startDateController,
                                         readOnly: true,
-                                        decoration: InputDecoration(
-                                          hintText: "DD / MM / YY",
-                                          hintStyle: TextStyle(
-                                            color: Colors.grey[500],
-                                          ),
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                            borderSide: BorderSide(
-                                              color: Colors.grey[300]!,
-                                            ),
-                                          ),
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 16,
-                                                vertical: 12,
-                                              ),
+                                        decoration: _decoration("DD / MM / YY").copyWith(
                                           suffixIcon: Icon(
                                             Icons.calendar_today,
-                                            color: Colors.blue[600],
+                                            color: Colors.grey[600],
                                             size: 20,
                                           ),
                                         ),
-                                        onTap:
-                                            () => _selectDate(
-                                              _startDateController,
-                                            ),
+                                        onTap: () => _selectDate(_startDateController),
                                       ),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
-                                      child: TextField(
+                                      child: TextFormField(
                                         controller: _endDateController,
                                         readOnly: true,
-                                        decoration: InputDecoration(
-                                          hintText: "DD / MM / YY",
-                                          hintStyle: TextStyle(
-                                            color: Colors.grey[500],
-                                          ),
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                            borderSide: BorderSide(
-                                              color: Colors.grey[300]!,
-                                            ),
-                                          ),
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 16,
-                                                vertical: 12,
-                                              ),
+                                        decoration: _decoration("DD / MM / YY").copyWith(
                                           suffixIcon: Icon(
                                             Icons.calendar_today,
-                                            color: Colors.blue[600],
+                                            color: Colors.grey[600],
                                             size: 20,
                                           ),
                                         ),
-                                        onTap:
-                                            () =>
-                                                _selectDate(_endDateController),
+                                        onTap: () => _selectDate(_endDateController),
                                       ),
                                     ),
                                   ],
@@ -729,18 +760,10 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
 
                       // ===== Attachments =====
-                      const Text(
-                        "Attachments(Optional)",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
+                      _fieldLabel("Attachments (Optional)"),
                       GestureDetector(
                         onTap: _pickFiles,
                         child: Container(
@@ -864,16 +887,8 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                               ],
                             ),
                           ),
-                          ElevatedButton.icon(
+                          ElevatedButton(
                             onPressed: _submitForm,
-                            icon: const Icon(Icons.send, size: 18),
-                            label: const Text(
-                              "Publish",
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
-                              ),
-                            ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF1976D2),
                               foregroundColor: Colors.white,
@@ -883,6 +898,13 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                               ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: const Text(
+                              "Publish",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
                               ),
                             ),
                           ),

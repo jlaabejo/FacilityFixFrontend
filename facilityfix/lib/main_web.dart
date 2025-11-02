@@ -28,7 +28,6 @@ import 'adminweb/pages/externalmaintenance_viewform.dart';
 import 'adminweb/pages/createwebinventoryitems_page.dart';
 import 'adminweb/pages/webinventoryitems_viewdetails.dart';
 import 'adminweb/pages/createwebannouncement_page.dart';
-import 'adminweb/pages/editwebannouncement_page.dart';
 import 'adminweb/pages/adminsettings_page.dart';
 import 'adminweb/pages/adminwebprofile_page.dart';
 import 'adminweb/pages/loadingscreen_page.dart';
@@ -221,18 +220,24 @@ class _MyAppState extends State<MyApp> {
           return new_inv.InventoryItemDetailsPage(itemId: itemId);
         },
       ),
+      // Legacy inventory routes (using old pages)
+      GoRoute(
+        path: '/inventory/create',
+        name: 'create_inventory_item',
+        builder: (context, state) => const InventoryItemCreatePage(),
+      ),
+      GoRoute(
+        path: '/inventory/details/:itemId',
+        name: 'inventory_details',
+        builder: (context, state) {
+          final itemId = state.pathParameters['itemId']!;
+          return InventoryItemDetailsPage(itemId: itemId);
+        },
+      ),
       GoRoute(
         path: '/adminweb/pages/createannouncement',
         name: 'create_announcement',
         builder: (context, state) => const CreateAnnouncementPage(),
-      ),
-      GoRoute(
-        path: '/announcement/edit/:announcementId',
-        name: 'edit_announcement',
-        builder: (context, state) {
-          final announcementId = state.pathParameters['announcementId']!;
-          return EditAnnouncementPage(announcementId: announcementId);
-        },
       ),
       GoRoute(
         path: '/profile',

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../popupwidgets/webusers_viewdetails_popup.dart';
 import '../services/api_service.dart';
+import '../widgets/tags.dart';
 
 class AdminUserPage extends StatefulWidget {
   const AdminUserPage({super.key});
@@ -17,23 +18,31 @@ class _AdminUserPageState extends State<AdminUserPage> {
   String _selectedRoleFilter = 'All Roles';
   String _selectedStatusFilter = 'All Status';
   List<bool> _selectedRows = [];
+  bool _selectAll = false;
 
   final ApiService _apiService = ApiService();
   bool _isLoading = true;
   String? _errorMessage;
 
   List<Map<String, dynamic>> _allUsers = [];
+  
+  // Pagination
+  int _currentPage = 1;
+  int _itemsPerPage = 10;
 
   // ---- Filtered Users List ----
   List<Map<String, dynamic>> get _filteredUsers {
     return _allUsers.where((user) {
-      // Search filter
+      // Search filter - search by name, email, and user ID
       bool matchesSearch =
           _searchController.text.isEmpty ||
           user['name'].toString().toLowerCase().contains(
             _searchController.text.toLowerCase(),
           ) ||
           user['email'].toString().toLowerCase().contains(
+            _searchController.text.toLowerCase(),
+          ) ||
+          user['id'].toString().toLowerCase().contains(
             _searchController.text.toLowerCase(),
           );
 
@@ -824,12 +833,306 @@ class _AdminUserPageState extends State<AdminUserPage> {
     }
   }
 
+  // Column widths for fixed table layout
+  final List<double> _colW = <double>[
+    50,  // CHECKBOX
+    80, // USER ID
+    200, // USER (name + email)
+    100, // ROLE
+    130, // DEPARTMENT
+    80, // STATUS
+    80,  // ACTION
+  ];
+
+  Widget _fixedCell(
+    int i,
+    Widget child, {
+    Alignment align = Alignment.centerLeft,
+  }) {
+    return SizedBox(
+      width: _colW[i],
+      child: Align(alignment: align, child: child),
+    );
+  }
+
+  Text _ellipsis(String s, {TextStyle? style}) => Text(
+    s,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    softWrap: false,
+    style: style,
+  );
+
+  // Pagination helper methods
+  List<Map<String, dynamic>> _getPaginatedUsers() {
+    final startIndex = (_currentPage - 1) * _itemsPerPage;
+    final endIndex = startIndex + _itemsPerPage;
+    
+    final filteredUsers = _filteredUsers;
+    if (startIndex >= filteredUsers.length) return [];
+    
+    return filteredUsers.sublist(
+      startIndex,
+      endIndex > filteredUsers.length ? filteredUsers.length : endIndex,
+    );
+  }
+
+  int get _totalPages {
+    final filteredUsers = _filteredUsers;
+    return filteredUsers.isEmpty ? 1 : (filteredUsers.length / _itemsPerPage).ceil();
+  }
+
+  void _goToPage(int page) {
+    if (page >= 1 && page <= _totalPages) {
+      setState(() {
+        _currentPage = page;
+      });
+    }
+  }
+
+  // Get list of selected users
+  List<Map<String, dynamic>> _getSelectedUsers() {
+    List<Map<String, dynamic>> selectedUsers = [];
+    for (int i = 0; i < _filteredUsers.length; i++) {
+      if (i < _selectedRows.length && _selectedRows[i]) {
+        selectedUsers.add(_filteredUsers[i]);
+      }
+    }
+    return selectedUsers;
+  }
+
+  // Toggle select all
+  void _toggleSelectAll(bool? value) {
+    setState(() {
+      _selectAll = value ?? false;
+      _selectedRows = List.generate(_filteredUsers.length, (index) => _selectAll);
+    });
+  }
+
+  // Bulk delete selected users
+  Future<void> _bulkDeleteUsers() async {
+    final selectedUsers = _getSelectedUsers();
+    
+    if (selectedUsers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No users selected'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Users'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Are you sure you want to delete ${selectedUsers.length} user(s)?'),
+            const SizedBox(height: 12),
+            Text(
+              'Users to be deleted:',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[700],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 200),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: selectedUsers.map((user) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Text(
+                      '• ${user['name']} (${user['email']})',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    ),
+                  )).toList(),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Show loading indicator
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Deleting users...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Delete users one by one
+    int successCount = 0;
+    int failureCount = 0;
+    List<String> failedUsers = [];
+
+    for (var user in selectedUsers) {
+      try {
+        await _apiService.deleteUser(user['id'], permanent: true);
+        successCount++;
+      } catch (e) {
+        failureCount++;
+        failedUsers.add(user['name']);
+      }
+    }
+
+    // Close loading dialog
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+
+    // Refresh the user list
+    await _fetchUsers();
+
+    // Reset selections
+    setState(() {
+      _selectAll = false;
+      _selectedRows = List.generate(_allUsers.length, (index) => false);
+    });
+
+    // Show result
+    if (mounted) {
+      if (failureCount == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Successfully deleted $successCount user(s)'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Deleted $successCount user(s), $failureCount failed'),
+                if (failedUsers.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Failed: ${failedUsers.join(", ")}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ],
+            ),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  void _previousPage() {
+    if (_currentPage > 1) {
+      setState(() {
+        _currentPage--;
+      });
+    }
+  }
+
+  void _nextPage() {
+    if (_currentPage < _totalPages) {
+      setState(() {
+        _currentPage++;
+      });
+    }
+  }
+
+  List<Widget> _buildPageNumbers() {
+    List<Widget> pageButtons = [];
+    
+    // Show max 5 page numbers at a time
+    int startPage = _currentPage - 2;
+    int endPage = _currentPage + 2;
+    
+    if (startPage < 1) {
+      startPage = 1;
+      endPage = 5;
+    }
+    
+    if (endPage > _totalPages) {
+      endPage = _totalPages;
+      startPage = _totalPages - 4;
+    }
+    
+    if (startPage < 1) startPage = 1;
+    
+    for (int i = startPage; i <= endPage; i++) {
+      pageButtons.add(
+        GestureDetector(
+          onTap: () => _goToPage(i),
+          child: Container(
+            width: 32,
+            height: 32,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              color: i == _currentPage ? const Color(0xFF1976D2) : Colors.grey[100],
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Center(
+              child: Text(
+                i.toString().padLeft(2, '0'),
+                style: TextStyle(
+                  color: i == _currentPage ? Colors.white : Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    
+    return pageButtons;
+  }
+
   
 
   @override
   Widget build(BuildContext context) {
-    final filteredUsers = _filteredUsers;
-
     return FacilityFixLayout(
       currentRoute: 'user_users',
       onNavigate: (routeKey) {
@@ -893,23 +1196,31 @@ class _AdminUserPageState extends State<AdminUserPage> {
             // ---- Search and Filter Controls ----
             Row(
               children: [
-                // Search Bar
+                // Search Field
                 Expanded(
                   flex: 2,
                   child: Container(
-                    height: 44,
+                    height: 40,
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade300),
+                      border: Border.all(color: Colors.grey[300]!),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: TextField(
                       controller: _searchController,
                       onChanged: (value) => setState(() {}),
-                      decoration: const InputDecoration(
-                        hintText: 'Search users...',
-                        prefixIcon: Icon(Icons.search, color: Colors.grey),
+                      decoration: InputDecoration(
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: Colors.grey[500],
+                          size: 20,
+                        ),
+                        hintText: "Search",
+                        hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
                         border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6.5,
+                        ),
                       ),
                     ),
                   ),
@@ -934,12 +1245,65 @@ class _AdminUserPageState extends State<AdminUserPage> {
                 ),
                 const SizedBox(width: 16),
 
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: _fetchUsers,
-                  tooltip: 'Refresh',
+                // Refresh Button
+                Container(
+                  height: 40,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: InkWell(
+                    onTap: _fetchUsers,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.refresh_rounded, size: 20, color: Colors.blue[600]),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Refresh',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.blue[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 32),
+
+                // Delete Selected Button (only show if users are selected)
+                if (_getSelectedUsers().isNotEmpty)
+                  Container(
+                    height: 40,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.red[50],
+                      border: Border.all(color: Colors.red[300]!),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: InkWell(
+                      onTap: _bulkDeleteUsers,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.delete_outline, size: 20, color: Colors.red[600]),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Delete Selected (${_getSelectedUsers().length})',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.red[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
 
                 
                 const Spacer(),
@@ -950,342 +1314,305 @@ class _AdminUserPageState extends State<AdminUserPage> {
             const SizedBox(height: 32),
 
             // ---- Users Table ----
-            Flexible(
-              fit: FlexFit.loose,
-              child:
-                  _isLoading
-                      ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const CircularProgressIndicator(),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Loading users...',
-                              style: TextStyle(color: Colors.grey.shade600),
-                            ),
-                          ],
+            Container(
+              height: 650, // Fixed height like concern slip page
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  // Table Header
+                  Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Users",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
                         ),
-                      )
-                      : _errorMessage != null
-                      ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.error_outline,
-                              size: 48,
-                              color: Colors.red.shade300,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              _errorMessage!,
-                              style: TextStyle(color: Colors.red.shade700),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 16),
-                            ElevatedButton.icon(
-                              onPressed: _fetchUsers,
-                              icon: const Icon(Icons.refresh),
-                              label: const Text('Retry'),
-                            ),
-                          ],
-                        ),
-                      )
-                      : Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade200),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Table Header
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade50,
-                                borderRadius: const BorderRadius.only(
-                                  topLeft: Radius.circular(12),
-                                  topRight: Radius.circular(12),
-                                ),
-                              ),
-                              child: const Row(
-                                children: [
-                                  SizedBox(width: 40), // Checkbox space
-                                  Expanded(
-                                    flex: 3,
-                                    child: Text(
-                                      'USER',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    flex: 2,
-                                    child: Text(
-                                      'ROLE',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    flex: 2,
-                                    child: Text(
-                                      'DEPARTMENT',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    flex: 2,
-                                    child: Text(
-                                      'STATUS',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(width: 48), // Actions space
-                                ],
-                              ),
-                            ),
+                      ],
+                    ),
+                  ),
+                  Divider(height: 1, thickness: 1, color: Colors.grey[400]),
 
-                            // Table Body
-                            Flexible(
-                              fit: FlexFit.loose,
-                              child:
-                                  filteredUsers.isEmpty
-                                      ? Center(
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(32),
-                                          child: Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              Icon(
-                                                Icons.people_outline,
-                                                size: 48,
-                                                color: Colors.grey.shade400,
-                                              ),
-                                              const SizedBox(height: 16),
-                                              Text(
-                                                'No users found',
-                                                style: TextStyle(
-                                                  color: Colors.grey.shade600,
-                                                  fontSize: 16,
-                                                ),
-                                              ),
-                                            ],
+                  // Data Table
+                  Expanded(
+                    child: _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _errorMessage != null
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.error_outline,
+                                      size: 48,
+                                      color: Colors.red[300],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      _errorMessage!,
+                                      style: TextStyle(
+                                        color: Colors.red[600],
+                                        fontSize: 16,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    ElevatedButton(
+                                      onPressed: _fetchUsers,
+                                      child: const Text('Retry'),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : _filteredUsers.isEmpty
+                                ? Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.people_outline,
+                                          size: 64,
+                                          color: Colors.grey[400],
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          'No Users Found',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            color: Colors.grey[600],
+                                            fontWeight: FontWeight.w500,
                                           ),
                                         ),
-                                      )
-                                      : ListView.builder(
-                                        shrinkWrap: true,
-                                        itemCount: filteredUsers.length,
-                                        itemBuilder: (context, index) {
-                                          final user = filteredUsers[index];
-                                          return Container(
-                                            padding: const EdgeInsets.all(16),
-                                            decoration: BoxDecoration(
-                                              border: Border(
-                                                bottom: BorderSide(
-                                                  color: Colors.grey.shade100,
-                                                ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'There are currently no users to display.',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey[500],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: DataTable(
+                                        columnSpacing: 65,
+                                        headingRowHeight: 56,
+                                        dataRowHeight: 64,
+                                        headingRowColor: WidgetStateProperty.all(
+                                          Colors.grey[50],
+                                        ),
+                                        headingTextStyle: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey[600],
+                                          letterSpacing: 0.5,
+                                        ),
+                                        dataTextStyle: const TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.black87,
+                                        ),
+                                        columns: [
+                                          DataColumn(
+                                            label: _fixedCell(
+                                              0,
+                                              Checkbox(
+                                                value: _selectAll,
+                                                onChanged: _toggleSelectAll,
                                               ),
                                             ),
-                                            child: Row(
-                                              children: [
-                                                // Checkbox
-                                                Checkbox(
-                                                  value:
-                                                      index <
-                                                              _selectedRows
-                                                                  .length
-                                                          ? _selectedRows[index]
-                                                          : false,
-                                                  onChanged: (bool? value) {
-                                                    setState(() {
-                                                      if (index <
-                                                          _selectedRows
-                                                              .length) {
-                                                        _selectedRows[index] =
-                                                            value ?? false;
-                                                      }
-                                                    });
-                                                  },
+                                          ),
+                                          DataColumn(
+                                            label: _fixedCell(1, const Text("USER ID")),
+                                          ),
+                                          DataColumn(
+                                            label: _fixedCell(2, const Text("USER NAME")),
+                                          ),
+                                          DataColumn(
+                                            label: _fixedCell(3, const Text("ROLE")),
+                                          ),
+                                          DataColumn(
+                                            label: _fixedCell(4, const Text("DEPARTMENT/UNIT")),
+                                          ),
+                                          DataColumn(
+                                            label: _fixedCell(5, const Text("STATUS")),
+                                          ),
+                                          DataColumn(
+                                            label: _fixedCell(6, const Text("")),
+                                          ),
+                                        ],
+                                        rows: _getPaginatedUsers().map((user) {
+                                          final index = _filteredUsers.indexOf(user);
+                                          return DataRow(
+                                            cells: [
+                                              // Checkbox
+                                              DataCell(
+                                                _fixedCell(
+                                                  0,
+                                                  Checkbox(
+                                                    value: index < _selectedRows.length
+                                                        ? _selectedRows[index]
+                                                        : false,
+                                                    onChanged: (bool? value) {
+                                                      setState(() {
+                                                        if (index < _selectedRows.length) {
+                                                          _selectedRows[index] = value ?? false;
+                                                        }
+                                                      });
+                                                    },
+                                                  ),
                                                 ),
-
-                                                // User Info
-                                                Expanded(
-                                                  flex: 3,
-                                                  child: Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
+                                              ),
+                                              // User ID
+                                              DataCell(
+                                                _fixedCell(
+                                                  1,
+                                                  _ellipsis(
+                                                    user['id'],
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      color: Colors.grey[700],
+                                                      fontFamily: 'monospace',
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              // User (Name + Email)
+                                              DataCell(
+                                                _fixedCell(
+                                                  2,
+                                                  Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    mainAxisAlignment: MainAxisAlignment.center,
                                                     children: [
-                                                      Text(
+                                                      _ellipsis(
                                                         user['name'],
                                                         style: const TextStyle(
-                                                          fontWeight:
-                                                              FontWeight.w500,
+                                                          fontWeight: FontWeight.w500,
                                                           fontSize: 14,
                                                         ),
                                                       ),
                                                       const SizedBox(height: 2),
-                                                      Text(
+                                                      _ellipsis(
                                                         user['email'],
                                                         style: TextStyle(
-                                                          color:
-                                                              Colors
-                                                                  .grey
-                                                                  .shade600,
+                                                          color: Colors.grey[600],
                                                           fontSize: 12,
                                                         ),
                                                       ),
                                                     ],
                                                   ),
                                                 ),
-
-                                                // Role Badge
-                                                Expanded(
-                                                  flex: 2,
-                                                  child: Align(
-                                                    alignment:
-                                                        Alignment.centerLeft,
-                                                    child: _buildRoleBadge(
-                                                      user['role'],
-                                                    ),
+                                              ),
+                                              // Role
+                                              DataCell(
+                                                _fixedCell(
+                                                  3,
+                                                  _buildRoleBadge(user['role']),
+                                                ),
+                                              ),
+                                              // Department
+                                              DataCell(
+                                                _fixedCell(
+                                                  4,
+                                                  user['department'].isEmpty
+                                                      ? const Text('-')
+                                                      : DepartmentTag(user['department']),
+                                                ),
+                                              ),
+                                              // Status
+                                              DataCell(
+                                                _fixedCell(
+                                                  5,
+                                                  _buildStatusBadge(user['status']),
+                                                ),
+                                              ),
+                                              // Action
+                                              DataCell(
+                                                _fixedCell(
+                                                  6,
+                                                  Builder(
+                                                    builder: (context) {
+                                                      return IconButton(
+                                                        onPressed: () {
+                                                          final rbx = context.findRenderObject() as RenderBox;
+                                                          final position = rbx.localToGlobal(Offset.zero);
+                                                          _showActionMenu(context, user, position);
+                                                        },
+                                                        icon: Icon(
+                                                          Icons.more_vert,
+                                                          color: Colors.grey[400],
+                                                          size: 20,
+                                                        ),
+                                                      );
+                                                    },
                                                   ),
+                                                  align: Alignment.centerLeft,
                                                 ),
-
-                                                // Department
-                                                Expanded(
-                                                  flex: 2,
-                                                  child: Text(
-                                                    user['department'].isEmpty
-                                                        ? '-'
-                                                        : user['department'],
-                                                    style: const TextStyle(
-                                                      fontSize: 14,
-                                                    ),
-                                                  ),
-                                                ),
-
-                                                // Status Badge
-                                                Expanded(
-                                                  flex: 2,
-                                                  child: Align(
-                                                    alignment:
-                                                        Alignment.centerLeft,
-                                                    child: _buildStatusBadge(
-                                                      user['status'],
-                                                    ),
-                                                  ),
-                                                ),
-
-                                                // Actions Button
-                                                Builder(
-                                                  builder: (context) {
-                                                    return IconButton(
-                                                      icon: const Icon(
-                                                        Icons.more_vert,
-                                                        color: Colors.grey,
-                                                        size: 20,
-                                                      ),
-                                                      onPressed: () {
-                                                        final rbx =
-                                                            context.findRenderObject()
-                                                                as RenderBox;
-                                                        final position = rbx
-                                                            .localToGlobal(
-                                                              Offset.zero,
-                                                            );
-                                                        _showActionMenu(
-                                                          context,
-                                                          user,
-                                                          position,
-                                                        );
-                                                      },
-                                                    );
-                                                  },
-                                                ),
-                                              ],
-                                            ),
+                                              ),
+                                            ],
                                           );
-                                        },
+                                        }).toList(),
                                       ),
+                                    ),
+                                  ),
+                  ),
+                  Divider(height: 1, thickness: 1, color: Colors.grey[400]),
+
+                  // Pagination Section
+                  Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _filteredUsers.isEmpty
+                              ? "No entries found"
+                              : "Showing ${(_currentPage - 1) * _itemsPerPage + 1} to ${(_currentPage * _itemsPerPage) > _filteredUsers.length ? _filteredUsers.length : _currentPage * _itemsPerPage} of ${_filteredUsers.length} entries",
+                          style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                        ),
+                        Row(
+                          children: [
+                            IconButton(
+                              onPressed: _currentPage > 1 ? _previousPage : null,
+                              icon: Icon(
+                                Icons.chevron_left,
+                                color: _currentPage > 1 ? Colors.grey[600] : Colors.grey[400],
+                              ),
+                            ),
+                            ..._buildPageNumbers(),
+                            IconButton(
+                              onPressed: _currentPage < _totalPages ? _nextPage : null,
+                              icon: Icon(
+                                Icons.chevron_right,
+                                color: _currentPage < _totalPages ? Colors.grey[600] : Colors.grey[400],
+                              ),
                             ),
                           ],
                         ),
-                      ),
-            ),
-
-            // ---- Pagination ----
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Showing 1 to ${filteredUsers.length} of ${filteredUsers.length} entries',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                ),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.chevron_left),
-                      onPressed: () {
-                        // TODO: Implement previous page
-                      },
+                      ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.blue,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text(
-                        '01',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: () {
-                        // TODO: Go to page 2
-                      },
-                      child: const Text('02'),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.chevron_right),
-                      onPressed: () {
-                        // TODO: Implement next page
-                      },
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
