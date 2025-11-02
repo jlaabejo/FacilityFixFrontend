@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../widgets/tags.dart';
 
 class JobServiceConcernSlipDialog extends StatelessWidget {
   final Map<String, dynamic> task;
@@ -15,69 +16,30 @@ class JobServiceConcernSlipDialog extends StatelessWidget {
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.all(20),
       child: Container(
-        width: MediaQuery.of(context).size.width * 0.6,
-        constraints: const BoxConstraints(
-          maxWidth: 800,
-          maxHeight: 800,
-        ),
+        width: MediaQuery.of(context).size.width * 0.7,
+        constraints: const BoxConstraints(maxWidth: 800, maxHeight: 500),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
           children: [
-            // Header Section
             _buildHeader(context),
-
-            // Content Section
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title
-                    Text(
-                      task['title'] ?? 'Leaking Faucet in Kitchen',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Details Grid
-                    _buildDetailsGrid(),
-                    const SizedBox(height: 32),
-
-                    // Work Description Section
-                    _buildWorkDescription(),
-                    const SizedBox(height: 32),
-
-                    // Assessment and Recommendation Section
-                    _buildAssessmentRecommendation(),
-                  ],
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                child: _buildDetailsView(),
               ),
             ),
-            
-            Divider(
-              color: Colors.grey[300],
-              thickness: 1,
-              height: 1,
-            ),
-
-            // Footer with Next Button
+            _buildFooter(context),
           ],
         ),
       ),
@@ -86,13 +48,18 @@ class JobServiceConcernSlipDialog extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.only(left: 32, right: 24, top: 24, bottom: 16),
+      padding: const EdgeInsets.only(left: 32, right: 24, top: 20, bottom: 16),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Colors.grey[200]!, width: 1),
+        ),
+      ),
       child: Row(
         children: [
           const Text(
-            'Concern Slip',
+            'Job Service Details',
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 16,
               fontWeight: FontWeight.w600,
               color: Colors.black87,
             ),
@@ -100,11 +67,7 @@ class JobServiceConcernSlipDialog extends StatelessWidget {
           const Spacer(),
           IconButton(
             onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(
-              Icons.close,
-              color: Colors.grey,
-              size: 24,
-            ),
+            icon: const Icon(Icons.close, color: Colors.grey, size: 20),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
           ),
@@ -112,59 +75,92 @@ class JobServiceConcernSlipDialog extends StatelessWidget {
       ),
     );
   }
+  
+  // Helper to check status
+  bool get _isPendingStatus {
+    final status = task['status']?.toString().toLowerCase() ?? '';
+    return status == 'pending';
+  }
+  
+  bool get _isAssignedStatus {
+    final status = task['status']?.toString().toLowerCase() ?? '';
+    return status == 'assigned';
+  }
+  
+  bool get _isSentStatus {
+    final status = task['status']?.toString().toLowerCase() ?? '';
+    return status == 'sent';
+  }
+  
+  bool get _isCompletedStatus {
+    final status = task['status']?.toString().toLowerCase() ?? '';
+    return status == 'completed';
+  }
 
-  Widget _buildDetailsGrid() {
+  Widget _buildDetailsView() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // First Row - Concern ID and Date Requested
+        // Title with JS ID and Status/Priority
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: _buildDetailItem(
-                'CONCERN ID',
-                task['concernId'] ?? task['id'] ?? 'CS-2025-00321',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    task['title'] ?? 'Leaking Faucet in Kitchen',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    task['serviceId'] ?? task['id'] ?? 'JS-2025-00045',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Date Created: ${task['dateCreated'] ?? task['dateRequested'] ?? 'July 21, 2025'}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[500],
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 48),
-            Expanded(
-              child: _buildDetailItem(
-                'DATE REQUESTED',
-                task['dateRequested'] ?? '2025-07-19',
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Divider(
-          color: Colors.grey[300],
-          thickness: 1,
-          height: 1,
-        ),
-        const SizedBox(height: 16),
-
-        // Priority and Status Section
-        Row(
-          children: [
-            _buildPriorityChip(task['priority'] ?? 'Medium'),
             const SizedBox(width: 16),
-            _buildStatusChip(task['status'] ?? 'Pending'),
-            const Spacer(),
+            PriorityTag(priority: task['priority'] ?? 'Medium'),
+            const SizedBox(width: 8),
+            StatusTag(status: task['status'] ?? 'Pending'),
           ],
         ),
         const SizedBox(height: 24),
-
-        // Second Row - Requested By and Department
+        Divider(color: Colors.grey[200], thickness: 1, height: 1),
+        const SizedBox(height: 24),
+        
+        // Requester Details
+        _buildSectionTitle('Requester Details'),
+        const SizedBox(height: 16),
+        
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: _buildDetailItem(
-                'REQUESTED BY',
-                task['requestedBy'] ?? 'Erika De Guzman',
+                'NAME',
+                task['requestedBy'] ?? task['requesterName'] ?? 'Erika De Guzman',
               ),
             ),
-            const SizedBox(width: 48),
+            const SizedBox(width: 24),
             Expanded(
               child: _buildDetailItem(
                 'DEPARTMENT',
@@ -174,22 +170,239 @@ class JobServiceConcernSlipDialog extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 24),
-
-        // Third Row - Building & Unit No.
+        
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: _buildDetailItem(
-                'BLDG & UNIT NO.',
-                task['buildingUnit'] ?? 'A - 1010',
+                'UNIT',
+                task['buildingUnit'] ?? task['unit'] ?? 'A - 1010',
               ),
             ),
-            const SizedBox(width: 48),
-            const Expanded(child: SizedBox()), // Empty space for alignment
+            const SizedBox(width: 24),
+            Expanded(
+              child: _buildDetailItem(
+                'SCHEDULE AVAILABILITY',
+                task['scheduleAvailability'] ?? task['preferredSchedule'] ?? 'July 21, 2025',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        
+        // Additional Notes Section
+        if (task['additionalNotes'] != null && task['additionalNotes'].toString().isNotEmpty) ...[
+          Row(
+            children: [
+              Expanded(
+                child: _buildDetailItem(
+                  'ADDITIONAL NOTES',
+                  task['additionalNotes'] ?? '',
+                ),
+              ),
+              const SizedBox(width: 24),
+              const Expanded(child: SizedBox()),
+            ],
+          ),
+          const SizedBox(height: 24),
+        ],
+        
+        Divider(color: Colors.grey[200], thickness: 1, height: 1),
+        const SizedBox(height: 24),
+        
+        // Staff Details Section (show for assigned, sent, or completed status)
+        if (_isAssignedStatus || _isSentStatus || _isCompletedStatus) ...[
+          _buildStaffDetailsSection(),
+          const SizedBox(height: 24),
+          Divider(color: Colors.grey[200], thickness: 1, height: 1),
+          const SizedBox(height: 24),
+        ],
+        
+        // Assessment Section (show for sent or completed status)
+        if (_isSentStatus || _isCompletedStatus) ...[
+          _buildAssessmentSection(),
+        ],
+      ],
+    );
+  }
+  
+  Widget _buildStaffDetailsSection() {
+    final assignedStaff = task['assignedStaff'] ?? task['rawData']?['assigned_staff'];
+    
+    if (assignedStaff == null) {
+      return const SizedBox.shrink();
+    }
+    
+    final staffName = assignedStaff['name'] ?? 
+                     '${assignedStaff['first_name'] ?? ''} ${assignedStaff['last_name'] ?? ''}'.trim();
+    final assessedAt = task['assessedAt'] ?? task['rawData']?['assessed_at'];
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle('Assigned Staff'),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            _buildSimpleAvatar(staffName, size: 40),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    staffName,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  if (assessedAt != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Assessed: $assessedAt',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
       ],
+    );
+  }
+  
+  Widget _buildAssessmentSection() {
+    final resolutionType = task['resolutionType'] ?? task['rawData']?['resolution_type'];
+    final assessment = task['assessment'] ?? task['rawData']?['staff_assessment'];
+    
+    if (resolutionType == null && assessment == null) {
+      return const SizedBox.shrink();
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle('Assessment and Resolution Details'),
+        const SizedBox(height: 16),
+        
+        if (resolutionType != null) ...[
+          Text(
+            'Resolution Type',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.4,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: Colors.blue[200]!),
+            ),
+            child: Text(
+              resolutionType.toString().replaceAll('_', ' ').toUpperCase(),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.blue[700],
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+        
+        if (assessment != null) ...[
+          _buildDetailItem('ASSESSMENT', ''),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue[200]!),
+            ),
+            child: Text(
+              assessment.toString(),
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.6,
+                color: Colors.grey[700],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+  
+  Widget _buildSimpleAvatar(String name, {double size = 32}) {
+    // Get initials from name
+    final parts = name.trim().split(' ');
+    String initials = '';
+    if (parts.isNotEmpty) {
+      initials = parts[0].isNotEmpty ? parts[0][0].toUpperCase() : '';
+      if (parts.length > 1 && parts.last.isNotEmpty) {
+        initials += parts.last[0].toUpperCase();
+      }
+    }
+    if (initials.isEmpty) initials = '?';
+    
+    // Generate color from name
+    int hash = 0;
+    for (int i = 0; i < name.length; i++) {
+      hash = name.codeUnitAt(i) + ((hash << 5) - hash);
+    }
+    final colors = [
+      Colors.blue[700]!,
+      Colors.green[700]!,
+      Colors.orange[700]!,
+      Colors.purple[700]!,
+      Colors.teal[700]!,
+      Colors.pink[700]!,
+    ];
+    final color = colors[hash.abs() % colors.length];
+    
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          initials,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: size * 0.4,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title.toUpperCase(),
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: Colors.grey[600],
+        letterSpacing: 0.8,
+      ),
     );
   }
 
@@ -200,239 +413,90 @@ class JobServiceConcernSlipDialog extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
+            fontSize: 14,
             color: Colors.grey[600],
-            letterSpacing: 0.5,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0.4,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Text(
           value,
           style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildWorkDescription() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Divider(
-          color: Colors.grey[300],
-          thickness: 1,
-          height: 1,
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'Work Description',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          task['description'] ??
-          'The kitchen faucet has been continuously leaking since last night. Water is dripping even when the handle is fully closed, which may lead to water waste and higher utility bills. Please inspect and repair as soon as possible.',
-          style: TextStyle(
             fontSize: 15,
-            height: 1.6,
-            color: Colors.grey[700],
-          ),
-        ),
-        const SizedBox(height: 16),
-        Divider(
-          color: Colors.grey[300],
-          thickness: 1,
-          height: 1,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAssessmentRecommendation() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Assessment Section
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Assessment',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                task['assessment'] ?? 
-                'Inspected faucet valve. Leak due to worn-out cartridge.',
-                style: TextStyle(
-                  fontSize: 15,
-                  height: 1.6,
-                  color: Colors.grey[700],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 48),
-        
-        // Recommendation Section
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Recommendation',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                task['recommendation'] ?? 
-                'Replace faucet cartridge.',
-                style: TextStyle(
-                  fontSize: 15,
-                  height: 1.6,
-                  color: Colors.grey[700],
-                ),
-              ),
-            ],
+            fontWeight: FontWeight.w400,
+            color: Colors.black87,
           ),
         ),
       ],
     );
   }
-
+  
   Widget _buildFooter(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Colors.grey[200]!, width: 1),
+        ),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          ElevatedButton(
-            onPressed: () {
-              // Handle next action
-              Navigator.of(context).pop();
-              JobServiceScheduleDialog.show(context, task);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1976D2),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 32,
-                vertical: 16,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              elevation: 0,
-            ),
-            child: const Text(
-              'Next',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
+          // Show Next button only if status is pending (to assign staff)
+          if (_isPendingStatus)
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                JobServiceScheduleDialog.show(context, task);
+              },
+              icon: const Icon(Icons.arrow_forward, size: 16),
+              label: const Text('Next'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue[600],
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                elevation: 0,
               ),
             ),
-          ),
+          
+          // Show View Concern Slip button if status is assigned or sent
+          if (_isAssignedStatus || _isSentStatus)
+            ElevatedButton.icon(
+              onPressed: () {
+                // Navigate to concern slip details
+                final concernSlipId = task['concernSlipId'] ?? task['rawData']?['concern_slip_id'];
+                if (concernSlipId != null) {
+                  // TODO: Open concern slip dialog with the concernSlipId
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('View Concern Slip: $concernSlipId'),
+                      backgroundColor: Colors.blue[600],
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('No concern slip associated'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.description, size: 16),
+              label: const Text('View Concern Slip'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue[600],
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                elevation: 0,
+              ),
+            ),
+          
+          // No buttons for completed status (view only)
         ],
-      ),
-    );
-  }
-
-  Widget _buildPriorityChip(String priority) {
-    Color bgColor;
-    Color textColor;
-    switch (priority.toLowerCase()) {
-      case 'high':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'medium':
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFFF8F00);
-        break;
-      case 'low':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      default:
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFFF8F00);
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        '$priority Priority',
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusChip(String status) {
-    Color bgColor;
-    Color textColor;
-    switch (status.toLowerCase()) {
-      case 'in progress':
-      case 'approved':
-        bgColor = const Color.fromARGB(49, 82, 131, 205);
-        textColor = const Color.fromARGB(255, 0, 93, 232);
-        break;
-      case 'pending':
-      case 'pending review':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'completed':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      case 'cancelled':
-      case 'denied':
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-        break;
-      default:
-        bgColor = Colors.grey[200]!;
-        textColor = Colors.grey[700]!;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
       ),
     );
   }
@@ -448,7 +512,7 @@ class JobServiceConcernSlipDialog extends StatelessWidget {
   }
 }
 
-class JobServiceScheduleDialog extends StatelessWidget {
+class JobServiceScheduleDialog extends StatefulWidget {
   final Map<String, dynamic> task;
 
   const JobServiceScheduleDialog({
@@ -457,66 +521,60 @@ class JobServiceScheduleDialog extends StatelessWidget {
   });
 
   @override
+  State<JobServiceScheduleDialog> createState() => _JobServiceScheduleDialogState();
+
+  // Static method to show the dialog
+  static void show(BuildContext context, Map<String, dynamic> task) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return JobServiceScheduleDialog(task: task);
+      },
+    );
+  }
+}
+
+class _JobServiceScheduleDialogState extends State<JobServiceScheduleDialog> {
+  String? selectedStaff;
+  DateTime? selectedDate;
+  final TextEditingController notesController = TextEditingController();
+
+  final List<String> staffList = [
+    'John Smith - Plumber',
+    'Maria Garcia - Electrician',
+    'David Johnson - Maintenance',
+    'Sarah Wilson - General Repair',
+  ];
+
+  @override
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.all(20),
       child: Container(
-        width: MediaQuery.of(context).size.width * 0.6,
-        constraints: const BoxConstraints(
-          maxWidth: 800,
-          maxHeight: 600,
-        ),
+        width: MediaQuery.of(context).size.width * 0.7,
+        constraints: const BoxConstraints(maxWidth: 800, maxHeight: 500),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
           children: [
-            // Header Section
             _buildHeader(context),
-
-            // Content Section
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(40),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title
-                    Text(
-                      task['title'] ?? 'Leaking Faucet in Kitchen',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Details Grid
-                    _buildDetailsGrid(),
-                    const SizedBox(height: 24),
-
-                    // Additional Notes Section
-                    _buildAdditionalNotes(),
-                  ],
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                child: _buildAssignmentForm(),
               ),
             ),
-            
-            
-
-            // Footer with Back and Next Buttons
             _buildFooter(context),
           ],
         ),
@@ -526,13 +584,18 @@ class JobServiceScheduleDialog extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.only(left: 32, right: 24, top: 24, bottom: 16),
+      padding: const EdgeInsets.only(left: 32, right: 24, top: 20, bottom: 16),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Colors.grey[200]!, width: 1),
+        ),
+      ),
       child: Row(
         children: [
           const Text(
-            'Job Service',
+            'Assign & Schedule Work',
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 16,
               fontWeight: FontWeight.w600,
               color: Colors.black87,
             ),
@@ -540,11 +603,7 @@ class JobServiceScheduleDialog extends StatelessWidget {
           const Spacer(),
           IconButton(
             onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(
-              Icons.close,
-              color: Colors.grey,
-              size: 24,
-            ),
+            icon: const Icon(Icons.close, color: Colors.grey, size: 20),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
           ),
@@ -552,254 +611,328 @@ class JobServiceScheduleDialog extends StatelessWidget {
       ),
     );
   }
-
-  Widget _buildDetailsGrid() {
-    return Column(
-      children: [
-        // First Row - Service ID and Date Requested
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildDetailItem(
-                'SERVICE ID',
-                task['serviceId'] ?? 'JS-2025-00045',
-              ),
-            ),
-            const SizedBox(width: 48),
-            Expanded(
-              child: _buildDetailItem(
-                'DATE REQUESTED',
-                task['dateRequested'] ?? 'July 21, 2025 – 5:00 PM',
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Divider(
-            color: Colors.grey[300],
-            thickness: 1,
-            height: 1,
-          ),
-        const SizedBox(height: 16),
-
-        // Urgency Section
-        Row(
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildUrgencyChip(task['urgency'] ?? 'Medium'),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-
-        // Second Row - Requested By and Preferred Schedule
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildDetailItem(
-                'REQUESTED BY',
-                task['requestedBy'] ?? 'Erika De Guzman',
-              ),
-            ),
-            const SizedBox(width: 48),
-            Expanded(
-              child: _buildDetailItem(
-                'PREFERRED SCHEDULE',
-                task['preferredSchedule'] ?? 'July 21, 2025 – 5:00 PM',
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-
-        // Third Row - Building & Unit No.
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildDetailItem(
-                'BLDG & UNIT NO.',
-                task['buildingUnit'] ?? 'A - 1010',
-              ),
-            ),
-            const SizedBox(width: 48),
-            const Expanded(child: SizedBox()), // Empty space for alignment
-          ],
-        ),
-        const SizedBox(height: 20),
-        Divider(
-            color: Colors.grey[300],
-            thickness: 1,
-            height: 1,
-          ),
-      ],
-    );
-  }
-
-  Widget _buildDetailItem(String label, String value) {
+  
+  Widget _buildAssignmentForm() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey[600],
-            letterSpacing: 0.5,
+        // Job Service Info Box
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.blue[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blue[200]!),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.assignment_ind, color: Colors.blue[700], size: 24),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Job Service Details',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Service ID',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.task['serviceId'] ?? widget.task['id'] ?? 'JS-2025-00045',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Requester',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.task['requestedBy'] ?? widget.task['requesterName'] ?? 'Erika De Guzman',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: const TextStyle(
+        const SizedBox(height: 32),
+        
+        // Assign Staff and Inspection Schedule
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _buildStaffDropdown(),
+            ),
+            const SizedBox(width: 24),
+            Expanded(
+              child: _buildDatePicker(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        
+        // Admin Notes
+        _buildNotesSection(),
+      ],
+    );
+  }
+  
+  Widget _buildStaffDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Assign Staff',
+          style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w500,
             color: Colors.black87,
           ),
         ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            border: Border.all(color: Colors.grey[300]!),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: selectedStaff,
+              hint: Text(
+                'Select Staff...',
+                style: TextStyle(
+                  color: Colors.grey[500],
+                  fontSize: 14,
+                ),
+              ),
+              isExpanded: true,
+              onChanged: (String? newValue) {
+                setState(() {
+                  selectedStaff = newValue;
+                });
+              },
+              items: staffList.map<DropdownMenuItem<String>>((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(
+                    value,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
       ],
     );
   }
-
-  Widget _buildAdditionalNotes() {
+  
+  Widget _buildDatePicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Inspection Schedule',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 12),
+        InkWell(
+          onTap: () => _selectDate(context),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.calendar_today,
+                  color: Colors.blue[600],
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  selectedDate != null
+                      ? '${selectedDate!.day.toString().padLeft(2, '0')} / ${selectedDate!.month.toString().padLeft(2, '0')} / ${selectedDate!.year}'
+                      : 'Select Date',
+                  style: TextStyle(
+                    color: selectedDate != null ? Colors.black87 : Colors.grey[500],
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildNotesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Admin Notes (Optional)',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: notesController,
+          maxLines: 5,
+          decoration: InputDecoration(
+            hintText: 'Enter Notes....',
+            hintStyle: TextStyle(
+              color: Colors.grey[500],
+              fontSize: 14,
+            ),
+            filled: true,
+            fillColor: Colors.grey[50],
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.blue[600]!),
+            ),
+            contentPadding: const EdgeInsets.all(16),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildFooter(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FF),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFFE3F2FD),
-          width: 1,
+        border: Border(
+          top: BorderSide(color: Colors.grey[200]!, width: 1),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1976D2),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Icon(
-                  Icons.note_alt,
-                  color: Colors.white,
-                  size: 16,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'Additional Notes',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            task['additionalNotes'] ?? 'Please notify me 30 minutes before arrival.',
-            style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF1976D2),
-              fontWeight: FontWeight.w500,
+          OutlinedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.grey[700],
+              side: BorderSide(color: Colors.grey[300]!),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
             ),
+            child: const Text('Back'),
+          ),
+          ElevatedButton(
+            onPressed: _handleSaveAndAssign,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green[600],
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              elevation: 0,
+            ),
+            child: const Text('Save and Assign'),
           ),
         ],
       ),
     );
   }
-
-  Widget _buildFooter(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(32),
-      child: Row(
-        children: [
-          // Back Button
-          OutlinedButton(
-            onPressed: () => Navigator.of(context).pop(),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF1976D2),
-              side: const BorderSide(color: Color(0xFF1976D2)),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 32,
-                vertical: 16,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Text(
-              'Back',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          const Spacer(),
-          
-          // Next Button
-          ],
-      ),
-    );
-  }
-
-  Widget _buildUrgencyChip(String urgency) {
-    Color bgColor;
-    Color textColor;
-    switch (urgency.toLowerCase()) {
-      case 'high':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'medium':
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFFF8F00);
-        break;
-      case 'low':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      default:
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFFF8F00);
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        '${urgency} Urgency',
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  // Static method to show the dialog
-  static void show(BuildContext context, Map<String, dynamic> task) {
-    showDialog(
+  
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
       context: context,
-      builder: (BuildContext context) {
-        return JobServiceScheduleDialog(task: task);
-      },
+      initialDate: selectedDate ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2030, 12),
+    );
+    if (picked != null && picked != selectedDate) {
+      setState(() {
+        selectedDate = picked;
+      });
+    }
+  }
+  
+  void _handleSaveAndAssign() {
+    if (selectedStaff == null || selectedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select staff and schedule date'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Handle save logic here
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Work assigned to $selectedStaff'),
+        backgroundColor: Colors.green,
+      ),
     );
   }
 }
@@ -884,7 +1017,7 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Priority Chip
-                    _buildUrgencyChip(widget.task['urgency'] ?? widget.task['priority'] ?? 'Medium'),
+                    PriorityTag(priority: widget.task['urgency'] ?? widget.task['priority'] ?? 'Medium'),
                     const SizedBox(height: 32),
 
                     // Assign Staff and Schedule Row
@@ -955,43 +1088,6 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
             constraints: const BoxConstraints(),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildUrgencyChip(String urgency) {
-    Color bgColor;
-    Color textColor;
-    switch (urgency.toLowerCase()) {
-      case 'high':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'medium':
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFFF8F00);
-        break;
-      case 'low':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      default:
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFFF8F00);
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        '$urgency Urgency',
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
       ),
     );
   }

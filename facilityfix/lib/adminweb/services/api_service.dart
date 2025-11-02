@@ -1653,11 +1653,16 @@ class ApiService {
   /// Get a specific inventory item by ID
   Future<Map<String, dynamic>> getInventoryItem(String itemId) async {
     try {
+      final url = '$baseUrl/inventory/items/$itemId';
+      print('[v0] Fetching inventory item from: $url');
       final headers = await _getAuthHeaders();
       final response = await http.get(
-        Uri.parse('$baseUrl/inventory/items/$itemId'),
+        Uri.parse(url),
         headers: headers,
       );
+
+      print('[v0] Response status: ${response.statusCode}');
+      print('[v0] Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         return json.decode(response.body);

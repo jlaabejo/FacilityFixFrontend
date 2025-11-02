@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 
 class AnnouncementDetailDialog extends StatefulWidget {
   final Map<String, dynamic> announcement;
+  final BuildContext rootContext;
 
   const AnnouncementDetailDialog({
     super.key,
     required this.announcement,
+    required this.rootContext,
   });
 
   @override
@@ -17,8 +21,11 @@ class AnnouncementDetailDialog extends StatefulWidget {
     showDialog(
       context: context,
       barrierDismissible: true,
-      builder: (BuildContext context) {
-        return AnnouncementDetailDialog(announcement: announcement);
+      builder: (BuildContext dialogContext) {
+        return AnnouncementDetailDialog(
+          announcement: announcement,
+          rootContext: context,
+        );
       },
     );
   }
@@ -213,7 +220,7 @@ class _AnnouncementDetailDialogState extends State<AnnouncementDetailDialog> {
         Expanded(
           child: _buildDetailItem(
             'Schedule Visibility',
-            _formatScheduleVisibility(widget.announcement['scheduleVisibility']),
+            _formatScheduleVisibility(),
           ),
         ),
       ],
@@ -226,7 +233,7 @@ class _AnnouncementDetailDialogState extends State<AnnouncementDetailDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Message Body',
+          'Announcement Details',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -388,7 +395,7 @@ class _AnnouncementDetailDialogState extends State<AnnouncementDetailDialog> {
           ),
           const Spacer(),
           
-          // Action buttons
+          // Action button
           OutlinedButton.icon(
             onPressed: () => _editAnnouncement(),
             icon: const Icon(Icons.edit, size: 18),
@@ -400,21 +407,6 @@ class _AnnouncementDetailDialogState extends State<AnnouncementDetailDialog> {
                 horizontal: 20,
                 vertical: 12,
               ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          ElevatedButton.icon(
-            onPressed: () => _exportAnnouncement(),
-            icon: const Icon(Icons.download, size: 18),
-            label: const Text('Export'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue[600],
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 12,
-              ),
-              elevation: 0,
             ),
           ),
         ],
@@ -576,66 +568,200 @@ class _AnnouncementDetailDialogState extends State<AnnouncementDetailDialog> {
   }
 
   // Format schedule visibility
-  String _formatScheduleVisibility(Map<String, dynamic>? schedule) {
-    if (schedule == null) return 'No schedule specified';
+  String _formatScheduleVisibility() {
+    final scheduledPublishDate = widget.announcement['scheduled_publish_date'];
+    final expiryDate = widget.announcement['expiry_date'];
     
-    final startDate = schedule['startDate'];
-    final endDate = schedule['endDate'];
-    final startTime = schedule['startTime'];
-    final endTime = schedule['endTime'];
-    
-    if (startDate != null && endDate != null) {
-      return '$startDate ($startTime) - $endDate ($endTime)';
+    if (scheduledPublishDate == null && expiryDate == null) {
+      return 'No schedule specified';
     }
     
-    return 'Schedule not specified';
+    final String startText = scheduledPublishDate != null 
+        ? _formatDate(scheduledPublishDate)
+        : 'Not scheduled';
+    final String endText = expiryDate != null 
+        ? _formatDate(expiryDate)
+        : 'No expiry';
+    
+    return '$startText - $endText';
+  }
+
+  // Helper method to format date
+  String _formatDate(String? dateString) {
+    if (dateString == null) return 'N/A';
+    try {
+      final date = DateTime.parse(dateString);
+      return DateFormat('MMMM d, yyyy - h:mm a').format(date);
+    } catch (e) {
+      return dateString;
+    }
   }
 
   // Event handlers for backend integration
-  void _togglePin(bool value) {
+  void _togglePin(bool value) async {
+    // Update the state first
     setState(() {
       isPinnedToDashboard = value;
     });
     
-    // TODO: Implement backend API call to update pin status
-    _updateAnnouncementPinStatus(widget.announcement['id'], value);
+    // Update backend API to persist the pin status
+    await _updateAnnouncementPinStatus(widget.announcement['id'], value);
     
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          value 
-            ? 'Announcement pinned to dashboard' 
-            : 'Announcement unpinned from dashboard'
+    // Close the dialog
+    if (mounted) {
+      Navigator.of(context).pop();
+    
+      // Show the snackbar
+      ScaffoldMessenger.of(widget.rootContext).showSnackBar(
+        SnackBar(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  value ? Icons.push_pin : Icons.push_pin_outlined,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Flexible(
+                child: Text(
+                  value 
+                    ? 'Announcement pinned to dashboard' 
+                    : 'Announcement unpinned from dashboard',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: value ? const Color(0xFF66BB6A) : const Color(0xFF9E9E9E),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.only(
+            left: 24,
+            bottom: 24,
+            right: MediaQuery.of(widget.rootContext).size.width * 0.7,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 3),
+          elevation: 2,
         ),
-        backgroundColor: value ? Colors.green : Colors.grey[600],
-      ),
-    );
+      );
+    }
   }
 
   void _editAnnouncement() {
     Navigator.of(context).pop();
-    // TODO: Navigate to edit announcement page
-    // You can implement navigation logic here
-    print('Edit announcement: ${widget.announcement['id']}');
-  }
-
-  void _exportAnnouncement() {
-    // TODO: Implement export functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Exporting announcement...'),
-        backgroundColor: Colors.blue,
-      ),
-    );
-    print('Export announcement: ${widget.announcement['id']}');
+    
+    // Get the database_id from the announcement data
+    final announcementId = widget.announcement['database_id'] ?? widget.announcement['id'];
+    
+    if (announcementId != null) {
+      // Navigate to edit page using the root context
+      widget.rootContext.go('/announcement/edit/$announcementId');
+    } else {
+      // Show error if no ID is found with minimalist styling
+      ScaffoldMessenger.of(widget.rootContext).showSnackBar(
+        SnackBar(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.error_outline_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 16),
+              const Flexible(
+                child: Text(
+                  'Cannot edit: Announcement ID not found',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFFEF5350),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.only(
+            left: 24,
+            bottom: 24,
+            right: MediaQuery.of(widget.rootContext).size.width * 0.7,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 3),
+          elevation: 2,
+        ),
+      );
+    }
   }
 
   void _downloadAttachment(Map<String, dynamic> attachment) {
     // TODO: Implement attachment download
-    ScaffoldMessenger.of(context).showSnackBar(
+    
+    // Show snackbar in the root context (outside dialog)
+    ScaffoldMessenger.of(widget.rootContext).showSnackBar(
       SnackBar(
-        content: Text('Downloading ${attachment['name']}...'),
-        backgroundColor: Colors.blue,
+        content: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.download_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Flexible(
+              child: Text(
+                'Downloading ${attachment['name']}...',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF42A5F5),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(
+          left: 24,
+          bottom: 24,
+          right: MediaQuery.of(widget.rootContext).size.width * 0.7,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 2),
+        elevation: 2,
       ),
     );
     print('Download attachment: ${attachment['name']}');

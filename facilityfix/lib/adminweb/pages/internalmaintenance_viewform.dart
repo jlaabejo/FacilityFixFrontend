@@ -194,8 +194,9 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
 
   Future<void> _loadInventoryItems() async {
     try {
-
+      // TODO: Replace with actual building ID from user session
       
+      // Call the service without positional or unknown named parameters to match the APIService signature.
       final response = await _apiService.getInventoryItems();
       
       if (response['success'] == true && response['data'] != null) {
@@ -426,6 +427,38 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     }
   }
 
+  void _addInventoryItem() {
+    if (_availableInventoryItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No inventory items available')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => _InventorySelectionDialog(
+        availableItems: _availableInventoryItems,
+        onItemSelected: (item, quantity) {
+          setState(() {
+            _selectedInventoryItems.add({
+              'inventory_id': item['id'] ?? item['_doc_id'],
+              'item_name': item['item_name'],
+              'item_code': item['item_code'],
+              'quantity': quantity,
+              'available_stock': item['current_stock'],
+            });
+          });
+        },
+      ),
+    );
+  }
+
+  void _removeInventoryItem(int index) {
+    setState(() {
+      _selectedInventoryItems.removeAt(index);
+    });
+  }
 
   // ------------------------ Validators (real-time) ------------------------
   String? _req(String? v) =>
@@ -614,7 +647,8 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                               _buildScheduleCard(),
                               const SizedBox(height: 24),
                               _buildAssignmentCard(),
-                         
+                              const SizedBox(height: 24),
+                              _buildInventoryItemsCard(),
                               const SizedBox(height: 24),
                               _buildAttachmentsCard(),
                               const SizedBox(height: 24),
@@ -1487,6 +1521,151 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     );
   }
 
+  /// Inventory Items card
+  Widget _buildInventoryItemsCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E8),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.inventory_2,
+                      color: Color(0xFF2E7D32),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Inventory Items',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+              if (_isEditMode)
+                IconButton(
+                  onPressed: _addInventoryItem,
+                  icon: const Icon(Icons.add_circle, color: Color(0xFF2E7D32)),
+                  tooltip: 'Add Item',
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (_selectedInventoryItems.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: Text(
+                'No inventory items requested',
+                style: TextStyle(color: Colors.grey[600]),
+                textAlign: TextAlign.center,
+              ),
+            )
+          else
+            Column(
+              children: _selectedInventoryItems.asMap().entries.map((entry) {
+                final index = entry.key;
+                final item = entry.value;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item['item_name'] ?? 'Unknown Item',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Code: ${item['item_code'] ?? 'N/A'}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Text(
+                                  'Qty: ${item['quantity']}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF2E7D32),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'Available: ${item['available_stock']}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_isEditMode)
+                        IconButton(
+                          onPressed: () => _removeInventoryItem(index),
+                          icon: const Icon(Icons.close, size: 18),
+                          color: Colors.red[600],
+                          tooltip: 'Remove',
+                        ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
 
   // ------------------------ Small card wrapper ------------------------
   Widget _card({

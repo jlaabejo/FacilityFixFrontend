@@ -106,6 +106,22 @@ class UiDateUtils {
     return '${_months[d.month - 1]} ${d.day}, ${d.year} | $h12 $ampm';
   }
 
+  /// "Aug 23 | 8 PM - 10 PM"
+  static String dateTimeRange(DateTime start, [DateTime? end]) {
+    String fmtTime(DateTime d) {
+      final h12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
+      final mm = d.minute.toString().padLeft(2, '0');
+      final time = d.minute == 0 ? '$h12' : '$h12:$mm';
+      final ampm = d.hour >= 12 ? 'PM' : 'AM';
+      return '$time $ampm';
+    }
+
+    final datePart = '${_months[start.month - 1]} ${start.day}';
+    if (end == null) return '$datePart | ${fmtTime(start)}';
+
+    return '$datePart | ${fmtTime(start)} - ${fmtTime(end)}';
+  }
+
   /// Accepts a raw date string (e.g. from API or form) and outputs a clean schedule label.
   static String formatSchedule(String raw) {
     final dt = DateTime.tryParse(raw) ?? parse(raw);

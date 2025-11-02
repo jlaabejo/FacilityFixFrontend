@@ -69,10 +69,18 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
   final List<String> _filterOptions = [
     'All',
     'Utility Interruption',
+    'Power Outage',
+    'Pest Control',
     'Maintenance',
-    'Emergency',
-    'Announcement',
   ];
+  
+  // Pagination
+  int _currentPage = 1;
+  int _itemsPerPage = 10;
+  
+  // Sorting
+  String _sortColumn = 'dateAdded';
+  bool _sortAscending = false; // Default to descending (newest first)
 
   // Column widths for table
   final List<double> _colW = <double>[
@@ -203,9 +211,25 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
       context.go('/announcement/edit/$announcementId');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cannot edit: Announcement ID not found'),
-          backgroundColor: Colors.red,
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Cannot edit: Announcement ID not found',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red[600],
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          duration: const Duration(seconds: 3),
+          elevation: 6,
         ),
       );
     }
@@ -264,12 +288,165 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
     );
   }
 
+  // Filtered announcements based on search and filter
+  List<Map<String, dynamic>> get _filteredAnnouncements {
+    var filtered = _announcementItems.where((announcement) {
+      // Search filter - now searches all columns
+      bool matchesSearch = _searchController.text.isEmpty ||
+          announcement['id'].toString().toLowerCase().contains(
+                _searchController.text.toLowerCase(),
+              ) ||
+          announcement['Title'].toString().toLowerCase().contains(
+                _searchController.text.toLowerCase(),
+              ) ||
+          announcement['type'].toString().toLowerCase().contains(
+                _searchController.text.toLowerCase(),
+              ) ||
+          announcement['location'].toString().toLowerCase().contains(
+                _searchController.text.toLowerCase(),
+              ) ||
+          announcement['dateAdded'].toString().toLowerCase().contains(
+                _searchController.text.toLowerCase(),
+              );
+
+      // Type filter
+      bool matchesFilter = _selectedFilter == 'All' ||
+          announcement['type'].toString().toLowerCase() ==
+              _selectedFilter.toLowerCase();
+
+      return matchesSearch && matchesFilter;
+    }).toList();
+    
+    // Apply sorting
+    filtered.sort((a, b) {
+      int comparison;
+      
+      switch (_sortColumn) {
+        case 'id':
+          comparison = a['id'].toString().compareTo(b['id'].toString());
+          break;
+        case 'Title':
+          comparison = a['Title'].toString().compareTo(b['Title'].toString());
+          break;
+        case 'type':
+          comparison = a['type'].toString().compareTo(b['type'].toString());
+          break;
+        case 'location':
+          comparison = a['location'].toString().compareTo(b['location'].toString());
+          break;
+        case 'dateAdded':
+        default:
+          // Parse dates for proper comparison
+          DateTime dateA = DateTime.tryParse(a['dateAdded'].toString()) ?? DateTime(1970);
+          DateTime dateB = DateTime.tryParse(b['dateAdded'].toString()) ?? DateTime(1970);
+          comparison = dateA.compareTo(dateB);
+          break;
+      }
+      
+      return _sortAscending ? comparison : -comparison;
+    });
+    
+    return filtered;
+  }
+
+  // Paginated announcements
+  List<Map<String, dynamic>> _getPaginatedAnnouncements() {
+    final startIndex = (_currentPage - 1) * _itemsPerPage;
+    final endIndex = startIndex + _itemsPerPage;
+
+    final filtered = _filteredAnnouncements;
+    if (startIndex >= filtered.length) return [];
+
+    return filtered.sublist(
+      startIndex,
+      endIndex > filtered.length ? filtered.length : endIndex,
+    );
+  }
+
+  int get _totalPages {
+    final filtered = _filteredAnnouncements;
+    return filtered.isEmpty ? 1 : (filtered.length / _itemsPerPage).ceil();
+  }
+
+  void _goToPage(int page) {
+    if (page >= 1 && page <= _totalPages) {
+      setState(() {
+        _currentPage = page;
+      });
+    }
+  }
+
+  void _previousPage() {
+    if (_currentPage > 1) {
+      setState(() {
+        _currentPage--;
+      });
+    }
+  }
+
+  void _nextPage() {
+    if (_currentPage < _totalPages) {
+      setState(() {
+        _currentPage++;
+      });
+    }
+  }
+
+  List<Widget> _buildPageNumbers() {
+    List<Widget> pageButtons = [];
+
+    // Show max 5 page numbers at a time
+    int startPage = _currentPage - 2;
+    int endPage = _currentPage + 2;
+
+    if (startPage < 1) {
+      startPage = 1;
+      endPage = 5;
+    }
+
+    if (endPage > _totalPages) {
+      endPage = _totalPages;
+      startPage = _totalPages - 4;
+    }
+
+    if (startPage < 1) startPage = 1;
+
+    for (int i = startPage; i <= endPage; i++) {
+      pageButtons.add(
+        GestureDetector(
+          onTap: () => _goToPage(i),
+          child: Container(
+            width: 32,
+            height: 32,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              color: i == _currentPage
+                  ? const Color(0xFF1976D2)
+                  : Colors.grey[100],
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Center(
+              child: Text(
+                i.toString().padLeft(2, '0'),
+                style: TextStyle(
+                  color: i == _currentPage ? Colors.white : Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return pageButtons;
+  }
+
   // Search functionality
   void _onSearchChanged(String value) {
-    // TODO: Implement search functionality with backend API
-    // For now, just update the controller
     setState(() {
-      // Filter logic will go here
+      _currentPage = 1; // Reset to first page on search
     });
   }
 
@@ -277,7 +454,20 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
   void _onFilterChanged(String filter) {
     setState(() {
       _selectedFilter = filter;
-      // TODO: Implement filter functionality with backend API
+      _currentPage = 1; // Reset to first page on filter change
+    });
+  }
+  
+  // Sorting functionality
+  void _onSort(String column) {
+    setState(() {
+      if (_sortColumn == column) {
+        _sortAscending = !_sortAscending;
+      } else {
+        _sortColumn = column;
+        _sortAscending = true;
+      }
+      _currentPage = 1; // Reset to first page on sort
     });
   }
 
@@ -388,6 +578,8 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                       'No message content available.',
                   'audiences': _parseAudience(announcement['audience']),
                   'scheduleVisibility': _parseSchedule(announcement),
+                  'scheduled_publish_date': announcement['scheduled_publish_date'],
+                  'expiry_date': announcement['expiry_date'],
                   'attachments': announcement['attachments'] ?? [],
                   'isPinned': announcement['is_pinned'] ?? false,
                   'content': announcement['content'] ?? '',
@@ -762,24 +954,115 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                           color: Colors.black87,
                         ),
                         columns: [
-                          DataColumn(label: _fixedCell(0, const Text("ID"))),
+                          DataColumn(
+                            label: _fixedCell(
+                              0,
+                              GestureDetector(
+                                onTap: () => _onSort('id'),
+                                child: Row(
+                                  children: [
+                                    const Text("ID"),
+                                    if (_sortColumn == 'id')
+                                      Icon(
+                                        _sortAscending
+                                            ? Icons.arrow_upward
+                                            : Icons.arrow_downward,
+                                        size: 14,
+                                        color: Colors.grey[600],
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                           DataColumn(
                             label: _fixedCell(
                               1,
-                              const Text("ANNOUNCEMENT TITLE"),
+                              GestureDetector(
+                                onTap: () => _onSort('Title'),
+                                child: Row(
+                                  children: [
+                                    const Text("ANNOUNCEMENT TITLE"),
+                                    if (_sortColumn == 'Title')
+                                      Icon(
+                                        _sortAscending
+                                            ? Icons.arrow_upward
+                                            : Icons.arrow_downward,
+                                        size: 14,
+                                        color: Colors.grey[600],
+                                      ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
-                          DataColumn(label: _fixedCell(2, const Text("TYPE"))),
                           DataColumn(
-                            label: _fixedCell(3, const Text("LOCATION")),
+                            label: _fixedCell(
+                              2,
+                              GestureDetector(
+                                onTap: () => _onSort('type'),
+                                child: Row(
+                                  children: [
+                                    const Text("TYPE"),
+                                    if (_sortColumn == 'type')
+                                      Icon(
+                                        _sortAscending
+                                            ? Icons.arrow_upward
+                                            : Icons.arrow_downward,
+                                        size: 14,
+                                        color: Colors.grey[600],
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
                           DataColumn(
-                            label: _fixedCell(4, const Text("DATE ADDED")),
+                            label: _fixedCell(
+                              3,
+                              GestureDetector(
+                                onTap: () => _onSort('location'),
+                                child: Row(
+                                  children: [
+                                    const Text("LOCATION"),
+                                    if (_sortColumn == 'location')
+                                      Icon(
+                                        _sortAscending
+                                            ? Icons.arrow_upward
+                                            : Icons.arrow_downward,
+                                        size: 14,
+                                        color: Colors.grey[600],
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataColumn(
+                            label: _fixedCell(
+                              4,
+                              GestureDetector(
+                                onTap: () => _onSort('dateAdded'),
+                                child: Row(
+                                  children: [
+                                    const Text("DATE CREATED"),
+                                    if (_sortColumn == 'dateAdded')
+                                      Icon(
+                                        _sortAscending
+                                            ? Icons.arrow_upward
+                                            : Icons.arrow_downward,
+                                        size: 14,
+                                        color: Colors.grey[600],
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
                           DataColumn(label: _fixedCell(5, const Text(""))),
                         ],
                         rows:
-                            _announcementItems.map((announcement) {
+                            _getPaginatedAnnouncements().map((announcement) {
                               return DataRow(
                                 cells: [
                                   DataCell(
@@ -861,7 +1144,9 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            "Showing 1 to ${_announcementItems.length} of ${_announcementItems.length} entries",
+                            _filteredAnnouncements.isEmpty
+                                ? "No entries found"
+                                : "Showing ${(_currentPage - 1) * _itemsPerPage + 1} to ${(_currentPage * _itemsPerPage) > _filteredAnnouncements.length ? _filteredAnnouncements.length : _currentPage * _itemsPerPage} of ${_filteredAnnouncements.length} entries",
                             style: TextStyle(
                               color: Colors.grey[600],
                               fontSize: 14,
@@ -872,56 +1157,24 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                             children: [
                               IconButton(
                                 onPressed:
-                                    null, // TODO: Implement previous page
+                                    _currentPage > 1 ? _previousPage : null,
                                 icon: Icon(
                                   Icons.chevron_left,
-                                  color: Colors.grey[400],
+                                  color: _currentPage > 1
+                                      ? Colors.grey[600]
+                                      : Colors.grey[400],
                                 ),
                               ),
-                              Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF1976D2),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Center(
-                                  child: Text(
-                                    "01",
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[100],
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    "02",
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                              ),
+                              ..._buildPageNumbers(),
                               IconButton(
-                                onPressed: () {
-                                  // TODO: Implement next page
-                                },
+                                onPressed: _currentPage < _totalPages
+                                    ? _nextPage
+                                    : null,
                                 icon: Icon(
                                   Icons.chevron_right,
-                                  color: Colors.grey[600],
+                                  color: _currentPage < _totalPages
+                                      ? Colors.grey[600]
+                                      : Colors.grey[400],
                                 ),
                               ),
                             ],

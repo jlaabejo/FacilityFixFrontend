@@ -64,17 +64,16 @@ class _InventoryItemDetailsPageState extends State<InventoryItemDetailsPage> {
   final Map<String, dynamic> _itemData = {
     'itemName': 'Galvanized Screw 3mm',
     'itemCode': 'MAT-CIV-003',
-    'dateAdded': 'Automated',
     'classification': 'Materials',
     'department': 'Civil/Carpentry',
-    'brandName': '-',
     'quantityInStock': 150,
     'reorderLevel': 50,
     'unit': 'pcs',
     'tag': 'High-Turnover',
     'status': 'In Stock',
     'supplier': 'Not Specified',
-    'warrantyUntil': 'DD / MM / YY',
+    'supplierContact': '+63 912 345 6789',
+    'supplierEmail': 'supplier@example.com',
   };
 
   @override
@@ -143,61 +142,30 @@ class _InventoryItemDetailsPageState extends State<InventoryItemDetailsPage> {
                     ),
                   ],
                 ),
-                // Action buttons (Edit & Export)
-                Row(
-                  children: [
-                    // Edit button
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        // Handle edit functionality
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Edit functionality will go here')),
-                        );
-                      },
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      label: const Text(
-                        "Edit",
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.grey[700],
-                        side: BorderSide(color: Colors.grey[300]!),
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
+                // Action button (Edit only)
+                OutlinedButton.icon(
+                  onPressed: () {
+                    // Handle edit functionality
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Edit functionality will go here')),
+                    );
+                  },
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text(
+                    "Edit",
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
                     ),
-                    const SizedBox(width: 12),
-                    // Export button
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        // Handle export functionality
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Export functionality will go here')),
-                        );
-                      },
-                      icon: const Icon(Icons.download, size: 18),
-                      label: const Text(
-                        "Export",
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1976D2),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.grey[700],
+                    side: BorderSide(color: Colors.grey[300]!),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                  ],
+                  ),
                 ),
               ],
             ),
@@ -275,7 +243,6 @@ class _InventoryItemDetailsPageState extends State<InventoryItemDetailsPage> {
                             children: [
                               _buildInfoRow("Item Name", _itemData['itemName']),
                               _buildInfoRow("Item Code", _itemData['itemCode']),
-                              _buildInfoRow("Date Added", _itemData['dateAdded']),
                             ],
                           ),
                         ),
@@ -287,7 +254,6 @@ class _InventoryItemDetailsPageState extends State<InventoryItemDetailsPage> {
                             children: [
                               _buildInfoRow("Classification", _itemData['classification']),
                               _buildInfoRow("Department", _itemData['department']),
-                              _buildInfoRow("Brand Name", _itemData['brandName']),
                             ],
                           ),
                         ),
@@ -307,7 +273,7 @@ class _InventoryItemDetailsPageState extends State<InventoryItemDetailsPage> {
                     Expanded(
                       flex: 2,
                       child: _buildInfoSection(
-                        title: "Stock Details",
+                        title: "Stock Information",
                         icon: Icons.inventory_2_outlined,
                         iconColor: const Color(0xFF4CAF50),
                         children: [
@@ -320,12 +286,10 @@ class _InventoryItemDetailsPageState extends State<InventoryItemDetailsPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     _buildStockRowStacked(
-                                      "Quantity in Stock",
+                                      "Current Stock",
                                       "${_itemData['quantityInStock']} ${_itemData['unit']}",
                                       valueColor: Colors.green,
                                     ),
-                                    _buildInfoRowStacked("Unit", _itemData['unit']),
-                                    
                                   ],
                                 ),
                               ),
@@ -340,26 +304,12 @@ class _InventoryItemDetailsPageState extends State<InventoryItemDetailsPage> {
                                       "${_itemData['reorderLevel']} ${_itemData['unit']}",
                                       valueColor: Colors.red,
                                     ),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          "Tag",
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.grey[600],
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        _buildTagChip(_itemData['tag']), // chip under label
-                                      ],
-                                    ),
                                   ],
                                 ),
                               ),
                             ],
                           ),
+                          _buildInfoRowStacked("Unit", _itemData['unit']),
                         ],
                       ),
                     ),
@@ -374,8 +324,9 @@ class _InventoryItemDetailsPageState extends State<InventoryItemDetailsPage> {
                         icon: Icons.local_shipping_outlined,
                         iconColor: const Color(0xFFFF9800),
                         children: [
-                          _buildInfoRowStacked("Supplier", _itemData['supplier']),
-                          _buildInfoRowStacked("Warranty Until", _itemData['warrantyUntil']),
+                          _buildInfoRowStacked("Supplier Name", _itemData['supplier']),
+                          _buildInfoRowStacked("Contact Number", _itemData['supplierContact']),
+                          _buildInfoRowStacked("Email", _itemData['supplierEmail']),
                         ],
                       ),
                     ),

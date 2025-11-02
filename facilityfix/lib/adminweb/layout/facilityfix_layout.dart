@@ -228,7 +228,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                   child: Row(
                     children: [
                       Image.asset(
-                        'images/leftgraphicsP2.png',
+                        'images/logo.png',
                         height: 40,
                       ),
                       const SizedBox(width: 8),
@@ -271,7 +271,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       // User and Role Management dropdown
                       _dropdownNav(
                         icon: Icons.group,
-                        title: 'User and Role Management',
+                        title: 'User Management',
                         sectionKey: 'user',
                         children: [
                           _subNavItem('Users', 'user_users'),
@@ -283,7 +283,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       // Work Orders dropdown
                       _dropdownNav(
                         icon: Icons.build_outlined,
-                        title: 'Work Orders',
+                        title: 'Task Management',
                         sectionKey: 'work',
                         children: [
                           _subNavItem('Maintenance Tasks', 'work_maintenance'),
@@ -434,7 +434,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                   child: Container(
                     decoration: const BoxDecoration(
                       image: DecorationImage(
-                        image: AssetImage('images/bglayout.png'), // Make sure this image exists in your assets
+                        image: AssetImage('images/bglayout.png'), 
                         fit: BoxFit.cover,
                         opacity: 1, 
                       ),

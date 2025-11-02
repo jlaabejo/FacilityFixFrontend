@@ -551,7 +551,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       requestTypeTag: 'Maintenance',
       priority: w.priority,
       statusTag: w.statusTag,
-      resolutionType: w.resolutionType,
 
       // Tenant / requester
       requestedBy: w.requestedBy ?? '—',
@@ -563,7 +562,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       completedAt: w.completedAt,
       location: w.location ?? w.unitId, // prefer location, fallback to unit
       description: w.description,
-      checklist_complete: (w.checklist ?? '')
+      checklist: (w.checklist ?? '')
           .split('\n')
           .map((s) => s.trim())
           .where((s) => s.isNotEmpty)

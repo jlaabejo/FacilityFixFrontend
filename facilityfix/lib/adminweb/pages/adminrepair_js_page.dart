@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../popupwidgets/js_viewdetails_popup.dart';
+import '../popupwidgets/assignstaff_popup.dart' as assign_popup;
 import '../services/api_service.dart';
-import '../../widgets/modals.dart';
+import '../widgets/tags.dart';
 
 class RepairJobServicePage extends StatefulWidget {
   const RepairJobServicePage({super.key});
@@ -18,10 +19,6 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   
   // Dynamic data from API
   List<Map<String, dynamic>> _repairTasks = [];
-  
-  // Staff data for assignment
-  List<Map<String, dynamic>> _staffMembers = [];
-  bool _isLoadingStaff = false;
   
   // Error handling
   String? _errorMessage;
@@ -119,8 +116,16 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       if (mounted) {
         setState(() {
           _repairTasks = tasks;
+          // Sort by priority: High/Critical first, then Medium, then Low
+          _repairTasks.sort((a, b) {
+            final priorityOrder = {'High': 0, 'Critical': 0, 'Medium': 1, 'Low': 2};
+            final priorityA = priorityOrder[a['priority']] ?? 3;
+            final priorityB = priorityOrder[b['priority']] ?? 3;
+            return priorityA.compareTo(priorityB);
+          });
           _isLoading = false;
           _errorMessage = null;
+          _currentPage = 1; // Reset to first page when loading new data
         });
       }
     } catch (e) {
@@ -205,29 +210,57 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   }
 
   String _mapCategoryToDepartment(String? category) {
-    if (category == null) return 'General';
+    if (category == null) return 'Other';
     switch (category.toLowerCase()) {
       case 'electrical':
         return 'Electrical';
       case 'plumbing':
         return 'Plumbing';
-      case 'hvac':
-        return 'HVAC';
       case 'carpentry':
         return 'Carpentry';
-      case 'maintenance':
-        return 'Maintenance';
       case 'masonry':
         return 'Masonry';
       default:
-        return 'General';
+        return category; // Return the original category
     }
   }
 
   // Dropdown values for filtering
-  String _selectedRole = 'All Roles';
+  String _selectedDepartment = 'All Departments';
   String _selectedStatus = 'All Status';
   String _selectedConcernType = 'Job Service';
+  String _searchQuery = '';
+
+  // Sorting
+  bool _sortAscending = true;
+
+  void _toggleSortOrder() {
+    setState(() {
+      _sortAscending = !_sortAscending;
+      
+      // Sort the repair tasks by date requested
+      _repairTasks.sort((a, b) {
+        final dateA = _parseDateForSort(a['dateRequested']);
+        final dateB = _parseDateForSort(b['dateRequested']);
+        
+        if (_sortAscending) {
+          return dateA.compareTo(dateB);
+        } else {
+          return dateB.compareTo(dateA);
+        }
+      });
+    });
+  }
+
+  DateTime _parseDateForSort(String dateStr) {
+    if (dateStr == 'N/A') return DateTime(1970);
+    
+    try {
+      return DateTime.parse(dateStr);
+    } catch (e) {
+      return DateTime(1970);
+    }
+  }
 
   // Action dropdown menu methods
   void _showActionMenu(
@@ -348,180 +381,818 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
 
   // Edit task method
   void _editTask(Map<String, dynamic> task) {
-    // Implement edit functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Edit task: ${task['id']}'),
-        backgroundColor: Colors.blue,
-      ),
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        final TextEditingController titleController = 
+            TextEditingController(text: task['title']);
+        final TextEditingController descController = 
+            TextEditingController(text: task['description']);
+        
+        // Schedule controller
+        DateTime? selectedSchedule;
+        final schedule = task['schedule'] ?? task['dateRequested'];
+        if (schedule != null && schedule.isNotEmpty) {
+          try {
+            if (schedule.toString().contains('T')) {
+              selectedSchedule = DateTime.parse(schedule.toString());
+            } else {
+              final parts = schedule.toString().split('-');
+              if (parts.length == 3) {
+                selectedSchedule = DateTime(
+                  int.parse(parts[0]),
+                  int.parse(parts[1]),
+                  int.parse(parts[2]),
+                );
+              }
+            }
+          } catch (e) {
+            print('[Edit] Error parsing schedule: $e');
+          }
+        }
+        
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 8,
+          child: Container(
+            width: 700,
+            constraints: const BoxConstraints(maxHeight: 700),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with blue background
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[600],
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.edit_document,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Edit Job Service',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              task['serviceId'] ?? 'N/A',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.white.withOpacity(0.9),
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          titleController.dispose();
+                          descController.dispose();
+                          Navigator.of(context).pop();
+                        },
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        tooltip: 'Close',
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Content
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Requester Details Section (Non-editable)
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.blue[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.blue[200]!),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.info_outline, color: Colors.blue[700], size: 18),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'REQUESTER DETAILS',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.blue[900],
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildReadOnlyField(
+                                      'Requested By',
+                                      task['requestedBy'] ?? 'N/A',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _buildReadOnlyField(
+                                      'Date Requested',
+                                      task['dateRequested'] ?? 'N/A',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildReadOnlyField(
+                                      'Building & Unit',
+                                      task['buildingUnit'] ?? 'N/A',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _buildReadOnlyField(
+                                      'Department',
+                                      task['department'] ?? 'N/A',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Title Field
+                        Text(
+                          'TITLE',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[600],
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: titleController,
+                          decoration: InputDecoration(
+                            hintText: 'Enter job service title',
+                            hintStyle: TextStyle(color: Colors.grey[400]),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.blue[600]!, width: 2),
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                          ),
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                        const SizedBox(height: 20),
+                        
+                        // Description Field
+                        Text(
+                          'DESCRIPTION',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[600],
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: descController,
+                          decoration: InputDecoration(
+                            hintText: 'Enter job service description',
+                            hintStyle: TextStyle(color: Colors.grey[400]),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.blue[600]!, width: 2),
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                            contentPadding: const EdgeInsets.all(16),
+                          ),
+                          maxLines: 5,
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Provide a detailed description of the job service',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        
+                        // Schedule Field (Editable)
+                        Text(
+                          'SCHEDULE',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[600],
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        StatefulBuilder(
+                          builder: (context, setDialogState) {
+                            return InkWell(
+                              onTap: () async {
+                                final DateTime? pickedDate = await showDatePicker(
+                                  context: context,
+                                  initialDate: selectedSchedule ?? DateTime.now(),
+                                  firstDate: DateTime.now(),
+                                  lastDate: DateTime(2030, 12),
+                                );
+                                
+                                if (pickedDate != null) {
+                                  setDialogState(() {
+                                    selectedSchedule = pickedDate;
+                                  });
+                                }
+                              },
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey[300]!),
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: Colors.grey[50],
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.calendar_today,
+                                      size: 18,
+                                      color: Colors.grey[600],
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        selectedSchedule != null 
+                                            ? '${selectedSchedule!.year}-${selectedSchedule!.month.toString().padLeft(2, '0')}-${selectedSchedule!.day.toString().padLeft(2, '0')}'
+                                            : 'Select schedule date',
+                                        style: TextStyle(
+                                          color: selectedSchedule != null
+                                              ? Colors.black87
+                                              : Colors.grey[500],
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                
+                // Footer with Actions
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    border: Border(
+                      top: BorderSide(color: Colors.grey[200]!, width: 1),
+                    ),
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton(
+                        onPressed: () {
+                          titleController.dispose();
+                          descController.dispose();
+                          Navigator.of(context).pop();
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.grey[700],
+                          side: BorderSide(color: Colors.grey[300]!),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          // Validate inputs
+                          if (titleController.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please enter a title'),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                            return;
+                          }
+                          
+                          try {
+                            // TODO: Implement API call when backend is ready
+                            // Update locally for now
+                            setState(() {
+                              task['title'] = titleController.text;
+                              task['description'] = descController.text;
+                              if (selectedSchedule != null) {
+                                final formattedDate = '${selectedSchedule!.year}-${selectedSchedule!.month.toString().padLeft(2, '0')}-${selectedSchedule!.day.toString().padLeft(2, '0')}';
+                                task['schedule'] = formattedDate;
+                              }
+                            });
+                            
+                            if (mounted) {
+                              Navigator.of(context).pop();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.check_circle, color: Colors.white),
+                                      const SizedBox(width: 12),
+                                      Text('${task['serviceId']} updated successfully'),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.green[600],
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.error, color: Colors.white),
+                                      const SizedBox(width: 12),
+                                      Expanded(child: Text('Failed to update: $e')),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.red[600],
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              );
+                            }
+                          } finally {
+                            titleController.dispose();
+                            descController.dispose();
+                          }
+                        },
+                        icon: const Icon(Icons.save, size: 18),
+                        label: const Text(
+                          'Save Changes',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[600],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
   // Assign task method
-  void _assignTask(Map<String, dynamic> task) async {
-    await _loadStaffMembers();
-    
-    if (!mounted) return;
-
-    // Prepare staff names for the modal
-    final staffNames = _staffMembers.map((staff) {
-      final firstName = staff['first_name'] ?? '';
-      final lastName = staff['last_name'] ?? '';
-      final department = staff['department'] ?? '';
-      
-      String displayName = '$firstName $lastName';
-      if (department.isNotEmpty) {
-        displayName += ' ($department)';
-      }
-      return displayName;
-    }).toList();
-
-    // Show assign staff modal
-    final result = await showModalBottomSheet<AssignResult>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => AssignStaffBottomSheet(
-        staff: staffNames,
-        busyByStaff: {}, // You can implement availability checking here
-      ),
+  void _assignTask(Map<String, dynamic> task) {
+    assign_popup.AssignScheduleWorkDialog.show(
+      context,
+      task,
+      onAssignmentComplete: () {
+        // Reload job services after assignment
+        _loadJobServices();
+      },
+      isMaintenanceTask: false, // This is a job service, not a maintenance task
     );
-
-    if (result != null && mounted) {
-      // Find the selected staff member's user ID
-      final selectedStaffIndex = staffNames.indexOf(result.staffName);
-      if (selectedStaffIndex >= 0 && selectedStaffIndex < _staffMembers.length) {
-        final staffUserId = _staffMembers[selectedStaffIndex]['user_id'] ?? _staffMembers[selectedStaffIndex]['id'];
-        
-        if (staffUserId != null) {
-          await _assignStaffToJobService(task, staffUserId, result.note);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Error: Could not find staff member ID'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  // Load staff members from API
-  Future<void> _loadStaffMembers() async {
-    if (_isLoadingStaff) return;
-    
-    setState(() => _isLoadingStaff = true);
-    
-    try {
-      final apiService = ApiService();
-      final staffData = await apiService.getStaffMembers();
-      
-      if (mounted) {
-        setState(() {
-          _staffMembers = List<Map<String, dynamic>>.from(staffData);
-          _isLoadingStaff = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading staff members: $e');
-      if (mounted) {
-        setState(() => _isLoadingStaff = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load staff members: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  // Assign staff to job service
-  Future<void> _assignStaffToJobService(
-    Map<String, dynamic> task,
-    String staffUserId,
-    String? note,
-  ) async {
-    try {
-      final apiService = ApiService();
-      
-      // Use the serviceId (which should be the actual job service ID)
-      final jobServiceId = task['serviceId'] ?? task['id'];
-      
-      await apiService.assignStaffToJobService(jobServiceId, staffUserId);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Staff assigned successfully to ${task['serviceId']}'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        
-        // Reload the job services to reflect the changes
-        await _loadJobServices();
-      }
-    } catch (e) {
-      debugPrint('Error assigning staff to job service: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to assign staff: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
   }
 
   // Delete task method
   void _deleteTask(Map<String, dynamic> task) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Delete Task'),
-          content: Text('Are you sure you want to delete task ${task['id']}?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 8,
+          child: Container(
+            width: 500,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
             ),
-            TextButton(
-              onPressed: () async {
-                Navigator.of(context).pop();
-                // TODO: Implement actual deletion via API
-                // For now, just remove from local list and reload
-                setState(() {
-                  _repairTasks.removeWhere((t) => t['id'] == task['id']);
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Task ${task['id']} deleted'),
-                    backgroundColor: Colors.red,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with red background
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.red[600],
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                    ),
                   ),
-                );
-                // Reload data to reflect changes
-                await _loadJobServices();
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Delete'),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.delete_forever,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Delete Job Service',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'This action cannot be undone',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.white70,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        tooltip: 'Close',
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Content
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 20),
+                      // Job service details
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey[200]!),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.description, 
+                                     color: Colors.grey[600], size: 18),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'JOB SERVICE DETAILS',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey[600],
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            _buildDeleteDetailRow('ID', task['serviceId'] ?? 'N/A'),
+                            const SizedBox(height: 8),
+                            _buildDeleteDetailRow('Title', task['title'] ?? 'No Title'),
+                            const SizedBox(height: 8),
+                            _buildDeleteDetailRow('Department', task['department'] ?? 'N/A'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Footer with Actions
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    border: Border(
+                      top: BorderSide(color: Colors.grey[200]!, width: 1),
+                    ),
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.grey[700],
+                          side: BorderSide(color: Colors.grey[300]!),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          Navigator.of(context).pop();
+                          
+                          try {
+                            // TODO: Implement API call when backend is ready
+                            // For now, remove locally
+                            setState(() {
+                              _repairTasks.removeWhere((t) => t['serviceId'] == task['serviceId']);
+                            });
+                            
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.check_circle, color: Colors.white),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text('${task['serviceId']} deleted successfully'),
+                                      ),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.green[600],
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.error, color: Colors.white),
+                                      const SizedBox(width: 12),
+                                      Expanded(child: Text('Failed to delete: $e')),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.red[600],
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.delete_forever, size: 18),
+                        label: const Text(
+                          'Delete Permanently',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red[600],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
   }
 
+  // Helper method for delete detail rows
+  Widget _buildDeleteDetailRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 90,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        const Text(': ', style: TextStyle(fontSize: 12)),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black87,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Helper method for read-only fields in edit dialog
+  Widget _buildReadOnlyField(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+
+  // Pagination
+  int _currentPage = 1;
+  int _itemsPerPage = 10;
+
   final List<double> _colW = <double>[
-    140, // SERVICE ID
-    140, // CONCERN ID
-    140, // BUILDING & UNIT
-    130, // SCHEDULE
-    110, // STATUS
-    100, // PRIORITY
-    38, // ACTION
+    110, // JOB SERVICE ID
+    130, // TITLE
+    110, // BUILDING & UNIT
+    130, // DATE REQUESTED
+    70, // PRIORITY
+    100, // DEPARTMENT
+    90, // STATUS
+    90, // ACTION
   ];
 
   Widget _fixedCell(
@@ -542,6 +1213,173 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     softWrap: false,
     style: style,
   );
+
+  // Pagination helper methods
+  List<Map<String, dynamic>> _getPaginatedTasks() {
+    // Apply filters first
+    List<Map<String, dynamic>> filteredTasks = _repairTasks.where((task) {
+      // Search filter - search in ID, title, and building & unit
+      bool matchesSearch = true;
+      if (_searchQuery.isNotEmpty) {
+        final searchLower = _searchQuery.toLowerCase();
+        final id = task['id']?.toString().toLowerCase() ?? '';
+        final title = task['title']?.toString().toLowerCase() ?? '';
+        final buildingUnit = task['buildingUnit']?.toString().toLowerCase() ?? '';
+        
+        matchesSearch = id.contains(searchLower) ||
+                       title.contains(searchLower) ||
+                       buildingUnit.contains(searchLower);
+      }
+      
+      // Department filter
+      bool matchesDepartment = true;
+      if (_selectedDepartment != 'All Departments') {
+        final taskDepartment = _mapCategoryToDepartment(task['category']?.toString() ?? '');
+        final mainDepartments = ['Electrical', 'Plumbing', 'Carpentry', 'Masonry'];
+        
+        if (_selectedDepartment == 'Other') {
+          // If "Other" is selected, match departments not in the main list
+          matchesDepartment = !mainDepartments.contains(taskDepartment);
+        } else {
+          // Match exact department
+          matchesDepartment = taskDepartment == _selectedDepartment;
+        }
+      }
+      
+      // Status filter
+      bool matchesStatus = true;
+      if (_selectedStatus != 'All Status') {
+        final taskStatus = task['status']?.toString() ?? '';
+        matchesStatus = taskStatus.toLowerCase() == _selectedStatus.toLowerCase();
+      }
+      
+      return matchesSearch && matchesDepartment && matchesStatus;
+    }).toList();
+    
+    final startIndex = (_currentPage - 1) * _itemsPerPage;
+    final endIndex = startIndex + _itemsPerPage;
+    
+    if (startIndex >= filteredTasks.length) return [];
+    
+    return filteredTasks.sublist(
+      startIndex,
+      endIndex > filteredTasks.length ? filteredTasks.length : endIndex,
+    );
+  }
+
+  int get _totalPages {
+    // Apply same filters for total page calculation
+    List<Map<String, dynamic>> filteredTasks = _repairTasks.where((task) {
+      bool matchesSearch = true;
+      if (_searchQuery.isNotEmpty) {
+        final searchLower = _searchQuery.toLowerCase();
+        final id = task['id']?.toString().toLowerCase() ?? '';
+        final title = task['title']?.toString().toLowerCase() ?? '';
+        final buildingUnit = task['buildingUnit']?.toString().toLowerCase() ?? '';
+        
+        matchesSearch = id.contains(searchLower) ||
+                       title.contains(searchLower) ||
+                       buildingUnit.contains(searchLower);
+      }
+      
+      bool matchesDepartment = true;
+      if (_selectedDepartment != 'All Departments') {
+        final taskDepartment = _mapCategoryToDepartment(task['category']?.toString() ?? '');
+        final mainDepartments = ['Electrical', 'Plumbing', 'Carpentry', 'Masonry'];
+        
+        if (_selectedDepartment == 'Other') {
+          // If "Other" is selected, match departments not in the main list
+          matchesDepartment = !mainDepartments.contains(taskDepartment);
+        } else {
+          // Match exact department
+          matchesDepartment = taskDepartment == _selectedDepartment;
+        }
+      }
+      
+      bool matchesStatus = true;
+      if (_selectedStatus != 'All Status') {
+        final taskStatus = task['status']?.toString() ?? '';
+        matchesStatus = taskStatus.toLowerCase() == _selectedStatus.toLowerCase();
+      }
+      
+      return matchesSearch && matchesDepartment && matchesStatus;
+    }).toList();
+    
+    return (filteredTasks.length / _itemsPerPage).ceil();
+  }
+
+  void _goToPage(int page) {
+    if (page >= 1 && page <= _totalPages) {
+      setState(() {
+        _currentPage = page;
+      });
+    }
+  }
+
+  void _previousPage() {
+    if (_currentPage > 1) {
+      setState(() {
+        _currentPage--;
+      });
+    }
+  }
+
+  void _nextPage() {
+    if (_currentPage < _totalPages) {
+      setState(() {
+        _currentPage++;
+      });
+    }
+  }
+
+  List<Widget> _buildPageNumbers() {
+    List<Widget> pageButtons = [];
+    
+    // Show max 5 page numbers at a time
+    int startPage = _currentPage - 2;
+    int endPage = _currentPage + 2;
+    
+    if (startPage < 1) {
+      startPage = 1;
+      endPage = 5;
+    }
+    
+    if (endPage > _totalPages) {
+      endPage = _totalPages;
+      startPage = _totalPages - 4;
+    }
+    
+    if (startPage < 1) startPage = 1;
+    
+    for (int i = startPage; i <= endPage; i++) {
+      pageButtons.add(
+        GestureDetector(
+          onTap: () => _goToPage(i),
+          child: Container(
+            width: 32,
+            height: 32,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              color: i == _currentPage ? const Color(0xFF1976D2) : Colors.grey[100],
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Center(
+              child: Text(
+                i.toString().padLeft(2, '0'),
+                style: TextStyle(
+                  color: i == _currentPage ? Colors.white : Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    
+    return pageButtons;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -630,7 +1468,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          "Work Orders",
+          "Task Management",
           style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.bold,
@@ -656,7 +1494,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
-              child: const Text('Work Orders'),
+              child: const Text('Task Management'),
             ),
             const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
             TextButton(
@@ -698,6 +1536,12 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: TextField(
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                    _currentPage = 1; // Reset to first page when searching
+                  });
+                },
                 decoration: InputDecoration(
                   prefixIcon: Icon(
                     Icons.search,
@@ -717,7 +1561,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
           ),
           const SizedBox(width: 16),
 
-          // Role Dropdown
+          // Department Dropdown
           Expanded(
             child: Container(
               height: 40,
@@ -729,23 +1573,26 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
-                  value: _selectedRole,
+                  value: _selectedDepartment,
                   onChanged: (String? newValue) {
                     setState(() {
-                      _selectedRole = newValue!;
+                      _selectedDepartment = newValue!;
+                      _currentPage = 1;
                     });
                   },
                   items:
                       <String>[
-                        'All Roles',
-                        'Admin',
-                        'Technician',
-                        'Manager',
+                        'All Departments',
+                        'Carpentry',
+                        'Electrical',
+                        'Masonry',
+                        'Plumbing',
+                        'Other',
                       ].map<DropdownMenuItem<String>>((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
                           child: Text(
-                            'Role: $value',
+                            value == 'All Departments' ? value : 'Dept: $value',
                             style: const TextStyle(fontSize: 14),
                           ),
                         );
@@ -946,7 +1793,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
-                  columnSpacing: 50,
+                  columnSpacing: 40,
                   headingRowHeight: 56,
                   dataRowHeight: 64,
                   headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
@@ -961,18 +1808,19 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                     color: Colors.black87,
                   ),
                   columns: [
-                    DataColumn(label: _fixedCell(0, const Text("SERVICE ID"))),
-                    DataColumn(label: _fixedCell(1, const Text("CONCERN ID"))),
+                    DataColumn(label: _fixedCell(0, const Text("JOB SERVICE ID"))),
+                    DataColumn(label: _fixedCell(1, const Text("TITLE"))),
                     DataColumn(
                       label: _fixedCell(2, const Text("BUILDING & UNIT")),
                     ),
-                    DataColumn(label: _fixedCell(3, const Text("SCHEDULE"))),
-                    DataColumn(label: _fixedCell(4, const Text("STATUS"))),
-                    DataColumn(label: _fixedCell(5, const Text("PRIORITY"))),
-                    DataColumn(label: _fixedCell(6, const Text(""))),
+                    DataColumn(label: _fixedCell(3, const Text("DATE REQUESTED"))),
+                    DataColumn(label: _fixedCell(4, const Text("PRIORITY"))),
+                    DataColumn(label: _fixedCell(5, const Text("DEPARTMENT"))),
+                    DataColumn(label: _fixedCell(6, const Text("STATUS"))),
+                    DataColumn(label: _fixedCell(7, const Text(""))),
                   ],
                   rows:
-                      _repairTasks.map((task) {
+                      _getPaginatedTasks().map((task) {
                         return DataRow(
                           cells: [
                             DataCell(
@@ -988,39 +1836,43 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                               ),
                             ),
                             DataCell(
-                              _fixedCell(
-                                1,
-                                _ellipsis(
-                                  task['concernId'],
-                                  style: TextStyle(
-                                    color: Colors.grey[700],
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
+                              _fixedCell(1, _ellipsis(task['title'])),
                             ),
                             DataCell(
                               _fixedCell(2, _ellipsis(task['buildingUnit'])),
                             ),
                             DataCell(
-                              _fixedCell(3, _ellipsis(task['schedule'])),
+                              _fixedCell(3, _ellipsis(task['dateRequested'])),
                             ),
 
-                            // Chips get a fixed box too (and aligned left)
+                            // Priority chip
                             DataCell(
-                              _fixedCell(4, _buildStatusChip(task['status'])),
+                              _fixedCell(
+                                4,
+                                PriorityTag(priority: task['priority']),
+                              ),
                             ),
+                            
+                            // Department
                             DataCell(
                               _fixedCell(
                                 5,
-                                _buildPriorityChip(task['priority']),
+                                DepartmentTag(task['department']),
+                              ),
+                            ),
+
+                            // Status chip
+                            DataCell(
+                              _fixedCell(
+                                6,
+                                StatusTag(status: task['status']),
                               ),
                             ),
 
                             // Action menu cell (narrow, centered)
                             DataCell(
                               _fixedCell(
-                                6,
+                                7,
                                 Builder(
                                   builder: (context) {
                                     return IconButton(
@@ -1066,55 +1918,25 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                 Text(
                   _repairTasks.isEmpty 
                     ? "No entries found"
-                    : "Showing 1 to ${_repairTasks.length} of ${_repairTasks.length} entries",
+                    : "Showing ${(_currentPage - 1) * _itemsPerPage + 1} to ${(_currentPage * _itemsPerPage) > _repairTasks.length ? _repairTasks.length : _currentPage * _itemsPerPage} of ${_repairTasks.length} entries",
                   style: TextStyle(color: Colors.grey[600], fontSize: 14),
                 ),
                 Row(
                   children: [
                     IconButton(
-                      onPressed: null,
-                      icon: Icon(Icons.chevron_left, color: Colors.grey[400]),
-                    ),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1976D2),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          "01",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                        ),
+                      onPressed: _currentPage > 1 ? _previousPage : null,
+                      icon: Icon(
+                        Icons.chevron_left,
+                        color: _currentPage > 1 ? Colors.grey[600] : Colors.grey[400],
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Center(
-                        child: Text(
-                          "02",
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ),
+                    ..._buildPageNumbers(),
                     IconButton(
-                      onPressed: () {},
-                      icon: Icon(Icons.chevron_right, color: Colors.grey[600]),
+                      onPressed: _currentPage < _totalPages ? _nextPage : null,
+                      icon: Icon(
+                        Icons.chevron_right,
+                        color: _currentPage < _totalPages ? Colors.grey[600] : Colors.grey[400],
+                      ),
                     ),
                   ],
                 ),
@@ -1122,86 +1944,6 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  // Priority Chip Widget
-  Widget _buildPriorityChip(String priority) {
-    Color bgColor;
-    Color textColor;
-    switch (priority) {
-      case 'High':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'Medium':
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFFF8F00);
-        break;
-      case 'Low':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      default:
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        priority,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  // Status Chip Widget
-  Widget _buildStatusChip(String status) {
-    Color bgColor;
-    Color textColor;
-    switch (status) {
-      case 'In Progress':
-        bgColor = const Color.fromARGB(49, 82, 131, 205);
-        textColor = const Color.fromARGB(255, 0, 93, 232);
-        break;
-      case 'Pending':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'Completed':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      case 'Cancelled':
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-        break;
-      default:
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
       ),
     );
   }

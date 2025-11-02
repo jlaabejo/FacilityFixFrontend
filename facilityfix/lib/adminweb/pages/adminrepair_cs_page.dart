@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../popupwidgets/cs_viewdetails_popup.dart';
-import '../popupwidgets/assignstaff_popup.dart';
 import '../popupwidgets/set_resolution_type_popup.dart';
 import '../services/api_service.dart';
+import '../widgets/tags.dart';
 
 class AdminRepairPage extends StatefulWidget {
   const AdminRepairPage({super.key});
@@ -21,10 +21,17 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   String _errorMessage = '';
 
   // Dropdown values for filtering
-  String _selectedRole = 'All Roles';
+  String _selectedDepartment = 'All Departments';
   String _selectedStatus = 'All Status';
   String _selectedConcernType = 'Concern Slip';
   String _searchQuery = '';
+
+  // Pagination
+  int _currentPage = 1;
+  int _itemsPerPage = 10;
+
+  // Sorting
+  bool _sortAscending = true;
 
   @override
   void initState() {
@@ -59,6 +66,15 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                 'rawData': slip, // Store raw data for detailed view
               };
             }).toList();
+        
+        // Sort by priority: High > Medium > Low
+        _repairTasks.sort((a, b) {
+          final priorityOrder = {'High': 0, 'Critical': 0, 'Medium': 1, 'Low': 2};
+          final priorityA = priorityOrder[a['priority']] ?? 3;
+          final priorityB = priorityOrder[b['priority']] ?? 3;
+          return priorityA.compareTo(priorityB);
+        });
+        
         _filteredTasks = List.from(_repairTasks);
         _isLoading = false;
       });
@@ -119,13 +135,13 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       case 'pending':
         return 'Pending';
       case 'assigned':
-        return 'To Inspect';
+        return 'Assigned';
       case 'in_progress':
         return 'In Progress';
       case 'assessed':
         return 'Assessed';
       case 'sent':
-        return 'Sent to Client';
+        return 'Sent';
       case 'approved':
         return 'Approved';
       case 'rejected':
@@ -145,21 +161,15 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
         return 'Electrical';
       case 'plumbing':
         return 'Plumbing';
-      case 'hvac':
-        return 'HVAC';
       case 'carpentry':
         return 'Carpentry';
-      case 'maintenance':
-        return 'Maintenance';
-      case 'security':
-        return 'Security';
-      case 'fire_safety':
-        return 'Fire Safety';
+      case 'masonry':
+        return 'Masonry';
       case 'pest control':
+      case 'pest_control':
         return 'Pest Control';
-
       default:
-        return 'General';
+        return category ?? 'Other'; // Return the original category or 'Other'
     }
   }
 
@@ -167,13 +177,14 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     setState(() {
       _filteredTasks =
           _repairTasks.where((task) {
-            // Search filter
+            // Search filter - search in ID, title, building & unit
             bool matchesSearch =
                 _searchQuery.isEmpty ||
                 task['title'].toLowerCase().contains(
                   _searchQuery.toLowerCase(),
                 ) ||
                 task['id'].toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                task['buildingUnit'].toLowerCase().contains(_searchQuery.toLowerCase()) ||
                 task['location'].toLowerCase().contains(
                   _searchQuery.toLowerCase(),
                 );
@@ -183,14 +194,60 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                 _selectedStatus == 'All Status' ||
                 task['status'] == _selectedStatus;
 
-            return matchesSearch && matchesStatus;
+            // Department filter
+            bool matchesDepartment = _selectedDepartment == 'All Departments';
+            if (!matchesDepartment) {
+              final taskDepartment = task['department'] ?? '';
+              final mainDepartments = ['Electrical', 'Plumbing', 'Carpentry', 'Masonry'];
+              
+              if (_selectedDepartment == 'Other') {
+                // If "Other" is selected, match departments not in the main list
+                matchesDepartment = !mainDepartments.contains(taskDepartment);
+              } else {
+                // Match exact department
+                matchesDepartment = taskDepartment == _selectedDepartment;
+              }
+            }
+
+            return matchesSearch && matchesStatus && matchesDepartment;
           }).toList();
+
+      // Reset to first page when filters change
+      _currentPage = 1;
     });
   }
 
   void _onSearchChanged(String query) {
     _searchQuery = query;
     _applyFilters();
+  }
+
+  void _toggleSortOrder() {
+    setState(() {
+      _sortAscending = !_sortAscending;
+      
+      // Sort the filtered tasks by date requested
+      _filteredTasks.sort((a, b) {
+        final dateA = _parseDateForSort(a['dateRequested']);
+        final dateB = _parseDateForSort(b['dateRequested']);
+        
+        if (_sortAscending) {
+          return dateA.compareTo(dateB);
+        } else {
+          return dateB.compareTo(dateA);
+        }
+      });
+    });
+  }
+
+  DateTime _parseDateForSort(String dateStr) {
+    if (dateStr == 'N/A') return DateTime(1970);
+    
+    try {
+      return DateTime.parse(dateStr);
+    } catch (e) {
+      return DateTime(1970);
+    }
   }
 
   // Helper function to convert routeKey to actual route path
@@ -237,22 +294,10 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     );
   }
 
-  // Check if task can be assigned to staff
-  bool _canAssignStaff(Map<String, dynamic> task) {
-    final status = task['status']?.toString().toLowerCase();
-    return status == 'pending' || status == 'evaluated';
-  }
-
   // Check if resolution type can be set (status is assessed)
   bool _canSetResolutionType(Map<String, dynamic> task) {
     final status = task['status']?.toString().toLowerCase();
     return status == 'assessed';
-  }
-
-  // Check if action buttons should be disabled
-  bool _areActionButtonsDisabled(Map<String, dynamic> task) {
-    final status = task['status']?.toString().toLowerCase();
-    return status == 'assigned' && task['rawData']?['assessed_by'] == null;
   }
 
   // Action dropdown menu methods
@@ -264,9 +309,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     final RenderBox overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox;
 
-    final canAssign = _canAssignStaff(task);
     final canSetResolution = _canSetResolutionType(task);
-    final actionsDisabled = _areActionButtonsDisabled(task);
 
     showMenu(
       context: context,
@@ -292,24 +335,6 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
             ],
           ),
         ),
-        if (canAssign)
-          PopupMenuItem(
-            value: 'assign',
-            child: Row(
-              children: [
-                Icon(
-                  Icons.person_add_outlined,
-                  color: Colors.blue[600],
-                  size: 18,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Assign Staff',
-                  style: TextStyle(color: Colors.blue[600], fontSize: 14),
-                ),
-              ],
-            ),
-          ),
         if (canSetResolution)
           PopupMenuItem(
             value: 'set_resolution',
@@ -330,19 +355,18 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
           ),
         PopupMenuItem(
           value: 'edit',
-          enabled: !actionsDisabled,
           child: Row(
             children: [
               Icon(
                 Icons.edit_outlined,
-                color: actionsDisabled ? Colors.grey[400] : Colors.blue[600],
+                color: Colors.blue[600],
                 size: 18,
               ),
               const SizedBox(width: 12),
               Text(
                 'Edit',
                 style: TextStyle(
-                  color: actionsDisabled ? Colors.grey[400] : Colors.blue[600],
+                  color: Colors.blue[600],
                   fontSize: 14,
                 ),
               ),
@@ -351,19 +375,18 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
         ),
         PopupMenuItem(
           value: 'delete',
-          enabled: !actionsDisabled,
           child: Row(
             children: [
               Icon(
                 Icons.delete_outline,
-                color: actionsDisabled ? Colors.grey[400] : Colors.red[600],
+                color: Colors.red[600],
                 size: 18,
               ),
               const SizedBox(width: 12),
               Text(
                 'Delete',
                 style: TextStyle(
-                  color: actionsDisabled ? Colors.grey[400] : Colors.red[600],
+                  color: Colors.red[600],
                   fontSize: 14,
                 ),
               ),
@@ -386,9 +409,6 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       case 'view':
         _viewTask(task);
         break;
-      case 'assign':
-        _assignStaff(task);
-        break;
       case 'set_resolution':
         _setResolutionType(task);
         break;
@@ -403,13 +423,8 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
 
   // View task method
   void _viewTask(Map<String, dynamic> task) {
-    ConcernSlipDetailDialog.show(context, task);
-  }
-
-  // Assign staff method
-  void _assignStaff(Map<String, dynamic> task) {
-    AssignScheduleWorkDialog.show(
-      context,
+    ConcernSlipDetailDialog.show(
+      context, 
       task,
       onAssignmentComplete: () {
         // Refresh the concern slips list after assignment
@@ -432,12 +447,503 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
 
   // Edit task method
   void _editTask(Map<String, dynamic> task) {
-    // Implement edit functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Edit task: ${task['id']}'),
-        backgroundColor: Colors.blue,
-      ),
+    // Navigate to edit page or show edit dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        final TextEditingController titleController = 
+            TextEditingController(text: task['title']);
+        final TextEditingController descController = 
+            TextEditingController(text: task['description']);
+        
+        // Schedule availability controller
+        DateTime? selectedSchedule;
+        final scheduleAvailability = task['rawData']?['schedule_availability'] ?? task['dateRequested'];
+        if (scheduleAvailability != null && scheduleAvailability.isNotEmpty) {
+          try {
+            if (scheduleAvailability.toString().contains('T')) {
+              selectedSchedule = DateTime.parse(scheduleAvailability.toString());
+            } else {
+              final parts = scheduleAvailability.toString().split('-');
+              if (parts.length == 3) {
+                selectedSchedule = DateTime(
+                  int.parse(parts[0]),
+                  int.parse(parts[1]),
+                  int.parse(parts[2]),
+                );
+              }
+            }
+          } catch (e) {
+            print('[Edit] Error parsing schedule: $e');
+          }
+        }
+        
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 8,
+          child: Container(
+            width: 700,
+            constraints: const BoxConstraints(maxHeight: 700),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with blue background
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[600],
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.edit_document,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Edit Concern Slip',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              task['id'] ?? 'N/A',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.white.withOpacity(0.9),
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          titleController.dispose();
+                          descController.dispose();
+                          Navigator.of(context).pop();
+                        },
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        tooltip: 'Close',
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Content
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Requester Details Section (Non-editable)
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.blue[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.blue[200]!),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.info_outline, color: Colors.blue[700], size: 18),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'REQUESTER DETAILS',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.blue[900],
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildReadOnlyField(
+                                      'Requested By',
+                                      task['rawData']?['requester_name'] ?? 'N/A',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _buildReadOnlyField(
+                                      'Date Requested',
+                                      task['dateRequested'] ?? 'N/A',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildReadOnlyField(
+                                      'Building & Unit',
+                                      task['buildingUnit'] ?? 'N/A',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _buildReadOnlyField(
+                                      'Department',
+                                      task['department'] ?? 'N/A',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Title Field
+                        Text(
+                          'TITLE',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[600],
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: titleController,
+                          decoration: InputDecoration(
+                            hintText: 'Enter concern slip title',
+                            hintStyle: TextStyle(color: Colors.grey[400]),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.blue[600]!, width: 2),
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                          ),
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                        const SizedBox(height: 20),
+                        
+                        // Description Field
+                        Text(
+                          'DESCRIPTION',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[600],
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: descController,
+                          decoration: InputDecoration(
+                            hintText: 'Enter concern slip description',
+                            hintStyle: TextStyle(color: Colors.grey[400]),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.blue[600]!, width: 2),
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                            contentPadding: const EdgeInsets.all(16),
+                          ),
+                          maxLines: 5,
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Provide a detailed description of the concern',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        
+                        // Schedule Availability Field (Editable)
+                        Text(
+                          'SCHEDULE AVAILABILITY',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[600],
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        StatefulBuilder(
+                          builder: (context, setDialogState) {
+                            return InkWell(
+                              onTap: () async {
+                                final DateTime? pickedDate = await showDatePicker(
+                                  context: context,
+                                  initialDate: selectedSchedule ?? DateTime.now(),
+                                  firstDate: DateTime.now(),
+                                  lastDate: DateTime(2030, 12),
+                                );
+                                
+                                if (pickedDate != null) {
+                                  setDialogState(() {
+                                    selectedSchedule = pickedDate;
+                                  });
+                                }
+                              },
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey[300]!),
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: Colors.grey[50],
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.calendar_today,
+                                      size: 18,
+                                      color: Colors.grey[600],
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        selectedSchedule != null 
+                                            ? '${selectedSchedule!.day.toString().padLeft(2, '0')}/${selectedSchedule!.month.toString().padLeft(2, '0')}/${selectedSchedule!.year}'
+                                            : 'Select schedule date',
+                                        style: TextStyle(
+                                          color: selectedSchedule != null
+                                              ? Colors.black87
+                                              : Colors.grey[500],
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                
+                // Footer with Actions
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    border: Border(
+                      top: BorderSide(color: Colors.grey[200]!, width: 1),
+                    ),
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton(
+                        onPressed: () {
+                          titleController.dispose();
+                          descController.dispose();
+                          Navigator.of(context).pop();
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.grey[700],
+                          side: BorderSide(color: Colors.grey[300]!),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          // Validate inputs
+                          if (titleController.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please enter a title'),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                            return;
+                          }
+                          
+                          try {
+                            // Update the task via API
+                            final concernSlipId = task['rawData']?['id'] ?? 
+                                                 task['rawData']?['_doc_id'];
+                            
+                            if (concernSlipId != null) {
+                              // TODO: Implement API call when backend is ready
+                              // await _apiService.updateConcernSlip(
+                              //   concernSlipId,
+                              //   {
+                              //     'title': titleController.text,
+                              //     'description': descController.text,
+                              //     'schedule_availability': selectedSchedule?.toIso8601String(),
+                              //   },
+                              // );
+                              
+                              // For now, update locally
+                              setState(() {
+                                task['title'] = titleController.text;
+                                task['description'] = descController.text;
+                                if (selectedSchedule != null) {
+                                  final formattedDate = '${selectedSchedule!.day.toString().padLeft(2, '0')}/${selectedSchedule!.month.toString().padLeft(2, '0')}/${selectedSchedule!.year}';
+                                  task['dateRequested'] = formattedDate;
+                                  if (task['rawData'] != null) {
+                                    task['rawData']['schedule_availability'] = selectedSchedule!.toIso8601String();
+                                  }
+                                }
+                                if (task['rawData'] != null) {
+                                  task['rawData']['title'] = titleController.text;
+                                  task['rawData']['description'] = descController.text;
+                                }
+                              });
+                              
+                              if (mounted) {
+                                Navigator.of(context).pop();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Row(
+                                      children: [
+                                        const Icon(Icons.check_circle, color: Colors.white),
+                                        const SizedBox(width: 12),
+                                        Text('${task['id']} updated successfully'),
+                                      ],
+                                    ),
+                                    backgroundColor: Colors.green[600],
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.error, color: Colors.white),
+                                      const SizedBox(width: 12),
+                                      Expanded(child: Text('Failed to update: $e')),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.red[600],
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              );
+                            }
+                          } finally {
+                            titleController.dispose();
+                            descController.dispose();
+                          }
+                        },
+                        icon: const Icon(Icons.save, size: 18),
+                        label: const Text(
+                          'Save Changes',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[600],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -445,48 +951,300 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   void _deleteTask(Map<String, dynamic> task) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Delete Task'),
-          content: Text('Are you sure you want to delete task ${task['id']}?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 8,
+          child: Container(
+            width: 500,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
             ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                // Remove task from list
-                setState(() {
-                  _repairTasks.removeWhere((t) => t['id'] == task['id']);
-                  _applyFilters();
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Task ${task['id']} deleted'),
-                    backgroundColor: Colors.red,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with red background
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.red[600],
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                    ),
                   ),
-                );
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Delete'),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.delete_forever,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Delete Concern Slip',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'This action cannot be undone',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.white70,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        tooltip: 'Close',
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Content
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 20),
+                      // Concern slip details
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey[200]!),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.description, 
+                                     color: Colors.grey[600], size: 18),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'CONCERN SLIP DETAILS',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey[600],
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            _buildDeleteDetailRow('ID', task['id'] ?? 'N/A'),
+                            const SizedBox(height: 8),
+                            _buildDeleteDetailRow('Title', task['title'] ?? 'No Title'),
+                            const SizedBox(height: 8),
+                            _buildDeleteDetailRow('Department', task['department'] ?? 'N/A'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Footer with Actions
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    border: Border(
+                      top: BorderSide(color: Colors.grey[200]!, width: 1),
+                    ),
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.grey[700],
+                          side: BorderSide(color: Colors.grey[300]!),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          Navigator.of(context).pop();
+                          
+                          try {
+                            // Delete via API
+                            final concernSlipId = task['rawData']?['id'] ?? 
+                                                 task['rawData']?['_doc_id'];
+                            
+                            if (concernSlipId != null) {
+                              // TODO: Implement API call when backend is ready
+                              // await _apiService.deleteConcernSlip(concernSlipId);
+                              
+                              // For now, remove locally
+                              setState(() {
+                                _repairTasks.removeWhere((t) => t['id'] == task['id']);
+                                _applyFilters();
+                              });
+                              
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Row(
+                                      children: [
+                                        const Icon(Icons.check_circle, color: Colors.white),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text('${task['id']} deleted successfully'),
+                                        ),
+                                      ],
+                                    ),
+                                    backgroundColor: Colors.green[600],
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.error, color: Colors.white),
+                                      const SizedBox(width: 12),
+                                      Expanded(child: Text('Failed to delete: $e')),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.red[600],
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.delete_forever, size: 18),
+                        label: const Text(
+                          'Delete Permanently',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red[600],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
   }
+  
+  Widget _buildDeleteDetailRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 90,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        const Text(': ', style: TextStyle(fontSize: 12)),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black87,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
 
   final List<double> _colW = <double>[
-    100, // CONCERN ID
-    140, // TITLE
-    110, // DATE REQUESTED
-    100, // BUILDING & UNIT
-    80, // PRIORITY
-    90, // DEPARTMENT
+    110, // CONCERN SLIP ID
+    130, // TITLE
+    110, // BUILDING & UNIT
+    130, // DATE REQUESTED
+    70, // PRIORITY
+    100, // DEPARTMENT
     90, // STATUS
-    38, // ACTION
+    90, // ACTION
   ];
 
   Widget _fixedCell(
@@ -507,6 +1265,94 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     softWrap: false,
     style: style,
   );
+
+  // Pagination helper methods
+  List<Map<String, dynamic>> _getPaginatedTasks() {
+    final startIndex = (_currentPage - 1) * _itemsPerPage;
+    final endIndex = startIndex + _itemsPerPage;
+    
+    if (startIndex >= _filteredTasks.length) return [];
+    
+    return _filteredTasks.sublist(
+      startIndex,
+      endIndex > _filteredTasks.length ? _filteredTasks.length : endIndex,
+    );
+  }
+
+  int get _totalPages => _filteredTasks.isEmpty ? 1 : (_filteredTasks.length / _itemsPerPage).ceil();
+
+  void _goToPage(int page) {
+    if (page >= 1 && page <= _totalPages) {
+      setState(() {
+        _currentPage = page;
+      });
+    }
+  }
+
+  void _previousPage() {
+    if (_currentPage > 1) {
+      setState(() {
+        _currentPage--;
+      });
+    }
+  }
+
+  void _nextPage() {
+    if (_currentPage < _totalPages) {
+      setState(() {
+        _currentPage++;
+      });
+    }
+  }
+
+  List<Widget> _buildPageNumbers() {
+    List<Widget> pageButtons = [];
+    
+    // Show max 5 page numbers at a time
+    int startPage = _currentPage - 2;
+    int endPage = _currentPage + 2;
+    
+    if (startPage < 1) {
+      startPage = 1;
+      endPage = 5;
+    }
+    
+    if (endPage > _totalPages) {
+      endPage = _totalPages;
+      startPage = _totalPages - 4;
+    }
+    
+    if (startPage < 1) startPage = 1;
+    
+    for (int i = startPage; i <= endPage; i++) {
+      pageButtons.add(
+        GestureDetector(
+          onTap: () => _goToPage(i),
+          child: Container(
+            width: 32,
+            height: 32,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              color: i == _currentPage ? const Color(0xFF1976D2) : Colors.grey[100],
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Center(
+              child: Text(
+                i.toString().padLeft(2, '0'),
+                style: TextStyle(
+                  color: i == _currentPage ? Colors.white : Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    
+    return pageButtons;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -548,7 +1394,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          "Work Orders",
+          "Task Management",
           style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.bold,
@@ -574,7 +1420,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
-              child: const Text('Work Orders'),
+              child: const Text('Task Management'),
             ),
             const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
             TextButton(
@@ -636,7 +1482,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
           ),
           const SizedBox(width: 16),
 
-          // Role Dropdown
+          // Department Dropdown
           Expanded(
             child: Container(
               height: 40,
@@ -648,23 +1494,26 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
-                  value: _selectedRole,
+                  value: _selectedDepartment,
                   onChanged: (String? newValue) {
                     setState(() {
-                      _selectedRole = newValue!;
+                      _selectedDepartment = newValue!;
+                      _applyFilters();
                     });
                   },
                   items:
                       <String>[
-                        'All Roles',
-                        'Admin',
-                        'Technician',
-                        'Manager',
+                        'All Departments',
+                        'Carpentry',
+                        'Electrical',
+                        'Masonry',
+                        'Plumbing',
+                        'Other',
                       ].map<DropdownMenuItem<String>>((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
                           child: Text(
-                            'Role: $value',
+                            value == 'All Departments' ? value : 'Dept: $value',
                             style: const TextStyle(fontSize: 14),
                           ),
                         );
@@ -891,11 +1740,11 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                       ],
                     ),
                     )
-                    : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
+                    : ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
                       child: SingleChildScrollView(
                         child: DataTable(
-                          columnSpacing: 50,
+                          columnSpacing: 40,
                           headingRowHeight: 56,
                           dataRowHeight: 64,
                           headingRowColor: WidgetStateProperty.all(
@@ -913,22 +1762,37 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                           ),
                           columns: [
                             DataColumn(
-                              label: _fixedCell(0, const Text("CONCERN ID")),
+                              label: _fixedCell(0, const Text("CONCERN SLIP ID")),
                             ),
                             DataColumn(
-                              label: _fixedCell(1, const Text("CONCERN TITLE")),
+                              label: _fixedCell(1, const Text("TITLE")),
                             ),
                             DataColumn(
                               label: _fixedCell(
                                 2,
-                                const Text("DATE REQUESTED"),
+                                const Text("BUILDING & UNIT"),
                               ),
                             ),
                             DataColumn(
                               label: _fixedCell(
                                 3,
-                                const Text("BUILDING & UNIT"),
+                                Row(
+                                  children: [
+                                    const Text("DATE REQUESTED"),
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      _sortAscending 
+                                        ? Icons.arrow_upward 
+                                        : Icons.arrow_downward,
+                                      size: 16,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ],
+                                ),
                               ),
+                              onSort: (columnIndex, ascending) {
+                                _toggleSortOrder();
+                              },
                             ),
                             DataColumn(
                               label: _fixedCell(4, const Text("PRIORITY")),
@@ -942,7 +1806,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                             DataColumn(label: _fixedCell(7, const Text(""))),
                           ],
                           rows:
-                              _filteredTasks.map((task) {
+                              _getPaginatedTasks().map((task) {
                                 return DataRow(
                                   cells: [
                                     DataCell(
@@ -963,13 +1827,13 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                                     DataCell(
                                       _fixedCell(
                                         2,
-                                        _ellipsis(task['dateRequested']),
+                                        _ellipsis(task['buildingUnit']),
                                       ),
                                     ),
                                     DataCell(
                                       _fixedCell(
                                         3,
-                                        _ellipsis(task['buildingUnit']),
+                                        _ellipsis(task['dateRequested']),
                                       ),
                                     ),
 
@@ -977,13 +1841,13 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                                     DataCell(
                                       _fixedCell(
                                         4,
-                                        _buildPriorityChip(task['priority']),
+                                        PriorityTag(priority: task['priority']),
                                       ),
                                     ),
                                     DataCell(
                                       _fixedCell(
                                         5,
-                                        _buildDepartmentChip(
+                                        DepartmentTag(
                                           task['department'],
                                         ),
                                       ),
@@ -991,7 +1855,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                                     DataCell(
                                       _fixedCell(
                                         6,
-                                        _buildStatusChip(task['status']),
+                                        StatusTag(status: task['status']),
                                       ),
                                     ),
 
@@ -1022,7 +1886,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                                             );
                                           },
                                         ),
-                                        align: Alignment.center,
+                                        align: Alignment.centerLeft,
                                       ),
                                     ),
                                   ],
@@ -1041,55 +1905,27 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  "Showing ${_filteredTasks.length} of ${_repairTasks.length} entries",
+                  _filteredTasks.isEmpty 
+                    ? "No entries found"
+                    : "Showing ${(_currentPage - 1) * _itemsPerPage + 1} to ${(_currentPage * _itemsPerPage) > _filteredTasks.length ? _filteredTasks.length : _currentPage * _itemsPerPage} of ${_filteredTasks.length} entries",
                   style: TextStyle(color: Colors.grey[600], fontSize: 14),
                 ),
                 Row(
                   children: [
                     IconButton(
-                      onPressed: null,
-                      icon: Icon(Icons.chevron_left, color: Colors.grey[400]),
-                    ),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1976D2),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          "01",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                        ),
+                      onPressed: _currentPage > 1 ? _previousPage : null,
+                      icon: Icon(
+                        Icons.chevron_left,
+                        color: _currentPage > 1 ? Colors.grey[600] : Colors.grey[400],
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Center(
-                        child: Text(
-                          "02",
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ),
+                    ..._buildPageNumbers(),
                     IconButton(
-                      onPressed: () {},
-                      icon: Icon(Icons.chevron_right, color: Colors.grey[600]),
+                      onPressed: _currentPage < _totalPages ? _nextPage : null,
+                      icon: Icon(
+                        Icons.chevron_right,
+                        color: _currentPage < _totalPages ? Colors.grey[600] : Colors.grey[400],
+                      ),
                     ),
                   ],
                 ),
@@ -1100,162 +1936,31 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       ),
     );
   }
-
-  // Priority Chip Widget
-  Widget _buildPriorityChip(String priority) {
-    Color bgColor;
-    Color textColor;
-    switch (priority) {
-      case 'High':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'Medium':
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFFF8F00);
-        break;
-      case 'Low':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      case 'Critical':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      default:
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        priority,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
+  // Helper method for read-only fields in edit dialog
+  Widget _buildReadOnlyField(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[700],
+          ),
         ),
-      ),
-    );
-  }
-
-  // Department Chip Widget
-  Widget _buildDepartmentChip(String department) {
-    final departmentLower = department.toLowerCase();
-    Color bg = Colors.grey[200]!;
-    Color fg = Colors.grey[800]!;
-
-    switch (departmentLower) {
-      case 'maintenance':
-        bg = const Color(0xFF19B36E);
-        fg = Colors.white;
-        break;
-      case 'carpentry':
-        bg = const Color(0xFFF79009);
-        fg = Colors.white;
-        break;
-      case 'plumbing':
-        bg = const Color(0xFF005CE7);
-        fg = Colors.white;
-        break;
-      case 'electrical':
-        bg = const Color(0xFFF95555);
-        fg = Colors.white;
-        break;
-      case 'masonry':
-        bg = const Color(0xFF666666);
-        fg = Colors.white;
-        break;
-      default:
-        bg = Colors.grey[200]!;
-        fg = Colors.grey[800]!;
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        department,
-        style: TextStyle(
-          color: fg,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
-      ),
-    );
-  }
-
-  // Status Chip Widget
-  Widget _buildStatusChip(String status) {
-    Color bgColor;
-    Color textColor;
-    switch (status) {
-      case 'In Progress':
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFFF8F00);
-        break;
-      case 'Pending':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'Completed':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      case 'Cancelled':
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-        break;
-      case 'To Inspect':
-        bgColor = const Color(0xFFE3F2FD);
-        textColor = const Color(0xFF1976D2);
-        break;
-      case 'Assessed':
-        bgColor = const Color(0xFFF3E5F5);
-        textColor = const Color(0xFF7B1FA2);
-        break;
-      case 'Sent to Client':
-        bgColor = const Color(0xFFE0F2F1);
-        textColor = const Color(0xFF00695C);
-        break;
-      case 'Approved':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      case 'Rejected':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'Returned to Tenant':
-        bgColor = const Color(0xFFFFF8E1);
-        textColor = const Color(0xFFFF8F00);
-        break;
-      default:
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
+      ],
     );
   }
 }

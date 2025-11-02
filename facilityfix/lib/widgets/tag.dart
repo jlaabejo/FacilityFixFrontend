@@ -82,9 +82,6 @@ class DepartmentTag extends StatelessWidget {
     final departmentLower = department.toLowerCase();
     
     switch (departmentLower) {
-      case 'maintenance':
-        bg = const Color(0xFF19B36E);
-        break;
       case 'carpentry':
         bg = const Color(0xFFF79009);
         break;
@@ -173,20 +170,25 @@ class StatusTag extends StatelessWidget {
   );
 
   // Map of normalized status -> colors
-  static const Map<String, _StatusStyle> _styles = {
-  'pending':     _StatusStyle(fg: Color(0xFF667085), bg: Color(0xFFF2F4F7)), 
-  'in progress': _StatusStyle(fg: Color(0xFF1570EF), bg: Color(0xFFEFF4FF)), 
-  'on hold':     _StatusStyle(fg: Color(0xFFF79009), bg: Color(0xFFFFFAEB)), 
-  'assigned':    _StatusStyle(fg: Color(0xFF005CE7), bg: Color(0xFFE6F0FF)), 
-  'assessed':    _StatusStyle(fg: Color(0xFF475467), bg: Color(0xFFE5E7EB)), 
-  'scheduled':   _StatusStyle(fg: Color(0xFF7A5AF8), bg: Color(0xFFF4F5FF)), 
-  'done':        _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)),
-
-  // Inventory
-  'approved':    _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)), 
-  'rejected':    _StatusStyle(fg: Color(0xFFD92D20), bg: Color(0xFFFEF3F2)), 
-  };
-
+static const Map<String, _StatusStyle> _styles = {
+  // General workflow statuses
+  'pending':         _StatusStyle(fg: Color(0xFF667085), bg: Color(0xFFF2F4F7)), 
+  'in progress':     _StatusStyle(fg: Color(0xFF1570EF), bg: Color(0xFFEFF4FF)), 
+  'on hold':         _StatusStyle(fg: Color(0xFFF79009), bg: Color(0xFFFFFAEB)), 
+  'scheduled':       _StatusStyle(fg: Color(0xFF7A5AF8), bg: Color(0xFFF4F5FF)), 
+  'completed':       _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)),
+  
+  // Inspection statuses
+  'to be inspect':   _StatusStyle(fg: Color(0xFF667085), bg: Color(0xFFF2F4F7)),
+  'inspected':       _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)),
+  
+  // Approval statuses
+  'for work order form': _StatusStyle(fg: Color(0xFF667085), bg: Color(0xFFF2F4F7)),
+  'for approval':    _StatusStyle(fg: Color(0xFFF79009), bg: Color(0xFFFFFAEB)),
+  'approved':        _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)), 
+  'ongoing':         _StatusStyle(fg: Color(0xFF1570EF), bg: Color(0xFFEFF4FF)),
+  'rejected':        _StatusStyle(fg: Color(0xFFD92D20), bg: Color(0xFFFEF3F2)),
+};
   // Normalize "In-Progress", "in_progress", "in progress" → "in progress"
   static String _normalize(String s) =>
       s.trim().toLowerCase().replaceAll(RegExp(r'[_\-]+'), ' ').replaceAll(RegExp(r'\s+'), ' ');
@@ -197,6 +199,15 @@ class StatusTag extends StatelessWidget {
   static StatusStyle colorsFor(String status) {
     final st = _styleFor(status);
     return StatusStyle(fg: st.fg, bg: st.bg);
+  }
+
+  /// Convert to Title Case for display
+  static String _toTitleCase(String input) {
+    return input
+        .trim()
+        .split(RegExp(r'\s+'))
+        .map((word) => word.isEmpty ? word : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
+        .join(' ');
   }
 
   @override
@@ -214,7 +225,7 @@ class StatusTag extends StatelessWidget {
         borderRadius: BorderRadius.circular(borderRadius),
       ),
       child: Text(
-        status,
+        _toTitleCase(status),
         style: TextStyle(
           color: fg,
           fontSize: fontSize,

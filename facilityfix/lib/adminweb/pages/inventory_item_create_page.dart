@@ -16,102 +16,44 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
   final _formKey = GlobalKey<FormState>();
   final ApiService _apiService = ApiService();
 
-  // Common input decoration
-  InputDecoration _getInputDecoration(String label, {String? hint}) {
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      labelStyle: TextStyle(color: Colors.grey[700]),
-      hintStyle: TextStyle(color: Colors.grey[400]),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[300]!),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[300]!),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[400]!),
-      ),
-    );
-  }
-
   // Form controllers
   final TextEditingController _itemNameController = TextEditingController();
   final TextEditingController _itemCodeController = TextEditingController();
-  final TextEditingController _brandNameController = TextEditingController();
   final TextEditingController _currentStockController = TextEditingController();
   final TextEditingController _reorderLevelController = TextEditingController();
-  final TextEditingController _supplierController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _supplierNameController = TextEditingController();
+  final TextEditingController _supplierContactController = TextEditingController();
+  final TextEditingController _supplierEmailController = TextEditingController();
+  final TextEditingController _customUnitController = TextEditingController();
 
   // Dropdown values
   String? _selectedClassification;
   String? _selectedDepartment;
   String? _selectedUnit;
-  bool _isCritical = false;
-  List<String> _selectedRecommendedLocations = [];
+  bool _showCustomUnitField = false;
 
   // State
   bool _isLoading = false;
   String? _errorMessage;
+  int _sequenceNumber = 1;
 
   // TODO: Replace with actual building ID from user session
   final String _buildingId = 'default_building_id';
 
-  // Helper function to get classification code
-  String _getClassificationCode(String classification) {
-    final codes = {
-      'consumable': 'CON',
-      'equipment': 'EQP',
-      'tool': 'TOL',
-      'spare_part': 'SPR',
-    };
-    return codes[classification] ?? 'ITM';
-  }
-
-  // Helper function to get department code
-  String _getDepartmentCode(String department) {
-    final codes = {
-      'electrical': 'ELC',
-      'plumbing': 'PLB',
-      'masonry': 'MSN',
-      'carpentry': 'CRP',
-      'maintenance': 'MNT',
-    };
-    return codes[department] ?? 'GEN';
-  }
-
-  // Generate item code based on classification and department
-  void _generateItemCode() {
-    if (_selectedClassification != null && _selectedDepartment != null) {
-      final classCode = _getClassificationCode(_selectedClassification!);
-      final deptCode = _getDepartmentCode(_selectedDepartment!);
-      final timestamp = DateTime.now().millisecondsSinceEpoch % 10000; // Last 4 digits
-      final itemCode = '$classCode-$deptCode-${timestamp.toString().padLeft(4, '0')}';
-
-      setState(() {
-        _itemCodeController.text = itemCode;
-      });
-    }
-  }
-
-  // Dropdown options
-  final List<String> _classifications = [
-    'consumable',
-    'equipment',
-    'tool',
-    'spare_part',
+  // Dropdown options - Updated with display names
+  final List<Map<String, String>> _classifications = [
+    {'value': 'CON', 'label': 'Consumable'},
+    {'value': 'EQP', 'label': 'Equipment'},
+    {'value': 'TOL', 'label': 'Tool'},
+    {'value': 'SPR', 'label': 'Spare Part'},
   ];
 
   final List<String> _departments = [
-    'electrical',
-    'plumbing',
-    'masonry',
-    'carpentry',
-    'maintenance',
+    'Electrical',
+    'Plumbing',
+    'Masonry',
+    'Carpentry',
+    'Maintenance',
   ];
 
   final List<String> _units = [
@@ -121,29 +63,44 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
     'meters',
     'boxes',
     'sets',
+    'others',
   ];
 
-  final List<String> _locations = [
-    'Swimming pool',
-    'Basketball Court',
-    'Gym',
-    'Parking area',
-    'Lobby',
-    'Elevators',
-    'Halls',
-    'Garden',
-    'Corridors',
-  ];
+  // Field height constant
+  static const double _kFieldHeight = 48;
+
+  @override
+  void initState() {
+    super.initState();
+    _generateItemCode();
+  }
+
+  void _generateItemCode() {
+    final now = DateTime.now();
+    final year = now.year;
+    final classificationPrefix = _selectedClassification ?? 'INV';
+    _sequenceNumber++;
+    final sequenceStr = _sequenceNumber.toString().padLeft(5, '0');
+    _itemCodeController.text = '$classificationPrefix-$year-$sequenceStr';
+  }
+
+  void _onClassificationChanged(String? value) {
+    setState(() {
+      _selectedClassification = value;
+      _generateItemCode();
+    });
+  }
 
   @override
   void dispose() {
     _itemNameController.dispose();
     _itemCodeController.dispose();
-    _brandNameController.dispose();
     _currentStockController.dispose();
     _reorderLevelController.dispose();
-    _supplierController.dispose();
-    _descriptionController.dispose();
+    _supplierNameController.dispose();
+    _supplierContactController.dispose();
+    _supplierEmailController.dispose();
+    _customUnitController.dispose();
     super.dispose();
   }
 
@@ -193,6 +150,12 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
 
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill in all required fields'),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
 
@@ -213,20 +176,22 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
 
       _apiService.setAuthToken(token);
 
+      final unitValue = _selectedUnit == 'others' && _customUnitController.text.isNotEmpty
+          ? _customUnitController.text.trim()
+          : _selectedUnit;
+
       final itemData = {
         'building_id': _buildingId,
         'item_name': _itemNameController.text.trim(),
         'item_code': _itemCodeController.text.trim(),
-        'classification': _selectedClassification,
-        'department': _selectedDepartment,
-        'brand_name': _brandNameController.text.trim(),
+        'classification': _selectedClassification?.toLowerCase(),
+        'department': _selectedDepartment?.toLowerCase(),
         'current_stock': int.parse(_currentStockController.text.trim()),
         'reorder_level': int.parse(_reorderLevelController.text.trim()),
-        'unit': _selectedUnit,
-        'is_critical': _isCritical,
-        'supplier': _supplierController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'recommended_on': _selectedRecommendedLocations,
+        'unit': unitValue,
+        'supplier': _supplierNameController.text.trim(),
+        'supplier_contact': _supplierContactController.text.trim(),
+        'supplier_email': _supplierEmailController.text.trim(),
       };
 
       final response = await _apiService.createInventoryItem(itemData);
@@ -273,68 +238,62 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Section
-            Row(
+            // Header Section with Breadcrumb
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        "Create New Item",
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      // Breadcrumb navigation
-                      Row(
-                        children: [
-                          TextButton(
-                            onPressed: () => context.go('/dashboard'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.black,
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                            ),
-                            child: const Text('Dashboard'),
-                          ),
-                          const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
-                          TextButton(
-                            onPressed: () => context.go('/inventory/items'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.black,
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                            ),
-                            child: const Text('Inventory Management'),
-                          ),
-                          const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
-                          TextButton(
-                            onPressed: null,
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.black,
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                            ),
-                            child: const Text('Create Item'),
-                          ),
-                        ],
-                      ),
-                    ],
+                const Text(
+                  "Create New Item",
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
                   ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () => context.go('/dashboard'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      child: const Text('Dashboard'),
+                    ),
+                    const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                    TextButton(
+                      onPressed: () => context.go('/inventory/items'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      child: const Text('Inventory Management'),
+                    ),
+                    const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                    TextButton(
+                      onPressed: null,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      child: const Text('Create Item'),
+                    ),
+                  ],
+                ),
               ],
             ),
-            
             const SizedBox(height: 32),
 
             // Error message
             if (_errorMessage != null)
               Container(
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 24),
                 decoration: BoxDecoration(
                   color: Colors.red[50],
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red[300]!),
+                  border: Border.all(color: Colors.red[200]!),
                 ),
                 child: Row(
                   children: [
@@ -352,6 +311,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
 
             // Form Container
             Container(
+              width: double.infinity,
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
@@ -363,121 +323,38 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                   ),
                 ],
               ),
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(32),
               child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Basic Information Section
-                    const Text(
-                      'Basic Information',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF2D3748),
+                    // ===== Basic Information Section =====
+                    _sectionHeader('Basic Information'),
+                    const SizedBox(height: 20),
+
+                    // Item Name (full width)
+                    _fieldLabel('Item Name *'),
+                    _fieldBox(
+                      child: TextFormField(
+                        controller: _itemNameController,
+                        decoration: _decoration('Enter item name'),
+                        validator: _req,
                       ),
                     ),
                     const SizedBox(height: 16),
 
-                    // Item Name
-                    TextFormField(
-                      controller: _itemNameController,
-                      decoration: InputDecoration(
-                        labelText: 'Item Name *',
-                        hintText: 'Enter item name',
-                        labelStyle: TextStyle(color: Colors.grey[700]),
-                        hintStyle: TextStyle(color: Colors.grey[400]),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey[400]!),
+                    // Item Code (read-only, auto-generated)
+                    _fieldLabel('Item Code'),
+                    _fieldBox(
+                      child: TextFormField(
+                        controller: _itemCodeController,
+                        readOnly: true,
+                        decoration: _decoration('Auto-generated').copyWith(
+                          filled: true,
+                          fillColor: Colors.grey[50],
                         ),
                       ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Item name is required';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Item Code & Brand Name (Row)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _itemCodeController,
-                            readOnly: true,
-                            decoration: InputDecoration(
-                              labelText: 'Item Code (Auto-generated) *',
-                              hintText: 'Select classification & department',
-                              labelStyle: TextStyle(color: Colors.grey[700]),
-                              hintStyle: TextStyle(color: Colors.grey[400]),
-                              suffixIcon: const Tooltip(
-                                message: 'Auto-generated based on classification and department',
-                                child: Icon(Icons.auto_awesome, size: 18, color: Colors.blue),
-                              ),
-                              filled: true,
-                              fillColor: Colors.grey[50],
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
-                              ),
-                              disabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[400]!),
-                              ),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please select classification & department';
-                              }
-                              return null;
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _brandNameController,
-                            decoration: InputDecoration(
-                              labelText: 'Brand Name',
-                              hintText: 'Enter brand name',
-                              labelStyle: TextStyle(color: Colors.grey[700]),
-                              hintStyle: TextStyle(color: Colors.grey[400]),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[400]!),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                     const SizedBox(height: 16),
 
@@ -485,298 +362,230 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                     Row(
                       children: [
                         Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _selectedClassification,
-                            decoration: InputDecoration(
-                              labelText: 'Classification *',
-                              labelStyle: TextStyle(color: Colors.grey[700]),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _fieldLabel('Classification *'),
+                              _fieldBox(
+                                child: DropdownButtonFormField<String>(
+                                  value: _selectedClassification,
+                                  decoration: _decoration('Select classification'),
+                                  items: _classifications.map((item) {
+                                    return DropdownMenuItem<String>(
+                                      value: item['value'],
+                                      child: Text(item['label']!),
+                                    );
+                                  }).toList(),
+                                  onChanged: _onClassificationChanged,
+                                  validator: _reqDropdown,
+                                ),
                               ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[400]!),
-                              ),
-                            ),
-                            items: _classifications.map((classification) {
-                              return DropdownMenuItem(
-                                value: classification,
-                                child: Text(classification.toUpperCase()),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedClassification = value;
-                              });
-                              _generateItemCode(); // Auto-generate item code
-                            },
-                            validator: (value) {
-                              if (value == null) {
-                                return 'Classification is required';
-                              }
-                              return null;
-                            },
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 24),
                         Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _selectedDepartment,
-                            decoration: _getInputDecoration('Department *'),
-                            items: _departments.map((department) {
-                              return DropdownMenuItem(
-                                value: department,
-                                child: Text(department.toUpperCase()),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedDepartment = value;
-                              });
-                              _generateItemCode(); // Auto-generate item code
-                            },
-                            validator: (value) {
-                              if (value == null) {
-                                return 'Department is required';
-                              }
-                              return null;
-                            },
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _fieldLabel('Department *'),
+                              _fieldBox(
+                                child: DropdownButtonFormField<String>(
+                                  value: _selectedDepartment,
+                                  decoration: _decoration('Select department'),
+                                  items: _departments.map((dept) {
+                                    return DropdownMenuItem<String>(
+                                      value: dept,
+                                      child: Text(dept),
+                                    );
+                                  }).toList(),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _selectedDepartment = value;
+                                    });
+                                  },
+                                  validator: _reqDropdown,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-
-                    // Item Code Format Info
-                    if (_itemCodeController.text.isNotEmpty)
-                      Container(
-                        margin: const EdgeInsets.only(top: 8),
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[50],
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue[100]!),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline, size: 16, color: Colors.blue[700]),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Item code format: [Classification]-[Department]-[Unique ID]',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.blue[700],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
                     const SizedBox(height: 24),
 
-                    // Stock Information Section
+                    // ===== Stock Information Section =====
                     const Divider(),
                     const SizedBox(height: 24),
-                    const Text(
-                      'Stock Information',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF2D3748),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
+                    _sectionHeader('Stock Information'),
+                    const SizedBox(height: 20),
 
                     // Current Stock, Reorder Level, Unit (Row)
                     Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _currentStockController,
-                            decoration: _getInputDecoration('Current Stock *', hint: '0'),
-                            keyboardType: TextInputType.number,
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Current stock is required';
-                              }
-                              if (int.tryParse(value) == null) {
-                                return 'Enter a valid number';
-                              }
-                              return null;
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _reorderLevelController,
-                            decoration: _getInputDecoration('Reorder Level *', hint: '0'),
-                            keyboardType: TextInputType.number,
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Reorder level is required';
-                              }
-                              if (int.tryParse(value) == null) {
-                                return 'Enter a valid number';
-                              }
-                              return null;
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _selectedUnit,
-                            decoration: _getInputDecoration('Unit *'),
-                            items: _units.map((unit) {
-                              return DropdownMenuItem(
-                                value: unit,
-                                child: Text(unit),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedUnit = value;
-                              });
-                            },
-                            validator: (value) {
-                              if (value == null) {
-                                return 'Unit is required';
-                              }
-                              return null;
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Additional Information Section
-                    const Divider(),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'Additional Information',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF2D3748),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Supplier
-                    TextFormField(
-                      controller: _supplierController,
-                      decoration: _getInputDecoration('Supplier', hint: 'Enter supplier name'),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Description
-                    TextFormField(
-                      controller: _descriptionController,
-                      decoration: _getInputDecoration('Description', hint: 'Enter item description'),
-                      maxLines: 3,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Recommended On (Multi-select)
-                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Recommend On (Locations)',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF2D3748),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey[300]!),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.all(12),
-                          child: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: _locations.map((location) {
-                              final isSelected = _selectedRecommendedLocations.contains(location);
-                              return FilterChip(
-                                label: Text(location),
-                                selected: isSelected,
-                                onSelected: (selected) {
-                                  setState(() {
-                                    if (selected) {
-                                      _selectedRecommendedLocations.add(location);
-                                    } else {
-                                      _selectedRecommendedLocations.remove(location);
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _fieldLabel('Current Stock *'),
+                              _fieldBox(
+                                child: TextFormField(
+                                  controller: _currentStockController,
+                                  decoration: _decoration('0'),
+                                  keyboardType: TextInputType.number,
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return 'Required';
                                     }
-                                  });
-                                },
-                                selectedColor: const Color(0xFF1976D2).withOpacity(0.2),
-                                checkmarkColor: const Color(0xFF1976D2),
-                                backgroundColor: Colors.grey[50],
-                                labelStyle: TextStyle(
-                                  fontSize: 13,
-                                  color: isSelected ? const Color(0xFF1976D2) : Colors.grey[700],
-                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                    if (int.tryParse(value) == null) {
+                                      return 'Invalid number';
+                                    }
+                                    return null;
+                                  },
                                 ),
-                              );
-                            }).toList(),
+                              ),
+                            ],
                           ),
                         ),
-                        if (_selectedRecommendedLocations.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              '${_selectedRecommendedLocations.length} location(s) selected',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
+                        const SizedBox(width: 24),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _fieldLabel('Reorder Level *'),
+                              _fieldBox(
+                                child: TextFormField(
+                                  controller: _reorderLevelController,
+                                  decoration: _decoration('0'),
+                                  keyboardType: TextInputType.number,
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return 'Required';
+                                    }
+                                    if (int.tryParse(value) == null) {
+                                      return 'Invalid number';
+                                    }
+                                    return null;
+                                  },
+                                ),
                               ),
-                            ),
+                            ],
                           ),
+                        ),
+                        const SizedBox(width: 24),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _fieldLabel('Unit *'),
+                              _fieldBox(
+                                child: DropdownButtonFormField<String>(
+                                  value: _selectedUnit,
+                                  decoration: _decoration('Select unit'),
+                                  items: _units.map((unit) {
+                                    return DropdownMenuItem<String>(
+                                      value: unit,
+                                      child: Text(unit),
+                                    );
+                                  }).toList(),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _selectedUnit = value;
+                                      _showCustomUnitField = value == 'others';
+                                    });
+                                  },
+                                  validator: _reqDropdown,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
+                    ),
+
+                    // Custom Unit field (if "others" selected)
+                    if (_showCustomUnitField) ...[
+                      const SizedBox(height: 16),
+                      _fieldLabel('Custom Unit *'),
+                      _fieldBox(
+                        child: TextFormField(
+                          controller: _customUnitController,
+                          decoration: _decoration('Enter custom unit (e.g., rolls, pairs)'),
+                          validator: _showCustomUnitField ? _req : null,
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 24),
+
+                    // ===== Supplier Information Section =====
+                    const Divider(),
+                    const SizedBox(height: 24),
+                    _sectionHeader('Supplier Information'),
+                    const SizedBox(height: 20),
+
+                    // Supplier Name
+                    _fieldLabel('Supplier Name'),
+                    _fieldBox(
+                      child: TextFormField(
+                        controller: _supplierNameController,
+                        decoration: _decoration('Enter supplier name'),
+                      ),
                     ),
                     const SizedBox(height: 16),
 
-                    // Critical Item Checkbox
-                    CheckboxListTile(
-                      title: const Text('Mark as Critical Item'),
-                      subtitle: const Text(
-                        'Critical items require immediate attention when stock is low',
-                      ),
-                      value: _isCritical,
-                      onChanged: (value) {
-                        setState(() {
-                          _isCritical = value ?? false;
-                        });
-                      },
-                      controlAffinity: ListTileControlAffinity.leading,
+                    // Contact Number & Email (Row)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _fieldLabel('Contact Number'),
+                              _fieldBox(
+                                child: TextFormField(
+                                  controller: _supplierContactController,
+                                  decoration: _decoration('Enter contact number'),
+                                  keyboardType: TextInputType.phone,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 24),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _fieldLabel('Email (Optional)'),
+                              _fieldBox(
+                                child: TextFormField(
+                                  controller: _supplierEmailController,
+                                  decoration: _decoration('Enter email address'),
+                                  keyboardType: TextInputType.emailAddress,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 32),
 
-                    // Action Buttons
+                    // ===== Action Buttons =====
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         OutlinedButton(
-                          onPressed: _isLoading
-                              ? null
-                              : () => context.go('/inventory/items'),
+                          onPressed: _isLoading ? null : () => context.go('/inventory/items'),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 32,
                               vertical: 16,
                             ),
+                            side: BorderSide(color: Colors.grey[300]!),
                           ),
                           child: const Text('Cancel'),
                         ),
@@ -785,9 +594,13 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                           onPressed: _isLoading ? null : _submitForm,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF1976D2),
+                            foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(
                               horizontal: 32,
                               vertical: 16,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
                             ),
                           ),
                           child: _isLoading
@@ -795,13 +608,16 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                                   width: 20,
                                   height: 20,
                                   child: CircularProgressIndicator(
-                                    strokeWidth: 2,
                                     color: Colors.white,
+                                    strokeWidth: 2,
                                   ),
                                 )
                               : const Text(
                                   'Create Item',
-                                  style: TextStyle(color: Colors.white),
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                         ),
                       ],
@@ -815,4 +631,54 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
       ),
     );
   }
+
+  // ===== UI Helper Methods =====
+  Widget _sectionHeader(String text) => Text(
+        text,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF2D3748),
+        ),
+      );
+
+  Widget _fieldLabel(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[700],
+          ),
+        ),
+      );
+
+  Widget _fieldBox({required Widget child}) =>
+      SizedBox(height: _kFieldHeight, child: child);
+
+  InputDecoration _decoration(String hint) => InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: Colors.grey[400]),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Colors.blue),
+        ),
+      );
+
+  // ===== Validators =====
+  String? _req(String? v) =>
+      (v == null || v.trim().isEmpty) ? 'Required' : null;
+
+  String? _reqDropdown<T>(T? v) => (v == null) ? 'Required' : null;
 }

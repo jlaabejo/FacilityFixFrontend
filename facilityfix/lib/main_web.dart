@@ -1,6 +1,9 @@
 // // // The above Dart code initializes a Flutter application with Firebase, sets up routing for various
 // // // pages in an admin web interface, and includes theme management functionality.
 
+import 'package:facilityfix/adminweb/pages/inventory_item_create_page.dart';
+
+import 'adminweb/pages/webinventoryitems_viewdetails.dart';
 import 'firebase_options.dart';
 import 'package:facilityfix/adminweb/pages/adminwebcalendar_page.dart';
 import 'package:flutter/material.dart';
@@ -19,21 +22,15 @@ import 'adminweb/pages/adminmaintenance_page.dart';
 import 'adminweb/pages/adminrepair_cs_page.dart';
 import 'adminweb/pages/adminrepair_js_page.dart';
 import 'adminweb/pages/adminrepair_wop_page.dart';
-import 'adminweb/pages/inventory_item_create_page.dart' as new_inv;
-import 'adminweb/pages/inventory_item_details_page.dart' as new_inv;
-import 'adminweb/pages/workmaintenance_form.dart';
+import 'adminweb/pages/internalmaintenance_form.dart';
 import 'adminweb/pages/internalmaintenance_viewform.dart';
 import 'adminweb/pages/externalmaintenance_form.dart';
 import 'adminweb/pages/externalmaintenance_viewform.dart';
-import 'adminweb/pages/createwebinventoryitems_page.dart';
-import 'adminweb/pages/webinventoryitems_viewdetails.dart';
 import 'adminweb/pages/createwebannouncement_page.dart';
 import 'adminweb/pages/editwebannouncement_page.dart';
 import 'adminweb/pages/adminsettings_page.dart';
 import 'adminweb/pages/adminwebprofile_page.dart';
 import 'adminweb/pages/loadingscreen_page.dart';
-
-
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -211,14 +208,14 @@ class _MyAppState extends State<MyApp> {
       GoRoute(
         path: '/inventory/item/create',
         name: 'inventory_item_create',
-        builder: (context, state) => const new_inv.InventoryItemCreatePage(),
+        builder: (context, state) => const InventoryItemCreatePage(),
       ),
       GoRoute(
         path: '/inventory/item/:itemId',
         name: 'inventory_item_details',
         builder: (context, state) {
           final itemId = state.pathParameters['itemId']!;
-          return new_inv.InventoryItemDetailsPage(itemId: itemId);
+          return InventoryItemDetailsPage(itemId: itemId);
         },
       ),
       GoRoute(
@@ -263,16 +260,12 @@ class _MyAppState extends State<MyApp> {
         name: 'analytics',
         builder: (context, state) => const AdminWebAnalyticsPage(),
       ),
-      
       // Announcement route
       GoRoute(
         path: '/announcement',
         name: 'announcement',
         builder: (context, state) => const AdminWebAnnouncementPage(),
       ),
-      
-
-      
       // Announcement route
       GoRoute(
         path: '/adminweb/pages/createannouncement',
@@ -438,80 +431,3 @@ class PlaceholderPage extends StatelessWidget {
   }
 }
 
-
-
-// // Mobile
-
-
-// import 'package:facilityfix/landingpage/welcomepage.dart';
-// import 'package:flutter/material.dart';
-// import 'package:firebase_core/firebase_core.dart';
-// import 'package:facilityfix/services/chat_helper.dart';
-// import 'package:facilityfix/services/firebase_config.dart';
-// import 'firebase_options.dart';
-// import 'debug/firebase_debug.dart';
-
-// void main() async {
-//   WidgetsFlutterBinding.ensureInitialized();
-  
-//   try {
-//     // Initialize Firebase with proper options
-//     await Firebase.initializeApp(
-//       options: DefaultFirebaseOptions.currentPlatform,
-//     );
-//     print('[FacilityFix] Firebase initialized successfully');
-    
-//     // Configure Firestore settings
-//     FirebaseConfig.configureFirestore();
-    
-//     // Test Firebase connection
-//     final isConnected = await FirebaseConfig.testConnection();
-//     if (isConnected) {
-//       print('[FacilityFix] Firebase connection verified');
-      
-//       // Initialize chat collections only if Firebase is working
-//       await ChatHelper.initializeChat();
-//       print('[FacilityFix] Chat initialized successfully');
-//     } else {
-//       print('[FacilityFix] Firebase connection failed');
-//       print('[FacilityFix] Chat features will be disabled');
-      
-//       // Run detailed diagnostics when connection fails
-//       print('[FacilityFix] Running Firebase diagnostics...');
-//       final diagnostics = await FirebaseDebugUtils.runDiagnostics();
-//       FirebaseDebugUtils.printDiagnostics(diagnostics);
-//     }
-//   } catch (e) {
-//     print('[FacilityFix] Initialization error: $e');
-//   }
-
-//   runApp(const MyApp());
-// }
-
-// class MyApp extends StatelessWidget {
-//   const MyApp({super.key});
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return MaterialApp(
-//       debugShowCheckedModeBanner: false,
-//       theme: ThemeData(
-//         primaryColor: const Color(0xFF005CE8),
-//         hintColor: const Color(0xFFF4F5FF),
-//         iconButtonTheme: IconButtonThemeData(
-//           style: ButtonStyle(
-//             backgroundColor: WidgetStateProperty.all<Color>(
-//               const Color(0xFFF4F5FF),
-//             ),
-//             foregroundColor: WidgetStateProperty.all<Color>(
-//               const Color(0xFF005CE8),
-//             ),
-//           ),
-//         ),
-//         fontFamily: 'Inter',
-//       ),
-//       home: WelcomePage(),
-//     );
-  
-//   }
-//   }
