@@ -76,9 +76,7 @@ class _InventoryItemHistoryContent extends StatelessWidget {
         Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-            child: historyEntries.isEmpty
-                ? _buildEmptyState()
-                : _buildHistoryList(historyEntries),
+            child: _buildEmptyState()
           ),
         ),
       ],
@@ -171,16 +169,7 @@ class _InventoryItemHistoryContent extends StatelessWidget {
     );
   }
 
-  Widget _buildHistoryList(List<Map<String, dynamic>> entries) {
-    return ListView.separated(
-      itemCount: entries.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 16),
-      itemBuilder: (_, index) {
-        final entry = entries[index];
-        return _HistoryEntryCard(entry: entry);
-      },
-    );
-  }
+
 }
 
 class _HistoryEntryCard extends StatelessWidget {

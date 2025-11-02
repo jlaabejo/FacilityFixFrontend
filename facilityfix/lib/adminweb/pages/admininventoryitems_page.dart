@@ -4,6 +4,7 @@ import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
 import '../../services/auth_storage.dart';
 import '../popupwidgets/inventoryitem_details_popup.dart';
+import '../popupwidgets/stock_management_popup.dart';
 import '../widgets/tags.dart';
 
 class InventoryManagementItemsPage extends StatefulWidget {
@@ -193,6 +194,19 @@ class _InventoryManagementItemsPageState
           ),
         ),
         PopupMenuItem(
+          value: 'manage_stock',
+          child: Row(
+            children: [
+              Icon(Icons.inventory, color: Colors.purple[600], size: 18),
+              const SizedBox(width: 12),
+              Text(
+                'Manage Stock',
+                style: TextStyle(color: Colors.purple[600], fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+        PopupMenuItem(
           value: 'edit',
           child: Row(
             children: [
@@ -233,6 +247,9 @@ class _InventoryManagementItemsPageState
     switch (action) {
       case 'view':
         _viewItem(item);
+        break;
+      case 'manage_stock':
+        _manageStock(item);
         break;
       case 'edit':
         _editItem(item);
@@ -287,6 +304,16 @@ class _InventoryManagementItemsPageState
       
       // TODO: Send update to backend API
       // await _apiService.updateInventoryItem(item['id'], updatedData);
+    }
+  }
+
+  // Manage stock method
+  Future<void> _manageStock(Map<String, dynamic> item) async {
+    final result = await StockManagementPopup.show(context, item);
+
+    // If stock was updated, reload the inventory items
+    if (result == true) {
+      _loadInventoryItems();
     }
   }
 

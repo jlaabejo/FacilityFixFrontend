@@ -182,11 +182,16 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
     if (_categoryBreakdown != null) {
       // Try to get from combined_overview first (aggregated data)
       final combinedOverview = _categoryBreakdown!['combined_overview'] as Map<String, dynamic>?;
+      final proper_categories = ['plumbing', 'electrical', 'HVAC', 'hvac', 'carpentry', 'masonry', 'pest control'];
+
+      
+      
+      
       if (combinedOverview != null) {
         final categories = combinedOverview['categories'] as Map<String, dynamic>?;
         if (categories != null) {
-          _categoryData = categories.map(
-            (key, value) => MapEntry(key, value as int),
+          _categoryData = Map.fromEntries(
+            categories.entries.where((entry) => proper_categories.contains(entry.key) || proper_categories.contains(entry.key.toLowerCase())).map((entry) => MapEntry(entry.key, entry.value as int)),
           );
         }
       } else {

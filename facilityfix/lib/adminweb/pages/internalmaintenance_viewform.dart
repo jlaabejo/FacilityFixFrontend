@@ -75,6 +75,9 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
   final _formKey = GlobalKey<FormState>();
   bool _isEditMode = false;
 
+  // Title controller
+  final _titleCtrl = TextEditingController();
+
   // Basic Information controllers
   final _departmentCtrl = TextEditingController();
   final _createdByCtrl = TextEditingController();
@@ -90,6 +93,12 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
   // Assignment controllers
   final _assigneeNameCtrl = TextEditingController();
   final _assigneeDeptCtrl = TextEditingController();
+
+  // Staff selection for assignment
+  List<Map<String, dynamic>> _staffList = [];
+  String? _selectedStaffId;
+  String? _selectedStaffName;
+  bool _isLoadingStaff = false;
 
   // Notifications controllers (NOW EDITABLE)
   final _adminNotifyCtrl = TextEditingController();
@@ -139,6 +148,9 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
       // Load linked inventory requests
       await _loadLinkedInventoryRequests();
 
+      // Load staff members for assignment
+      await _loadStaffMembers();
+
       _populateFields();
 
       setState(() {
@@ -149,6 +161,61 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
       setState(() {
         _error = 'Failed to load task data: $e';
         _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadStaffMembers() async {
+    setState(() {
+      _isLoadingStaff = true;
+    });
+
+    try {
+      String? taskCategory = _taskData?['category']?.toString().toLowerCase();
+      String? department;
+
+      // Map category to department
+      switch (taskCategory) {
+        case 'electrical':
+          department = 'electrical';
+          break;
+        case 'plumbing':
+          department = 'plumbing';
+          break;
+        case 'hvac':
+          department = 'hvac';
+          break;
+        case 'carpentry':
+          department = 'carpentry';
+          break;
+        case 'maintenance':
+          department = 'maintenance';
+          break;
+        case 'security':
+          department = 'security';
+          break;
+        case 'fire_safety':
+          department = 'fire_safety';
+          break;
+        default:
+          department = null;
+      }
+
+      final staffData = await _apiService.getStaffMembers(
+        department: department,
+        availableOnly: true,
+      );
+
+      setState(() {
+        _staffList = staffData;
+        _isLoadingStaff = false;
+      });
+
+      print('[InternalTaskView] Loaded ${_staffList.length} staff members');
+    } catch (e) {
+      print('[InternalTaskView] Error loading staff: $e');
+      setState(() {
+        _isLoadingStaff = false;
       });
     }
   }
@@ -225,6 +292,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     }
 
     // Assign from incoming data with fallback keys
+    setText(_titleCtrl, ['task_title', 'taskTitle', 'title']);
     setText(_departmentCtrl, ['department', 'assigneeDept']);
     setText(_createdByCtrl, ['created_by', 'assigneeName', 'assigned_staff_name']);
     setText(_estimatedDurationCtrl, ['estimated_duration', 'estimatedDuration']);
@@ -237,6 +305,38 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     setText(_assigneeDeptCtrl, ['department', 'assigneeDept']);
     setText(_adminNotifyCtrl, ['admin_notification', 'adminNotify']);
     setText(_staffNotifyCtrl, ['staff_notification', 'staffNotify']);
+
+    // Set selected staff ID if available
+    // Try to find the staff member in the staff list
+    final assignedTo = seed['assigned_to'];
+    if (assignedTo != null && assignedTo.toString().isNotEmpty) {
+      final assignedValue = assignedTo.toString();
+
+      // First, try to find by user_id or id (exact match)
+      var matchedStaff = _staffList.firstWhere(
+        (staff) => (staff['user_id'] ?? staff['id']) == assignedValue,
+        orElse: () => {},
+      );
+
+      // If not found by ID, try to find by name
+      if (matchedStaff.isEmpty) {
+        matchedStaff = _staffList.firstWhere(
+          (staff) {
+            final firstName = staff['first_name'] ?? '';
+            final lastName = staff['last_name'] ?? '';
+            final fullName = '$firstName $lastName'.trim();
+            return fullName == assignedValue;
+          },
+          orElse: () => {},
+        );
+      }
+
+      // Set the selected staff ID if we found a match
+      if (matchedStaff.isNotEmpty) {
+        _selectedStaffId = (matchedStaff['user_id'] ?? matchedStaff['id'] ?? '').toString();
+        _selectedStaffName = _assigneeNameCtrl.text;
+      }
+    }
 
     void addAttachment(dynamic entry) {
       if (entry == null) return;
@@ -298,6 +398,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
 
   @override
   void dispose() {
+    _titleCtrl.dispose();
     _departmentCtrl.dispose();
     _createdByCtrl.dispose();
     _estimatedDurationCtrl.dispose();
@@ -315,6 +416,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
 
   // ------------------------ Snapshot & Handlers ------------------------
   Map<String, String> _takeSnapshot() => {
+    'title': _titleCtrl.text,
     'department': _departmentCtrl.text,
     'createdBy': _createdByCtrl.text,
     'estimatedDuration': _estimatedDurationCtrl.text,
@@ -327,12 +429,14 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     'assigneeDept': _assigneeDeptCtrl.text,
     'adminNotify': _adminNotifyCtrl.text,
     'staffNotify': _staffNotifyCtrl.text,
+    'selectedStaffId': _selectedStaffId ?? '',
   };
 
   void _enterEditMode() => setState(() => _isEditMode = true);
 
   void _cancelEdit() {
     // Revert to snapshot
+    _titleCtrl.text = _original['title']!;
     _departmentCtrl.text = _original['department']!;
     _createdByCtrl.text = _original['createdBy']!;
     _estimatedDurationCtrl.text = _original['estimatedDuration']!;
@@ -345,6 +449,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     _assigneeDeptCtrl.text = _original['assigneeDept']!;
     _adminNotifyCtrl.text = _original['adminNotify']!;
     _staffNotifyCtrl.text = _original['staffNotify']!;
+    _selectedStaffId = _original['selectedStaffId']!.isNotEmpty ? _original['selectedStaffId'] : null;
     setState(() => _isEditMode = false);
   }
 
@@ -358,40 +463,73 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
 
     try {
       final updateData = _takeSnapshot();
-      print('[v0] Updating maintenance task: ${widget.taskId} -> $updateData');
+      print('[InternalTaskView] Updating maintenance task: ${widget.taskId} -> $updateData');
 
       // Create inventory requests for selected items first
       final inventoryRequestIds = await _createInventoryRequests();
 
-      // TODO: Call API to update the task with all data including inventory request IDs
-      // For now, we're not updating the task yet until the API is implemented
-      // await _apiService.updateMaintenanceTask(widget.taskId, {
-      //   ...updateData,
-      //   if (inventoryRequestIds.isNotEmpty) 'inventory_request_ids': inventoryRequestIds,
-      // });
+      // Prepare the update payload for the API
+      final Map<String, dynamic> apiUpdateData = {
+        'task_title': _titleCtrl.text.trim(),
+        'department': _departmentCtrl.text.trim(),
+        'location': _locationCtrl.text.trim(),
+        'task_description': _descriptionCtrl.text.trim(),
+        'recurrence_type': _recurrenceCtrl.text.trim(),
+        'scheduled_date': _startDateCtrl.text.trim(),
+        'estimated_duration': _estimatedDurationCtrl.text.trim(),
+      };
 
-      _original = Map<String, String>.from(updateData); // update baseline
-      setState(() => _isEditMode = false);
-
-      // Reload inventory requests to show the newly created ones
-      if (inventoryRequestIds.isNotEmpty) {
-        await _loadLinkedInventoryRequests();
+      // Add assigned_to if a staff member is selected
+      if (_selectedStaffId != null && _selectedStaffId!.isNotEmpty) {
+        apiUpdateData['assigned_to'] = _selectedStaffId;
       }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Task saved successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+      // Add inventory request IDs if any
+      if (inventoryRequestIds.isNotEmpty) {
+        apiUpdateData['inventory_request_ids'] = inventoryRequestIds;
+      }
+
+      // Call the API to update the task
+      print('[InternalTaskView] Calling API with data: $apiUpdateData');
+      final response = await _apiService.updateMaintenanceTask(
+        widget.taskId,
+        apiUpdateData,
+      );
+
+      print('[InternalTaskView] Update response: $response');
+
+      if (response['success'] == true) {
+        _original = Map<String, String>.from(updateData); // update baseline
+        setState(() => _isEditMode = false);
+
+        // Reload inventory requests to show the newly created ones
+        if (inventoryRequestIds.isNotEmpty) {
+          await _loadLinkedInventoryRequests();
+        }
+
+        // Reload the task data to reflect the changes
+        await _initializeData();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Task updated successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        throw Exception(response['detail'] ?? 'Failed to update task');
       }
     } catch (e) {
-      print('[v0] Error saving task: $e');
+      print('[InternalTaskView] Error saving task: $e');
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Failed to save task: $e')));
+        ).showSnackBar(SnackBar(
+          content: Text('Failed to save task: $e'),
+          backgroundColor: Colors.red,
+        ));
       }
     }
   }
@@ -539,38 +677,55 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Left: title + id + assignee
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _taskData?['task_title'] ?? 
-                                  _taskData?['taskTitle'] ?? 
-                                  _taskData?['title'] ?? 
-                                  'Maintenance Task',
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _isEditMode
+                                  ? TextFormField(
+                                      controller: _titleCtrl,
+                                      validator: _req,
+                                      style: const TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                      ),
+                                      decoration: const InputDecoration(
+                                        isDense: true,
+                                        border: OutlineInputBorder(),
+                                        hintText: 'Enter task title',
+                                      ),
+                                    )
+                                  : Text(
+                                      _titleCtrl.text.isNotEmpty
+                                          ? _titleCtrl.text
+                                          : 'Maintenance Task',
+                                      style: const TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                              const SizedBox(height: 4),
+                              Text(
+                                widget.taskId,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              widget.taskId,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
+                              const SizedBox(height: 4),
+                              Text(
+                                "Assigned To: ${_assigneeNameCtrl.text}",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              "Assigned To: ${_assigneeNameCtrl.text}",
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 16),
                         // Right: chips then toolbar
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
@@ -618,8 +773,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                               const SizedBox(height: 24),
                               _buildAttachmentsCard(),
                               const SizedBox(height: 24),
-                              _buildNotificationsCard(),
-                              const SizedBox(height: 24),
+                    
                             ],
                           ),
                         ),
@@ -818,13 +972,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _editableRow('Department', _departmentCtrl, validator: _req),
-          _editableRow('Created By', _createdByCtrl, validator: _req),
-          _editableRow(
-            'Estimated Duration',
-            _estimatedDurationCtrl,
-            validator: _durationValidator,
-            hint: 'e.g., 3 hrs, 45 mins',
-          ),
+
           _editableRow('Location / Area', _locationCtrl, validator: _req),
           const SizedBox(height: 16),
           Text(
@@ -874,18 +1022,68 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
             validator: _req,
             hint: 'e.g., Every 1 month',
           ),
-          _editableRow(
-            'Start Date',
-            _startDateCtrl,
-            validator: _dateValidator,
-            hint: 'YYYY-MM-DD',
-          ),
-          _editableRow(
+          _buildStartDateRow(),
+          _readOnlyRow(
             'Next Due Date',
-            _nextDueCtrl,
-            validator: _dateValidator,
-            hint: 'YYYY-MM-DD',
+            _nextDueCtrl.text,
             highlight: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStartDateRow() {
+    final labelStyle = TextStyle(
+      fontSize: 14,
+      color: Colors.grey[600],
+      fontWeight: FontWeight.w500,
+    );
+    final valueStyle = const TextStyle(
+      fontSize: 14,
+      color: Colors.black87,
+      fontWeight: FontWeight.w500,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 160, child: Text('Start Date', style: labelStyle)),
+          Expanded(
+            child: _isEditMode
+                ? InkWell(
+                    onTap: () async {
+                      final DateTime? picked = await showDatePicker(
+                        context: context,
+                        initialDate: _startDateCtrl.text.isNotEmpty
+                            ? DateTime.tryParse(_startDateCtrl.text) ?? DateTime.now()
+                            : DateTime.now(),
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          _startDateCtrl.text = picked.toString().split(' ')[0];
+                        });
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                        suffixIcon: Icon(Icons.calendar_today, size: 18),
+                      ),
+                      child: Text(
+                        _startDateCtrl.text.isNotEmpty ? _startDateCtrl.text : 'Select date',
+                        style: TextStyle(
+                          color: _startDateCtrl.text.isEmpty ? Colors.grey : Colors.black87,
+                        ),
+                      ),
+                    ),
+                  )
+                : Text(_startDateCtrl.text, style: valueStyle),
           ),
         ],
       ),
@@ -897,41 +1095,139 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
       icon: Icons.person,
       iconBg: Colors.grey[200]!,
       title: 'Assignment',
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.person_outline,
-              color: Colors.grey[600],
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _editableRow(
-                  'Assignee Name',
-                  _assigneeNameCtrl,
-                  validator: _req,
-                  compact: true,
+          if (_isEditMode) ...[
+            // In edit mode: show staff dropdown
+            if (_isLoadingStaff)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: CircularProgressIndicator(),
                 ),
-                _editableRow(
-                  'Department',
-                  _assigneeDeptCtrl,
-                  validator: _req,
-                  compact: true,
+              )
+            else if (_staffList.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber, color: Colors.orange[700]),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'No staff members available in this category',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              DropdownButtonFormField<String>(
+                value: _selectedStaffId,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  labelText: 'Assigned Staff',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  prefixIcon: const Icon(Icons.person),
+                ),
+                items: _staffList.map<DropdownMenuItem<String>>((staff) {
+                  final staffId = staff['user_id'] ?? staff['id'] ?? '';
+                  final firstName = staff['first_name'] ?? '';
+                  final lastName = staff['last_name'] ?? '';
+                  final department = staff['staff_department'] ?? staff['department'] ?? 'General';
+
+                  String name = '$firstName $lastName'.trim();
+                  if (name.isEmpty) name = 'Staff Member';
+
+                  return DropdownMenuItem<String>(
+                    value: staffId.toString(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          name,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          department,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedStaffId = value;
+                    if (value != null) {
+                      final staff = _staffList.firstWhere(
+                        (s) => (s['user_id'] ?? s['id']) == value,
+                        orElse: () => {},
+                      );
+                      final firstName = staff['first_name'] ?? '';
+                      final lastName = staff['last_name'] ?? '';
+                      _selectedStaffName = '$firstName $lastName'.trim();
+                      _assigneeNameCtrl.text = _selectedStaffName!;
+                      _assigneeDeptCtrl.text = staff['staff_department'] ?? staff['department'] ?? '';
+                    }
+                  });
+                },
+                validator: (value) => value == null || value.isEmpty ? 'Please select a staff member' : null,
+              ),
+          ] else ...[
+            // In view mode: show read-only assignment info
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.person_outline,
+                    color: Colors.grey[600],
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _readOnlyRow(
+                        'Assignee Name',
+                        _assigneeNameCtrl.text,
+                        compact: true,
+                      ),
+                      _readOnlyRow(
+                        'Department',
+                        _assigneeDeptCtrl.text,
+                        compact: true,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -1232,64 +1528,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
         ],
       ),
       padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFE8F5E8),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.comment,
-                  color: Color(0xFF2E7D2E),
-                  size: 16,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                "Admin Notes",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE3F2FD),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF1976D2), width: 1),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.warning, color: Color(0xFF1976D2), size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    "Emergency lights in basement often have moisture issues - check battery backups.",
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.blue[800],
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+      );
   }
 
   Widget _buildAttachmentsCard() {
@@ -1588,6 +1827,38 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                       ),
                     )
                     : Text(controller.text, style: valueStyle),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ------------------------ Read-only row (always displays value) ------------------------
+  Widget _readOnlyRow(
+    String label,
+    String value, {
+    bool highlight = false,
+    bool compact = false,
+  }) {
+    final labelStyle = TextStyle(
+      fontSize: 14,
+      color: Colors.grey[600],
+      fontWeight: FontWeight.w500,
+    );
+    final valueStyle = TextStyle(
+      fontSize: 14,
+      color: highlight ? Colors.red[600] : Colors.black87,
+      fontWeight: FontWeight.w500,
+    );
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: compact ? 8 : 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 160, child: Text(label, style: labelStyle)),
+          Expanded(
+            child: Text(value.isNotEmpty ? value : 'N/A', style: valueStyle),
           ),
         ],
       ),

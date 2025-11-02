@@ -1,10 +1,13 @@
+import 'dart:convert';
 import 'package:facilityfix/adminweb/widgets/tags.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
 import '../popupwidgets/inventory_requestdetails_popup.dart';
+import '../../services/api_services.dart' as api_services;
 
 class InventoryRequestPage extends StatefulWidget {
   const InventoryRequestPage({super.key});
@@ -45,33 +48,85 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
   
   Future<void> _loadInventoryItems() async {
     try {
-      final response = await _apiService.getInventoryItems(
-        buildingId: _buildingId,
+      // Fetch ALL inventory items (not filtered by building)
+      final token = await api_services.APIService.requireToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      };
+
+      final response = await http.get(
+        Uri.parse('${ApiService.baseUrl}/inventory/items'),
+        headers: headers,
       );
 
-      print('[v0] Inventory items response: $response');
+      print('[v0] Inventory items response status: ${response.statusCode}');
 
-      if (response['success'] == true) {
-        final items = List<Map<String, dynamic>>.from(response['data'] ?? []);
-        print('[v0] Number of inventory items: ${items.length}');
-        
-        // Build a map of inventory_id -> item_name
-        final Map<String, String> itemNames = {};
-        for (var item in items) {
-          final id = item['id']?.toString() ?? item['item_code']?.toString();
-          final name = item['item_name']?.toString() ?? item['name']?.toString();
-          if (id != null && name != null) {
-            itemNames[id] = name;
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          final items = List<Map<String, dynamic>>.from(data['data'] ?? []);
+          print('[v0] Number of inventory items: ${items.length}');
+
+          // Build a map of inventory_id -> item_name
+          final Map<String, String> itemNames = {};
+          for (var item in items) {
+            final id = item['id']?.toString() ?? item['_doc_id']?.toString();
+            final name = item['item_name']?.toString() ?? item['name']?.toString();
+            if (id != null && name != null) {
+              itemNames[id] = name;
+              print('[v0] Cached: $id -> $name');
+            }
           }
+
+          print('[v0] Cached ${itemNames.length} item names');
+          setState(() {
+            _inventoryItemNames = itemNames;
+          });
         }
-        
-        print('[v0] Cached ${itemNames.length} item names');
-        setState(() {
-          _inventoryItemNames = itemNames;
-        });
       }
     } catch (e) {
       print('[v0] Error fetching inventory items: $e');
+    }
+  }
+
+  /// Fetch item name by inventory ID from the API (for items not in cache)
+  Future<void> _fetchMissingItemNames() async {
+    final missingIds = <String>[];
+
+    // Find all inventory IDs that aren't cached
+    for (var request in _requestItems) {
+      final inventoryId = request['inventory_id']?.toString();
+      if (inventoryId != null && !_inventoryItemNames.containsKey(inventoryId)) {
+        missingIds.add(inventoryId);
+      }
+    }
+
+    if (missingIds.isEmpty) {
+      return;
+    }
+
+    print('[v0] Fetching ${missingIds.length} missing item names');
+
+    // Fetch each missing item individually
+    for (var inventoryId in missingIds) {
+      try {
+        final response = await _apiService.getInventoryItem(inventoryId);
+        if (response['success'] == true && response['data'] != null) {
+          final itemData = response['data'];
+          final itemName = itemData['item_name']?.toString() ??
+                          itemData['name']?.toString() ??
+                          'Unknown Item';
+
+          setState(() {
+            _inventoryItemNames[inventoryId] = itemName;
+          });
+
+          print('[v0] Fetched: $inventoryId -> $itemName');
+        }
+      } catch (e) {
+        print('[v0] Error fetching item $inventoryId: $e');
+      }
     }
   }
 
@@ -91,17 +146,20 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
       if (response['success'] == true) {
         final rawData = response['data'] ?? [];
         print('[v0] Number of requests: ${rawData.length}');
-        
+
         // Debug: Print first item structure if available
         if (rawData.isNotEmpty) {
           print('[v0] First item structure: ${rawData[0]}');
           print('[v0] First item keys: ${(rawData[0] as Map).keys.toList()}');
         }
-        
+
         setState(() {
           _requestItems = List<Map<String, dynamic>>.from(rawData);
           _isLoading = false;
         });
+
+        // Fetch any missing item names
+        await _fetchMissingItemNames();
       } else {
         setState(() {
           _errorMessage = 'Failed to load inventory requests';
@@ -1060,7 +1118,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                               // Get item name from cached inventory items
                               String itemName = 'Unknown Item';
                               final inventoryId = item['inventory_id']?.toString();
-                              
+
                               if (inventoryId != null && _inventoryItemNames.containsKey(inventoryId)) {
                                 // Found in cached inventory items
                                 itemName = _inventoryItemNames[inventoryId]!;
@@ -1071,6 +1129,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                                 // Show ID if we have it but no name
                                 itemName = 'Item $inventoryId';
                               }
+               
                               
                               final quantity =
                                   (item['quantity_requested'] ?? 0).toString();

@@ -1789,6 +1789,131 @@ class ApiService {
     }
   }
 
+  /// Restock inventory item (add stock)
+  Future<Map<String, dynamic>> restockInventoryItem(
+    String itemId,
+    int quantity, {
+    String? reason,
+    double? costPerUnit,
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final queryParams = <String, String>{
+        'quantity': quantity.toString(),
+      };
+
+      if (reason != null) queryParams['reason'] = reason;
+      if (costPerUnit != null) queryParams['cost_per_unit'] = costPerUnit.toString();
+
+      final uri = Uri.parse(
+        '$baseUrl/inventory/items/$itemId/restock',
+      ).replace(queryParameters: queryParams);
+
+      final response = await http.post(uri, headers: headers);
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        final errorBody = json.decode(response.body);
+        return {
+          'success': false,
+          'detail': errorBody['detail'] ?? 'Failed to restock item',
+        };
+      }
+    } catch (e) {
+      print('[v0] Error restocking inventory item: $e');
+      return {
+        'success': false,
+        'detail': 'Error: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Consume inventory stock (remove stock)
+  Future<Map<String, dynamic>> consumeInventoryStock(
+    String itemId,
+    int quantity, {
+    String? reason,
+    String? referenceType,
+    String? referenceId,
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final queryParams = <String, String>{
+        'quantity': quantity.toString(),
+      };
+
+      if (reason != null) queryParams['reason'] = reason;
+      if (referenceType != null) queryParams['reference_type'] = referenceType;
+      if (referenceId != null) queryParams['reference_id'] = referenceId;
+
+      final uri = Uri.parse(
+        '$baseUrl/inventory/items/$itemId/consume',
+      ).replace(queryParameters: queryParams);
+
+      final response = await http.post(uri, headers: headers);
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        final errorBody = json.decode(response.body);
+        return {
+          'success': false,
+          'detail': errorBody['detail'] ?? 'Failed to consume stock',
+        };
+      }
+    } catch (e) {
+      print('[v0] Error consuming inventory stock: $e');
+      return {
+        'success': false,
+        'detail': 'Error: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Get inventory transactions for an item
+  Future<Map<String, dynamic>> getInventoryTransactions(
+    String itemId, {
+    String? transactionType,
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final queryParams = <String, String>{
+        'inventory_id': itemId,
+      };
+
+      if (transactionType != null) {
+        queryParams['transaction_type'] = transactionType;
+      }
+
+      final uri = Uri.parse(
+        '$baseUrl/inventory/transactions',
+      ).replace(queryParameters: queryParams);
+
+      final response = await http.get(uri, headers: headers);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data is Map<String, dynamic>) {
+          return data;
+        } else {
+          return {'success': true, 'data': data};
+        }
+      } else {
+        throw Exception(
+          'Failed to load transactions: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error fetching inventory transactions: $e');
+      return {
+        'success': false,
+        'data': [],
+        'detail': 'Error: ${e.toString()}',
+      };
+    }
+  }
+
   /// Get all inventory requests
   Future<Map<String, dynamic>> getInventoryRequests({
     String? buildingId,
