@@ -222,14 +222,15 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
   // date clickable to open create maintenance dialog
   void _openDayDialog(DateTime date) {
     final tasks = _getTasksForDate(date);
-
+    
     showDialog(
       context: context,
-      builder: (ctx) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 600),
           child: Container(
             width: 520,
             padding: const EdgeInsets.all(20),
@@ -237,7 +238,7 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header: Date (left) + Create Task (right)
+                // Header row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -288,14 +289,13 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 16),
                 const Divider(height: 1),
-
                 const SizedBox(height: 12),
 
-                // Body: task list (or empty state)
+                // Scrollable or shrink-wrapped task list
                 if (tasks.isEmpty)
+                  // 🧩 Shrink layout when there are no tasks
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -316,77 +316,80 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                     ),
                   )
                 else
-                  ...tasks.map(
-                    (task) => InkWell(
-                      onTap: () {
-                        Navigator.of(ctx).pop();
-                        _showTaskDetails(task);
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 8),
-                        decoration: BoxDecoration(
-                          color: _getTaskColor(task['type']).withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: _getTaskColor(
-                              task['type'],
-                            ).withOpacity(0.25),
+                  // 🧩 Scrollable list when there are tasks
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: tasks.map(
+                          (task) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8.0),
+                            child: InkWell(
+                              onTap: () {
+                                Navigator.of(ctx).pop();
+                                _showTaskDetails(task);
+                              },
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: _getTaskColor(task['type']).withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: _getTaskColor(task['type']).withOpacity(0.25),
+                                  ),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: 4,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: _getTaskColor(task['type']),
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            task['title'] ?? '',
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            task['assignedTo'] ?? 'Unassigned',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 4,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: _getTaskColor(task['type']),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    task['title'],
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    task['assignedTo'],
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[600],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Icon(
-                              Icons.chevron_right,
-                              color: Colors.grey[500],
-                              size: 18,
-                            ),
-                          ],
-                        ),
+                        ).toList(),
                       ),
                     ),
                   ),
               ],
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
+
 
   // Get tasks for a specific date
   List<Map<String, dynamic>> _getTasksForDate(DateTime date) {
@@ -826,7 +829,7 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                       GestureDetector(
                         onTap: () {
                           // Show all tasks for this date
-                          _showAllTasksForDate(date, tasks);
+                          _openDayDialog(date);
                         },
                         child: Container(
                           width: double.infinity,
@@ -855,122 +858,122 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
   }
 
   // Show all tasks for a specific date
-  void _showAllTasksForDate(DateTime date, List<Map<String, dynamic>> tasks) {
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Container(
-            width: 400,
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Tasks for ${_getMonthName(date.month)} ${date.day}',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
+  // void _showAllTasksForDate(DateTime date, List<Map<String, dynamic>> tasks) {
+  //   showDialog(
+  //     context: context,
+  //     builder: (ctx) {
+  //       return Dialog(
+  //         shape: RoundedRectangleBorder(
+  //           borderRadius: BorderRadius.circular(16),
+  //         ),
+  //         child: Container(
+  //           width: 400,
+  //           padding: const EdgeInsets.all(24),
+  //           child: Column(
+  //             mainAxisSize: MainAxisSize.min,
+  //             crossAxisAlignment: CrossAxisAlignment.start,
+  //             children: [
+  //               // Header
+  //               Row(
+  //                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //                 children: [
+  //                   Text(
+  //                     'Tasks for ${_getMonthName(date.month)} ${date.day}',
+  //                     style: const TextStyle(
+  //                       fontSize: 18,
+  //                       fontWeight: FontWeight.w600,
+  //                     ),
+  //                   ),
+  //                   IconButton(
+  //                     onPressed: () => Navigator.of(ctx).pop(),
+  //                     icon: const Icon(Icons.close),
+  //                   ),
+  //                 ],
+  //               ),
+  //               const SizedBox(height: 16),
 
-                // Task list (each item opens popover anchored to its tile)
-                ...tasks.map<Widget>((task) {
-                  return Builder(
-                    builder:
-                        (tileCtx) => InkWell(
-                          onTap: () {
-                            // Capture the tile's screen rect BEFORE closing the dialog
-                            final rect = _rectFromContext(tileCtx);
-                            Navigator.of(ctx).pop(); // close list dialog
+  //               // Task list (each item opens popover anchored to its tile)
+  //               ...tasks.map<Widget>((task) {
+  //                 return Builder(
+  //                   builder:
+  //                       (tileCtx) => InkWell(
+  //                         onTap: () {
+  //                           // Capture the tile's screen rect BEFORE closing the dialog
+  //                           final rect = _rectFromContext(tileCtx);
+  //                           Navigator.of(ctx).pop(); // close list dialog
 
-                            // Show the anchored popover on the base route
-                            Future.microtask(
-                              () => _showTaskPopoverAt(task, rect),
-                            );
-                          },
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            margin: const EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: _getTaskColor(
-                                task['type'],
-                              ).withOpacity(0.10),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: _getTaskColor(
-                                  task['type'],
-                                ).withOpacity(0.30),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 4,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: _getTaskColor(task['type']),
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        task['title'],
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      Text(
-                                        task['assignedTo'],
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Icon(
-                                  Icons.chevron_right,
-                                  size: 18,
-                                  color: Colors.grey[500],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                  );
-                }),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+  //                           // Show the anchored popover on the base route
+  //                           Future.microtask(
+  //                             () => _showTaskPopoverAt(task, rect),
+  //                           );
+  //                         },
+  //                         child: Container(
+  //                           width: double.infinity,
+  //                           padding: const EdgeInsets.all(12),
+  //                           margin: const EdgeInsets.only(bottom: 8),
+  //                           decoration: BoxDecoration(
+  //                             color: _getTaskColor(
+  //                               task['type'],
+  //                             ).withOpacity(0.10),
+  //                             borderRadius: BorderRadius.circular(8),
+  //                             border: Border.all(
+  //                               color: _getTaskColor(
+  //                                 task['type'],
+  //                               ).withOpacity(0.30),
+  //                             ),
+  //                           ),
+  //                           child: Row(
+  //                             children: [
+  //                               Container(
+  //                                 width: 4,
+  //                                 height: 40,
+  //                                 decoration: BoxDecoration(
+  //                                   color: _getTaskColor(task['type']),
+  //                                   borderRadius: BorderRadius.circular(2),
+  //                                 ),
+  //                               ),
+  //                               const SizedBox(width: 12),
+  //                               Expanded(
+  //                                 child: Column(
+  //                                   crossAxisAlignment:
+  //                                       CrossAxisAlignment.start,
+  //                                   children: [
+  //                                     Text(
+  //                                       task['title'],
+  //                                       style: const TextStyle(
+  //                                         fontSize: 14,
+  //                                         fontWeight: FontWeight.w600,
+  //                                       ),
+  //                                     ),
+  //                                     Text(
+  //                                       task['assignedTo'],
+  //                                       style: TextStyle(
+  //                                         fontSize: 12,
+  //                                         color: Colors.grey[600],
+  //                                       ),
+  //                                     ),
+  //                                   ],
+  //                                 ),
+  //                               ),
+  //                               const SizedBox(width: 8),
+  //                               Icon(
+  //                                 Icons.chevron_right,
+  //                                 size: 18,
+  //                                 color: Colors.grey[500],
+  //                               ),
+  //                             ],
+  //                           ),
+  //                         ),
+  //                       ),
+  //                 );
+  //               }),
+  //             ],
+  //           ),
+  //         ),
+  //       );
+  //     },
+  //   );
+  // }
 
   //  Popover helpers
   // Get a screen-space rect for any widget context

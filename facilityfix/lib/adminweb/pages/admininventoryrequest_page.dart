@@ -1,8 +1,10 @@
+import 'package:facilityfix/adminweb/widgets/tags.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
+import '../popupwidgets/inventory_requestdetails_popup.dart';
 
 class InventoryRequestPage extends StatefulWidget {
   const InventoryRequestPage({super.key});
@@ -14,8 +16,22 @@ class InventoryRequestPage extends StatefulWidget {
 class _InventoryRequestPageState extends State<InventoryRequestPage> {
   final ApiService _apiService = ApiService();
   List<Map<String, dynamic>> _requestItems = [];
+  Map<String, String> _inventoryItemNames = {}; // Cache for item names
   bool _isLoading = true;
   String? _errorMessage;
+
+  // Pagination
+  int _currentPage = 1;
+  int _itemsPerPage = 10;
+  
+  // Search and filter
+  final TextEditingController _searchController = TextEditingController();
+  String _selectedFilter = 'All';
+  final List<String> _filterOptions = ['All', 'Pending', 'Approved', 'Rejected'];
+  
+  // Sorting
+  String _sortColumn = 'requested_date';
+  bool _sortAscending = false; // Default to descending (newest first)
 
   // TODO: Replace with actual building ID from user session
   final String _buildingId = 'default_building_id';
@@ -23,7 +39,40 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
   @override
   void initState() {
     super.initState();
+    _loadInventoryItems();
     _loadInventoryRequests();
+  }
+  
+  Future<void> _loadInventoryItems() async {
+    try {
+      final response = await _apiService.getInventoryItems(
+        buildingId: _buildingId,
+      );
+
+      print('[v0] Inventory items response: $response');
+
+      if (response['success'] == true) {
+        final items = List<Map<String, dynamic>>.from(response['data'] ?? []);
+        print('[v0] Number of inventory items: ${items.length}');
+        
+        // Build a map of inventory_id -> item_name
+        final Map<String, String> itemNames = {};
+        for (var item in items) {
+          final id = item['id']?.toString() ?? item['item_code']?.toString();
+          final name = item['item_name']?.toString() ?? item['name']?.toString();
+          if (id != null && name != null) {
+            itemNames[id] = name;
+          }
+        }
+        
+        print('[v0] Cached ${itemNames.length} item names');
+        setState(() {
+          _inventoryItemNames = itemNames;
+        });
+      }
+    } catch (e) {
+      print('[v0] Error fetching inventory items: $e');
+    }
   }
 
   Future<void> _loadInventoryRequests() async {
@@ -40,10 +89,17 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
       print('[v0] Inventory requests response: $response');
 
       if (response['success'] == true) {
+        final rawData = response['data'] ?? [];
+        print('[v0] Number of requests: ${rawData.length}');
+        
+        // Debug: Print first item structure if available
+        if (rawData.isNotEmpty) {
+          print('[v0] First item structure: ${rawData[0]}');
+          print('[v0] First item keys: ${(rawData[0] as Map).keys.toList()}');
+        }
+        
         setState(() {
-          _requestItems = List<Map<String, dynamic>>.from(
-            response['data'] ?? [],
-          );
+          _requestItems = List<Map<String, dynamic>>.from(rawData);
           _isLoading = false;
         });
       } else {
@@ -108,11 +164,11 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
   // Column widths for table
   final List<double> _colW = <double>[
     150, // REQUEST ID
+    150, // MAINTENANCE ID
     200, // ITEM NAME
-    180, // ITEM TYPE (now PURPOSE)
     100, // QUANTITY
     120, // DATE
-    120, // STATUS
+    110, // STATUS
     48, // ACTION
   ];
 
@@ -171,7 +227,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
           ),
         ),
         // Show approve/reject options only for pending requests
-        if (item['status'] == 'pending') ...[
+        if (item['status'] == 'pending' || _normalizeStatus(item['status']) == 'pending') ...[
           PopupMenuItem(
             value: 'approve',
             child: Row(
@@ -245,117 +301,59 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
   }
 
   // View request method
-  void _viewRequest(Map<String, dynamic> item) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        final requestId = item['_doc_id'] ?? item['id'] ?? 'N/A';
-        final itemName = item['item_name'] ?? 'Item ${item['inventory_id'] ?? 'Unknown'}';
-        final purpose = item['purpose'] ?? 'General';
-        final quantity = (item['quantity_requested'] ?? 0).toString();
-        final quantityApproved = (item['quantity_approved'] ?? 0).toString();
-        final status = item['status'] ?? 'pending';
-        final requestedBy = item['requested_by'] ?? 'Unknown';
-        final requestedDate = _formatDate(item['requested_date']);
-        final approvedDate = _formatDate(item['approved_date']);
-        final adminNotes = item['admin_notes'] ?? 'No notes';
-        final maintenanceTaskId = item['maintenance_task_id'] ?? item['reference_id'];
+  Future<void> _viewRequest(Map<String, dynamic> item) async {
+    final requestId = item['_doc_id'] ?? item['id'] ?? 'N/A';
+    
+    // Get item name from cached inventory items
+    String itemName = 'Unknown Item';
+    final inventoryId = item['inventory_id']?.toString();
+    
+    if (inventoryId != null && _inventoryItemNames.containsKey(inventoryId)) {
+      // Found in cached inventory items
+      itemName = _inventoryItemNames[inventoryId]!;
+    } else if (item['item_name'] != null && item['item_name'].toString().isNotEmpty) {
+      // Fallback to direct field
+      itemName = item['item_name'].toString();
+    } else if (inventoryId != null) {
+      // Show ID if we have it but no name
+      itemName = 'Item $inventoryId';
+    }
+    
+    // Prepare request data for the popup
+    final requestData = {
+      'requestId': requestId,
+      'itemName': itemName,
+      'purpose': item['purpose'] ?? 'General',
+      'quantityRequested': item['quantity_requested'] ?? 0,
+      'quantityApproved': item['quantity_approved'] ?? 0,
+      'status': _normalizeStatus(item['status']),
+      'requestedBy': item['requested_by'] ?? 'Unknown',
+      'staffDepartment': item['staff_department'] ?? 'N/A',
+      'requestedDate': _formatDate(item['requested_date']),
+      'approvedDate': _formatDate(item['approved_date']),
+      'adminNotes': item['admin_notes'] ?? 'No notes',
+      'maintenanceTaskId': item['maintenance_task_id'] ?? item['reference_id'],
+      // Keep the original item for actions
+      '_originalItem': item,
+    };
 
-        return AlertDialog(
-          title: Row(
-            children: [
-              const Icon(Icons.info_outline, color: Color(0xFF1976D2)),
-              const SizedBox(width: 12),
-              const Text('Request Details'),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: SizedBox(
-              width: 500,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildDetailRow('Request ID', requestId),
-                  const Divider(height: 20),
-                  _buildDetailRow('Item Name', itemName),
-                  _buildDetailRow('Purpose', purpose),
-                  _buildDetailRow('Quantity Requested', quantity),
-                  if (status == 'approved' || status == 'fulfilled')
-                    _buildDetailRow('Quantity Approved', quantityApproved),
-                  const Divider(height: 20),
-                  _buildDetailRow('Status', status.toUpperCase()),
-                  _buildDetailRow('Requested By', requestedBy),
-                  _buildDetailRow('Requested Date', requestedDate),
-                  if (status == 'approved' || status == 'fulfilled' || status == 'denied')
-                    _buildDetailRow('Response Date', approvedDate),
-                  const Divider(height: 20),
-                  if (maintenanceTaskId != null && maintenanceTaskId.toString().isNotEmpty)
-                    _buildDetailRow('Maintenance Task', maintenanceTaskId.toString()),
-                  if (adminNotes.isNotEmpty && adminNotes != 'No notes') ...[
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Admin Notes:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      adminNotes,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[700],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
+    // Show the details popup and get result
+    final result = await InventoryRequestDetailsDialog.show(context, requestData);
+    
+    // Handle the action if user clicked approve or reject
+    if (result != null && result['action'] != null) {
+      final action = result['action'];
+      final originalItem = result['requestData']['_originalItem'];
+      
+      if (action == 'approve') {
+        await _approveRequest(originalItem);
+      } else if (action == 'reject') {
+        _rejectRequest(originalItem);
+      }
+    }
   }
 
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 150,
-            child: Text(
-              '$label:',
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[700],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _approveRequest(Map<String, dynamic> item) async {
+  Future<void> _approveRequest(Map<String, dynamic> item) async {
     try {
       // Use _doc_id as the primary ID from Firestore
       final requestId = item['_doc_id'] ?? item['id'];
@@ -540,6 +538,224 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
       return 'N/A';
     }
   }
+  
+  // Normalize status to only pending, approved, rejected
+  String _normalizeStatus(String? status) {
+    if (status == null) return 'pending';
+    
+    final normalized = status.toLowerCase().trim();
+    
+    // Map various status values to the three allowed statuses
+    switch (normalized) {
+      case 'fulfilled':
+      case 'completed':
+      case 'approved':
+        return 'approved';
+      case 'denied':
+      case 'rejected':
+        return 'rejected';
+      case 'pending':
+      default:
+        return 'pending';
+    }
+  }
+  
+  // Format ID with prefix
+  String _formatId(dynamic id, String prefix) {
+    if (id == null || id.toString().isEmpty) return 'N/A';
+    final idStr = id.toString();
+    
+    // If already has the full format (e.g., REQ-2025-00001 or MT-2025-00001), return as is
+    if (idStr.contains('-') && idStr.split('-').length == 3) {
+      return idStr;
+    }
+    
+    // Extract numeric part from the ID
+    final numericId = idStr.replaceAll(RegExp(r'[^0-9]'), '');
+    if (numericId.isEmpty) return 'N/A';
+    
+    // Pad with leading zeros to make it 5 digits
+    final sequenceNumber = numericId.padLeft(5, '0');
+    final year = DateTime.now().year;
+    
+    // Format as PREFIX-YEAR-XXXXX
+    return '$prefix-$year-$sequenceNumber';
+  }
+  
+  // Filtered requests based on search and filter
+  List<Map<String, dynamic>> get _filteredRequests {
+    var filtered = List<Map<String, dynamic>>.from(_requestItems);
+    
+    // Apply search filter
+    if (_searchController.text.isNotEmpty) {
+      final searchLower = _searchController.text.toLowerCase();
+      filtered = filtered.where((item) {
+        final requestId = (item['_doc_id'] ?? item['id'] ?? '').toString().toLowerCase();
+        final maintenanceId = (item['maintenance_task_id'] ?? item['reference_id'] ?? '').toString().toLowerCase();
+        final itemName = (item['item_name'] ?? '').toString().toLowerCase();
+        final quantity = (item['quantity_requested'] ?? '').toString().toLowerCase();
+        
+        return requestId.contains(searchLower) ||
+               maintenanceId.contains(searchLower) ||
+               itemName.contains(searchLower) ||
+               quantity.contains(searchLower);
+      }).toList();
+    }
+    
+    // Apply status filter
+    if (_selectedFilter != 'All') {
+      final filterStatus = _selectedFilter.toLowerCase();
+      filtered = filtered.where((item) {
+        final status = _normalizeStatus(item['status']).toLowerCase();
+        return status == filterStatus;
+      }).toList();
+    }
+    
+    // Apply sorting
+    filtered.sort((a, b) {
+      int comparison;
+      
+      switch (_sortColumn) {
+        case 'requested_date':
+        default:
+          // Parse dates for proper comparison
+          DateTime dateA = DateTime.tryParse(a['requested_date']?.toString() ?? '') ?? DateTime(1970);
+          DateTime dateB = DateTime.tryParse(b['requested_date']?.toString() ?? '') ?? DateTime(1970);
+          comparison = dateA.compareTo(dateB);
+          break;
+      }
+      
+      return _sortAscending ? comparison : -comparison;
+    });
+    
+    return filtered;
+  }
+
+  // Pagination helper methods
+  List<Map<String, dynamic>> _getPaginatedRequests() {
+    final startIndex = (_currentPage - 1) * _itemsPerPage;
+    final endIndex = startIndex + _itemsPerPage;
+    
+    final filtered = _filteredRequests;
+    if (startIndex >= filtered.length) return [];
+    
+    return filtered.sublist(
+      startIndex,
+      endIndex > filtered.length ? filtered.length : endIndex,
+    );
+  }
+
+  int get _totalPages {
+    final filtered = _filteredRequests;
+    return filtered.isEmpty ? 1 : (filtered.length / _itemsPerPage).ceil();
+  }
+
+  void _goToPage(int page) {
+    if (page >= 1 && page <= _totalPages) {
+      setState(() {
+        _currentPage = page;
+      });
+    }
+  }
+
+  void _previousPage() {
+    if (_currentPage > 1) {
+      setState(() {
+        _currentPage--;
+      });
+    }
+  }
+
+  void _nextPage() {
+    if (_currentPage < _totalPages) {
+      setState(() {
+        _currentPage++;
+      });
+    }
+  }
+
+  List<Widget> _buildPageNumbers() {
+    List<Widget> pageButtons = [];
+    
+    // Show max 5 page numbers at a time
+    int startPage = _currentPage - 2;
+    int endPage = _currentPage + 2;
+    
+    if (startPage < 1) {
+      startPage = 1;
+      endPage = 5;
+    }
+    
+    if (endPage > _totalPages) {
+      endPage = _totalPages;
+      startPage = _totalPages - 4;
+    }
+    
+    if (startPage < 1) startPage = 1;
+    
+    for (int i = startPage; i <= endPage; i++) {
+      pageButtons.add(
+        GestureDetector(
+          onTap: () => _goToPage(i),
+          child: Container(
+            width: 32,
+            height: 32,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              color: i == _currentPage ? const Color(0xFF1976D2) : Colors.grey[100],
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Center(
+              child: Text(
+                i.toString().padLeft(2, '0'),
+                style: TextStyle(
+                  color: i == _currentPage ? Colors.white : Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    
+    return pageButtons;
+  }
+  
+  // Search functionality
+  void _onSearchChanged(String value) {
+    setState(() {
+      _currentPage = 1; // Reset to first page on search
+    });
+  }
+
+  // Filter functionality
+  void _onFilterChanged(String filter) {
+    setState(() {
+      _selectedFilter = filter;
+      _currentPage = 1; // Reset to first page on filter change
+    });
+  }
+  
+  // Sorting functionality
+  void _onSort(String column) {
+    setState(() {
+      if (_sortColumn == column) {
+        _sortAscending = !_sortAscending;
+      } else {
+        _sortColumn = column;
+        _sortAscending = true;
+      }
+      _currentPage = 1; // Reset to first page on sort
+    });
+  }
+  
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -660,6 +876,8 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: TextField(
+                                controller: _searchController,
+                                onChanged: _onSearchChanged,
                                 decoration: InputDecoration(
                                   suffixIcon: Icon(
                                     Icons.search,
@@ -681,33 +899,43 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                             ),
                             const SizedBox(width: 12),
                             // Filter button
-                            Container(
-                              height: 40,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.tune,
-                                    color: Colors.grey[600],
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    "Filter",
-                                    style: TextStyle(
-                                      color: Colors.grey[700],
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
+                            PopupMenuButton<String>(
+                              initialValue: _selectedFilter,
+                              onSelected: _onFilterChanged,
+                              itemBuilder: (context) => _filterOptions.map((filter) {
+                                return PopupMenuItem(
+                                  value: filter,
+                                  child: Text(filter),
+                                );
+                              }).toList(),
+                              child: Container(
+                                height: 40,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey[300]!),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.tune,
+                                      color: Colors.grey[600],
+                                      size: 18,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      "Filter",
+                                      style: TextStyle(
+                                        color: Colors.grey[700],
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],
@@ -765,7 +993,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
-                        columnSpacing: 30,
+                        columnSpacing: 36,
                         headingRowHeight: 56,
                         dataRowHeight: 64,
                         headingRowColor: WidgetStateProperty.all(
@@ -786,32 +1014,68 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                             label: _fixedCell(0, const Text("REQUEST ID")),
                           ),
                           DataColumn(
-                            label: _fixedCell(1, const Text("ITEM NAME")),
+                            label: _fixedCell(1, const Text("MAINTENANCE ID")),
                           ),
                           DataColumn(
-                            label: _fixedCell(2, const Text("PURPOSE")),
+                            label: _fixedCell(2, const Text("ITEM NAME")),
                           ),
                           DataColumn(
                             label: _fixedCell(3, const Text("QUANTITY")),
                           ),
-                          DataColumn(label: _fixedCell(4, const Text("DATE"))),
+                          DataColumn(
+                            label: _fixedCell(
+                              4,
+                              GestureDetector(
+                                onTap: () => _onSort('requested_date'),
+                                child: Row(
+                                  children: [
+                                    const Text("DATE REQUESTED"),
+                                    if (_sortColumn == 'requested_date')
+                                      Icon(
+                                        _sortAscending
+                                            ? Icons.arrow_upward
+                                            : Icons.arrow_downward,
+                                        size: 14,
+                                        color: Colors.grey[600],
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                           DataColumn(
                             label: _fixedCell(5, const Text("STATUS")),
                           ),
                           DataColumn(label: _fixedCell(6, const Text(""))),
                         ],
                         rows:
-                            _requestItems.map((item) {
+                            _getPaginatedRequests().map((item) {
                               // Use _doc_id as the primary ID from Firestore
-                              final requestId = item['_doc_id'] ?? item['id'] ?? 'N/A';
-                              final itemName =
-                                  item['item_name'] ??
-                                  'Item ${item['inventory_id'] ?? 'Unknown'}';
-                              final purpose = item['purpose'] ?? 'General';
+                              final requestId = _formatId(item['_doc_id'] ?? item['id'], 'REQ');
+                              final maintenanceId = _formatId(
+                                item['maintenance_task_id'] ?? item['reference_id'],
+                                'MT',
+                              );
+                              
+                              // Get item name from cached inventory items
+                              String itemName = 'Unknown Item';
+                              final inventoryId = item['inventory_id']?.toString();
+                              
+                              if (inventoryId != null && _inventoryItemNames.containsKey(inventoryId)) {
+                                // Found in cached inventory items
+                                itemName = _inventoryItemNames[inventoryId]!;
+                              } else if (item['item_name'] != null && item['item_name'].toString().isNotEmpty) {
+                                // Fallback to direct field
+                                itemName = item['item_name'].toString();
+                              } else if (inventoryId != null) {
+                                // Show ID if we have it but no name
+                                itemName = 'Item $inventoryId';
+                              }
+                              
                               final quantity =
                                   (item['quantity_requested'] ?? 0).toString();
                               final date = _formatDate(item['requested_date']);
-                              final status = item['status'] ?? 'pending';
+                              final status = _normalizeStatus(item['status']);
 
                               return DataRow(
                                 cells: [
@@ -827,23 +1091,23 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                                       ),
                                     ),
                                   ),
-                                  DataCell(_fixedCell(1, _ellipsis(itemName))),
                                   DataCell(
                                     _fixedCell(
-                                      2,
+                                      1,
                                       _ellipsis(
-                                        purpose,
+                                        maintenanceId,
                                         style: TextStyle(
-                                          color: Colors.grey[600],
+                                          color: Colors.grey[700],
                                           fontSize: 13,
                                         ),
                                       ),
                                     ),
                                   ),
+                                  DataCell(_fixedCell(2, _ellipsis(itemName))),
                                   DataCell(_fixedCell(3, _ellipsis(quantity))),
                                   DataCell(_fixedCell(4, _ellipsis(date))),
                                   DataCell(
-                                    _fixedCell(5, _buildStatusChip(status)),
+                                    _fixedCell(5, StatusTag(status: status)),
                                   ),
                                   DataCell(
                                     _fixedCell(
@@ -888,7 +1152,9 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "Showing 1 to ${_requestItems.length} of ${_requestItems.length} entries",
+                          _filteredRequests.isEmpty
+                              ? "No entries found"
+                              : "Showing ${(_currentPage - 1) * _itemsPerPage + 1} to ${(_currentPage * _itemsPerPage) > _filteredRequests.length ? _filteredRequests.length : _currentPage * _itemsPerPage} of ${_filteredRequests.length} entries",
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 14,
@@ -897,54 +1163,18 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                         Row(
                           children: [
                             IconButton(
-                              onPressed: null,
+                              onPressed: _currentPage > 1 ? _previousPage : null,
                               icon: Icon(
                                 Icons.chevron_left,
-                                color: Colors.grey[400],
+                                color: _currentPage > 1 ? Colors.grey[600] : Colors.grey[400],
                               ),
                             ),
-                            Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1976D2),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  "01",
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[100],
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  "02",
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ),
+                            ..._buildPageNumbers(),
                             IconButton(
-                              onPressed: () {},
+                              onPressed: _currentPage < _totalPages ? _nextPage : null,
                               icon: Icon(
                                 Icons.chevron_right,
-                                color: Colors.grey[600],
+                                color: _currentPage < _totalPages ? Colors.grey[600] : Colors.grey[400],
                               ),
                             ),
                           ],
@@ -960,54 +1190,5 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
       ),
     );
   }
-
-  // Status chip widget
-  Widget _buildStatusChip(String status) {
-    Color bgColor;
-    Color textColor;
-
-    switch (status.toLowerCase()) {
-      case 'pending':
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFE65100);
-        break;
-      case 'approved':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      case 'denied':
-      case 'rejected':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'fulfilled':
-      case 'completed':
-        bgColor = const Color(0xFFE3F2FD);
-        textColor = const Color(0xFF1976D2);
-        break;
-      case 'cancelled':
-        bgColor = Colors.grey[200]!;
-        textColor = Colors.grey[700]!;
-        break;
-      default:
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        status[0].toUpperCase() + status.substring(1),
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
 }
+  

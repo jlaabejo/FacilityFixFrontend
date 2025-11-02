@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
 import '../../services/auth_storage.dart';
+import '../popupwidgets/inventoryitem_details_popup.dart';
+import '../widgets/tags.dart';
 
 class InventoryManagementItemsPage extends StatefulWidget {
   const InventoryManagementItemsPage({super.key});
@@ -20,6 +22,11 @@ class _InventoryManagementItemsPageState
   bool _isLoading = true;
   String? _errorMessage;
   String? _selectedStatus;
+  
+  // Search and pagination
+  final TextEditingController _searchController = TextEditingController();
+  int _currentPage = 1;
+  int _itemsPerPage = 10;
 
   // TODO: Replace with actual building ID from user session
   final String _buildingId = 'default_building_id';
@@ -123,10 +130,10 @@ class _InventoryManagementItemsPageState
 
   // Column widths for table
   final List<double> _colW = <double>[
-    190, // ITEM NO.
-    380, // ITEM NAME
-    200, // STOCK
-    //140, // TAG
+    140, // ITEM NO.
+    250, // ITEM NAME
+    100, // STOCK
+    180, // CLASSIFICATION
     160, // STATUS
     48, // ACTION
   ];
@@ -237,31 +244,87 @@ class _InventoryManagementItemsPageState
   }
 
   // View item method
-  void _viewItem(Map<String, dynamic> item) {
-    final itemId = item['id'] ?? item['item_code'];
-    context.go('/inventory/item/$itemId');
+  Future<void> _viewItem(Map<String, dynamic> item) async {
+    // Prepare item data for the popup
+    final itemData = {
+      'itemName': item['item_name'] ?? 'N/A',
+      'itemCode': item['item_code'] ?? item['id'] ?? 'N/A',
+      'classification': _getItemClassification(item),
+      'department': item['department'] ?? 'N/A',
+      'quantityInStock': item['current_stock'] ?? 0,
+      'reorderLevel': item['reorder_level'] ?? 0,
+      'unit': item['unit'] ?? 'pcs',
+      'tag': _getItemTag(item),
+      'status': _getItemStatus(item),
+      'supplier': item['supplier'] ?? 'Not Specified',
+      'supplierContact': item['supplier_contact'] ?? 'N/A',
+      'supplierEmail': item['supplier_email'] ?? 'N/A',
+      'createdAt': item['created_at'] ?? item['createdAt'],
+      'updatedBy': item['updated_by'] ?? item['updatedBy'],
+      'history': item['history'] ?? [],
+      'id': item['id'],
+    };
+
+    // Show the details popup and get updated data
+    final updatedData = await InventoryItemDetailsDialog.show(context, itemData);
+    
+    // If data was updated, sync it back to the backend
+    if (updatedData != null) {
+      // Update the local item with new values
+      final itemIndex = _inventoryItems.indexWhere((i) => i['id'] == item['id']);
+      if (itemIndex != -1) {
+        // Get the updated stock value (could be in either field)
+        final newStock = updatedData['quantityInStock'] ?? updatedData['currentStock'];
+        
+        setState(() {
+          _inventoryItems[itemIndex]['current_stock'] = newStock;
+          _inventoryItems[itemIndex]['quantity_in_stock'] = newStock;
+          _inventoryItems[itemIndex]['history'] = updatedData['history'];
+          _inventoryItems[itemIndex]['updated_by'] = updatedData['updatedBy'];
+        });
+        _updateFilteredItems();
+      }
+      
+      // TODO: Send update to backend API
+      // await _apiService.updateInventoryItem(item['id'], updatedData);
+    }
   }
 
   // Edit item method
   void _editItem(Map<String, dynamic> item) {
     // Implement edit functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Edit item: ${item['id']}'),
-        backgroundColor: Colors.blue,
-      ),
-    );
+    // TODO: Implement edit item dialog
   }
 
   void _updateFilteredItems() {
     setState(() {
-      if (_selectedStatus == null || _selectedStatus == 'All') {
-        _filteredItems = List.from(_inventoryItems);
-      } else {
-        _filteredItems = _inventoryItems
+      var items = List<Map<String, dynamic>>.from(_inventoryItems);
+      
+      // Apply status filter
+      if (_selectedStatus != null && _selectedStatus != 'All') {
+        items = items
             .where((item) => _getItemStatus(item) == _selectedStatus)
             .toList();
       }
+      
+      // Apply search filter
+      if (_searchController.text.isNotEmpty) {
+        final searchLower = _searchController.text.toLowerCase();
+        items = items.where((item) {
+          final itemNo = (item['item_code'] ?? item['id'] ?? '').toString().toLowerCase();
+          final itemName = (item['item_name'] ?? '').toString().toLowerCase();
+          final stock = (item['current_stock'] ?? '').toString().toLowerCase();
+          final classification = (item['classification'] ?? '').toString().toLowerCase();
+          
+          return itemNo.contains(searchLower) ||
+                 itemName.contains(searchLower) ||
+                 stock.contains(searchLower) ||
+                 classification.contains(searchLower);
+        }).toList();
+      }
+      
+      _filteredItems = items;
+      _currentPage = 1; // Reset to first page when filter changes
     });
   }
 
@@ -331,23 +394,9 @@ class _InventoryManagementItemsPageState
                   await _apiService.deleteInventoryItem(item['id']);
                   // Reload the list
                   _loadInventoryItems();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Item ${item['item_name']} deleted'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
                 } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error deleting item: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
+                  // Error occurred during deletion
+                  print('Error deleting item: $e');
                 }
               },
               style: TextButton.styleFrom(foregroundColor: Colors.red),
@@ -384,6 +433,112 @@ class _InventoryManagementItemsPageState
     } else {
       return 'Essential';
     }
+  }
+  
+  String _getItemClassification(Map<String, dynamic> item) {
+    // Get classification from item data, or use category/type as fallback
+    return item['classification'] ?? 
+           item['category'] ?? 
+           item['type'] ?? 
+           'General';
+  }
+  
+  // Pagination methods
+  List<Map<String, dynamic>> _getPaginatedItems() {
+    final startIndex = (_currentPage - 1) * _itemsPerPage;
+    final endIndex = startIndex + _itemsPerPage;
+
+    if (startIndex >= _filteredItems.length) return [];
+
+    return _filteredItems.sublist(
+      startIndex,
+      endIndex > _filteredItems.length ? _filteredItems.length : endIndex,
+    );
+  }
+
+  int get _totalPages {
+    return _filteredItems.isEmpty ? 1 : (_filteredItems.length / _itemsPerPage).ceil();
+  }
+
+  void _goToPage(int page) {
+    if (page >= 1 && page <= _totalPages) {
+      setState(() {
+        _currentPage = page;
+      });
+    }
+  }
+
+  void _previousPage() {
+    if (_currentPage > 1) {
+      setState(() {
+        _currentPage--;
+      });
+    }
+  }
+
+  void _nextPage() {
+    if (_currentPage < _totalPages) {
+      setState(() {
+        _currentPage++;
+      });
+    }
+  }
+
+  List<Widget> _buildPageNumbers() {
+    List<Widget> pageButtons = [];
+
+    // Show max 5 page numbers at a time
+    int startPage = _currentPage - 2;
+    int endPage = _currentPage + 2;
+
+    if (startPage < 1) {
+      startPage = 1;
+      endPage = 5;
+    }
+
+    if (endPage > _totalPages) {
+      endPage = _totalPages;
+      startPage = _totalPages - 4;
+    }
+
+    if (startPage < 1) startPage = 1;
+
+    for (int i = startPage; i <= endPage; i++) {
+      pageButtons.add(
+        GestureDetector(
+          onTap: () => _goToPage(i),
+          child: Container(
+            width: 32,
+            height: 32,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              color: i == _currentPage
+                  ? const Color(0xFF1976D2)
+                  : Colors.grey[100],
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Center(
+              child: Text(
+                i.toString().padLeft(2, '0'),
+                style: TextStyle(
+                  color: i == _currentPage ? Colors.white : Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return pageButtons;
+  }
+  
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -528,6 +683,8 @@ class _InventoryManagementItemsPageState
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: TextField(
+                                controller: _searchController,
+                                onChanged: (value) => _updateFilteredItems(),
                                 decoration: InputDecoration(
                                   suffixIcon: Icon(
                                     Icons.search,
@@ -658,7 +815,7 @@ class _InventoryManagementItemsPageState
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
-                        columnSpacing: 30,
+                        columnSpacing: 43,
                         headingRowHeight: 56,
                         dataRowHeight: 64,
                         headingRowColor: WidgetStateProperty.all(
@@ -676,26 +833,28 @@ class _InventoryManagementItemsPageState
                         ),
                         columns: [
                           DataColumn(
-                            label: _fixedCell(0, const Text("ITEM NO.")),
+                            label: _fixedCell(0, const Text("ITEM ID")),
                           ),
                           DataColumn(
-                            label: _fixedCell(1, const Text("ITEM NAME")),
+                            label: _fixedCell(1, const Text("NAME")),
                           ),
                           DataColumn(label: _fixedCell(2, const Text("STOCK"))),
-                          // DataColumn(label: _fixedCell(3, const Text("TAG"))),
                           DataColumn(
-                            label: _fixedCell(3, const Text("STATUS")),
+                            label: _fixedCell(3, const Text("CLASSIFICATION")),
                           ),
-                          DataColumn(label: _fixedCell(4, const Text(""))),
+                          DataColumn(
+                            label: _fixedCell(4, const Text("STATUS")),
+                          ),
+                          DataColumn(label: _fixedCell(5, const Text(""))),
                         ],
                         rows:
-                            _filteredItems.map((item) {
+                            _getPaginatedItems().map((item) {
                               final itemNo =
                                   item['item_code'] ?? item['id'] ?? 'N/A';
                               final itemName = item['item_name'] ?? 'Unknown';
                               final stock =
                                   (item['current_stock'] ?? 0).toString();
-                              final tag = _getItemTag(item);
+                              final classification = _getItemClassification(item);
                               final status = _getItemStatus(item);
 
                               return DataRow(
@@ -714,13 +873,15 @@ class _InventoryManagementItemsPageState
                                   ),
                                   DataCell(_fixedCell(1, _ellipsis(itemName))),
                                   DataCell(_fixedCell(2, _ellipsis(stock))),
-                                  // DataCell(_fixedCell(3, _buildTagChip(tag))),
                                   DataCell(
-                                    _fixedCell(3, _buildStatusChip(status)),
+                                    _fixedCell(3, InventoryClassification(classification)),
+                                  ),
+                                  DataCell(
+                                    _fixedCell(4, StockStatusTag(status)),
                                   ),
                                   DataCell(
                                     _fixedCell(
-                                      4,
+                                      5,
                                       Builder(
                                         builder: (context) {
                                           return IconButton(
@@ -761,63 +922,37 @@ class _InventoryManagementItemsPageState
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "Showing 1 to ${_filteredItems.length} of ${_inventoryItems.length} entries",
+                          _filteredItems.isEmpty
+                              ? "No entries found"
+                              : "Showing ${(_currentPage - 1) * _itemsPerPage + 1} to ${(_currentPage * _itemsPerPage) > _filteredItems.length ? _filteredItems.length : _currentPage * _itemsPerPage} of ${_filteredItems.length} entries",
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 14,
                           ),
                         ),
+                        // Pagination controls
                         Row(
                           children: [
                             IconButton(
-                              onPressed: null,
+                              onPressed:
+                                  _currentPage > 1 ? _previousPage : null,
                               icon: Icon(
                                 Icons.chevron_left,
-                                color: Colors.grey[400],
+                                color: _currentPage > 1
+                                    ? Colors.grey[600]
+                                    : Colors.grey[400],
                               ),
                             ),
-                            Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1976D2),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  "01",
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[100],
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  "02",
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ),
+                            ..._buildPageNumbers(),
                             IconButton(
-                              onPressed: () {},
+                              onPressed: _currentPage < _totalPages
+                                  ? _nextPage
+                                  : null,
                               icon: Icon(
                                 Icons.chevron_right,
-                                color: Colors.grey[600],
+                                color: _currentPage < _totalPages
+                                    ? Colors.grey[600]
+                                    : Colors.grey[400],
                               ),
                             ),
                           ],
@@ -829,86 +964,6 @@ class _InventoryManagementItemsPageState
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  // Tag chip widget
-  Widget _buildTagChip(String tag) {
-    Color bgColor;
-    Color textColor;
-
-    switch (tag) {
-      case 'High-Turnover':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      case 'Critical':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'Essential':
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFE65100);
-        break;
-      default:
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        tag,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  // Status chip widget
-  Widget _buildStatusChip(String status) {
-    Color bgColor;
-    Color textColor;
-
-    switch (status) {
-      case 'In Stock':
-        bgColor = const Color(0xFFE3F2FD);
-        textColor = const Color(0xFF1976D2);
-        break;
-      case 'Low Stock':
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFE65100);
-        break;
-      case 'Out of Stock':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      default:
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
         ),
       ),
     );

@@ -6,7 +6,7 @@ import '../popupwidgets/maintenance_firesafety_popup.dart';
 import '../popupwidgets/maintenance_earthquake_popup.dart';
 import '../popupwidgets/maintenance_typhoonflood_popup.dart';
 import '../services/api_service.dart';
-import '../../services/auth_storage.dart';
+import '../widgets/tags.dart';
 
 class AdminMaintenancePage extends StatefulWidget {
   const AdminMaintenancePage({super.key});
@@ -28,10 +28,41 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     'typhoon_flood': {'exists': false},
   };
 
+  // Pagination
+  int _currentPage = 1;
+  final int _itemsPerPage = 10;
+
+  // Search and filter
+  final TextEditingController _searchController = TextEditingController();
+  String _selectedFilter = 'All';
+  final List<String> _filterOptions = ['All', 'Scheduled', 'In Progress', 'Completed', 'Pending'];
+
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(_onSearchChanged);
     _initializeAndFetchData();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    setState(() {
+      _currentPage = 1; // Reset to first page on search
+    });
+  }
+
+  void _onFilterChanged(String? newFilter) {
+    if (newFilter != null) {
+      setState(() {
+        _selectedFilter = newFilter;
+        _currentPage = 1; // Reset to first page on filter change
+      });
+    }
   }
 
   Future<void> _initializeAndFetchData() async {
@@ -156,12 +187,13 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
   }
 
   final List<double> _colW = <double>[
-    160, // ID
-    180, // LOCATION
-    250, // TASK TITLE
-    140, // STATUS
+    130, // ID
+    120, // LOCATION
+    180, // TASK TITLE
+    140, // MAINTENANCE TYPE
+    90, // STATUS
     120, // DATE
-    100, // RECURRENCE
+    90, // RECURRENCE
     48, // ACTION
   ];
 
@@ -193,6 +225,136 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
       }
     }
     return defaultValue;
+  }
+
+  // Format maintenance ID to MT-2025-XXXXX format
+  String _formatId(String? id) {
+    if (id == null || id.isEmpty) return 'MT-2025-00000';
+    
+    // Extract numeric part from ID
+    final numericPart = id.replaceAll(RegExp(r'[^0-9]'), '');
+    if (numericPart.isEmpty) return 'MT-2025-00000';
+    
+    // Get current year
+    final year = DateTime.now().year;
+    
+    // Pad to 5 digits
+    final sequence = numericPart.padLeft(5, '0');
+    
+    return 'MT-$year-$sequence';
+  }
+
+  // Filter and search tasks
+  List<Map<String, dynamic>> get _filteredTasks {
+    List<Map<String, dynamic>> filtered = List.from(_tasks);
+
+    // Apply status filter
+    if (_selectedFilter != 'All') {
+      filtered = filtered.where((task) {
+        final status = _getTaskField(task, ['status'], 'scheduled').toLowerCase();
+        final filterLower = _selectedFilter.toLowerCase();
+        return status.contains(filterLower);
+      }).toList();
+    }
+
+    // Apply search
+    final query = _searchController.text.toLowerCase();
+    if (query.isNotEmpty) {
+      filtered = filtered.where((task) {
+        final id = _formatId(_getTaskField(task, ['id', 'formatted_id', 'task_code'], '')).toLowerCase();
+        final location = _getTaskField(task, ['location'], '').toLowerCase();
+        final title = _getTaskField(task, ['task_title', 'taskTitle', 'title'], '').toLowerCase();
+        final status = _getTaskField(task, ['status'], '').toLowerCase();
+        final scheduledDate = _formatDate(task['scheduled_date'] ?? task['startDate'] ?? task['start_date']).toLowerCase();
+        final recurrence = _getTaskField(task, ['recurrence', 'recurrence_type', 'recurrence_pattern'], '').toLowerCase();
+
+        return id.contains(query) ||
+            location.contains(query) ||
+            title.contains(query) ||
+            status.contains(query) ||
+            scheduledDate.contains(query) ||
+            recurrence.contains(query);
+      }).toList();
+    }
+
+    return filtered;
+  }
+
+  // Get paginated tasks
+  List<Map<String, dynamic>> _getPaginatedTasks() {
+    final filtered = _filteredTasks;
+    final startIndex = (_currentPage - 1) * _itemsPerPage;
+    final endIndex = startIndex + _itemsPerPage;
+    
+    if (startIndex >= filtered.length) return [];
+    return filtered.sublist(
+      startIndex,
+      endIndex > filtered.length ? filtered.length : endIndex,
+    );
+  }
+
+  int get _totalPages {
+    final filtered = _filteredTasks;
+    return (filtered.length / _itemsPerPage).ceil();
+  }
+
+  void _goToPage(int page) {
+    setState(() {
+      _currentPage = page;
+    });
+  }
+
+  void _previousPage() {
+    if (_currentPage > 1) {
+      setState(() {
+        _currentPage--;
+      });
+    }
+  }
+
+  void _nextPage() {
+    if (_currentPage < _totalPages) {
+      setState(() {
+        _currentPage++;
+      });
+    }
+  }
+
+  // Build page number buttons
+  List<Widget> _buildPageNumbers() {
+    List<Widget> pageButtons = [];
+    final totalPages = _totalPages;
+
+    for (int i = 1; i <= totalPages; i++) {
+      pageButtons.add(
+        GestureDetector(
+          onTap: () => _goToPage(i),
+          child: Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: i == _currentPage ? const Color(0xFF1976D2) : Colors.grey[100],
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Center(
+              child: Text(
+                i.toString().padLeft(2, '0'),
+                style: TextStyle(
+                  color: i == _currentPage ? Colors.white : Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      if (i < totalPages) {
+        pageButtons.add(const SizedBox(width: 4));
+      }
+    }
+
+    return pageButtons;
   }
 
   // Action dropdown menu methods
@@ -301,6 +463,35 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     }
 
     return '';
+  }
+  
+  // Get maintenance type for display
+  String _getMaintenanceType(Map<String, dynamic> task) {
+    // Check if it's a special safety task
+    final taskId = task['id']?.toString() ?? '';
+    final taskType = task['task_type']?.toString().toLowerCase() ?? '';
+    
+    // Check for special safety maintenance tasks
+    if (taskId.contains('fire_safety') || 
+        taskId.contains('earthquake') || 
+        taskId.contains('typhoon_flood') ||
+        taskType == 'fire_safety' ||
+        taskType == 'earthquake' ||
+        taskType == 'typhoon_flood' ||
+        taskType == 'safety') {
+      return 'Safety Compliance';
+    }
+    
+    // Check for internal/external type
+    final type = _resolveMaintenanceType(task);
+    if (type.contains('internal')) {
+      return 'Internal';
+    } else if (type.contains('external')) {
+      return 'External';
+    }
+    
+    // Default fallback
+    return 'Internal';
   }
 
   // Helper methods for special tasks
@@ -479,7 +670,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "Work Orders",
+                      "Task Management",
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
@@ -509,7 +700,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                             foregroundColor: Colors.black,
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
-                          child: const Text('Work Orders'),
+                          child: const Text('Task Management'),
                         ),
                         const Icon(
                           Icons.chevron_right,
@@ -628,8 +819,6 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                         ),
                         Row(
                           children: [
-                            
-                            const SizedBox(width: 8),
                             Container(
                               width: 240,
                               height: 40,
@@ -638,6 +827,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: TextField(
+                                controller: _searchController,
                                 decoration: InputDecoration(
                                   suffixIcon: Icon(
                                     Icons.search,
@@ -657,21 +847,46 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Container(
-                              height: 40,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
+                            const SizedBox(width: 8),
+                            // Filter button
+                            PopupMenuButton<String>(
+                              initialValue: _selectedFilter,
+                              onSelected: _onFilterChanged,
+                              itemBuilder: (context) => _filterOptions.map((filter) {
+                                return PopupMenuItem(
+                                  value: filter,
+                                  child: Text(filter),
+                                );
+                              }).toList(),
+                              child: Container(
+                                height: 40,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey[300]!),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.tune,
+                                      color: Colors.grey[600],
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _selectedFilter,
+                                      style: TextStyle(
+                                        color: Colors.grey[700],
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: IconButton(
-                              onPressed: _fetchMaintenanceTasks,
-                              icon: const Icon(Icons.refresh),
-                              tooltip: 'Refresh',
-                            ),
                             ),
                           ],
                         ),
@@ -715,12 +930,22 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                         ),
                       ),
                     )
+                  else if (_filteredTasks.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(40.0),
+                      child: Center(
+                        child: Text(
+                          'No tasks match your search or filter',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    )
                   else
                     // Table content
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
-                        columnSpacing: 16,
+                        columnSpacing: 25,
                         headingRowHeight: 56,
                         dataRowHeight: 64,
                         headingRowColor: MaterialStateProperty.all(
@@ -737,7 +962,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                           color: Colors.black87,
                         ),
                         columns: [
-                          DataColumn(label: _fixedCell(0, const Text("ID"))),
+                          DataColumn(label: _fixedCell(0, const Text("MAINTENANCE ID"))),
                           DataColumn(
                             label: _fixedCell(1, const Text("LOCATION")),
                           ),
@@ -745,19 +970,23 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                             label: _fixedCell(2, const Text("TASK TITLE")),
                           ),
                           DataColumn(
-                            label: _fixedCell(3, const Text("STATUS")),
+                            label: _fixedCell(3, const Text("MAINTENANCE TYPE")),
                           ),
-                          DataColumn(label: _fixedCell(4, const Text("DATE"))),
                           DataColumn(
-                            label: _fixedCell(5, const Text("RECURRENCE")),
+                            label: _fixedCell(4, const Text("STATUS")),
                           ),
-                          DataColumn(label: _fixedCell(6, const Text(""))),
+                          DataColumn(label: _fixedCell(5, const Text("DATE CREATED "))),
+                          DataColumn(
+                            label: _fixedCell(6, const Text("RECURRENCE")),
+                          ),
+                          DataColumn(label: _fixedCell(7, const Text(""))),
                         ],
                         rows:
-                            _tasks.map((task) {
-                              final taskId = _getTaskField(task, ['id', 'formatted_id', 'task_code'], 'N/A');
+                            _getPaginatedTasks().map((task) {
+                              final taskId = _formatId(_getTaskField(task, ['id', 'formatted_id', 'task_code'], ''));
                               final location = _getTaskField(task, ['location'], 'N/A');
                               final title = _getTaskField(task, ['task_title', 'taskTitle', 'title'], 'N/A');
+                              final maintenanceType = _getMaintenanceType(task);
                               final status = _getTaskField(task, ['status'], 'scheduled');
                               final scheduledDate = task['scheduled_date'] ?? task['startDate'] ?? task['start_date'];
                               final recurrence = _getTaskField(task, ['recurrence', 'recurrence_type', 'recurrence_pattern'], 'none');
@@ -791,24 +1020,30 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                                   DataCell(
                                     _fixedCell(
                                       3,
-                                      _buildStatusChip(status),
+                                      MaintenanceType(maintenanceType),
                                     ),
                                   ),
                                   DataCell(
                                     _fixedCell(
                                       4,
-                                      _ellipsis(_formatDate(scheduledDate)),
+                                      StatusTag(status: status),
                                     ),
                                   ),
                                   DataCell(
                                     _fixedCell(
                                       5,
-                                      _ellipsis(recurrence),
+                                      _ellipsis(_formatDate(scheduledDate)),
                                     ),
                                   ),
                                   DataCell(
                                     _fixedCell(
                                       6,
+                                      _ellipsis(recurrence),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    _fixedCell(
+                                      7,
                                       Builder(
                                         builder: (context) {
                                           return IconButton(
@@ -849,7 +1084,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "Showing 1 to ${_tasks.length} of ${_tasks.length} entries",
+                          "Showing ${(_currentPage - 1) * _itemsPerPage + 1} to ${(_currentPage * _itemsPerPage) > _filteredTasks.length ? _filteredTasks.length : (_currentPage * _itemsPerPage)} of ${_filteredTasks.length} entries",
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 14,
@@ -858,54 +1093,18 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                         Row(
                           children: [
                             IconButton(
-                              onPressed: null,
+                              onPressed: _currentPage > 1 ? _previousPage : null,
                               icon: Icon(
                                 Icons.chevron_left,
-                                color: Colors.grey[400],
+                                color: _currentPage > 1 ? Colors.grey[600] : Colors.grey[400],
                               ),
                             ),
-                            Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1976D2),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  "01",
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[100],
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  "02",
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ),
+                            ..._buildPageNumbers(),
                             IconButton(
-                              onPressed: () {},
+                              onPressed: _currentPage < _totalPages ? _nextPage : null,
                               icon: Icon(
                                 Icons.chevron_right,
-                                color: Colors.grey[600],
+                                color: _currentPage < _totalPages ? Colors.grey[600] : Colors.grey[400],
                               ),
                             ),
                           ],
@@ -982,44 +1181,6 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  // Widget for status chips
-  Widget _buildStatusChip(String status) {
-    Color bgColor;
-    Color textColor;
-    final statusLower = status.toLowerCase();
-
-    if (statusLower.contains('progress')) {
-      bgColor = const Color(0xFFFFEBEE);
-      textColor = const Color(0xFFD32F2F);
-    } else if (statusLower.contains('new') ||
-        statusLower.contains('scheduled')) {
-      bgColor = const Color(0xFFE3F2FD);
-      textColor = const Color(0xFF1976D2);
-    } else if (statusLower.contains('completed')) {
-      bgColor = const Color(0xFFE8F5E9);
-      textColor = const Color(0xFF388E3C);
-    } else {
-      bgColor = Colors.grey[100]!;
-      textColor = Colors.grey[700]!;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
         ),
       ),
     );

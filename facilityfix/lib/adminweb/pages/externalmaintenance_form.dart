@@ -20,6 +20,9 @@ class _ExternalMaintenanceFormPageState
   final _formKey = GlobalKey<FormState>();
   AutovalidateMode _autoValidateMode = AutovalidateMode.disabled;
 
+  // For consistent field heights
+  static const double _kFieldHeight = 48;
+
   // ---------- Controllers ----------
   final TextEditingController _taskTitleController = TextEditingController();
   final TextEditingController _taskCodeController = TextEditingController();
@@ -35,15 +38,16 @@ class _ExternalMaintenanceFormPageState
   final TextEditingController _assessmentController = TextEditingController();
   final TextEditingController _recommendationController =
       TextEditingController();
-  final TextEditingController _departmentController = TextEditingController();
-  final TextEditingController _maintenanceTypeController =
-      TextEditingController();
+  final TextEditingController _otherLocationController = TextEditingController();
+  final TextEditingController _otherServiceCategoryController = TextEditingController();
+  final TextEditingController _estimatedDurationController = TextEditingController();
+  final TextEditingController _startDateController = TextEditingController();
+  final TextEditingController _nextDueDateController = TextEditingController();
 
   // ---------- State (dropdowns/dates) ----------
   String? _selectedServiceCategory;
   DateTime? _dateCreated;
   String? _selectedPriority;
-  String? _selectedStatus;
   String? _selectedLocation;
   String? _selectedRecurrence;
   DateTime? _startDate;
@@ -55,6 +59,8 @@ class _ExternalMaintenanceFormPageState
   String? _selectedAssessmentReceived;
   String? _selectedLoggedBy = 'Auto-filled';
   String? _selectedAdminNotifications;
+  bool _isOtherLocation = false;
+  bool _isOtherServiceCategory = false;
 
   static const List<String> _monthNames = [
     'Jan',
@@ -81,14 +87,9 @@ class _ExternalMaintenanceFormPageState
     'Elevators',
     'Cleaning Services',
     'Pest Control',
+    'Other',
   ];
-  final List<String> _priorityOptions = ['Low', 'Medium', 'High', 'Critical'];
-  final List<String> _statusOptions = [
-    'New',
-    'In Progress',
-    'Completed',
-    'On Hold',
-  ];
+  final List<String> _priorityOptions = ['Low', 'Medium', 'High'];
   final List<String> _locationOptions = [
     'Swimming pool',
     'Basketball Court',
@@ -99,13 +100,7 @@ class _ExternalMaintenanceFormPageState
     'Halls',
     'Garden',
     'Corridors',
-  ];
-  final List<String> _recurrenceOptions = [
-    'Weekly',
-    'Monthly',
-    '3 Months',
-    '6 Months',
-    'Yearly',
+    'Other',
   ];
   final List<String> _assessmentOptions = ['Yes', 'No', 'Pending'];
   final List<String> _loggedByOptions = [
@@ -113,24 +108,18 @@ class _ExternalMaintenanceFormPageState
     'Manual Entry',
     'System Generated',
   ];
-  final List<String> _adminNotificationOptions = [
-    'Before due date',
-    'On due date',
-    '1 day before',
-    '1 week before',
-  ];
 
   DateTime _calculateNextDueDate(DateTime base, String frequency) {
     switch (frequency) {
+      case 'Daily':
+        return base.add(const Duration(days: 1));
       case 'Weekly':
         return base.add(const Duration(days: 7));
       case 'Monthly':
         return _addMonths(base, 1);
-      case '3 Months':
+      case 'Quarterly':
         return _addMonths(base, 3);
-      case '6 Months':
-        return _addMonths(base, 6);
-      case 'Yearly':
+      case 'Annually':
         return _addMonths(base, 12);
       default:
         return base;
@@ -153,35 +142,37 @@ class _ExternalMaintenanceFormPageState
         .day;
   }
 
-  void _applyRecurrenceSchedule(String? value) {
-    if (value == null) {
-      setState(() => _selectedRecurrence = null);
-      return;
+  // Auto-generate notifications based on task duration
+  void _updateNotifications() {
+    if (_startDate == null) return;
+    
+    final now = DateTime.now();
+    final daysUntilStart = _startDate!.difference(now).inDays;
+    
+    // Auto-generate notification schedule based on time until task
+    List<String> notifications = [];
+    
+    if (daysUntilStart >= 30) {
+      notifications.add('1 month before');
     }
-
-  final rawStart = _startDate ?? DateTime.now();
-  final baseStart = DateTime(rawStart.year, rawStart.month, rawStart.day);
-  final nextDue = _calculateNextDueDate(baseStart, value);
-
+    if (daysUntilStart >= 7) {
+      notifications.add('1 week before');
+    }
+    if (daysUntilStart >= 5) {
+      notifications.add('5 days before');
+    }
+    if (daysUntilStart >= 3) {
+      notifications.add('3 days before');
+    }
+    if (daysUntilStart >= 1) {
+      notifications.add('1 day before');
+    }
+    
     setState(() {
-      _selectedRecurrence = value;
-      _startDate = baseStart;
-      _nextDueDate = nextDue;
-      _serviceWindowStart = baseStart;
-      _serviceWindowEnd = nextDue;
-    });
-  }
-
-  void _handleStartDateChange(DateTime date) {
-    final normalized = DateTime(date.year, date.month, date.day);
-
-    setState(() {
-      _startDate = normalized;
-      if (_selectedRecurrence != null) {
-        final nextDue = _calculateNextDueDate(normalized, _selectedRecurrence!);
-        _nextDueDate = nextDue;
-        _serviceWindowStart = normalized;
-        _serviceWindowEnd = nextDue;
+      if (notifications.isNotEmpty) {
+        _selectedAdminNotifications = notifications.join(', ');
+      } else {
+        _selectedAdminNotifications = 'On due date';
       }
     });
   }
@@ -210,6 +201,59 @@ class _ExternalMaintenanceFormPageState
       buffer.write(' - Service window $windowStart to $windowEnd');
     }
     return buffer.toString();
+  }
+
+  void _handleRecurrenceChange(String? value) {
+    if (value == null) {
+      setState(() => _selectedRecurrence = null);
+      return;
+    }
+
+    final rawStart = _startDate ?? DateTime.now();
+    final baseStart = DateTime(rawStart.year, rawStart.month, rawStart.day);
+    final nextDue = _calculateNextDueDate(baseStart, value);
+
+    setState(() {
+      _selectedRecurrence = value;
+      _startDate = baseStart;
+      _nextDueDate = nextDue;
+      _startDateController.text = _formatDateYYYYMMDD(baseStart);
+      _nextDueDateController.text = _formatDateYYYYMMDD(nextDue);
+      _updateNotifications(); // Auto-update notifications
+    });
+  }
+
+  void _handleStartDateChange(DateTime date) {
+    final normalized = DateTime(date.year, date.month, date.day);
+
+    setState(() {
+      _startDate = normalized;
+      _startDateController.text = _formatDateYYYYMMDD(normalized);
+      
+      if (_selectedRecurrence != null) {
+        final nextDue = _calculateNextDueDate(normalized, _selectedRecurrence!);
+        _nextDueDate = nextDue;
+        _nextDueDateController.text = _formatDateYYYYMMDD(nextDue);
+      }
+      _updateNotifications(); // Auto-update notifications
+    });
+  }
+
+  String _formatDateYYYYMMDD(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _pickDate({
+    required DateTime initial,
+    required Function(DateTime) onPick,
+  }) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+    );
+    if (picked != null) onPick(picked);
   }
 
   Widget _buildRecurrenceSummary() {
@@ -290,9 +334,8 @@ class _ExternalMaintenanceFormPageState
   @override
   void initState() {
     super.initState();
-    _maintenanceTypeController.text =
-        'External / 3rd-Party'; // automated + read-only
     _dateCreated = DateTime.now(); // prefill but user can change
+    _selectedAssessmentReceived = 'No'; // Auto-set to "No" when task is created
 
     _initAutoFields();
   }
@@ -430,7 +473,7 @@ class _ExternalMaintenanceFormPageState
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
+                    color: Colors.black.withOpacity(0.05),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -444,7 +487,10 @@ class _ExternalMaintenanceFormPageState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildSectionTitle("Basic Information"),
+                      _buildSectionHeader(
+                        "Basic Information",
+                        "General details about the maintenance task",
+                      ),
                       const SizedBox(height: 24),
 
                       // Task Title + Task Code
@@ -454,7 +500,7 @@ class _ExternalMaintenanceFormPageState
                             child: _buildTextField(
                               label: "Task Title",
                               controller: _taskTitleController,
-                              placeholder: "Enter Item Name",
+                              placeholder: "Enter Task Title",
                               validator: _req,
                             ),
                           ),
@@ -463,7 +509,7 @@ class _ExternalMaintenanceFormPageState
                             child: _buildTextField(
                               label: "Task Code",
                               controller: _taskCodeController,
-                              placeholder: "Code Id",
+                              placeholder: "Auto-generated",
                               enabled: false,
                               validator: _req,
                             ),
@@ -472,37 +518,7 @@ class _ExternalMaintenanceFormPageState
                       ),
                       const SizedBox(height: 24),
 
-                      // Maintenance Type (auto) + Service Category
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildTextField(
-                              label: "Maintenance Type",
-                              controller: _maintenanceTypeController,
-                              placeholder: "External / 3rd-Party",
-                              enabled: false,
-                              validator: _req,
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: _buildDropdownField(
-                              label: "Service Category",
-                              value: _selectedServiceCategory,
-                              placeholder: "Input",
-                              options: _serviceCategoryOptions,
-                              onChanged:
-                                  (v) => setState(
-                                    () => _selectedServiceCategory = v,
-                                  ),
-                              validator: (v) => v == null ? 'Required' : null,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Created By (auto) + Date Created (editable)
+                      // Created By + Date Created
                       Row(
                         children: [
                           Expanded(
@@ -510,7 +526,7 @@ class _ExternalMaintenanceFormPageState
                               label: "Created By",
                               controller: _createdByController,
                               placeholder: "Auto-filled",
-                              enabled: true,
+                              enabled: false,
                               validator: _req,
                             ),
                           ),
@@ -530,7 +546,7 @@ class _ExternalMaintenanceFormPageState
                       ),
                       const SizedBox(height: 24),
 
-                      // Priority + Status
+                      // Priority only (Status auto-set to "New")
                       Row(
                         children: [
                           Expanded(
@@ -544,35 +560,98 @@ class _ExternalMaintenanceFormPageState
                               validator: (v) => v == null ? 'Required' : null,
                             ),
                           ),
+                          const Expanded(child: SizedBox()), // Empty space on right
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      const Divider(color: Color(0xFFE2E8F0), height: 1, thickness: 1),
+                      const SizedBox(height: 32),
+
+                      // Task Scope & Description
+                      _buildSectionHeader(
+                        "Task Scope & Description",
+                        "Detailed description of what needs to be done",
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Location/Area on left, Service Category on right
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildDropdownField(
+                              label: "Location / Area",
+                              value: _selectedLocation,
+                              placeholder: "Select Location...",
+                              options: _locationOptions,
+                              onChanged: (v) {
+                                setState(() {
+                                  _selectedLocation = v;
+                                  _isOtherLocation = (v == 'Other');
+                                  if (!_isOtherLocation) {
+                                    _otherLocationController.clear();
+                                  }
+                                });
+                              },
+                              validator: (v) => v == null ? 'Required' : null,
+                            ),
+                          ),
                           const SizedBox(width: 24),
                           Expanded(
                             child: _buildDropdownField(
-                              label: "Status",
-                              value: _selectedStatus,
-                              placeholder: "Select Status...",
-                              options: _statusOptions,
-                              onChanged:
-                                  (v) => setState(() => _selectedStatus = v),
+                              label: "Service Category",
+                              value: _selectedServiceCategory,
+                              placeholder: "Select Category...",
+                              options: _serviceCategoryOptions,
+                              onChanged: (v) {
+                                setState(() {
+                                  _selectedServiceCategory = v;
+                                  _isOtherServiceCategory = (v == 'Other');
+                                  if (!_isOtherServiceCategory) {
+                                    _otherServiceCategoryController.clear();
+                                  }
+                                });
+                              },
                               validator: (v) => v == null ? 'Required' : null,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 40),
-
-                      // Service Scope & Description
-                      _buildSectionTitle("Service Scope & Description"),
-                      const SizedBox(height: 24),
-
-                      _buildDropdownField(
-                        label: "Location / Area",
-                        value: _selectedLocation,
-                        placeholder: "Select Department...",
-                        options: _locationOptions,
-                        onChanged: (v) => setState(() => _selectedLocation = v),
-                        fullWidth: true,
-                        validator: (v) => v == null ? 'Required' : null,
-                      ),
+                      
+                      // Show custom location input if "Other" is selected
+                      if (_isOtherLocation) ...[
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildTextField(
+                                label: 'Specify Location',
+                                controller: _otherLocationController,
+                                placeholder: 'Enter custom location...',
+                                validator: _req,
+                              ),
+                            ),
+                            const Expanded(child: SizedBox()),
+                          ],
+                        ),
+                      ],
+                      
+                      // Show custom service category input if "Other" is selected
+                      if (_isOtherServiceCategory) ...[
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            const Expanded(child: SizedBox()),
+                            Expanded(
+                              child: _buildTextField(
+                                label: 'Specify Service Category',
+                                controller: _otherServiceCategoryController,
+                                placeholder: 'Enter custom category...',
+                                validator: _req,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 24),
 
                       _buildTextAreaField(
@@ -582,19 +661,14 @@ class _ExternalMaintenanceFormPageState
                         validator: _req,
                       ),
                       const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        child: _buildTextField(
-                          label: "Responsible Department",
-                          controller: _departmentController,
-                          placeholder: "Enter Department",
-                          validator: _req,
-                        ),
-                      ),
-                      const SizedBox(height: 40),
+                      const Divider(color: Color(0xFFE2E8F0), height: 1, thickness: 1),
+                      const SizedBox(height: 32),
 
                       // Contractor Info
-                      _buildSectionTitle("Contractor Information"),
+                      _buildSectionHeader(
+                        "Contractor Information",
+                        "Details of the external contractor assigned to this task or a company",
+                      ),
                       const SizedBox(height: 24),
 
                       Row(
@@ -632,103 +706,141 @@ class _ExternalMaintenanceFormPageState
                           ),
                         ],
                       ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 24),
+                      const Divider(color: Color(0xFFE2E8F0), height: 1, thickness: 1),
+                      const SizedBox(height: 32),
 
                       // Recurrence & Schedule
-                      _buildSectionTitle("Recurrence & Schedule"),
+                      _buildSectionHeader(
+                        "Recurrence & Schedule",
+                        "Define when and how often this maintenance task occurs",
+                      ),
                       const SizedBox(height: 24),
 
+                      // Row 1: Recurrence and Estimated Duration
                       Row(
                         children: [
+                          // Recurrence
                           Expanded(
                             child: _buildDropdownField(
-                              label: "Recurrence",
+                              label: 'Recurrence Frequency',
                               value: _selectedRecurrence,
-                              placeholder: "Input",
-                              options: _recurrenceOptions,
-                              onChanged: _applyRecurrenceSchedule,
+                              placeholder: 'Select frequency...',
+                              options: const [
+                                'Daily',
+                                'Weekly',
+                                'Monthly',
+                                'Quarterly',
+                                'Annually',
+                              ],
+                              onChanged: _handleRecurrenceChange,
                               validator: (v) => v == null ? 'Required' : null,
                             ),
                           ),
                           const SizedBox(width: 24),
+
+                          // Estimated Duration
                           Expanded(
-                            child: _buildDateField(
-                              label: "Start Date",
-                              selectedDate: _startDate,
-                              placeholder: "DD / MM / YY",
-                              onDateSelected: _handleStartDateChange,
-                              requiredField: true,
+                            child: _buildTextField(
+                              label: 'Estimated Duration',
+                              controller: _estimatedDurationController,
+                              placeholder: 'e.g., 3 hrs / 45 mins',
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) return 'Required';
+                                return null;
+                              },
                             ),
                           ),
                         ],
                       ),
-                      _buildRecurrenceSummary(),
                       const SizedBox(height: 24),
 
+                      // Row 2: Start Date and Next Due Date
                       Row(
                         children: [
-                          Expanded(
-                            child: _buildDateField(
-                              label: "Next Due Date",
-                              selectedDate: _nextDueDate,
-                              placeholder: "DD / MM / YY",
-                              onDateSelected:
-                                  (d) => setState(() => _nextDueDate = d),
-                              requiredField: true,
-                              enabled: false,
-                            ),
-                          ),
-                          const SizedBox(width: 24),
+                          // Start Date
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  "Service Window",
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.grey[700],
+                                _fieldLabel('Start Date'),
+                                Container(
+                                  height: _kFieldHeight,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey[300]!),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: TextFormField(
+                                    controller: _startDateController,
+                                    validator: _req,
+                                    readOnly: true,
+                                    onTap: () => _pickDate(
+                                      initial: _startDate ?? DateTime.now(),
+                                      onPick: _handleStartDateChange,
+                                    ),
+                                    decoration: InputDecoration(
+                                      hintText: 'YYYY-MM-DD',
+                                      hintStyle: TextStyle(color: Colors.grey[240], fontSize: 14),
+                                      border: InputBorder.none,
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 12,
+                                      ),
+                                      suffixIcon: const Icon(
+                                        Icons.calendar_today,
+                                        size: 18,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _buildDateField(
-                                        label: "",
-                                        selectedDate: _serviceWindowStart,
-                                        placeholder: "DD / MM / YY",
-                                        onDateSelected:
-                                            (d) => setState(
-                                              () => _serviceWindowStart = d,
-                                            ),
-                                        showLabel: false,
-                                        enabled: false,
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 24),
+
+                          // Next Due Date
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Next Due Date'),
+                                Container(
+                                  height: _kFieldHeight,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey[300]!),
+                                    borderRadius: BorderRadius.circular(8),
+                                    color: Colors.grey[50],
+                                  ),
+                                  child: TextFormField(
+                                    controller: _nextDueDateController,
+                                    validator: _req,
+                                    readOnly: true,
+                                    decoration: InputDecoration(
+                                      hintText: 'YYYY-MM-DD',
+                                      hintStyle: TextStyle(color: Colors.grey[240], fontSize: 14),
+                                      border: InputBorder.none,
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 12,
                                       ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: _buildDateField(
-                                        label: "",
-                                        selectedDate: _serviceWindowEnd,
-                                        placeholder: "DD / MM / YY",
-                                        onDateSelected:
-                                            (d) => setState(
-                                              () => _serviceWindowEnd = d,
-                                            ),
-                                        showLabel: false,
-                                        enabled: false,
+                                      suffixIcon: const Icon(
+                                        Icons.calendar_today,
+                                        size: 18,
                                       ),
+                                      filled: true,
+                                      fillColor: Colors.grey[50],
                                     ),
-                                  ],
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 40),
+                      _buildRecurrenceSummary(),
+                      const SizedBox(height: 24),
+                      const Divider(color: Color(0xFFE2E8F0), height: 1, thickness: 1),
+                      const SizedBox(height: 32),
 
                       // Post-Service Assessment Logging
                       _buildSectionTitle("Post-Service Assessment Logging"),
@@ -848,80 +960,21 @@ class _ExternalMaintenanceFormPageState
                           ),
                         ],
                       ),
-                      const SizedBox(height: 40),
-
-                      // // Attachments
-                      // _buildSectionTitle("Attachments"),
-                      // const SizedBox(height: 24),
-
-                      // Container(
-                      //   height: 120,
-                      //   width: double.infinity,
-                      //   decoration: BoxDecoration(
-                      //     border: Border.all(
-                      //       color: Colors.grey[300]!,
-                      //       width: 2,
-                      //     ),
-                      //     borderRadius: BorderRadius.circular(8),
-                      //   ),
-                      //   child: Column(
-                      //     mainAxisAlignment: MainAxisAlignment.center,
-                      //     children: [
-                      //       Icon(
-                      //         Icons.cloud_upload_outlined,
-                      //         size: 32,
-                      //         color: Colors.grey[400],
-                      //       ),
-                      //       const SizedBox(height: 8),
-                      //       const Text(
-                      //         "Drop files here or click to upload",
-                      //         style: TextStyle(
-                      //           fontSize: 14,
-                      //           color: Colors.black54,
-                      //         ),
-                      //       ),
-                      //       const SizedBox(height: 4),
-                      //       Text(
-                      //         "PDF, PNG, JPG up to 10MB",
-                      //         style: TextStyle(
-                      //           fontSize: 12,
-                      //           color: Colors.grey[500],
-                      //         ),
-                      //       ),
-                      //     ],
-                      //   ),
-                      // ),
-                      // const SizedBox(height: 40),
-
-                      // Notifications
-                      _buildSectionTitle("Notifications"),
-                      const SizedBox(height: 24),
-
-                      _buildDropdownField(
-                        label: "Admin Notifications",
-                        value: _selectedAdminNotifications,
-                        placeholder: "Before due date",
-                        options: _adminNotificationOptions,
-                        onChanged:
-                            (v) =>
-                                setState(() => _selectedAdminNotifications = v),
-                        fullWidth: true,
-                      ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 32),
 
                       // Actions
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           SizedBox(
-                            width: 140,
+                            width: 100,
                             height: 48,
                             child: OutlinedButton(
-                              onPressed: _saveDraft,
+                              onPressed: _onCancel,
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.blue,
-                                side: const BorderSide(
-                                  color: Colors.blue,
+                                foregroundColor: Colors.grey[700],
+                                side: BorderSide(
+                                  color: Colors.grey[300]!,
                                   width: 1.5,
                                 ),
                                 shape: RoundedRectangleBorder(
@@ -929,15 +982,15 @@ class _ExternalMaintenanceFormPageState
                                 ),
                               ),
                               child: const Text(
-                                'Save Draft',
+                                'Cancel',
                                 style: TextStyle(
-                                  fontSize: 16,
+                                  fontSize: 15,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 16),
+                          const SizedBox(width: 12),
                           SizedBox(
                             width: 100,
                             height: 48,
@@ -954,7 +1007,7 @@ class _ExternalMaintenanceFormPageState
                               child: const Text(
                                 'Submit',
                                 style: TextStyle(
-                                  fontSize: 16,
+                                  fontSize: 15,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -974,13 +1027,8 @@ class _ExternalMaintenanceFormPageState
   }
 
   // ---------- Actions ----------
-  void _saveDraft() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Draft saved successfully!'),
-        backgroundColor: Colors.green,
-      ),
-    );
+  void _onCancel() {
+    context.go('/work/maintenance');
   }
 
   Future<void> _onNext() async {
@@ -1017,7 +1065,7 @@ class _ExternalMaintenanceFormPageState
       );
       return;
     }
-    if (_dateCreated == null || _startDate == null || _nextDueDate == null) {
+    if (_dateCreated == null || _startDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select required dates.'),
@@ -1026,6 +1074,16 @@ class _ExternalMaintenanceFormPageState
       );
       return;
     }
+
+    // Get actual location (use Other input if selected)
+    final actualLocation = _isOtherLocation 
+        ? _otherLocationController.text.trim()
+        : (_selectedLocation ?? '');
+    
+    // Get actual service category (use Other input if selected)
+    final actualServiceCategory = _isOtherServiceCategory 
+        ? _otherServiceCategoryController.text.trim()
+        : (_selectedServiceCategory ?? '');
 
     String formatDate(DateTime date) {
       return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -1038,11 +1096,11 @@ class _ExternalMaintenanceFormPageState
     'task_title': _taskTitleController.text.trim(),
     'task_description': _descriptionController.text.trim(),
     'maintenance_type': 'external',
-    'service_category': _selectedServiceCategory,
+    'service_category': actualServiceCategory,
     'created_by': _createdByController.text.trim(),
     'priority': _selectedPriority ?? 'medium',
-    'status': _selectedStatus ?? 'scheduled',
-    'location': _selectedLocation ?? '',
+    'status': 'New', // Auto-set to "New" for external maintenance
+    'location': actualLocation,
     
     // Contractor Information
     'contractor_name': _contractorNameController.text.trim(),
@@ -1051,16 +1109,11 @@ class _ExternalMaintenanceFormPageState
     'email': _emailController.text.trim(),
     
     // Scheduling Information
-    'recurrence_type': _selectedRecurrence != null
-        ? _selectedRecurrence!.toLowerCase()
-        : 'none',
+    'recurrence_type': _selectedRecurrence?.toLowerCase() ?? 'none',
     'start_date': formatDate(_startDate!),
     'scheduled_date': scheduledDateIso,
-    'next_due_date': formatDate(_nextDueDate!),
-    'service_window_start':
-      _serviceWindowStart != null ? formatDate(_serviceWindowStart!) : null,
-    'service_window_end':
-      _serviceWindowEnd != null ? formatDate(_serviceWindowEnd!) : null,
+    'next_due_date': _nextDueDate != null ? formatDate(_nextDueDate!) : null,
+    'estimated_duration': _estimatedDurationController.text.trim(),
     
     // Assessment and Tracking
     'assessment_received': _selectedAssessmentReceived,
@@ -1069,14 +1122,13 @@ class _ExternalMaintenanceFormPageState
     'assessment': _assessmentController.text.trim(),
     'recommendation': _recommendationController.text.trim(),
     
-    // Department and Admin
-    'department': _departmentController.text.trim(),
+    // Admin Notifications (Auto-generated from start date)
     'admin_notification': _selectedAdminNotifications,
     
     // System Fields
     'building_id': 'default_building',
     'task_type': 'external',
-    'category': _selectedServiceCategory ?? 'maintenance',
+    'category': actualServiceCategory,
     'assigned_to': _contractorNameController.text.trim(),
     
     // Required Arrays
@@ -1116,12 +1168,83 @@ class _ExternalMaintenanceFormPageState
   }
 
   // ---------- Shared UI helpers ----------
+  Widget _buildSectionHeader(String title, String subtitle) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 4,
+              height: 24,
+              decoration: BoxDecoration(
+                color: Colors.blue,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.only(left: 16),
+          child: Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey[600],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSectionTitle(String title) => Text(
     title,
     style: const TextStyle(
-      fontSize: 18,
+      fontSize: 20,
       fontWeight: FontWeight.w600,
       color: Colors.black87,
+    ),
+  );
+
+  InputDecoration _decoration(String hint) => InputDecoration(
+    hintText: hint,
+    hintStyle: TextStyle(color: Colors.grey[400]),
+    isDense: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(color: Colors.grey[300]!),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(color: Colors.grey[300]!),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: Colors.blue),
+    ),
+  );
+
+  Widget _fieldLabel(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: Colors.black87,
+      ),
     ),
   );
 
@@ -1135,34 +1258,16 @@ class _ExternalMaintenanceFormPageState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey[700],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          height: 48,
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey[300]!),
-            borderRadius: BorderRadius.circular(8),
-            color: enabled ? Colors.white : Colors.grey[50],
-          ),
+        _fieldLabel(label),
+        SizedBox(
+          height: _kFieldHeight,
           child: TextFormField(
             controller: controller,
             enabled: enabled,
             validator: validator,
-            decoration: InputDecoration(
-              hintText: placeholder,
-              hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 12,
-              ),
+            decoration: _decoration(placeholder).copyWith(
+              filled: !enabled,
+              fillColor: enabled ? Colors.white : Colors.grey[50],
               suffixIcon:
                   _isLoadingCode && controller == _taskCodeController
                       ? const Padding(
@@ -1194,36 +1299,16 @@ class _ExternalMaintenanceFormPageState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (label.isNotEmpty) ...[
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey[700],
-            ),
-          ),
-          const SizedBox(height: 8),
-        ],
-        Container(
-          height: 48,
+        if (label.isNotEmpty) _fieldLabel(label),
+        SizedBox(
+          height: _kFieldHeight,
           width: fullWidth ? double.infinity : null,
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey[300]!),
-            borderRadius: BorderRadius.circular(8),
-            color: enabled ? Colors.white : Colors.grey[50],
-          ),
           child: DropdownButtonFormField<String>(
             value: value,
             validator: validator,
-            decoration: InputDecoration(
-              hintText: placeholder,
-              hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 12,
-              ),
+            decoration: _decoration(placeholder).copyWith(
+              filled: !enabled,
+              fillColor: enabled ? Colors.white : Colors.grey[50],
             ),
             dropdownColor: Colors.white,
             items:
@@ -1259,26 +1344,9 @@ class _ExternalMaintenanceFormPageState
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (showLabel && label.isNotEmpty) ...[
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey[700],
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-            Container(
-              height: 48,
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: hasError ? Colors.red : Colors.grey[300]!,
-                ),
-                borderRadius: BorderRadius.circular(8),
-                color: enabled ? Colors.white : Colors.grey[50],
-              ),
+            if (showLabel && label.isNotEmpty) _fieldLabel(label),
+            SizedBox(
+              height: _kFieldHeight,
               child: InkWell(
                 onTap:
                     enabled
@@ -1287,10 +1355,11 @@ class _ExternalMaintenanceFormPageState
                           state.didChange(d);
                         })
                         : null,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
+                child: InputDecorator(
+                  decoration: _decoration(placeholder).copyWith(
+                    filled: !enabled,
+                    fillColor: enabled ? Colors.white : Colors.grey[50],
+                    errorText: hasError ? state.errorText : null,
                   ),
                   child: Row(
                     children: [
@@ -1319,13 +1388,6 @@ class _ExternalMaintenanceFormPageState
                 ),
               ),
             ),
-            if (hasError) ...[
-              const SizedBox(height: 6),
-              Text(
-                state.errorText!,
-                style: const TextStyle(color: Colors.red, fontSize: 12),
-              ),
-            ],
           ],
         );
       },
@@ -1341,34 +1403,12 @@ class _ExternalMaintenanceFormPageState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey[700],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          height: 120,
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey[300]!),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: TextFormField(
-            controller: controller,
-            validator: validator,
-            maxLines: null,
-            expands: true,
-            textAlignVertical: TextAlignVertical.top,
-            decoration: InputDecoration(
-              hintText: placeholder,
-              hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.all(12),
-            ),
-          ),
+        _fieldLabel(label),
+        TextFormField(
+          controller: controller,
+          validator: validator,
+          maxLines: 5,
+          decoration: _decoration(placeholder),
         ),
       ],
     );
@@ -1387,8 +1427,11 @@ class _ExternalMaintenanceFormPageState
     _emailController.dispose();
     _assessmentController.dispose();
     _recommendationController.dispose();
-    _departmentController.dispose();
-    _maintenanceTypeController.dispose();
+    _otherLocationController.dispose();
+    _otherServiceCategoryController.dispose();
+    _estimatedDurationController.dispose();
+    _startDateController.dispose();
+    _nextDueDateController.dispose();
     super.dispose();
   }
 }

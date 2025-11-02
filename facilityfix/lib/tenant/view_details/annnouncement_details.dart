@@ -186,8 +186,12 @@ class _AnnouncementDetailsState extends State<AnnouncementDetailsPage> {
                           announcementType: _announcement?['type'] ?? 'general',
                           description: _announcement?['content'] ?? 'No description available',
                           locationAffected: _announcement?['location_affected'] ?? 'N/A',
-                          scheduleStart: _formatDate(_announcement?['scheduled_publish_date']),
-                          scheduleEnd: _formatDate(_announcement?['expiry_date']),
+                          scheduleStart: _announcement?['scheduled_publish_date'] != null
+                              ? _formatDate(_announcement?['scheduled_publish_date'])
+                              : 'Not scheduled',
+                          scheduleEnd: _announcement?['expiry_date'] != null
+                              ? _formatDate(_announcement?['expiry_date'])
+                              : 'No expiry',
                           contactNumber: _announcement?['contact_number'] ?? 'N/A',
                           contactEmail: _announcement?['contact_email'] ?? 'N/A',
                           isRead: _announcement?['is_read'] ?? false,

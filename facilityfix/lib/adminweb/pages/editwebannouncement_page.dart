@@ -162,12 +162,12 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
         // Set location
         _selectedLocation = response['location_affected'];
         
-        // Set dates if available
-        if (response['start_date'] != null) {
-          _startDateController.text = _formatDate(response['start_date']);
+        // Set schedule dates if available (using correct backend field names)
+        if (response['scheduled_publish_date'] != null) {
+          _startDateController.text = _formatDate(response['scheduled_publish_date']);
         }
-        if (response['end_date'] != null) {
-          _endDateController.text = _formatDate(response['end_date']);
+        if (response['expiry_date'] != null) {
+          _endDateController.text = _formatDate(response['expiry_date']);
         }
         
         _isLoading = false;
@@ -314,10 +314,94 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
     return true;
   }
 
-  // Show error snackbar
+  // Show error snackbar with minimalist aesthetically pleasing styling
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
+      SnackBar(
+        content: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.error_outline_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Flexible(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFFEF5350),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(left: 24, bottom: 24, right: MediaQuery.of(context).size.width * 0.7),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 4),
+        elevation: 2,
+      ),
+    );
+  }
+
+  // Show success snackbar with minimalist aesthetically pleasing styling
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.check_circle_outline_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Flexible(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF66BB6A),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(left: 24, bottom: 24, right: MediaQuery.of(context).size.width * 0.7),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 4),
+        elevation: 2,
+        action: SnackBarAction(
+          label: 'View',
+          textColor: Colors.white,
+          onPressed: () => context.go('/announcement'),
+        ),
+      ),
     );
   }
 
@@ -378,17 +462,16 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Announcement updated successfully! ID: ${response['formatted_id'] ?? widget.announcementId}',
-            ),
-            backgroundColor: Colors.green,
-          ),
+        _showSuccessSnackBar(
+          'Announcement updated successfully! ID: ${response['formatted_id'] ?? widget.announcementId}',
         );
 
-        // Navigate back to announcement list
-        context.go('/announcement');
+        // Navigate back to announcement list after a short delay
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            context.go('/announcement');
+          }
+        });
       }
     } catch (e) {
       print('[Edit] Error updating announcement: $e');
@@ -398,12 +481,7 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update announcement: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showErrorSnackBar('Failed to update announcement: $e');
       }
     }
   }
@@ -465,13 +543,8 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
                           children: [
                             Row(
                               children: [
-                                IconButton(
-                                  icon: const Icon(Icons.arrow_back),
-                                  onPressed: () => context.go('/announcement'),
-                                ),
-                                const SizedBox(width: 8),
                                 const Text(
-                                  "Edit Announcement",
+                                  "Announcement",
                                   style: TextStyle(
                                     fontSize: 28,
                                     fontWeight: FontWeight.bold,
@@ -546,30 +619,44 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                // Title
+                                // Basic Information
                                 const Text(
-                                  "Title",
+                                  "Basic Information",
                                   style: TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 20,
                                     fontWeight: FontWeight.w600,
                                     color: Colors.black87,
                                   ),
                                 ),
+                                const SizedBox(height: 18),
+                                
+                                // Title
+                                Text(
+                                  "Title",
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
                                 const SizedBox(height: 8),
-                                TextField(
-                                  controller: _titleController,
-                                  decoration: InputDecoration(
-                                    hintText:
-                                        "e.g., Scheduled Water Interruption",
-                                    hintStyle: TextStyle(color: Colors.grey[500]),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide:
-                                          BorderSide(color: Colors.grey[300]!),
-                                    ),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 12,
+                                Container(
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey[300]!),
+                                    borderRadius: BorderRadius.circular(8),
+                                    color: Colors.white,
+                                  ),
+                                  child: TextField(
+                                    controller: _titleController,
+                                    decoration: InputDecoration(
+                                      hintText: "e.g., Scheduled Water Interruption",
+                                      hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                                      border: InputBorder.none,
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 12,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -584,43 +671,55 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          const Text(
+                                          Text(
                                             "Audience",
                                             style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.black87,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.grey[700],
                                             ),
                                           ),
                                           const SizedBox(height: 8),
-                                          DropdownButtonFormField<String>(
-                                            value: _selectedAudience,
-                                            hint: const Text("Select recipients..."),
-                                            decoration: InputDecoration(
-                                              border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                                borderSide: BorderSide(
-                                                  color: Colors.grey[300]!,
+                                          Container(
+                                            height: 48,
+                                            decoration: BoxDecoration(
+                                              border: Border.all(color: Colors.grey[300]!),
+                                              borderRadius: BorderRadius.circular(8),
+                                              color: Colors.white,
+                                            ),
+                                            child: DropdownButtonFormField<String>(
+                                              value: _selectedAudience,
+                                              hint: Text(
+                                                "Select recipients...",
+                                                style: TextStyle(
+                                                  color: Colors.grey[400],
+                                                  fontSize: 14,
                                                 ),
                                               ),
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 16,
-                                                vertical: 12,
+                                              decoration: const InputDecoration(
+                                                border: InputBorder.none,
+                                                contentPadding: EdgeInsets.symmetric(
+                                                  horizontal: 12,
+                                                  vertical: 12,
+                                                ),
                                               ),
+                                              icon: Icon(
+                                                Icons.arrow_drop_down,
+                                                color: Colors.grey[600],
+                                              ),
+                                              dropdownColor: Colors.white,
+                                              items: _audienceOptions.map((audience) {
+                                                return DropdownMenuItem(
+                                                  value: audience,
+                                                  child: Text(audience),
+                                                );
+                                              }).toList(),
+                                              onChanged: (value) {
+                                                setState(() {
+                                                  _selectedAudience = value;
+                                                });
+                                              },
                                             ),
-                                            items: _audienceOptions.map((audience) {
-                                              return DropdownMenuItem(
-                                                value: audience,
-                                                child: Text(audience),
-                                              );
-                                            }).toList(),
-                                            onChanged: (value) {
-                                              setState(() {
-                                                _selectedAudience = value;
-                                              });
-                                            },
                                           ),
                                         ],
                                       ),
@@ -632,54 +731,55 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          const Text(
-                                            "Type",
+                                          Text(
+                                            "Announcement Type",
                                             style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.black87,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.grey[700],
                                             ),
                                           ),
                                           const SizedBox(height: 8),
-                                          DropdownButtonFormField<String>(
-                                            value: _selectedType,
-                                            hint: const Text("Select type..."),
-                                            decoration: InputDecoration(
-                                              border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                                borderSide: BorderSide(
-                                                  color: Colors.grey[300]!,
-                                                ),
-                                              ),
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 16,
-                                                vertical: 12,
-                                              ),
+                                          Container(
+                                            height: 48,
+                                            decoration: BoxDecoration(
+                                              border: Border.all(color: Colors.grey[300]!),
+                                              borderRadius: BorderRadius.circular(8),
+                                              color: Colors.white,
                                             ),
-                                            items: _typeOptions.map((type) {
-                                              return DropdownMenuItem<String>(
-                                                value: type['value'] as String,
-                                                child: Row(
-                                                  children: [
-                                                    Icon(
-                                                      type['icon'] as IconData,
-                                                      color:
-                                                          type['color'] as Color?,
-                                                      size: 18,
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Text(type['label'] as String),
-                                                  ],
+                                            child: DropdownButtonFormField<String>(
+                                              value: _selectedType,
+                                              hint: Text(
+                                                "Select type...",
+                                                style: TextStyle(
+                                                  color: Colors.grey[400],
+                                                  fontSize: 14,
                                                 ),
-                                              );
-                                            }).toList(),
-                                            onChanged: (value) {
-                                              setState(() {
-                                                _selectedType = value;
-                                              });
-                                            },
+                                              ),
+                                              decoration: const InputDecoration(
+                                                border: InputBorder.none,
+                                                contentPadding: EdgeInsets.symmetric(
+                                                  horizontal: 12,
+                                                  vertical: 12,
+                                                ),
+                                              ),
+                                              icon: Icon(
+                                                Icons.arrow_drop_down,
+                                                color: Colors.grey[600],
+                                              ),
+                                              dropdownColor: Colors.white,
+                                              items: _typeOptions.map((type) {
+                                                return DropdownMenuItem<String>(
+                                                  value: type['value'] as String,
+                                                  child: Text(type['label'] as String),
+                                                );
+                                              }).toList(),
+                                              onChanged: (value) {
+                                                setState(() {
+                                                  _selectedType = value;
+                                                });
+                                              },
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -688,58 +788,37 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
                                 ),
                                 const SizedBox(height: 24),
 
-                                // Post Details
-                                const Text(
-                                  "Post Details",
+                                // Announcement Details
+                                Text(
+                                  "Announcement Details",
                                   style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.grey[700],
                                   ),
                                 ),
                                 const SizedBox(height: 8),
                                 Container(
-                                  width: double.infinity,
-                                  height: 32,
+                                  height: 200,
                                   decoration: BoxDecoration(
-                                    color: Colors.grey[200],
-                                    borderRadius: const BorderRadius.only(
-                                      topLeft: Radius.circular(8),
-                                      topRight: Radius.circular(8),
-                                    ),
                                     border: Border.all(color: Colors.grey[300]!),
+                                    borderRadius: BorderRadius.circular(8),
+                                    color: Colors.white,
                                   ),
-                                  alignment: Alignment.centerLeft,
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 12),
-                                  child: const Text(
-                                    "Text",
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.black87,
+                                  child: TextField(
+                                    controller: _detailsController,
+                                    maxLines: null,
+                                    expands: true,
+                                    textAlignVertical: TextAlignVertical.top,
+                                    decoration: InputDecoration(
+                                      hintText: "Enter the full announcement details...",
+                                      hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                                      border: InputBorder.none,
+                                      contentPadding: const EdgeInsets.all(24),
                                     ),
                                   ),
                                 ),
-                                TextField(
-                                  controller: _detailsController,
-                                  maxLines: 8,
-                                  decoration: InputDecoration(
-                                    hintText:
-                                        "Enter the full announcement details...",
-                                    hintStyle: TextStyle(color: Colors.grey[500]),
-                                    border: OutlineInputBorder(
-                                      borderRadius: const BorderRadius.only(
-                                        bottomLeft: Radius.circular(8),
-                                        bottomRight: Radius.circular(8),
-                                      ),
-                                      borderSide:
-                                          BorderSide(color: Colors.grey[300]!),
-                                    ),
-                                    contentPadding: const EdgeInsets.all(16),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 20),
 
                                 // Location + Schedule
                                 Row(
@@ -750,43 +829,55 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          const Text(
+                                          Text(
                                             "Location Affected (Optional)",
                                             style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.black87,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.grey[700],
                                             ),
                                           ),
                                           const SizedBox(height: 8),
-                                          DropdownButtonFormField<String>(
-                                            value: _selectedLocation,
-                                            hint: const Text("Select"),
-                                            decoration: InputDecoration(
-                                              border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                                borderSide: BorderSide(
-                                                  color: Colors.grey[300]!,
+                                          Container(
+                                            height: 48,
+                                            decoration: BoxDecoration(
+                                              border: Border.all(color: Colors.grey[300]!),
+                                              borderRadius: BorderRadius.circular(8),
+                                              color: Colors.white,
+                                            ),
+                                            child: DropdownButtonFormField<String>(
+                                              value: _selectedLocation,
+                                              hint: Text(
+                                                "Select",
+                                                style: TextStyle(
+                                                  color: Colors.grey[400],
+                                                  fontSize: 14,
                                                 ),
                                               ),
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 16,
-                                                vertical: 12,
+                                              decoration: const InputDecoration(
+                                                border: InputBorder.none,
+                                                contentPadding: EdgeInsets.symmetric(
+                                                  horizontal: 12,
+                                                  vertical: 12,
+                                                ),
                                               ),
+                                              icon: Icon(
+                                                Icons.arrow_drop_down,
+                                                color: Colors.grey[600],
+                                              ),
+                                              dropdownColor: Colors.white,
+                                              items: _locationOptions.map((location) {
+                                                return DropdownMenuItem(
+                                                  value: location,
+                                                  child: Text(location),
+                                                );
+                                              }).toList(),
+                                              onChanged: (value) {
+                                                setState(() {
+                                                  _selectedLocation = value;
+                                                });
+                                              },
                                             ),
-                                            items: _locationOptions.map((location) {
-                                              return DropdownMenuItem(
-                                                value: location,
-                                                child: Text(location),
-                                              );
-                                            }).toList(),
-                                            onChanged: (value) {
-                                              setState(() {
-                                                _selectedLocation = value;
-                                              });
-                                            },
                                           ),
                                         ],
                                       ),
@@ -799,78 +890,84 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
                                             CrossAxisAlignment.start,
                                         children: [
                                           const SizedBox(height: 24),
-                                          const Text(
+                                          Text(
                                             "Schedule Visibility",
                                             style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.black87,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.grey[700],
                                             ),
                                           ),
                                           const SizedBox(height: 8),
                                           Row(
                                             children: [
                                               Expanded(
-                                                child: TextField(
-                                                  controller: _startDateController,
-                                                  readOnly: true,
-                                                  decoration: InputDecoration(
-                                                    hintText: "DD / MM / YY",
-                                                    hintStyle: TextStyle(
-                                                      color: Colors.grey[500],
-                                                    ),
-                                                    border: OutlineInputBorder(
-                                                      borderRadius:
-                                                          BorderRadius.circular(8),
-                                                      borderSide: BorderSide(
-                                                        color: Colors.grey[300]!,
+                                                child: Container(
+                                                  height: 48,
+                                                  decoration: BoxDecoration(
+                                                    border: Border.all(color: Colors.grey[300]!),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                    color: Colors.white,
+                                                  ),
+                                                  child: TextField(
+                                                    controller: _startDateController,
+                                                    readOnly: true,
+                                                    decoration: InputDecoration(
+                                                      hintText: "DD / MM / YY",
+                                                      hintStyle: TextStyle(
+                                                        color: Colors.grey[400],
+                                                        fontSize: 14,
+                                                      ),
+                                                      border: InputBorder.none,
+                                                      contentPadding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 12,
+                                                            vertical: 12,
+                                                          ),
+                                                      suffixIcon: Icon(
+                                                        Icons.calendar_today,
+                                                        color: Colors.grey[600],
+                                                        size: 20,
                                                       ),
                                                     ),
-                                                    contentPadding:
-                                                        const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 12,
-                                                    ),
-                                                    suffixIcon: Icon(
-                                                      Icons.calendar_today,
-                                                      color: Colors.blue[600],
-                                                      size: 20,
-                                                    ),
+                                                    onTap: () =>
+                                                        _selectDate(_startDateController),
                                                   ),
-                                                  onTap: () =>
-                                                      _selectDate(_startDateController),
                                                 ),
                                               ),
                                               const SizedBox(width: 12),
                                               Expanded(
-                                                child: TextField(
-                                                  controller: _endDateController,
-                                                  readOnly: true,
-                                                  decoration: InputDecoration(
-                                                    hintText: "DD / MM / YY",
-                                                    hintStyle: TextStyle(
-                                                      color: Colors.grey[500],
-                                                    ),
-                                                    border: OutlineInputBorder(
-                                                      borderRadius:
-                                                          BorderRadius.circular(8),
-                                                      borderSide: BorderSide(
-                                                        color: Colors.grey[300]!,
+                                                child: Container(
+                                                  height: 48,
+                                                  decoration: BoxDecoration(
+                                                    border: Border.all(color: Colors.grey[300]!),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                    color: Colors.white,
+                                                  ),
+                                                  child: TextField(
+                                                    controller: _endDateController,
+                                                    readOnly: true,
+                                                    decoration: InputDecoration(
+                                                      hintText: "DD / MM / YY",
+                                                      hintStyle: TextStyle(
+                                                        color: Colors.grey[400],
+                                                        fontSize: 14,
+                                                      ),
+                                                      border: InputBorder.none,
+                                                      contentPadding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 12,
+                                                            vertical: 12,
+                                                          ),
+                                                      suffixIcon: Icon(
+                                                        Icons.calendar_today,
+                                                        color: Colors.grey[600],
+                                                        size: 20,
                                                       ),
                                                     ),
-                                                    contentPadding:
-                                                        const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 12,
-                                                    ),
-                                                    suffixIcon: Icon(
-                                                      Icons.calendar_today,
-                                                      color: Colors.blue[600],
-                                                      size: 20,
-                                                    ),
+                                                    onTap: () =>
+                                                        _selectDate(_endDateController),
                                                   ),
-                                                  onTap: () =>
-                                                      _selectDate(_endDateController),
                                                 ),
                                               ),
                                             ],
@@ -891,12 +988,12 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
                                 const SizedBox(height: 24),
 
                                 // Attachments
-                                const Text(
-                                  "Attachments(Optional)",
+                                Text(
+                                  "Attachments (Optional)",
                                   style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.grey[700],
                                   ),
                                 ),
                                 const SizedBox(height: 8),
@@ -986,7 +1083,7 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
 
                                 // Bottom Actions
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment: MainAxisAlignment.end,
                                   children: [
                                     ElevatedButton(
                                       onPressed: () => context.go('/announcement'),
@@ -1009,25 +1106,9 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
                                         ),
                                       ),
                                     ),
-                                    ElevatedButton.icon(
+                                    const SizedBox(width: 16),
+                                    ElevatedButton(
                                       onPressed: _isSaving ? null : _submitForm,
-                                      icon: _isSaving
-                                          ? const SizedBox(
-                                              width: 18,
-                                              height: 18,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: Colors.white,
-                                              ),
-                                            )
-                                          : const Icon(Icons.save, size: 18),
-                                      label: Text(
-                                        _isSaving ? "Saving..." : "Save Changes",
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 16,
-                                        ),
-                                      ),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: const Color(0xFF1976D2),
                                         foregroundColor: Colors.white,
@@ -1039,6 +1120,39 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
                                           borderRadius: BorderRadius.circular(8),
                                         ),
                                       ),
+                                      child: _isSaving
+                                          ? const SizedBox(
+                                              width: 80,
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  SizedBox(
+                                                    width: 16,
+                                                    height: 16,
+                                                    child: CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                  SizedBox(width: 8),
+                                                  Text(
+                                                    "Saving...",
+                                                    style: TextStyle(
+                                                      fontWeight: FontWeight.w600,
+                                                      fontSize: 16,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            )
+                                          : const Text(
+                                              "Save",
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 16,
+                                              ),
+                                            ),
                                     ),
                                   ],
                                 ),

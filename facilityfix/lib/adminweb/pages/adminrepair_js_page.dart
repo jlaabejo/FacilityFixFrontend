@@ -4,6 +4,7 @@ import '../layout/facilityfix_layout.dart';
 import '../popupwidgets/js_viewdetails_popup.dart';
 import '../popupwidgets/assignstaff_popup.dart' as assign_popup;
 import '../services/api_service.dart';
+import '../widgets/tags.dart';
 
 class RepairJobServicePage extends StatefulWidget {
   const RepairJobServicePage({super.key});
@@ -380,12 +381,480 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
 
   // Edit task method
   void _editTask(Map<String, dynamic> task) {
-    // Implement edit functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Edit task: ${task['id']}'),
-        backgroundColor: Colors.blue,
-      ),
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        final TextEditingController titleController = 
+            TextEditingController(text: task['title']);
+        final TextEditingController descController = 
+            TextEditingController(text: task['description']);
+        
+        // Schedule controller
+        DateTime? selectedSchedule;
+        final schedule = task['schedule'] ?? task['dateRequested'];
+        if (schedule != null && schedule.isNotEmpty) {
+          try {
+            if (schedule.toString().contains('T')) {
+              selectedSchedule = DateTime.parse(schedule.toString());
+            } else {
+              final parts = schedule.toString().split('-');
+              if (parts.length == 3) {
+                selectedSchedule = DateTime(
+                  int.parse(parts[0]),
+                  int.parse(parts[1]),
+                  int.parse(parts[2]),
+                );
+              }
+            }
+          } catch (e) {
+            print('[Edit] Error parsing schedule: $e');
+          }
+        }
+        
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 8,
+          child: Container(
+            width: 700,
+            constraints: const BoxConstraints(maxHeight: 700),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with blue background
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[600],
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.edit_document,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Edit Job Service',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              task['serviceId'] ?? 'N/A',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.white.withOpacity(0.9),
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          titleController.dispose();
+                          descController.dispose();
+                          Navigator.of(context).pop();
+                        },
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        tooltip: 'Close',
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Content
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Requester Details Section (Non-editable)
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.blue[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.blue[200]!),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.info_outline, color: Colors.blue[700], size: 18),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'REQUESTER DETAILS',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.blue[900],
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildReadOnlyField(
+                                      'Requested By',
+                                      task['requestedBy'] ?? 'N/A',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _buildReadOnlyField(
+                                      'Date Requested',
+                                      task['dateRequested'] ?? 'N/A',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildReadOnlyField(
+                                      'Building & Unit',
+                                      task['buildingUnit'] ?? 'N/A',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _buildReadOnlyField(
+                                      'Department',
+                                      task['department'] ?? 'N/A',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Title Field
+                        Text(
+                          'TITLE',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[600],
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: titleController,
+                          decoration: InputDecoration(
+                            hintText: 'Enter job service title',
+                            hintStyle: TextStyle(color: Colors.grey[400]),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.blue[600]!, width: 2),
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                          ),
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                        const SizedBox(height: 20),
+                        
+                        // Description Field
+                        Text(
+                          'DESCRIPTION',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[600],
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: descController,
+                          decoration: InputDecoration(
+                            hintText: 'Enter job service description',
+                            hintStyle: TextStyle(color: Colors.grey[400]),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.blue[600]!, width: 2),
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey[50],
+                            contentPadding: const EdgeInsets.all(16),
+                          ),
+                          maxLines: 5,
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Provide a detailed description of the job service',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        
+                        // Schedule Field (Editable)
+                        Text(
+                          'SCHEDULE',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[600],
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        StatefulBuilder(
+                          builder: (context, setDialogState) {
+                            return InkWell(
+                              onTap: () async {
+                                final DateTime? pickedDate = await showDatePicker(
+                                  context: context,
+                                  initialDate: selectedSchedule ?? DateTime.now(),
+                                  firstDate: DateTime.now(),
+                                  lastDate: DateTime(2030, 12),
+                                );
+                                
+                                if (pickedDate != null) {
+                                  setDialogState(() {
+                                    selectedSchedule = pickedDate;
+                                  });
+                                }
+                              },
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey[300]!),
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: Colors.grey[50],
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.calendar_today,
+                                      size: 18,
+                                      color: Colors.grey[600],
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        selectedSchedule != null 
+                                            ? '${selectedSchedule!.year}-${selectedSchedule!.month.toString().padLeft(2, '0')}-${selectedSchedule!.day.toString().padLeft(2, '0')}'
+                                            : 'Select schedule date',
+                                        style: TextStyle(
+                                          color: selectedSchedule != null
+                                              ? Colors.black87
+                                              : Colors.grey[500],
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                
+                // Footer with Actions
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    border: Border(
+                      top: BorderSide(color: Colors.grey[200]!, width: 1),
+                    ),
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton(
+                        onPressed: () {
+                          titleController.dispose();
+                          descController.dispose();
+                          Navigator.of(context).pop();
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.grey[700],
+                          side: BorderSide(color: Colors.grey[300]!),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          // Validate inputs
+                          if (titleController.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please enter a title'),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                            return;
+                          }
+                          
+                          try {
+                            // TODO: Implement API call when backend is ready
+                            // Update locally for now
+                            setState(() {
+                              task['title'] = titleController.text;
+                              task['description'] = descController.text;
+                              if (selectedSchedule != null) {
+                                final formattedDate = '${selectedSchedule!.year}-${selectedSchedule!.month.toString().padLeft(2, '0')}-${selectedSchedule!.day.toString().padLeft(2, '0')}';
+                                task['schedule'] = formattedDate;
+                              }
+                            });
+                            
+                            if (mounted) {
+                              Navigator.of(context).pop();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.check_circle, color: Colors.white),
+                                      const SizedBox(width: 12),
+                                      Text('${task['serviceId']} updated successfully'),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.green[600],
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.error, color: Colors.white),
+                                      const SizedBox(width: 12),
+                                      Expanded(child: Text('Failed to update: $e')),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.red[600],
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              );
+                            }
+                          } finally {
+                            titleController.dispose();
+                            descController.dispose();
+                          }
+                        },
+                        icon: const Icon(Icons.save, size: 18),
+                        label: const Text(
+                          'Save Changes',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[600],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -406,38 +875,308 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   void _deleteTask(Map<String, dynamic> task) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Delete Task'),
-          content: Text('Are you sure you want to delete task ${task['id']}?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 8,
+          child: Container(
+            width: 500,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
             ),
-            TextButton(
-              onPressed: () async {
-                Navigator.of(context).pop();
-                // TODO: Implement actual deletion via API
-                // For now, just remove from local list and reload
-                setState(() {
-                  _repairTasks.removeWhere((t) => t['id'] == task['id']);
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Task ${task['id']} deleted'),
-                    backgroundColor: Colors.red,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with red background
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.red[600],
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                    ),
                   ),
-                );
-                // Reload data to reflect changes
-                await _loadJobServices();
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Delete'),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.delete_forever,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Delete Job Service',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'This action cannot be undone',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.white70,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        tooltip: 'Close',
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Content
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 20),
+                      // Job service details
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey[200]!),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.description, 
+                                     color: Colors.grey[600], size: 18),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'JOB SERVICE DETAILS',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey[600],
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            _buildDeleteDetailRow('ID', task['serviceId'] ?? 'N/A'),
+                            const SizedBox(height: 8),
+                            _buildDeleteDetailRow('Title', task['title'] ?? 'No Title'),
+                            const SizedBox(height: 8),
+                            _buildDeleteDetailRow('Department', task['department'] ?? 'N/A'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Footer with Actions
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    border: Border(
+                      top: BorderSide(color: Colors.grey[200]!, width: 1),
+                    ),
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.grey[700],
+                          side: BorderSide(color: Colors.grey[300]!),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          Navigator.of(context).pop();
+                          
+                          try {
+                            // TODO: Implement API call when backend is ready
+                            // For now, remove locally
+                            setState(() {
+                              _repairTasks.removeWhere((t) => t['serviceId'] == task['serviceId']);
+                            });
+                            
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.check_circle, color: Colors.white),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text('${task['serviceId']} deleted successfully'),
+                                      ),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.green[600],
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.error, color: Colors.white),
+                                      const SizedBox(width: 12),
+                                      Expanded(child: Text('Failed to delete: $e')),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.red[600],
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.delete_forever, size: 18),
+                        label: const Text(
+                          'Delete Permanently',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red[600],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
+    );
+  }
+
+  // Helper method for delete detail rows
+  Widget _buildDeleteDetailRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 90,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        const Text(': ', style: TextStyle(fontSize: 12)),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black87,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Helper method for read-only fields in edit dialog
+  Widget _buildReadOnlyField(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
     );
   }
 
@@ -729,7 +1468,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          "Work Orders",
+          "Task Management",
           style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.bold,
@@ -755,7 +1494,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
-              child: const Text('Work Orders'),
+              child: const Text('Task Management'),
             ),
             const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
             TextButton(
@@ -1078,7 +1817,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                     DataColumn(label: _fixedCell(4, const Text("PRIORITY"))),
                     DataColumn(label: _fixedCell(5, const Text("DEPARTMENT"))),
                     DataColumn(label: _fixedCell(6, const Text("STATUS"))),
-                    DataColumn(label: _fixedCell(7, const Text("ACTION"))),
+                    DataColumn(label: _fixedCell(7, const Text(""))),
                   ],
                   rows:
                       _getPaginatedTasks().map((task) {
@@ -1108,17 +1847,26 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
 
                             // Priority chip
                             DataCell(
-                              _fixedCell(4, _buildPriorityChip(task['priority'])),
+                              _fixedCell(
+                                4,
+                                PriorityTag(priority: task['priority']),
+                              ),
                             ),
                             
                             // Department
                             DataCell(
-                              _fixedCell(5, _ellipsis(task['department'])),
+                              _fixedCell(
+                                5,
+                                DepartmentTag(task['department']),
+                              ),
                             ),
 
                             // Status chip
                             DataCell(
-                              _fixedCell(6, _buildStatusChip(task['status'])),
+                              _fixedCell(
+                                6,
+                                StatusTag(status: task['status']),
+                              ),
                             ),
 
                             // Action menu cell (narrow, centered)
@@ -1196,86 +1944,6 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  // Priority Chip Widget
-  Widget _buildPriorityChip(String priority) {
-    Color bgColor;
-    Color textColor;
-    switch (priority) {
-      case 'High':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'Medium':
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFFF8F00);
-        break;
-      case 'Low':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      default:
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        priority,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  // Status Chip Widget
-  Widget _buildStatusChip(String status) {
-    Color bgColor;
-    Color textColor;
-    switch (status) {
-      case 'In Progress':
-        bgColor = const Color.fromARGB(49, 82, 131, 205);
-        textColor = const Color.fromARGB(255, 0, 93, 232);
-        break;
-      case 'Pending':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'Completed':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      case 'Cancelled':
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-        break;
-      default:
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
       ),
     );
   }

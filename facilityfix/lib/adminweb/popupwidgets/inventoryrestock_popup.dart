@@ -70,6 +70,8 @@ class _RestockDialogState extends State<RestockDialog> {
 
     try {
       final quantity = int.parse(_quantityController.text.trim());
+      final currentStock = int.tryParse((widget.itemData['currentStock'] ?? '0').toString()) ?? 0;
+      final timestamp = DateTime.now().toIso8601String();
       
       // TODO: Replace with actual API call
       // Example:
@@ -99,7 +101,10 @@ class _RestockDialogState extends State<RestockDialog> {
         'success': true,
         'itemId': widget.itemData['id'],
         'quantity': quantity,
-        'timestamp': DateTime.now().toIso8601String(),
+        'timestamp': timestamp,
+        'action': 'Manual Restock',
+        'note': 'Stock increased from $currentStock to ${currentStock + quantity}',
+        'actor': widget.itemData['performedBy'] ?? 'Admin',
       });
     } catch (e) {
       // Handle error

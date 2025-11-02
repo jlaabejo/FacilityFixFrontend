@@ -834,11 +834,11 @@ class _AdminUserPageState extends State<AdminUserPage> {
   // Column widths for fixed table layout
   final List<double> _colW = <double>[
     50,  // CHECKBOX
-    120, // USER ID
-    250, // USER (name + email)
+    80, // USER ID
+    200, // USER (name + email)
     100, // ROLE
     130, // DEPARTMENT
-    100, // STATUS
+    80, // STATUS
     80,  // ACTION
   ];
 
@@ -1208,9 +1208,9 @@ class _AdminUserPageState extends State<AdminUserPage> {
                                     child: SingleChildScrollView(
                                       scrollDirection: Axis.horizontal,
                                       child: DataTable(
-                                        columnSpacing: 70,
+                                        columnSpacing: 65,
                                         headingRowHeight: 56,
-                                        dataRowHeight: 50,
+                                        dataRowHeight: 64,
                                         headingRowColor: WidgetStateProperty.all(
                                           Colors.grey[50],
                                         ),
@@ -1228,14 +1228,14 @@ class _AdminUserPageState extends State<AdminUserPage> {
                                           DataColumn(
                                             label: _fixedCell(
                                               0,
-                                              const SizedBox.shrink(),
+                                              const Text(""),
                                             ),
                                           ),
                                           DataColumn(
                                             label: _fixedCell(1, const Text("USER ID")),
                                           ),
                                           DataColumn(
-                                            label: _fixedCell(2, const Text("USER")),
+                                            label: _fixedCell(2, const Text("USER NAME")),
                                           ),
                                           DataColumn(
                                             label: _fixedCell(3, const Text("ROLE")),
@@ -1247,7 +1247,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
                                             label: _fixedCell(5, const Text("STATUS")),
                                           ),
                                           DataColumn(
-                                            label: _fixedCell(6, const Text("ACTION")),
+                                            label: _fixedCell(6, const Text("")),
                                           ),
                                         ],
                                         rows: _getPaginatedUsers().map((user) {

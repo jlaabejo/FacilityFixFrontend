@@ -271,7 +271,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       // User and Role Management dropdown
                       _dropdownNav(
                         icon: Icons.group,
-                        title: 'User and Role Management',
+                        title: 'User Management',
                         sectionKey: 'user',
                         children: [
                           _subNavItem('Users', 'user_users'),
@@ -283,7 +283,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       // Work Orders dropdown
                       _dropdownNav(
                         icon: Icons.build_outlined,
-                        title: 'Work Orders',
+                        title: 'Task Management',
                         sectionKey: 'work',
                         children: [
                           _subNavItem('Maintenance Tasks', 'work_maintenance'),
@@ -431,9 +431,18 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
 
                 // Main content area with background
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
-                    child: widget.body,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      image: DecorationImage(
+                        image: AssetImage('images/bglayout.png'), 
+                        fit: BoxFit.cover,
+                        opacity: 1, 
+                      ),
+                    ),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: widget.body,
+                    ),
                   ),
                 ),
               ],

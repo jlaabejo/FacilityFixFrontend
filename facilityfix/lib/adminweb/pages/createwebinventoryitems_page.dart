@@ -36,19 +36,18 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
   final String _buildingId = 'default_building_id';
 
   final List<String> _classifications = [
-    'Materials',
-    'Tools',
+    'Consumable',
     'Equipment',
-    'Consumables',
-    'Spare Parts',
+    'Tool',
+    'Material',
+    'Chemical',
   ];
 
   final List<String> _departments = [
-    'Civil/Carpentry',
+    'Carpentry',
     'Electrical',
+    'Masonry',
     'Plumbing',
-    'HVAC',
-    'General Maintenance',
   ];
 
   final List<String> _units = [
@@ -543,13 +542,16 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildSectionHeader(
+                    // Basic Information
+                    const Text(
                       "Basic Information",
-                      Icons.info_outline,
-                      const Color(0xFF1976D2),
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
                     ),
-                    const SizedBox(height: 24),
-
+                    const SizedBox(height: 18),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

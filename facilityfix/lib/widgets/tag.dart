@@ -82,9 +82,6 @@ class DepartmentTag extends StatelessWidget {
     final departmentLower = department.toLowerCase();
     
     switch (departmentLower) {
-      case 'maintenance':
-        bg = const Color(0xFF19B36E);
-        break;
       case 'carpentry':
         bg = const Color(0xFFF79009);
         break;

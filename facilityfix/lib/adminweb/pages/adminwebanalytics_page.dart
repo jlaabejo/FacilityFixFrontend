@@ -494,6 +494,51 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // ============================================
+                    // HEADER SECTION: TITLE AND BREADCRUMBS
+                    // ============================================
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Analytics",
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        // Breadcrumbs
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () => context.go('/dashboard'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                              ),
+                              child: const Text('Dashboard'),
+                            ),
+                            const Icon(
+                              Icons.chevron_right,
+                              color: Colors.grey,
+                              size: 16,
+                            ),
+                            TextButton(
+                              onPressed: null,
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                              ),
+                              child: const Text('Analytics'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    
+                    // ============================================
                     // TOP ROW: ANALYTICS STATISTICS CARDS
                     // ============================================
                     LayoutBuilder(
@@ -1069,39 +1114,32 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
   }
 
   // ============================================
-  // TOP ISSUE BY CATEGORY PIE CHART WIDGET
+  // TOP ISSUE BY REPAIR CLASSIFICATION PIE CHART WIDGET
   // ============================================
   Widget _buildTopIssueChart() {
     final categoryData =
         _categoryData.isNotEmpty
             ? _categoryData
             : {
-              'HVAC': 28,
-              'Electrical': 15,
-              'Civil/Carpentry': 10,
-              'Plumbing': 10,
-              'Others': 10,
+              'HVAC': 15,
+              'Carpentry': 20,
+              'Electrical': 25,
+              'Masonry': 15,
+              'Pest Control': 10,
+              'Plumbing': 15,
             };
 
     // Calculate total for percentages
     final total = categoryData.values.fold<int>(0, (sum, count) => sum + count);
 
-    // Define colors for categories
+    // Define colors for repair classifications
     final categoryColors = {
-      'HVAC': Colors.blue,
-      'hvac': Colors.blue,
-      'Electrical': Colors.orange,
+      'hvac': Colors.cyan,
+      'carpentry': Colors.brown,
       'electrical': Colors.orange,
-      'Civil/Carpentry': Colors.red,
-      'carpentry': Colors.red,
-      'Plumbing': Colors.yellow,
-      'plumbing': Colors.yellow,
-      'Others': Colors.green,
-      'general': Colors.green,
-      'pest control': Colors.purple,
-      'masonry': Colors.brown,
-      'security': Colors.indigo,
-      'fire_safety': Colors.deepOrange,
+      'masonry': Colors.grey[600]!,
+      'pest control': Colors.green,
+      'plumbing': Colors.blue,
     };
 
     // Create pie chart sections
@@ -1145,10 +1183,10 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Top Issue by Category',
+              'Top Issue by Repair Classification',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 30),
 
             // Pie Chart
             SizedBox(
@@ -1165,7 +1203,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
 
             // Chart Legend with Statistics
             const Text(
-              'MOST PROBLEMATIC AREAS',
+              'MOST PROBLEMATIC CLASSIFICATION TYPE',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,

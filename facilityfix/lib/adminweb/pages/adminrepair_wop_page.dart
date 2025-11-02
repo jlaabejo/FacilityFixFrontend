@@ -995,7 +995,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          "Work Orders",
+          "Task Management",
           style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.bold,
@@ -1021,7 +1021,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
-              child: const Text('Work Orders'),
+              child: const Text('Task Management'),
             ),
             const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
             TextButton(
@@ -1376,7 +1376,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                               label: _fixedCell(6, const Text("STATUS")),
                             ),
                             DataColumn(
-                              label: _fixedCell(7, const Text("ACTION")),
+                              label: _fixedCell(7, const Text("")),
                             ),
                           ],
                           rows:
