@@ -162,24 +162,27 @@ class DepartmentTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color bg = const Color(0xFFB0BEC5); // Soft blue-grey default
+    Color bg = const Color(0xFFE0E0E0); // Soft light grey default
     final departmentLower = department.toLowerCase();
     
     switch (departmentLower) {
       case 'carpentry':
-        bg = const Color(0xFFFFB74D); // Soft orange
+        bg = const Color(0xFFFFE0B2); // Softer peachy orange
         break;
       case 'plumbing':
-        bg = const Color(0xFF64B5F6); // Soft blue
+        bg = const Color(0xFFBBDEFB); // Softer sky blue
         break;
       case 'electrical':
-        bg = const Color(0xFFEF9A9A); // Soft red/pink
+        bg = const Color(0xFFFFCDD2); // Softer pink/light red
         break;
       case 'masonry':
-        bg = const Color(0xFF90A4AE); // Soft grey-blue
+        bg = const Color(0xFFCFD8DC); // Softer blue-grey
         break;
       case 'pest control':
-        bg = const Color(0xFF81C784); // Soft green
+        bg = const Color(0xFFC8E6C9); // Softer mint green
+        break;
+      case 'house keeping':
+        bg = const Color(0xFFE1BEE7); // Soft lavender/purple
         break;
     }
     
@@ -190,7 +193,7 @@ class DepartmentTag extends StatelessWidget {
         .map((word) => word.isNotEmpty ? word[0].toUpperCase() + word.substring(1) : '')
         .join(' ');
     
-    return Tag(label: displayText, bg: bg, fg: Colors.white);
+    return Tag(label: displayText, bg: bg, fg: Colors.black87);
   }
 }
 

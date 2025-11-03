@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/api_services.dart';
 import '../layout/facilityfix_layout.dart';
-import '../popupwidgets/createmaintenancedialogue_popup.dart';
+import '../maintenance_task/pop_up/createmaintenancedialogue_popup.dart';
 
 class AdminWebCalendarPage extends StatefulWidget {
   const AdminWebCalendarPage({super.key});
@@ -477,30 +477,6 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                    ),
-                    Row(
-                      children: [
-                        // Edit button
-                        IconButton(
-                          onPressed: () {
-                            // TODO: Implement edit functionality
-                            Navigator.of(context).pop();
-                          },
-                          icon: const Icon(Icons.edit_outlined, size: 20),
-                        ),
-                        // More options button
-                        IconButton(
-                          onPressed: () {
-                            // TODO: Implement more options
-                          },
-                          icon: const Icon(Icons.more_horiz, size: 20),
-                        ),
-                        // Close button
-                        IconButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: const Icon(Icons.close, size: 20),
-                        ),
-                      ],
                     ),
                   ],
                 ),
@@ -1349,20 +1325,6 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.person, size: 12, color: Colors.grey),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Assigned',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                      ],
                     ),
                   ),
                 ],
