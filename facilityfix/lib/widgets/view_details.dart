@@ -69,41 +69,10 @@ class ConcernSlipDetails extends StatelessWidget {
   });
 
   // Map resolution -> what we show as "Request Type"
+  // For concern slip, always show "Concern Slip" regardless of resolution
   String _effectiverequestTypeTag() {
-    final res = resolutionType?.trim().toLowerCase();
-
-
-    if (this.title.contains("Job Service")){
-      return "Job Service";
-    }
-
-
-    if (this.title.contains("Work Order")){
-      return "Work Order";
-    }
-
-     if (this.title.contains("Rejected")){
-      return "Concern Slip";
-    }
-
-     if (this.title.contains("Rejected")){
-      return "Concern Slip";
-    }
-
-
-
-
-    switch (res) {
-      case 'job_service':
-        return 'Job Service';
-      case 'work_permit':
-        return 'Work Order';
-      case 'rejected':
-        // keep it as Concern Slip; reflect rejection via statusTag
-        return 'Concern Slip';
-      default:
-        return requestTypeTag;
-    }
+    // Always return "Concern Slip" for this widget
+    return 'Concern Slip';
   }
 
   // Local helpers for formatting via UiDateUtils
@@ -236,9 +205,16 @@ class ConcernSlipDetails extends StatelessWidget {
           const _SectionTitle('Requester Details'),
           SizedBox(height: 8 * s),
           KeyValueRow.text(label: 'Requested By', valueText: requestedBy),
-          if ((unitId ?? '').isNotEmpty) ...[
+          if (unitId.isNotEmpty) ...[
             SizedBox(height: 4 * s),
-            KeyValueRow.text(label: 'Unit ID', valueText: unitId!),
+            KeyValueRow.text(label: 'Unit ID', valueText: unitId),
+          ],
+          if ((scheduleAvailability?.trim().isNotEmpty ?? false)) ...[
+            SizedBox(height: 4 * s),
+            KeyValueRow.text(
+              label: 'Schedule Availability',
+              valueText: _fmtScheduleAvail(scheduleAvailability) ?? '—',
+            ),
           ],
 
           // ----- Divider -----
@@ -284,10 +260,19 @@ class ConcernSlipDetails extends StatelessWidget {
             SizedBox(height: 12 * s),
 
             _Section(
-              title: 'Staff Assessment',
+              title: 'Assigned Staff',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Date Assessed (shown once)
+                  if (assessedAt != null) ...[
+                    KeyValueRow.text(
+                      label: 'Date Assessed',
+                      valueText: _fmtDate(assessedAt!),
+                    ),
+                    SizedBox(height: 8 * s),
+                  ],
+
                   // Assigned Staff subsection (only if we have any staff info)
                   if ((assignedStaff?.trim().isNotEmpty ?? false) ||
                       (staffDepartment?.trim().isNotEmpty ?? false) ||
@@ -317,15 +302,6 @@ class ConcernSlipDetails extends StatelessWidget {
                         ],
                       ),
                     ),
-                  ],
-
-                  // Date Assessed (shown once)
-                  if (assessedAt != null) ...[
-                    KeyValueRow.text(
-                      label: 'Date Assessed',
-                      valueText: _fmtDate(assessedAt!),
-                    ),
-                    SizedBox(height: 8 * s),
                   ],
 
                   // Assessment text
@@ -383,6 +359,7 @@ class JobServiceDetails extends StatelessWidget {
   final String requestTypeTag; // e.g. "Job Service"
   final String? resolutionType; // job_service, work_permit, rejected
   final String? priority; // High | Medium | Low
+  final String? departmentTag;
   final String
   statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
 
@@ -411,6 +388,9 @@ class JobServiceDetails extends StatelessWidget {
   // Tracking
   final List<String>? materialsUsed;
 
+  // Callbacks
+  final VoidCallback? onViewConcernSlip;
+
   const JobServiceDetails({
     super.key,
 
@@ -423,6 +403,7 @@ class JobServiceDetails extends StatelessWidget {
     this.priority,
     required this.statusTag,
     this.resolutionType,
+    this.departmentTag,
 
     // Tenant / Requester
     required this.requestedBy,
@@ -447,6 +428,9 @@ class JobServiceDetails extends StatelessWidget {
 
     // Tracking
     this.materialsUsed,
+
+    // Callbacks
+    this.onViewConcernSlip,
   });
 
   // Map resolution type to what we DISPLAY as "Request Type".
@@ -546,25 +530,73 @@ class JobServiceDetails extends StatelessWidget {
                   UiIdFormatter.formatJobServiceId(id),
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 12 * s,
-                  color: const Color(0xFF475467),
-                  fontWeight: FontWeight.w500,
-                  height: 1.2,
+                    fontFamily: 'Inter',
+                    fontSize: 12 * s,
+                    color: const Color(0xFF475467),
+                    fontWeight: FontWeight.w500,
+                    height: 1.2,
                   ),
                 ),
-                 
               ),
               SizedBox(width: 8 * s),
-              Text(
-                'From Slip: $concernSlipId',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 11.5 * s,
-                  color: const Color(0xFF667085),
-                  fontWeight: FontWeight.w500,
+              if (concernSlipId.isNotEmpty && onViewConcernSlip != null)
+                GestureDetector(
+                  onTap: onViewConcernSlip,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 12 * s,
+                      vertical: 6 * s,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF005CE7),
+                      borderRadius: BorderRadius.circular(6 * s),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF005CE7).withOpacity(0.2),
+                          blurRadius: 4 * s,
+                          offset: Offset(0, 2 * s),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.description_outlined,
+                          size: 16 * s,
+                          color: Colors.white,
+                        ),
+                        SizedBox(width: 6 * s),
+                        Text(
+                          'View Concern Slip',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12 * s,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                        SizedBox(width: 4 * s),
+                        Icon(
+                          Icons.arrow_forward,
+                          size: 14 * s,
+                          color: Colors.white,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else if (concernSlipId.isNotEmpty)
+                Text(
+                  'From Slip: $concernSlipId',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11.5 * s,
+                    color: const Color(0xFF667085),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
             ],
           ),
 
@@ -577,7 +609,7 @@ class JobServiceDetails extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 KeyValueRow.text(
-                  label: 'Date Created',
+                  label: 'Date Requested',
                   valueText: _fmtDate(createdAt),
                 ),
                 if (updatedAt != null) ...[
@@ -605,6 +637,14 @@ class JobServiceDetails extends StatelessWidget {
                     labelWidth: 120 * s,
                   ),
                 ],
+                if ((departmentTag?.trim().isNotEmpty ?? false)) ...[
+                  SizedBox(height: 6 * s),
+                  KeyValueRow(
+                    label: 'Department',
+                    value: DepartmentTag(departmentTag!.trim()),
+                    labelWidth: 120 * s,
+                  ),
+                ],
               ],
             ),
           ),
@@ -618,9 +658,18 @@ class JobServiceDetails extends StatelessWidget {
           const _SectionTitle('Requester Details'),
           SizedBox(height: 8 * s),
           KeyValueRow.text(label: 'Requested By', valueText: requestedBy),
-          if ((unitId ?? '').isNotEmpty) ...[
+          // Name and Email intentionally removed to match Concern Slip mapping
+          // Show Unit ID and optional Schedule Availability
+          if (unitId.isNotEmpty) ...[
             SizedBox(height: 4 * s),
-            KeyValueRow.text(label: 'Unit ID', valueText: unitId!),
+            KeyValueRow.text(label: 'Unit ID', valueText: unitId),
+          ],
+          if ((scheduleAvailability?.trim().isNotEmpty ?? false)) ...[
+            SizedBox(height: 4 * s),
+            KeyValueRow.text(
+              label: 'Schedule Availability',
+              valueText: _fmtSchedAvail(scheduleAvailability) ?? '—',
+            ),
           ],
 
           // ----- Divider -----
@@ -639,9 +688,11 @@ class JobServiceDetails extends StatelessWidget {
                 children: [
                   // Additional Notes Text
                   if ((additionalNotes?.trim().isNotEmpty ?? false)) ...[
-                    Text(
-                      additionalNotes!.trim(),
-                      style: TextStyle(fontSize: 14 * s),
+                    _SectionCard(
+                      title: 'Additional Notes',
+                      content: additionalNotes!.trim(),
+                      padding: EdgeInsets.all(14 * s),
+                      hideIfEmpty: false,
                     ),
                     SizedBox(height: 8 * s),
                   ],
@@ -667,48 +718,44 @@ class JobServiceDetails extends StatelessWidget {
                 ],
               ),
             ),
-            SizedBox(height: 14 * s),
           ],
-
 
           // ----- Divider -----
           SizedBox(height: 14 * s),
           ffDivider(),
           SizedBox(height: 12 * s),
 
-          // ===== Staff =====
+          // ===== Assigned Staff =====
           if (hasStaffBits) ...[
-            _Section(
-              title: 'Assigned Staff',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if ((assignedStaff?.trim().isNotEmpty ?? false)) ...[
-                    _AvatarNameBlock(
-                      name: assignedStaff!.trim(),
-                      departmentTag:
-                          (staffDepartment?.trim().isNotEmpty ?? false)
-                              ? staffDepartment!.trim()
-                              : null,
-                      photoUrl:
-                          (staffPhotoUrl?.trim().isNotEmpty ?? false)
-                              ? staffPhotoUrl!.trim()
-                              : null,
-                    ),
-                    SizedBox(height: 10 * s),
-                  ] else if ((staffDepartment?.trim().isNotEmpty ?? false)) ...[
-                    DepartmentTag(staffDepartment!.trim()),
-                    SizedBox(height: 10 * s),
-                  ],
+            const _SectionTitle('Assigned Staff'),
+            SizedBox(height: 8 * s),
 
-                  if (assessedAt != null)
-                    KeyValueRow.text(
-                      label: 'Date Assessed',
-                      valueText: _fmtDate(assessedAt!),
-                    ),
-                ],
+            // Show staff avatar/name if available
+            if ((assignedStaff?.trim().isNotEmpty ?? false)) ...[
+              _AvatarNameBlock(
+                name: assignedStaff!.trim(),
+                departmentTag:
+                    (staffDepartment?.trim().isNotEmpty ?? false)
+                        ? staffDepartment!.trim()
+                        : null,
+                photoUrl:
+                    (staffPhotoUrl?.trim().isNotEmpty ?? false)
+                        ? staffPhotoUrl!.trim()
+                        : null,
               ),
-            ),
+            ] else if ((staffDepartment?.trim().isNotEmpty ?? false)) ...[
+              DepartmentTag(staffDepartment!.trim()),
+            ],
+
+            // Date Assessed
+            if (assessedAt != null) ...[
+              SizedBox(height: 8 * s),
+              KeyValueRow.text(
+                label: 'Date Assessed',
+                valueText: _fmtDate(assessedAt!),
+              ),
+            ],
+
             SizedBox(height: 14 * s),
           ],
 
@@ -844,12 +891,13 @@ class WorkOrderPermitDetails extends StatelessWidget {
   final DateTime? approvalDate;
   final String? denialReason;
   final String? adminNotes; // (moved from additionalNotes)
-  
+
   // Completion Notes
   final String? completionNotes;
 
   // Callbacks
-  final Future<void> Function(String permitId, String? completionNotes)? onComplete;
+  final Future<void> Function(String permitId, String? completionNotes)?
+  onComplete;
 
   const WorkOrderPermitDetails({
     super.key,
@@ -884,7 +932,7 @@ class WorkOrderPermitDetails extends StatelessWidget {
     this.denialReason,
     this.adminNotes,
     this.completionNotes,
-    
+
     // Callbacks
     this.onComplete,
   });
@@ -1206,49 +1254,48 @@ class WorkOrderPermitDetails extends StatelessWidget {
               ),
             ),
           ],
-          
+
           // ===== Complete Button (only show if approved/in-progress and onComplete callback exists) =====
-          if (_canBeCompleted() && onComplete != null && id != null) ...[
-           
-          ],
+          if (_canBeCompleted() && onComplete != null && id != null) ...[],
         ],
       ),
     );
   }
-  
+
   // Check if work order can be completed
   bool _canBeCompleted() {
     final status = statusTag.toLowerCase().trim();
     final displayStatus = _displayStatus.toLowerCase().trim();
-    
+
     // Debug output
     print('[WorkOrderPermit] Checking completion eligibility:');
     print('  statusTag: "$statusTag" (normalized: "$status")');
     print('  _displayStatus: "$_displayStatus" (normalized: "$displayStatus")');
     print('  onComplete: ${onComplete != null}');
     print('  id: $id');
-    
+
     // Can complete if:
     // 1. Status is approved or in progress
     // 2. Not already completed
     // 3. Not rejected
-    final canComplete = (status == 'approved' || 
-            status == 'in progress' || 
+    final canComplete =
+        (status == 'approved' ||
+            status == 'in progress' ||
             displayStatus == 'approved' ||
             displayStatus == 'in progress') &&
-           status != 'completed' &&
-           status != 'rejected' &&
-           displayStatus != 'completed' &&
-           displayStatus != 'rejected';
-    
+        status != 'completed' &&
+        status != 'rejected' &&
+        displayStatus != 'completed' &&
+        displayStatus != 'rejected';
+
     print('  canComplete: $canComplete');
     return canComplete;
   }
-  
+
   // Show completion dialog
   void _showCompleteDialog(BuildContext context) {
     final notesController = TextEditingController();
-    
+
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -1279,13 +1326,13 @@ class WorkOrderPermitDetails extends StatelessWidget {
             TextButton(
               onPressed: () async {
                 Navigator.of(dialogContext).pop();
-                
+
                 if (id != null && onComplete != null) {
                   try {
                     await onComplete!(
                       id!,
-                      notesController.text.isNotEmpty 
-                          ? notesController.text 
+                      notesController.text.isNotEmpty
+                          ? notesController.text
                           : null,
                     );
                   } catch (e) {
@@ -1335,7 +1382,6 @@ class MaintenanceDetails extends StatefulWidget {
   final String? priority; // High | Medium | Low
   final String
   statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
-  final String? resolutionType; // job_service, work_permit, rejected
 
   //  Tenant / Requester
   final String requestedBy;
@@ -1347,7 +1393,7 @@ class MaintenanceDetails extends StatefulWidget {
   final DateTime? completedAt;
   final String? location;
   final String? description;
-  final List<String>? checklist_complete;
+  final List<String>? checklist;
   final List<String>? attachments;
   final String? adminNote;
 
@@ -1362,6 +1408,21 @@ class MaintenanceDetails extends StatefulWidget {
   // Tracking
   final List<String>? materialsUsed;
 
+  // Interactive checklist and inventory
+  final List<Map<String, dynamic>>? checklistItems;
+  final List<Map<String, dynamic>>? inventoryRequests;
+  final int? completedCount;
+  final int? totalCount;
+  final bool? isUpdating;
+  final Function(int)? onToggleChecklistItem;
+  final Function(Map<String, dynamic>)? onInventoryItemTap;
+  final String? currentStaffId;
+  final String? taskCategory;
+  
+  // Action callbacks
+  final VoidCallback? onHold;
+  final VoidCallback? onCreateAssessment;
+
   const MaintenanceDetails({
     super.key,
     // Basic
@@ -1372,7 +1433,6 @@ class MaintenanceDetails extends StatefulWidget {
     required this.requestTypeTag,
     this.priority,
     required this.statusTag,
-    this.resolutionType,
     // Tenant / Requester
     required this.requestedBy,
     required this.scheduleDate,
@@ -1382,7 +1442,7 @@ class MaintenanceDetails extends StatefulWidget {
     this.completedAt,
     this.location,
     this.description,
-    this.checklist_complete,
+    this.checklist,
     this.attachments,
     this.adminNote,
     // Staff
@@ -1394,6 +1454,19 @@ class MaintenanceDetails extends StatefulWidget {
     this.staffAttachments,
     // Tracking
     this.materialsUsed,
+    // Interactive
+    this.checklistItems,
+    this.inventoryRequests,
+    this.completedCount,
+    this.totalCount,
+    this.isUpdating,
+    this.onToggleChecklistItem,
+    this.onInventoryItemTap,
+    this.currentStaffId,
+    this.taskCategory,
+    // Actions
+    this.onHold,
+    this.onCreateAssessment,
   });
 
   @override
@@ -1407,7 +1480,7 @@ class _MaintenanceState extends State<MaintenanceDetails> {
   void initState() {
     super.initState();
     _checklistState =
-        (widget.checklist_complete ?? const <String>[])
+        (widget.checklist ?? const <String>[])
             .map((item) => {"text": item, "checked": false})
             .toList();
   }
@@ -1519,16 +1592,16 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                 ],
                 if ((widget.departmentTag ?? '').trim().isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  KeyValueRow.text(
+                  KeyValueRow(
                     label: 'Department',
-                    valueText: widget.departmentTag!.trim(),
+                    value: DepartmentTag(widget.departmentTag!.trim()),
                   ),
                 ],
                 if ((widget.priority ?? '').trim().isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  KeyValueRow.text(
+                  KeyValueRow(
                     label: 'Priority',
-                    valueText: widget.priority!.trim(),
+                    value: PriorityTag(priority: widget.priority!.trim()),
                   ),
                 ],
                 if (widget.startedAt != null) ...[
@@ -1559,20 +1632,331 @@ class _MaintenanceState extends State<MaintenanceDetails> {
           ffDivider(),
           const SizedBox(height: 8),
           // Description
-          if ((widget.description ?? '').trim().isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _SectionCard(
-              title: "Task Description",
-              content: widget.description!.trim(),
-              padding: const EdgeInsets.all(14),
-              hideIfEmpty: false,
+          _SectionCard(
+            title: 'Description',
+            content: (widget.description ?? '').trim(),
+            padding: const EdgeInsets.all(14),
+            hideIfEmpty: false,
+          ),
+
+          const SizedBox(height: 10),
+
+          // Interactive Checklist Section
+          if (widget.checklistItems != null &&
+              widget.checklistItems!.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: Color(0xFFE5E7EB)),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.checklist,
+                          size: 20,
+                          color: Color(0xFF6B7280),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Task Checklist',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1F2937),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${widget.completedCount ?? 0} of ${widget.totalCount ?? 0} completed',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Checklist Items
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: widget.checklistItems!.length,
+                    separatorBuilder:
+                        (_, __) => const Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: Color(0xFFE5E7EB),
+                        ),
+                    itemBuilder: (context, index) {
+                      final item = widget.checklistItems![index];
+                      final isCompleted = item['completed'] == true;
+                      final assignedTo = item['assigned_to']?.toString() ?? '';
+
+                      // If there's an assigned_to field, check if it matches current user
+                      if (widget.currentStaffId != null &&
+                          assignedTo.isNotEmpty &&
+                          assignedTo != widget.currentStaffId &&
+                          widget.taskCategory == 'safety') {
+                        return const SizedBox.shrink();
+                      }
+
+                      return InkWell(
+                        onTap:
+                            widget.isUpdating == true ||
+                                    widget.onToggleChecklistItem == null
+                                ? null
+                                : () => widget.onToggleChecklistItem!(index),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                isCompleted
+                                    ? Icons.check_box
+                                    : Icons.check_box_outline_blank,
+                                size: 24,
+                                color:
+                                    isCompleted
+                                        ? Colors.green
+                                        : const Color(0xFF9CA3AF),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  item['task'] ?? '',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color:
+                                        isCompleted
+                                            ? const Color(0xFF6B7280)
+                                            : const Color(0xFF1F2937),
+                                    decoration:
+                                        isCompleted
+                                            ? TextDecoration.lineThrough
+                                            : TextDecoration.none,
+                                    fontWeight:
+                                        isCompleted
+                                            ? FontWeight.w400
+                                            : FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              if (widget.isUpdating == true)
+                                const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Inventory Requests Section
+          if (widget.inventoryRequests != null &&
+              widget.inventoryRequests!.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: Color(0xFFE5E7EB)),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.inventory_2_outlined,
+                          size: 20,
+                          color: Color(0xFF6B7280),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Required Materials & Tools',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1F2937),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Inventory Items
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: widget.inventoryRequests!.length,
+                    separatorBuilder:
+                        (_, __) => const Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: Color(0xFFE5E7EB),
+                        ),
+                    itemBuilder: (context, index) {
+                      final request = widget.inventoryRequests![index];
+                      final itemName = request['item_name'] ?? 'Unknown Item';
+                      final quantity =
+                          request['quantity_requested'] ??
+                          request['stock_quantity'] ??
+                          0;
+                      final status = request['status'] ?? 'pending';
+                      final unit = request['unit'] ?? '';
+                      final category = request['category'] ?? '';
+
+                      // Determine if item is received
+                      bool isReceived =
+                          status.toLowerCase() == 'fulfilled' ||
+                          status.toLowerCase() == 'received';
+
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    itemName,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF1F2937),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'RESERVE $quantity',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF1F2937),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        'STOCK $quantity',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFF6B7280),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (category.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF3F4F6),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        category.toUpperCase(),
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF6B7280),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        isReceived
+                                            ? const Color(0xFFECFDF5)
+                                            : Colors.white,
+                                    border: Border.all(
+                                      color:
+                                          isReceived
+                                              ? const Color(0xFF059669)
+                                              : const Color(0xFF005CE7),
+                                    ),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    isReceived ? 'Received' : 'Request',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color:
+                                          isReceived
+                                              ? const Color(0xFF059669)
+                                              : const Color(0xFF005CE7),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ],
 
           const SizedBox(height: 10),
 
           // Checklist (interactive)
-          if ((widget.checklist_complete ?? const <String>[]).isNotEmpty)
+          if ((widget.checklist ?? const <String>[]).isNotEmpty)
             _Section(
               title: "Checklist / Task Steps",
               child: Column(
@@ -1658,36 +2042,36 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                               : null,
                     ),
 
-                    // ===== Assessment Section =====
-                    if (widget.assessedAt != null ||
-                        (widget.assessment?.trim().isNotEmpty ?? false)) ...[
-                      const SizedBox(height: 14),
-                      _Section(
-                        title: 'Assessment',
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Date Assessed
-                            if (widget.assessedAt != null) ...[
-                              KeyValueRow.text(
-                                label: 'Assessed At',
-                                valueText: _relativeOrFullDT(widget.assessedAt),
-                              ),
-                              const SizedBox(height: 8),
-                            ],
-
-                            // Assessment Notes
-                            if ((widget.assessment ?? '').trim().isNotEmpty) ...[
-                              Text(
-                                widget.assessment!.trim(),
-                                style: const TextStyle(fontSize: 14),
-                              ),
-                            ],
+                  // ===== Assessment Section =====
+                  if (widget.assessedAt != null ||
+                      (widget.assessment?.trim().isNotEmpty ?? false)) ...[
+                    const SizedBox(height: 14),
+                    _Section(
+                      title: 'Assessment',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Date Assessed
+                          if (widget.assessedAt != null) ...[
+                            KeyValueRow.text(
+                              label: 'Assessed At',
+                              valueText: _relativeOrFullDT(widget.assessedAt),
+                            ),
+                            const SizedBox(height: 8),
                           ],
-                        ),
+
+                          // Assessment Notes
+                          if ((widget.assessment ?? '').trim().isNotEmpty) ...[
+                            Text(
+                              widget.assessment!.trim(),
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ],
+                        ],
                       ),
-                      const SizedBox(height: 14),
-                    ],
+                    ),
+                    const SizedBox(height: 14),
+                  ],
 
                   // Attachments
                   if ((widget.staffAttachments ?? const <String>[])
@@ -1938,62 +2322,9 @@ class AnnouncementDetails extends StatelessWidget {
               title: 'Location Affected',
               content: locationAffected,
             ),
-  
 
             if (hasAttachment)
               _buildSectionCard(title: 'Attachment', content: attachment!),
-
-            // Mark as Read Button
-            if (!isRead && onMarkAsRead != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 20),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: onMarkAsRead,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF005CE7),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.check_circle_outline, size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          'Mark as Read',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-            // Already Read Indicator
-            if (isRead)
-              Padding(
-                padding: const EdgeInsets.only(top: 20),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0F9FF),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFBAE6FD), width: 1),
-                  ),
-                ),
-              ),
           ],
         ),
       ),
@@ -2311,12 +2642,14 @@ class InventoryDetailsScreen extends StatelessWidget {
 
     // ===== Notes =====
     if (_isNotEmpty(notes)) {
-      sections.add(_SectionCard(
-        title: 'Notes / Purpose',
-        content: notes!,
-        padding: const EdgeInsets.all(14),
-        hideIfEmpty: false,
-      ));
+      sections.add(
+        _SectionCard(
+          title: 'Notes / Purpose',
+          content: notes!,
+          padding: const EdgeInsets.all(14),
+          hideIfEmpty: false,
+        ),
+      );
     }
 
     // Interleave with dividers
@@ -2720,8 +3053,6 @@ class _ValueText extends StatelessWidget {
     );
   }
 }
-
-
 
 /// ------------------------------------------------------------
 /// Section Title (already responsive; tightened weights/colors)

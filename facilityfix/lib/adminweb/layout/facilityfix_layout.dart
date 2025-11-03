@@ -276,10 +276,10 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       ),
                       const SizedBox(height: 4),
 
-                      // Work Orders dropdown
+                      // Task Management dropdown
                       _dropdownNav(
                         icon: Icons.build_outlined,
-                        title: 'Work Orders',
+                        title: 'Task Management',
                         sectionKey: 'work',
                         children: [
                           _subNavItem('Maintenance Tasks', 'work_maintenance'),

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:facilityfix/tenant/home.dart' as Tenant;
 import 'package:facilityfix/staff/home.dart' as Staff;
-import 'package:facilityfix/admin/home.dart' as Admin;
 import 'package:facilityfix/widgets/forms.dart';
 
 import 'package:facilityfix/services/api_services.dart';
@@ -354,9 +353,6 @@ class _SignUpState extends State<SignUp> {
           break;
         case 'staff':
           destination = const Staff.HomePage();
-          break;
-        case 'admin':
-          destination = const Admin.HomePage();
           break;
         default:
           destination = const Tenant.HomePage();

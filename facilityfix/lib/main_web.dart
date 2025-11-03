@@ -21,13 +21,14 @@ import 'adminweb/pages/adminrepair_js_page.dart';
 import 'adminweb/pages/adminrepair_wop_page.dart';
 import 'adminweb/pages/inventory_item_create_page.dart' as new_inv;
 import 'adminweb/pages/inventory_item_details_page.dart' as new_inv;
-import 'adminweb/pages/workmaintenance_form.dart';
+import 'adminweb/pages/internalmaintenance_form.dart';
 import 'adminweb/pages/internalmaintenance_viewform.dart';
 import 'adminweb/pages/externalmaintenance_form.dart';
 import 'adminweb/pages/externalmaintenance_viewform.dart';
 import 'adminweb/pages/createwebinventoryitems_page.dart';
 import 'adminweb/pages/webinventoryitems_viewdetails.dart';
 import 'adminweb/pages/createwebannouncement_page.dart';
+import 'adminweb/pages/editwebannouncement_page.dart';
 import 'adminweb/pages/adminsettings_page.dart';
 import 'adminweb/pages/adminwebprofile_page.dart';
 import 'adminweb/pages/loadingscreen_page.dart';
@@ -238,6 +239,15 @@ class _MyAppState extends State<MyApp> {
         path: '/adminweb/pages/createannouncement',
         name: 'create_announcement',
         builder: (context, state) => const CreateAnnouncementPage(),
+      ),
+      // Edit announcement route
+      GoRoute(
+        path: '/announcement/edit/:announcementId',
+        name: 'edit_announcement',
+        builder: (context, state) {
+          final announcementId = state.pathParameters['announcementId']!;
+          return EditAnnouncementPage(announcementId: announcementId);
+        },
       ),
       GoRoute(
         path: '/profile',

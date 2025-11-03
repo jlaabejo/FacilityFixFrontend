@@ -9,10 +9,7 @@ import '../../services/auth_storage.dart';
 class EditAnnouncementPage extends StatefulWidget {
   final String announcementId;
 
-  const EditAnnouncementPage({
-    super.key,
-    required this.announcementId,
-  });
+  const EditAnnouncementPage({super.key, required this.announcementId});
 
   @override
   State<EditAnnouncementPage> createState() => _EditAnnouncementPageState();
@@ -32,13 +29,13 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
   String? _selectedType;
   String? _selectedLocation;
   List<File> _attachedFiles = [];
-  
-  // Additional controllers for "Others" options
+  // Custom 'Others' inputs (copied from CreateAnnouncementPage)
   final TextEditingController _customTypeController = TextEditingController();
-  final TextEditingController _customLocationController = TextEditingController();
+  final TextEditingController _customLocationController =
+      TextEditingController();
   bool _showCustomType = false;
   bool _showCustomLocation = false;
-  
+
   // Loading and error states
   bool _isLoading = true;
   bool _isSaving = false;
@@ -149,16 +146,16 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
 
     try {
       print('[Edit] Fetching announcement: ${widget.announcementId}');
-      
+
       final response = await _apiService.getAnnouncement(widget.announcementId);
-      
+
       print('[Edit] Loaded announcement data: $response');
 
       setState(() {
         // Populate form fields
         _titleController.text = response['title'] ?? '';
         _detailsController.text = response['content'] ?? '';
-        
+
         // Set audience
         final audience = response['audience']?.toString().toLowerCase();
         if (audience == 'tenant' || audience == 'tenants') {
@@ -168,41 +165,45 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
         } else {
           _selectedAudience = 'All';
         }
-        
-        // Set type
-        final typeValue = response['type'] ?? 'General Announcement';
-        final isKnownType = _typeOptions.any((t) => t['value'] == typeValue);
-        if (isKnownType) {
-          _selectedType = typeValue;
-          _showCustomType = false;
-        } else {
+
+        // Set type (if backend value isn't in our known list, treat it as 'Others')
+        final backendType = response['type']?.toString();
+        final knownTypeValues =
+            _typeOptions.map((t) => t['value'] as String).toList();
+        if (backendType != null &&
+            backendType.isNotEmpty &&
+            !knownTypeValues.contains(backendType)) {
           _selectedType = 'Others';
           _showCustomType = true;
-          _customTypeController.text = typeValue;
+          _customTypeController.text = backendType;
+        } else {
+          _selectedType = backendType ?? 'General Announcement';
+          _showCustomType = _selectedType == 'Others';
         }
-        
-        // Set location
-        final locationValue = response['location_affected'];
-        if (locationValue != null) {
-          final isKnownLocation = _locationOptions.contains(locationValue);
-          if (isKnownLocation && locationValue != 'Others') {
-            _selectedLocation = locationValue;
-            _showCustomLocation = false;
-          } else {
-            _selectedLocation = 'Others';
-            _showCustomLocation = true;
-            _customLocationController.text = locationValue;
-          }
+
+        // Set location (handle unknown location as 'Others')
+        final backendLocation = response['location_affected']?.toString();
+        if (backendLocation != null &&
+            backendLocation.isNotEmpty &&
+            !_locationOptions.contains(backendLocation)) {
+          _selectedLocation = 'Others';
+          _showCustomLocation = true;
+          _customLocationController.text = backendLocation;
+        } else {
+          _selectedLocation = backendLocation;
+          _showCustomLocation = _selectedLocation == 'Others';
         }
-        
+
         // Set schedule dates if available (using correct backend field names)
         if (response['scheduled_publish_date'] != null) {
-          _startDateController.text = _formatDate(response['scheduled_publish_date']);
+          _startDateController.text = _formatDate(
+            response['scheduled_publish_date'],
+          );
         }
         if (response['expiry_date'] != null) {
           _endDateController.text = _formatDate(response['expiry_date']);
         }
-        
+
         _isLoading = false;
       });
     } catch (e) {
@@ -216,7 +217,7 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
 
   String _formatDate(dynamic date) {
     if (date == null) return '';
-    
+
     try {
       DateTime dateTime;
       if (date is String) {
@@ -226,7 +227,7 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
       } else {
         return '';
       }
-      
+
       return '${dateTime.day.toString().padLeft(2, '0')}/${dateTime.month.toString().padLeft(2, '0')}/${dateTime.year}';
     } catch (e) {
       print('[Edit] Error formatting date: $e');
@@ -336,7 +337,10 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
       _showErrorSnackBar('Please select an audience');
       return false;
     }
-    if (_selectedType == null) {
+    // If 'Others' is selected for type, require the custom input to be filled
+    if (_selectedType == null ||
+        (_selectedType == 'Others' &&
+            _customTypeController.text.trim().isEmpty)) {
       _showErrorSnackBar('Please select a type');
       return false;
     }
@@ -381,7 +385,11 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
         ),
         backgroundColor: const Color(0xFFEF5350),
         behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.only(left: 24, bottom: 24, right: MediaQuery.of(context).size.width * 0.7),
+        margin: EdgeInsets.only(
+          left: 24,
+          bottom: 24,
+          right: MediaQuery.of(context).size.width * 0.7,
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         duration: const Duration(seconds: 4),
@@ -424,7 +432,11 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
         ),
         backgroundColor: const Color(0xFF66BB6A),
         behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.only(left: 24, bottom: 24, right: MediaQuery.of(context).size.width * 0.7),
+        margin: EdgeInsets.only(
+          left: 24,
+          bottom: 24,
+          right: MediaQuery.of(context).size.width * 0.7,
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         duration: const Duration(seconds: 4),
@@ -444,11 +456,11 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
       // Parse the date from DD/MM/YYYY format
       final parts = dateString.split('/');
       if (parts.length != 3) return null;
-      
+
       final day = int.parse(parts[0]);
       final month = int.parse(parts[1]);
       final year = int.parse(parts[2]);
-      
+
       final dateTime = DateTime(year, month, day);
       return dateTime.toIso8601String();
     } catch (e) {
@@ -465,14 +477,15 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
       _isSaving = true;
     });
 
-    // Determine final type and location values
-    final finalType = _showCustomType && _customTypeController.text.trim().isNotEmpty
-        ? _customTypeController.text.trim()
-        : _selectedType ?? 'General Announcement';
-        
-    final finalLocation = _showCustomLocation && _customLocationController.text.trim().isNotEmpty
-        ? _customLocationController.text.trim()
-        : _selectedLocation;
+    final finalType =
+        _showCustomType && _customTypeController.text.trim().isNotEmpty
+            ? _customTypeController.text.trim()
+            : _selectedType ?? 'General Announcement';
+
+    final finalLocation =
+        _showCustomLocation && _customLocationController.text.trim().isNotEmpty
+            ? _customLocationController.text.trim()
+            : _selectedLocation;
 
     final updateData = {
       'title': _titleController.text.trim(),
@@ -485,15 +498,15 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
               ? _convertDateToISO(_startDateController.text)
               : null,
       'expiry_date':
-          _endDateController.text.isNotEmpty 
-              ? _convertDateToISO(_endDateController.text) 
+          _endDateController.text.isNotEmpty
+              ? _convertDateToISO(_endDateController.text)
               : null,
       'notify_changes': true, // Notify users about the update
     };
 
     try {
       print('[Edit] Updating announcement with data: $updateData');
-      
+
       final response = await _apiService.updateAnnouncement(
         widget.announcementId,
         updateData,
@@ -517,7 +530,7 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
       }
     } catch (e) {
       print('[Edit] Error updating announcement: $e');
-      
+
       setState(() {
         _isSaving = false;
       });
@@ -539,6 +552,75 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
     super.dispose();
   }
 
+  // UI Helper Methods
+  Widget _buildSectionHeader(String title, String subtitle) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 4,
+              height: 24,
+              decoration: BoxDecoration(
+                color: Colors.blue,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.only(left: 16),
+          child: Text(
+            subtitle,
+            style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  InputDecoration _decoration(String hint) => InputDecoration(
+    hintText: hint,
+    hintStyle: TextStyle(color: Colors.grey[400]),
+    isDense: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(color: Colors.grey[300]!),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(color: Colors.grey[300]!),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: Colors.blue),
+    ),
+  );
+
+  Widget _fieldLabel(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: Colors.black87,
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     return FacilityFixLayout(
@@ -551,737 +633,621 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
           _handleLogout(context);
         }
       },
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _errorMessage != null
+      body:
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _errorMessage != null
               ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.error_outline, size: 64, color: Colors.red),
-                      const SizedBox(height: 16),
-                      Text(
-                        _errorMessage!,
-                        style: const TextStyle(fontSize: 16, color: Colors.red),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () => context.go('/announcement'),
-                        child: const Text('Back to Announcements'),
-                      ),
-                    ],
-                  ),
-                )
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.error_outline, size: 64, color: Colors.red),
+                    const SizedBox(height: 16),
+                    Text(
+                      _errorMessage!,
+                      style: const TextStyle(fontSize: 16, color: Colors.red),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => context.go('/announcement'),
+                      child: const Text('Back to Announcements'),
+                    ),
+                  ],
+                ),
+              )
               : LayoutBuilder(
-                  builder: (context, constraints) {
-                    final hasBoundedHeight = constraints.hasBoundedHeight;
+                builder: (context, constraints) {
+                  final hasBoundedHeight = constraints.hasBoundedHeight;
 
-                    final content = Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Header Section
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Text(
-                                  "Announcement",
-                                  style: TextStyle(
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
+                  final content = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Header Section
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Text(
+                                "Announcement",
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                TextButton(
-                                  onPressed: () => context.go('/dashboard'),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: Colors.black,
-                                    padding:
-                                        const EdgeInsets.symmetric(horizontal: 8),
-                                  ),
-                                  child: const Text('Dashboard'),
-                                ),
-                                const Icon(
-                                  Icons.chevron_right,
-                                  color: Colors.grey,
-                                  size: 16,
-                                ),
-                                TextButton(
-                                  onPressed: () => context.go('/announcement'),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: Colors.black,
-                                    padding:
-                                        const EdgeInsets.symmetric(horizontal: 8),
-                                  ),
-                                  child: const Text('Announcement'),
-                                ),
-                                const Icon(
-                                  Icons.chevron_right,
-                                  color: Colors.grey,
-                                  size: 16,
-                                ),
-                                TextButton(
-                                  onPressed: null,
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: Colors.black,
-                                    padding:
-                                        const EdgeInsets.symmetric(horizontal: 8),
-                                  ),
-                                  child: const Text('Edit'),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 32),
-
-                        // Main Form Container
-                        Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.03),
-                                blurRadius: 10,
-                                offset: const Offset(0, 2),
                               ),
                             ],
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(32.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // Basic Information
-                                const Text(
-                                  "Basic Information",
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              TextButton(
+                                onPressed: () => context.go('/dashboard'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
                                   ),
                                 ),
-                                const SizedBox(height: 18),
-                                
-                                // Title
-                                Text(
-                                  "Title",
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.grey[700],
+                                child: const Text('Dashboard'),
+                              ),
+                              const Icon(
+                                Icons.chevron_right,
+                                color: Colors.grey,
+                                size: 16,
+                              ),
+                              TextButton(
+                                onPressed: () => context.go('/announcement'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                Container(
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: Colors.grey[300]!),
-                                    borderRadius: BorderRadius.circular(8),
-                                    color: Colors.white,
-                                  ),
-                                  child: TextField(
-                                    controller: _titleController,
-                                    decoration: InputDecoration(
-                                      hintText: "e.g., Scheduled Water Interruption",
-                                      hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-                                      border: InputBorder.none,
-                                      contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 12,
-                                      ),
-                                    ),
+                                child: const Text('Announcement'),
+                              ),
+                              const Icon(
+                                Icons.chevron_right,
+                                color: Colors.grey,
+                                size: 16,
+                              ),
+                              TextButton(
+                                onPressed: null,
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
                                   ),
                                 ),
-                                const SizedBox(height: 24),
+                                child: const Text('Edit'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 32),
 
-                                // Audience & Type
-                                Row(
-                                  children: [
-                                    // Audience
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            "Audience",
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                              color: Colors.grey[700],
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Container(
-                                            height: 48,
-                                            decoration: BoxDecoration(
-                                              border: Border.all(color: Colors.grey[300]!),
-                                              borderRadius: BorderRadius.circular(8),
-                                              color: Colors.white,
-                                            ),
-                                            child: DropdownButtonFormField<String>(
-                                              value: _selectedAudience,
-                                              hint: Text(
-                                                "Select recipients...",
-                                                style: TextStyle(
-                                                  color: Colors.grey[400],
-                                                  fontSize: 14,
-                                                ),
-                                              ),
-                                              decoration: const InputDecoration(
-                                                border: InputBorder.none,
-                                                contentPadding: EdgeInsets.symmetric(
-                                                  horizontal: 12,
-                                                  vertical: 12,
-                                                ),
-                                              ),
-                                              icon: Icon(
-                                                Icons.arrow_drop_down,
-                                                color: Colors.grey[600],
-                                              ),
-                                              dropdownColor: Colors.white,
-                                              items: _audienceOptions.map((audience) {
-                                                return DropdownMenuItem(
-                                                  value: audience,
-                                                  child: Text(audience),
-                                                );
-                                              }).toList(),
-                                              onChanged: (value) {
-                                                setState(() {
-                                                  _selectedAudience = value;
-                                                });
-                                              },
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 24),
-                                    // Type
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            "Announcement Type",
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                              color: Colors.grey[700],
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Container(
-                                            height: 48,
-                                            decoration: BoxDecoration(
-                                              border: Border.all(color: Colors.grey[300]!),
-                                              borderRadius: BorderRadius.circular(8),
-                                              color: Colors.white,
-                                            ),
-                                            child: DropdownButtonFormField<String>(
-                                              value: _selectedType,
-                                              hint: Text(
-                                                "Select type...",
-                                                style: TextStyle(
-                                                  color: Colors.grey[400],
-                                                  fontSize: 14,
-                                                ),
-                                              ),
-                                              decoration: const InputDecoration(
-                                                border: InputBorder.none,
-                                                contentPadding: EdgeInsets.symmetric(
-                                                  horizontal: 12,
-                                                  vertical: 12,
-                                                ),
-                                              ),
-                                              icon: Icon(
-                                                Icons.arrow_drop_down,
-                                                color: Colors.grey[600],
-                                              ),
-                                              dropdownColor: Colors.white,
-                                              items: _typeOptions.map((type) {
-                                                return DropdownMenuItem<String>(
-                                                  value: type['value'] as String,
-                                                  child: Text(type['label'] as String),
-                                                );
-                                              }).toList(),
-                                              onChanged: (value) {
-                                                setState(() {
-                                                  _selectedType = value;
-                                                  _showCustomType = value == 'Others';
-                                                  if (!_showCustomType) {
-                                                    _customTypeController.clear();
-                                                  }
-                                                });
-                                              },
-                                            ),
-                                          ),
-                                          if (_showCustomType) ...[
-                                            const SizedBox(height: 12),
-                                            TextFormField(
-                                              controller: _customTypeController,
-                                              decoration: InputDecoration(
-                                                hintText: "Enter custom type...",
-                                                hintStyle: TextStyle(color: Colors.grey[400]),
-                                                isDense: true,
-                                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                                border: OutlineInputBorder(
-                                                  borderRadius: BorderRadius.circular(8),
-                                                  borderSide: BorderSide(color: Colors.grey[300]!),
-                                                ),
-                                                enabledBorder: OutlineInputBorder(
-                                                  borderRadius: BorderRadius.circular(8),
-                                                  borderSide: BorderSide(color: Colors.grey[300]!),
-                                                ),
-                                                focusedBorder: OutlineInputBorder(
-                                                  borderRadius: BorderRadius.circular(8),
-                                                  borderSide: const BorderSide(color: Colors.blue),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 24),
+                      // Main Form Container
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.03),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(32.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // ===== Basic Information =====
+                              _buildSectionHeader(
+                                'Basic Information',
+                                'General details about the announcement',
+                              ),
+                              const SizedBox(height: 24),
 
-                                // Announcement Details
-                                Text(
-                                  "Announcement Details",
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.grey[700],
-                                  ),
+                              // Title
+                              Text(
+                                "Title",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey[700],
                                 ),
-                                const SizedBox(height: 8),
-                                Container(
-                                  height: 200,
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: Colors.grey[300]!),
-                                    borderRadius: BorderRadius.circular(8),
-                                    color: Colors.white,
-                                  ),
-                                  child: TextField(
-                                    controller: _detailsController,
-                                    maxLines: null,
-                                    expands: true,
-                                    textAlignVertical: TextAlignVertical.top,
-                                    decoration: InputDecoration(
-                                      hintText: "Enter the full announcement details...",
-                                      hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-                                      border: InputBorder.none,
-                                      contentPadding: const EdgeInsets.all(24),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey[300]!),
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: Colors.white,
+                                ),
+                                child: TextField(
+                                  controller: _titleController,
+                                  decoration: InputDecoration(
+                                    hintText:
+                                        "e.g., Scheduled Water Interruption",
+                                    hintStyle: TextStyle(
+                                      color: Colors.grey[400],
+                                      fontSize: 14,
+                                    ),
+                                    border: InputBorder.none,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 12,
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 20),
+                              ),
+                              const SizedBox(height: 24),
 
-                                // Location + Schedule
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Location
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            "Location Affected (Optional)",
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                              color: Colors.grey[700],
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Container(
-                                            height: 48,
-                                            decoration: BoxDecoration(
-                                              border: Border.all(color: Colors.grey[300]!),
-                                              borderRadius: BorderRadius.circular(8),
-                                              color: Colors.white,
-                                            ),
-                                            child: DropdownButtonFormField<String>(
-                                              value: _selectedLocation,
-                                              hint: Text(
-                                                "Select location...",
-                                                style: TextStyle(
-                                                  color: Colors.grey[400],
-                                                  fontSize: 14,
-                                                ),
-                                              ),
-                                              decoration: const InputDecoration(
-                                                border: InputBorder.none,
-                                                contentPadding: EdgeInsets.symmetric(
-                                                  horizontal: 12,
-                                                  vertical: 12,
-                                                ),
-                                              ),
-                                              icon: Icon(
-                                                Icons.arrow_drop_down,
-                                                color: Colors.grey[600],
-                                              ),
-                                              dropdownColor: Colors.white,
-                                              items: [
-                                                const DropdownMenuItem(
-                                                  value: null,
-                                                  child: Text("None"),
-                                                ),
-                                                ..._locationOptions.map((location) {
-                                                  return DropdownMenuItem(
-                                                    value: location,
-                                                    child: Text(location),
-                                                  );
-                                                }),
-                                              ],
-                                              onChanged: (value) {
-                                                setState(() {
-                                                  _selectedLocation = value;
-                                                  _showCustomLocation = value == 'Others';
-                                                  if (!_showCustomLocation) {
-                                                    _customLocationController.clear();
-                                                  }
-                                                });
-                                              },
-                                            ),
-                                          ),
-                                          if (_showCustomLocation) ...[
-                                            const SizedBox(height: 12),
-                                            TextFormField(
-                                              controller: _customLocationController,
-                                              decoration: InputDecoration(
-                                                hintText: "Enter custom location...",
-                                                hintStyle: TextStyle(color: Colors.grey[400]),
-                                                isDense: true,
-                                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                                border: OutlineInputBorder(
-                                                  borderRadius: BorderRadius.circular(8),
-                                                  borderSide: BorderSide(color: Colors.grey[300]!),
-                                                ),
-                                                enabledBorder: OutlineInputBorder(
-                                                  borderRadius: BorderRadius.circular(8),
-                                                  borderSide: BorderSide(color: Colors.grey[300]!),
-                                                ),
-                                                focusedBorder: OutlineInputBorder(
-                                                  borderRadius: BorderRadius.circular(8),
-                                                  borderSide: const BorderSide(color: Colors.blue),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 24),
-                                    // Schedule
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            "Schedule Visibility",
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                              color: Colors.grey[700],
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Container(
-                                                  height: 48,
-                                                  decoration: BoxDecoration(
-                                                    border: Border.all(color: Colors.grey[300]!),
-                                                    borderRadius: BorderRadius.circular(8),
-                                                    color: Colors.white,
-                                                  ),
-                                                  child: TextField(
-                                                    controller: _startDateController,
-                                                    readOnly: true,
-                                                    decoration: InputDecoration(
-                                                      hintText: "DD / MM / YY",
-                                                      hintStyle: TextStyle(
-                                                        color: Colors.grey[400],
-                                                        fontSize: 14,
-                                                      ),
-                                                      border: InputBorder.none,
-                                                      contentPadding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 12,
-                                                            vertical: 12,
-                                                          ),
-                                                      suffixIcon: Icon(
-                                                        Icons.calendar_today,
-                                                        color: Colors.grey[600],
-                                                        size: 20,
-                                                      ),
-                                                    ),
-                                                    onTap: () =>
-                                                        _selectDate(_startDateController),
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Expanded(
-                                                child: Container(
-                                                  height: 48,
-                                                  decoration: BoxDecoration(
-                                                    border: Border.all(color: Colors.grey[300]!),
-                                                    borderRadius: BorderRadius.circular(8),
-                                                    color: Colors.white,
-                                                  ),
-                                                  child: TextField(
-                                                    controller: _endDateController,
-                                                    readOnly: true,
-                                                    decoration: InputDecoration(
-                                                      hintText: "DD / MM / YY",
-                                                      hintStyle: TextStyle(
-                                                        color: Colors.grey[400],
-                                                        fontSize: 14,
-                                                      ),
-                                                      border: InputBorder.none,
-                                                      contentPadding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 12,
-                                                            vertical: 12,
-                                                          ),
-                                                      suffixIcon: Icon(
-                                                        Icons.calendar_today,
-                                                        color: Colors.grey[600],
-                                                        size: 20,
-                                                      ),
-                                                    ),
-                                                    onTap: () =>
-                                                        _selectDate(_endDateController),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            "Start date → Expiry Date",
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey[600],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 24),
-
-                                // Attachments
-                                Text(
-                                  "Attachments (Optional)",
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.grey[700],
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                GestureDetector(
-                                  onTap: _pickFiles,
-                                  child: Container(
-                                    width: double.infinity,
-                                    height: 120,
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                        color: Colors.grey[300]!,
-                                        style: BorderStyle.solid,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
+                              // ===== Audience & Type =====
+                              // First row: audience input and type dropdown aligned
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Audience
+                                  Expanded(
                                     child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Icon(
-                                          Icons.cloud_upload_outlined,
-                                          size: 32,
-                                          color: Colors.grey[500],
+                                        _fieldLabel("Audience"),
+                                        Container(
+                                          height: 48,
+                                          child:
+                                              DropdownButtonFormField<String>(
+                                                value: _selectedAudience,
+                                                decoration: _decoration(
+                                                  "Select recipients...",
+                                                ),
+                                                isExpanded: true,
+                                                items:
+                                                    _audienceOptions.map((
+                                                      audience,
+                                                    ) {
+                                                      return DropdownMenuItem(
+                                                        value: audience,
+                                                        child: Text(audience),
+                                                      );
+                                                    }).toList(),
+                                                onChanged: (value) {
+                                                  setState(() {
+                                                    _selectedAudience = value;
+                                                  });
+                                                },
+                                              ),
                                         ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          "Drop files here or click to upload",
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.grey[700],
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          "PDF, PNG, JPG up to 10MB",
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey[500],
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 24),
+                                  // Type
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        _fieldLabel("Announcement Type"),
+                                        Container(
+                                          height: 48,
+                                          child: DropdownButtonFormField<
+                                            String
+                                          >(
+                                            value: _selectedType,
+                                            decoration: _decoration(
+                                              "Select type...",
+                                            ),
+                                            isExpanded: true,
+                                            items:
+                                                _typeOptions.map((type) {
+                                                  return DropdownMenuItem<
+                                                    String
+                                                  >(
+                                                    value:
+                                                        type['value'] as String,
+                                                    child: Text(
+                                                      type['label'] as String,
+                                                    ),
+                                                  );
+                                                }).toList(),
+                                            onChanged: (value) {
+                                              setState(() {
+                                                _selectedType = value;
+                                                _showCustomType =
+                                                    value == 'Others';
+                                                if (!_showCustomType) {
+                                                  _customTypeController.clear();
+                                                }
+                                              });
+                                            },
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                ),
-                                if (_attachedFiles.isNotEmpty) ...[
-                                  const SizedBox(height: 12),
-                                  ...List.generate(_attachedFiles.length, (index) {
-                                    final file = _attachedFiles[index];
-                                    return Container(
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey[50],
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: Colors.grey[200]!),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            Icons.attach_file,
-                                            size: 16,
-                                            color: Colors.grey[600],
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              file.path
-                                                  .split(Platform.pathSeparator)
-                                                  .last,
-                                              style: const TextStyle(fontSize: 14),
-                                            ),
-                                          ),
-                                          IconButton(
-                                            onPressed: () => _removeFile(index),
-                                            icon: Icon(
-                                              Icons.close,
-                                              size: 16,
-                                              color: Colors.red[600],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }),
                                 ],
-                                const SizedBox(height: 24),
+                              ),
 
-                                // Bottom Actions
+                              // Second row: optional custom type input aligned under Type column
+                              if (_showCustomType) ...[
+                                const SizedBox(height: 12),
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    ElevatedButton(
-                                      onPressed: () => context.go('/announcement'),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.grey[300],
-                                        foregroundColor: Colors.black87,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 32,
-                                          vertical: 16,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                      ),
-                                      child: const Text(
-                                        "Cancel",
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 16,
+                                    // empty left column to keep alignment under Type
+                                    Expanded(child: const SizedBox()),
+                                    const SizedBox(width: 24),
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: _customTypeController,
+                                        decoration: _decoration(
+                                          "Enter custom type...",
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 16),
-                                    ElevatedButton(
-                                      onPressed: _isSaving ? null : _submitForm,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF1976D2),
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 32,
-                                          vertical: 16,
+                                  ],
+                                ),
+                              ],
+                              const SizedBox(height: 24),
+
+                              // ===== Post Details =====
+                              _fieldLabel("Announcement Details"),
+                              TextFormField(
+                                controller: _detailsController,
+                                maxLines: 8,
+                                decoration: _decoration(
+                                  "Enter the full announcement details...",
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              const Divider(
+                                color: Color(0xFFE2E8F0),
+                                height: 1,
+                                thickness: 1,
+                              ),
+                              const SizedBox(height: 32),
+                              // ===== Task Scope & Description =====
+                              _buildSectionHeader(
+                                'Task Scope & Description',
+                                'Detailed description of what needs to be done',
+                              ),
+                              const SizedBox(height: 24),
+
+                              // ===== Location + Schedule =====
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Location
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        _fieldLabel(
+                                          "Location Affected (Optional)",
                                         ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
+                                        DropdownButtonFormField<String>(
+                                          value: _selectedLocation,
+                                          decoration: _decoration(
+                                            "Select location...",
+                                          ),
+                                          items: [
+                                            const DropdownMenuItem(
+                                              value: null,
+                                              child: Text("None"),
+                                            ),
+                                            ..._locationOptions.map(
+                                              (loc) => DropdownMenuItem(
+                                                value: loc,
+                                                child: Text(loc),
+                                              ),
+                                            ),
+                                          ],
+                                          onChanged: (value) {
+                                            setState(() {
+                                              _selectedLocation = value;
+                                              _showCustomLocation =
+                                                  value == 'Others';
+                                              if (!_showCustomLocation) {
+                                                _customLocationController
+                                                    .clear();
+                                              }
+                                            });
+                                          },
+                                        ),
+                                        if (_showCustomLocation) ...[
+                                          const SizedBox(height: 12),
+                                          TextFormField(
+                                            controller:
+                                                _customLocationController,
+                                            decoration: _decoration(
+                                              "Enter custom location...",
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 24),
+                                  // Schedule
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        _fieldLabel("Schedule Visibility"),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: TextFormField(
+                                                controller:
+                                                    _startDateController,
+                                                readOnly: true,
+                                                decoration: _decoration(
+                                                  "DD / MM / YY",
+                                                ).copyWith(
+                                                  suffixIcon: Icon(
+                                                    Icons.calendar_today,
+                                                    color: Colors.grey[600],
+                                                    size: 20,
+                                                  ),
+                                                ),
+                                                onTap:
+                                                    () => _selectDate(
+                                                      _startDateController,
+                                                    ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: TextFormField(
+                                                controller: _endDateController,
+                                                readOnly: true,
+                                                decoration: _decoration(
+                                                  "DD / MM / YY",
+                                                ).copyWith(
+                                                  suffixIcon: Icon(
+                                                    Icons.calendar_today,
+                                                    color: Colors.grey[600],
+                                                    size: 20,
+                                                  ),
+                                                ),
+                                                onTap:
+                                                    () => _selectDate(
+                                                      _endDateController,
+                                                    ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          "Start date → Expiry Date",
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+
+                              // Attachments
+                              Text(
+                                "Attachments (Optional)",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey[700],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              GestureDetector(
+                                onTap: _pickFiles,
+                                child: Container(
+                                  width: double.infinity,
+                                  height: 120,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                      color: Colors.grey[300]!,
+                                      style: BorderStyle.solid,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.cloud_upload_outlined,
+                                        size: 32,
+                                        color: Colors.grey[500],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        "Drop files here or click to upload",
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey[700],
+                                          fontWeight: FontWeight.w500,
                                         ),
                                       ),
-                                      child: _isSaving
-                                          ? const SizedBox(
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        "PDF, PNG, JPG up to 10MB",
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[500],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              if (_attachedFiles.isNotEmpty) ...[
+                                const SizedBox(height: 12),
+                                ...List.generate(_attachedFiles.length, (
+                                  index,
+                                ) {
+                                  final file = _attachedFiles[index];
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[50],
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: Colors.grey[200]!,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.attach_file,
+                                          size: 16,
+                                          color: Colors.grey[600],
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            file.path
+                                                .split(Platform.pathSeparator)
+                                                .last,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          onPressed: () => _removeFile(index),
+                                          icon: Icon(
+                                            Icons.close,
+                                            size: 16,
+                                            color: Colors.red[600],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                              ],
+                              const SizedBox(height: 24),
+
+                              // Bottom Actions
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  ElevatedButton(
+                                    onPressed:
+                                        () => context.go('/announcement'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.grey[300],
+                                      foregroundColor: Colors.black87,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 32,
+                                        vertical: 16,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      "Cancel",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  ElevatedButton(
+                                    onPressed: _isSaving ? null : _submitForm,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF1976D2),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 32,
+                                        vertical: 16,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                    child:
+                                        _isSaving
+                                            ? const SizedBox(
                                               width: 80,
                                               child: Row(
                                                 mainAxisSize: MainAxisSize.min,
-                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
                                                 children: [
                                                   SizedBox(
                                                     width: 16,
                                                     height: 16,
-                                                    child: CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                      color: Colors.white,
-                                                    ),
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                          color: Colors.white,
+                                                        ),
                                                   ),
                                                   SizedBox(width: 8),
                                                   Text(
                                                     "Saving...",
                                                     style: TextStyle(
-                                                      fontWeight: FontWeight.w600,
+                                                      fontWeight:
+                                                          FontWeight.w600,
                                                       fontSize: 16,
                                                     ),
                                                   ),
                                                 ],
                                               ),
                                             )
-                                          : const Text(
+                                            : const Text(
                                               "Save",
                                               style: TextStyle(
                                                 fontWeight: FontWeight.w600,
                                                 fontSize: 16,
                                               ),
                                             ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    );
+                      ),
+                    ],
+                  );
 
-                    return SingleChildScrollView(
-                      padding: const EdgeInsets.all(24.0),
-                      child: hasBoundedHeight
-                          ? ConstrainedBox(
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.all(24.0),
+                    child:
+                        hasBoundedHeight
+                            ? ConstrainedBox(
                               constraints: BoxConstraints(
                                 minHeight: constraints.maxHeight,
                               ),
                               child: content,
                             )
-                          : content,
-                    );
-                  },
-                ),
+                            : content,
+                  );
+                },
+              ),
     );
   }
 }

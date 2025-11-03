@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
@@ -19,12 +21,16 @@ class AssessmentForm extends StatefulWidget {
   
   /// Optional context string for where the assessment is coming from (e.g., a WO title or id)
   final String? requestType;
+  
+  /// Whether to show resolution type selection (true for concern slips, false for job service/maintenance)
+  final bool showResolutionType;
 
   const AssessmentForm({
     super.key,
     this.concernSlipId,
     this.concernSlipData,
     this.requestType,
+    this.showResolutionType = true,
   });
 
   @override
@@ -64,12 +70,11 @@ class _AssessmentFormState extends State<AssessmentForm> {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController dateAssessedController = TextEditingController();
   final TextEditingController assessmentController = TextEditingController();
-  final TextEditingController recommendationController = TextEditingController();
 
   // -------- Error states --------
   String? _assessmentError;
-  String? _recommendationError;
   bool _isSubmitting = false;
+  String _selectedResolutionType = 'job_service'; // Default to job_service
 
   @override
   void initState() {
@@ -106,7 +111,6 @@ class _AssessmentFormState extends State<AssessmentForm> {
     nameController.dispose();
     dateAssessedController.dispose();
     assessmentController.dispose();
-    recommendationController.dispose();
     super.dispose();
   }
 
@@ -132,21 +136,16 @@ class _AssessmentFormState extends State<AssessmentForm> {
 
   bool _validateFields() {
     String? assessErr;
-    String? recErr;
 
     if (assessmentController.text.trim().isEmpty) {
       assessErr = 'Assessment is required';
     }
-    if (recommendationController.text.trim().isEmpty) {
-      recErr = 'Recommendation is required';
-    }
 
     setState(() {
       _assessmentError = assessErr;
-      _recommendationError = recErr;
     });
 
-    return assessErr == null && recErr == null;
+    return assessErr == null;
   }
 
   Future<void> _submit() async {
@@ -175,7 +174,18 @@ class _AssessmentFormState extends State<AssessmentForm> {
     setState(() => _isSubmitting = true);
 
     try {
-      final apiService = APIService();
+      final apiService = APIService(roleOverride: AppRole.staff);
+      
+      // Build request body
+      final Map<String, dynamic> requestBody = {
+        'assessment': assessmentController.text.trim(),
+        'attachments': [], // TODO: Add file attachments if available
+      };
+      
+      // Only include resolution_type for concern slips
+      if (widget.showResolutionType) {
+        requestBody['resolution_type'] = _selectedResolutionType;
+      }
       
       // Submit assessment to backend
       await apiService.patch(
@@ -183,11 +193,7 @@ class _AssessmentFormState extends State<AssessmentForm> {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: {
-          'assessment': assessmentController.text.trim(),
-          'recommendation': recommendationController.text.trim(),
-          'attachments': [], // TODO: Add file attachments if available
-        },
+        body: jsonEncode(requestBody),
       );
       
 
@@ -221,7 +227,7 @@ class _AssessmentFormState extends State<AssessmentForm> {
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
         leading: const BackButton(),
-        title: 'Assessment & Recommendation',
+        title: widget.showResolutionType ? 'Assessment & Resolution Type' : 'Assessment Form',
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -295,8 +301,10 @@ class _AssessmentFormState extends State<AssessmentForm> {
                 ),
 
                 const SizedBox(height: 16),
-                const Text('Assessment and Recommendation',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                Text(
+                  widget.showResolutionType ? 'Assessment and Resolution Type' : 'Assessment',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
                 const SizedBox(height: 8),
 
                 InputField(
@@ -307,17 +315,115 @@ class _AssessmentFormState extends State<AssessmentForm> {
                   maxLines: 4,
                   errorText: _assessmentError,
                 ),
-                const SizedBox(height: 8),
-                InputField(
-                  label: 'Recommendation',
-                  controller: recommendationController,
-                  hintText: 'Enter recommendation',
-                  isRequired: true,
-                  maxLines: 4,
-                  errorText: _recommendationError,
-                ),
 
-                const SizedBox(height: 8),
+                if (widget.showResolutionType) ...[
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Resolution Type',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedResolutionType = 'job_service';
+                          });
+                        },
+                        child: Container(
+                          color: Colors.transparent,
+                          child: Row(
+                            children: [
+                              Radio<String>(
+                                value: 'job_service',
+                                groupValue: _selectedResolutionType,
+                                activeColor: const Color(0xFF005CE7),
+                                onChanged: (String? value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _selectedResolutionType = value;
+                                    });
+                                  }
+                                },
+                              ),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: const [
+                                    Text(
+                                      'Job Service',
+                                      style: TextStyle(fontSize: 14),
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      'For repairs handled by internal staff',
+                                      style: TextStyle(fontSize: 12, color: Color(0xFF667085)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Divider(height: 1),
+                      const SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedResolutionType = 'work_order';
+                          });
+                        },
+                        child: Container(
+                          color: Colors.transparent,
+                          child: Row(
+                            children: [
+                              Radio<String>(
+                                value: 'work_order',
+                                groupValue: _selectedResolutionType,
+                                activeColor: const Color(0xFF005CE7),
+                                onChanged: (String? value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _selectedResolutionType = value;
+                                    });
+                                  }
+                                },
+                              ),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: const [
+                                    Text(
+                                      'Work Order Permit',
+                                      style: TextStyle(fontSize: 14),
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      'For repairs requiring external contractors',
+                                      style: TextStyle(fontSize: 12, color: Color(0xFF667085)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                ],
+
+                const SizedBox(height: 16),
                 const Text('Attachment', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 const FileAttachmentPicker(label: 'Upload Attachment'),

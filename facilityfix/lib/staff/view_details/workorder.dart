@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-
 import 'package:facilityfix/models/work_orders.dart'; // <-- unified WorkOrderDetails class only
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/staff/workorder.dart'; // WorkOrderPage (list)
-
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart' as custom_buttons;
 
@@ -20,7 +18,6 @@ import 'package:facilityfix/widgets/view_details.dart';
 
 // Import API services
 import 'package:facilityfix/services/api_services.dart';
-import 'package:facilityfix/adminweb/services/api_service.dart' as admin_api;
 
 class WorkOrderDetailsPage extends StatefulWidget {
   final String selectedTabLabel;
@@ -54,6 +51,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
+    NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
     NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),
@@ -101,22 +99,13 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         await _enrichWithUserNames(data);
         final jobService = JobService.fromJson(data);
         _fetchedWorkOrder = _jobServiceToWorkOrderDetails(jobService);
-      } else if (workOrderId.toUpperCase().startsWith('WO-')) {
-        data = await _apiService.getWorkOrderById(workOrderId);
-        await _enrichWithUserNames(data);
-        final workOrderPermit = WorkOrderPermit.fromJson(data);
-        _fetchedWorkOrder = _workOrderPermitToWorkOrderDetails(workOrderPermit);
       } else if (workOrderId.toUpperCase().startsWith('MT-')) {
         data = await _apiService.getMaintenanceTaskById(workOrderId);
         await _enrichWithUserNames(data);
         final maintenance = Maintenance.fromJson(data);
         _fetchedWorkOrder = _maintenanceToWorkOrderDetails(maintenance);
       } else {
-        // Default to work order if prefix is unknown
-        data = await _apiService.getWorkOrderById(workOrderId);
-        await _enrichWithUserNames(data);
-        final workOrderPermit = WorkOrderPermit.fromJson(data);
-        _fetchedWorkOrder = _workOrderPermitToWorkOrderDetails(workOrderPermit);
+        throw Exception('Unknown work order type: $workOrderId');
       }
 
       // Remap labels if needed
@@ -247,40 +236,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     );
   }
 
-  WorkOrderDetails _workOrderPermitToWorkOrderDetails(WorkOrderPermit wop) {
-    return WorkOrderDetails(
-      id: wop.id,
-      createdAt: wop.createdAt,
-      updatedAt: wop.updatedAt,
-      requestTypeTag: wop.requestTypeTag,
-      departmentTag: wop.departmentTag,
-      priority: wop.priority,
-      statusTag: wop.statusTag,
-      resolutionType: wop.resolutionType,
-      requestedBy: wop.requestedBy,
-      requestedByName: wop.requestedByName,
-      concernSlipId: wop.concernSlipId,
-      unitId: wop.unitId,
-      title: wop.title,
-      assignedStaff: wop.assignedStaff,
-      staffDepartment: wop.staffDepartment,
-      assignedPhotoUrl: wop.assignedPhotoUrl,
-      contractorName: wop.contractorName,
-      contractorNumber: wop.contractorNumber,
-      contractorCompany: wop.contractorCompany,
-      workScheduleFrom: wop.workScheduleFrom,
-      workScheduleTo: wop.workScheduleTo,
-      entryEquipments: wop.entryEquipments,
-      approvedBy: wop.approvedBy,
-      approvalDate: wop.approvalDate,
-      denialReason: wop.denialReason,
-      adminNotes: wop.adminNotes,
-      completionNotes: wop.completionNotes,
-      attachments: wop.attachments,
-      staffAttachments: wop.staffAttachments,
-    );
-  }
-
   WorkOrderDetails _maintenanceToWorkOrderDetails(Maintenance mt) {
     return WorkOrderDetails(
       id: mt.id,
@@ -407,21 +362,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
                 notes: completionNotes,
               );
             }
-          } else if (workOrderId.toUpperCase().startsWith('WO_') || 
-                     workOrderId.toUpperCase().startsWith('WP_')) {
-            debugPrint('[Details] Executing Work Order Permit completion');
-            debugPrint('[Details] Creating admin API service instance');
-            // Complete Work Order Permit (using admin API service)
-            final adminApiService = admin_api.ApiService();
-            debugPrint('[Details] Calling completeWorkOrderPermit with ID: $workOrderId');
-            debugPrint('[Details] Completion notes: ${completionNotes.isNotEmpty ? completionNotes : "null"}');
-            await adminApiService.completeWorkOrderPermit(
-              workOrderId,
-              completionNotes: completionNotes.isNotEmpty ? completionNotes : null,
-            );
-            debugPrint('[Details] completeWorkOrderPermit call completed successfully');
-            // Reload the work order data to reflect changes
-            await _fetchWorkOrderData();
           } else if (workOrderId.toUpperCase().startsWith('CS-')) {
             debugPrint('[Details] Executing Concern Slip completion');
 
@@ -551,7 +491,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       requestTypeTag: 'Maintenance',
       priority: w.priority,
       statusTag: w.statusTag,
-      resolutionType: w.resolutionType,
 
       // Tenant / requester
       requestedBy: w.requestedBy ?? '—',
@@ -563,7 +502,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       completedAt: w.completedAt,
       location: w.location ?? w.unitId, // prefer location, fallback to unit
       description: w.description,
-      checklist_complete: (w.checklist ?? '')
+      checklist: (w.checklist ?? '')
           .split('\n')
           .map((s) => s.trim())
           .where((s) => s.isNotEmpty)
@@ -584,49 +523,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     );
   }
 
-  Widget _buildWorkOrderPermit(WorkOrderDetails w) {
-    return WorkOrderPermitDetails(
-      // Basic
-      id: w.id,
-      concernSlipId: w.concernSlipId ?? '—',
-      createdAt: w.createdAt,
-      updatedAt: w.updatedAt,
-      requestTypeTag: 'Work Order',
-      priority: w.priority,
-      statusTag: w.statusTag,
-      resolutionType: w.resolutionType,
-
-      // Requester
-      requestedBy: w.requestedBy ?? '—',
-      unitId: w.unitId,
-
-      // Permit specifics
-      contractorName: w.contractorName ?? '—',
-      contractorNumber: w.contractorNumber ?? '—',
-      contractorCompany: w.contractorCompany,
-
-      // Work window
-      workScheduleFrom: w.workScheduleFrom ?? w.createdAt,
-      workScheduleTo: w.workScheduleTo ?? w.createdAt,
-      entryEquipments: w.entryEquipments,
-
-      // Approvals
-      approvedBy: w.approvedBy,
-      approvalDate: w.approvalDate,
-      denialReason: w.denialReason,
-      adminNotes: w.adminNotes,
-      completionNotes: w.completionNotes,
-
-      // Callback for completion
-      onComplete: (permitId, completionNotes) async {
-        debugPrint('[WorkOrderPermit] onComplete called with permitId: $permitId, notes: $completionNotes');
-        // The logic is already handled in _showMarkAsCompleteDialog
-        // This callback is triggered from within the WorkOrderPermitDetails widget
-        await _showMarkAsCompleteDialog();
-      },
-    );
-  }
-
   // ---------- Infer route label from unified model ----------
   String _autoLabelFromWorkOrder(WorkOrderDetails w) {
     final id = w.id.toUpperCase();
@@ -636,7 +532,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     bool isMaint() => type.contains('maintenance') || id.startsWith('MT');
     bool isSlip()  => type.contains('concern')    || id.startsWith('CS');
     bool isJS()    => type.contains('job service')|| id.startsWith('JS');
-    bool isWO()    => type.contains('work order') || id.startsWith('WO');
 
     if (isMaint()) {
       return (s == 'scheduled' || s == 'assigned' || s == 'in progress')
@@ -647,11 +542,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       return (s == 'assigned' || s == 'on hold' || s == 'scheduled')
           ? 'job service assigned'
           : 'job service assessed';
-    }
-    if (isWO()) {
-      return (s == 'assigned' || s == 'scheduled' || s == 'in progress')
-          ? 'work order assigned'
-          : 'work order assessed';
     }
     if (isSlip()) {
       return (s == 'assigned' || s == 'on hold')
@@ -728,11 +618,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         children.add(_buildJobService(w, assessed: _detailsLabel.contains('assessed')));
         break;
 
-      case 'work order assigned':
-      case 'work order assessed':
-        children.add(_buildWorkOrderPermit(w));
-        break;
-
       case 'maintenance task scheduled':
       case 'maintenance task assessed':
         children.add(_buildMaintenance(w, assessed: _detailsLabel.contains('assessed')));
@@ -744,8 +629,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         final mapped = _autoLabelFromWorkOrder(w);
         if (mapped.contains('maintenance')) {
           children.add(_buildMaintenance(w, assessed: mapped.contains('assessed')));
-        } else if (mapped.contains('work order')) {
-          children.add(_buildWorkOrderPermit(w));
         } else if (mapped.contains('job service')) {
           children.add(_buildJobService(w, assessed: mapped.contains('assessed')));
         } else {
@@ -757,8 +640,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         final mapped = _autoLabelFromWorkOrder(w);
         if (mapped.contains('maintenance')) {
           children.add(_buildMaintenance(w, assessed: mapped.contains('assessed')));
-        } else if (mapped.contains('work order')) {
-          children.add(_buildWorkOrderPermit(w));
         } else if (mapped.contains('job service')) {
           children.add(_buildJobService(w, assessed: mapped.contains('assessed')));
         } else {

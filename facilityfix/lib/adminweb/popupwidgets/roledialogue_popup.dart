@@ -78,11 +78,19 @@ class _RoleDialogState extends State<RoleDialog> {
   // Controllers
   final TextEditingController _roleNameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
+  // Additional fields for specific role types
+  final TextEditingController _buildingController = TextEditingController();
+  final TextEditingController _unitNumberController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
 
   // Permissions model
   late Map<String, Map<String, bool>> _permissions;
 
   bool _isRoleNameValid = true;
+
+  // Role type handling
+  String? _roleType;
+  final List<String> _roleTypes = ['Staff', 'Tenant', 'Other'];
 
   // ----- Permissions Catalog -----
   static final _catalog = <_PermissionSection>[
@@ -193,6 +201,25 @@ class _RoleDialogState extends State<RoleDialog> {
       // Pre-fill fields
       _roleNameController.text = (widget.initialRole!['name'] ?? '').toString();
       _descriptionController.text = (widget.initialRole!['description'] ?? '').toString();
+      // Prefill role type and conditional fields
+      _roleType = (widget.initialRole!['role_type'] ?? '').toString();
+      // building_unit may be provided as a map or string; support both
+      final bu = widget.initialRole!['building_unit'];
+      if (bu is Map) {
+        _buildingController.text = (bu['building'] ?? '').toString();
+        _unitNumberController.text = (bu['unit'] ?? '').toString();
+      } else if (bu is String) {
+        // try to split common delimiters
+        final parts = bu.split(RegExp(r'[|:/,-\\]'));
+        if (parts.isNotEmpty) _buildingController.text = parts.first.trim();
+        if (parts.length > 1) _unitNumberController.text = parts[1].trim();
+      } else {
+        // fallback to older keys if present
+        _buildingController.text = (widget.initialRole!['building'] ?? '').toString();
+        _unitNumberController.text = (widget.initialRole!['unit_number'] ?? '').toString();
+      }
+      // phone field
+      _phoneController.text = (widget.initialRole!['phone'] ?? widget.initialRole!['phone_number'] ?? '').toString();
 
       // Accept either nested map or flat list for permissions
       final rawPerms = widget.initialRole!['permissions'];
@@ -224,6 +251,9 @@ class _RoleDialogState extends State<RoleDialog> {
   void dispose() {
     _roleNameController.dispose();
     _descriptionController.dispose();
+    _buildingController.dispose();
+    _unitNumberController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -252,7 +282,7 @@ class _RoleDialogState extends State<RoleDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildHeader(context),
+                    _buildHeader(context),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
@@ -262,6 +292,10 @@ class _RoleDialogState extends State<RoleDialog> {
                     _buildRoleNameField(),
                     const SizedBox(height: 24),
                     _buildDescriptionField(),
+                            // New role type selector and conditional fields
+                            const SizedBox(height: 8),
+                            _buildRoleTypeField(),
+                            _buildConditionalFields(),
                     const SizedBox(height: 32),
                     ..._catalog.expand((section) => [
                           _buildPermissionSection(
@@ -470,6 +504,107 @@ class _RoleDialogState extends State<RoleDialog> {
     );
   }
 
+  // Role type selector and conditional fields
+  Widget _buildRoleTypeField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        const Text(
+          'Role Type',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: _roleType == '' ? null : _roleType,
+          isExpanded: true,
+          decoration: InputDecoration(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          ),
+          hint: const Text('Select role type'),
+          items: _roleTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+          onChanged: (v) {
+            setState(() {
+              _roleType = v;
+            });
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildConditionalFields() {
+    if (_roleType == 'Staff') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 16),
+          const Text('Phone Number', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _phoneController,
+            keyboardType: TextInputType.phone,
+            decoration: InputDecoration(
+              hintText: 'Enter phone number (e.g. +1234567890)',
+              hintStyle: TextStyle(color: Colors.grey[400]),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey[300]!)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+          ),
+        ],
+      );
+    } else if (_roleType == 'Tenant') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 16),
+          const Text('Building', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _buildingController,
+            decoration: InputDecoration(
+              hintText: 'Enter building name/identifier',
+              hintStyle: TextStyle(color: Colors.grey[400]),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey[300]!)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text('Unit Number', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _unitNumberController,
+            decoration: InputDecoration(
+              hintText: 'Enter unit / apartment number',
+              hintStyle: TextStyle(color: Colors.grey[400]),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey[300]!)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text('Phone Number', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _phoneController,
+            keyboardType: TextInputType.phone,
+            decoration: InputDecoration(
+              hintText: 'Enter phone number (e.g. +1234567890)',
+              hintStyle: TextStyle(color: Colors.grey[400]),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey[300]!)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
   Widget _buildFooter(BuildContext context) {
     final isCreate = widget.mode == RoleDialogMode.create;
     return Container(
@@ -518,6 +653,13 @@ class _RoleDialogState extends State<RoleDialog> {
     });
     if (!_isRoleNameValid) return;
 
+    // Validate phone number if provided
+    final phoneVal = _phoneController.text.trim();
+    if (phoneVal.isNotEmpty && !_isValidPhone(phoneVal)) {
+      if (mounted) _showErrorSnackBar('Please enter a valid phone number (e.g. +1234567890)');
+      return;
+    }
+
     final isCreate = widget.mode == RoleDialogMode.create;
 
     if (isCreate) {
@@ -526,6 +668,12 @@ class _RoleDialogState extends State<RoleDialog> {
         'name': _roleNameController.text.trim(),
         'description': _descriptionController.text.trim(),
         'permissions': _deepCopyPermissions(_permissions),
+        'role_type': _roleType,
+        'phone': _phoneController.text.trim(),
+        'building_unit': {
+          'building': _buildingController.text.trim(),
+          'unit': _unitNumberController.text.trim(),
+        },
         'createdAt': DateTime.now().toIso8601String(),
         'users': 0,
       };
@@ -549,6 +697,12 @@ class _RoleDialogState extends State<RoleDialog> {
         'name': _roleNameController.text.trim(),
         'description': _descriptionController.text.trim(),
         'permissions': _deepCopyPermissions(_permissions),
+        'role_type': _roleType,
+        'phone': _phoneController.text.trim(),
+        'building_unit': {
+          'building': _buildingController.text.trim(),
+          'unit': _unitNumberController.text.trim(),
+        },
         'updatedAt': DateTime.now().toIso8601String(),
       };
       try {
@@ -608,6 +762,13 @@ class _RoleDialogState extends State<RoleDialog> {
         }
       }
     });
+  }
+
+  // Basic phone validation: optional + followed by 7-15 digits (simple E.164-ish)
+  bool _isValidPhone(String s) {
+    final normalized = s.trim();
+    final re = RegExp(r'^\+?[0-9]{7,15}\$');
+    return re.hasMatch(normalized);
   }
 
   void _showErrorSnackBar(String message) {

@@ -66,24 +66,24 @@ class _AdminRolePageState extends State<AdminRolePage> {
       'id': 'maintenance_department',
       'name': 'MAINTENANCE DEPARTMENT',
       'description':
-          'Access to work orders, maintenance scheduling, and inventory management.',
+          'Access to Task Management, maintenance scheduling, and inventory management.',
       'userCount': 4,
       'permissions': [
         {
-          'category': 'Work Orders',
+          'category': 'Task Management',
           'icon': Icons.build,
           'color': Colors.orange,
           'actions': [
             {
-              'name': 'Create Work Orders',
+              'name': 'Create Task Management',
               'description': 'Generate new maintenance tasks',
             },
             {
-              'name': 'Update Work Orders',
-              'description': 'Modify existing work orders',
+              'name': 'Update Task Management',
+              'description': 'Modify existing Task Management',
             },
             {
-              'name': 'View Work Orders',
+              'name': 'View Task Management',
               'description': 'Access all work order information',
             },
           ],
@@ -219,7 +219,7 @@ class _AdminRolePageState extends State<AdminRolePage> {
         return 'announcements';
       case 'Inventory Management':
         return 'inventory';
-      case 'Work Orders':
+      case 'Task Management':
         return 'workOrder';
       case 'Calendar':
         return 'calendar';

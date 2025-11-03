@@ -6,7 +6,6 @@ import '../popupwidgets/maintenance_firesafety_popup.dart';
 import '../popupwidgets/maintenance_earthquake_popup.dart';
 import '../popupwidgets/maintenance_typhoonflood_popup.dart';
 import '../services/api_service.dart';
-import '../../services/auth_storage.dart';
 
 class AdminMaintenancePage extends StatefulWidget {
   const AdminMaintenancePage({super.key});
@@ -18,8 +17,20 @@ class AdminMaintenancePage extends StatefulWidget {
 class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
   final ApiService _apiService = ApiService();
   List<Map<String, dynamic>> _tasks = [];
+  List<Map<String, dynamic>> _filteredTasks = [];
   bool _isLoading = true;
   String? _error;
+  
+  // Search and filter state
+  final TextEditingController _searchController = TextEditingController();
+  String? _selectedStatusFilter;
+  
+  // Pagination state
+  int _currentPage = 0;
+  final int _itemsPerPage = 10;
+  
+  // Sorting state
+  bool _sortAscending = false;
 
   // Special maintenance tasks summary data
   Map<String, dynamic> _specialTasksSummary = {
@@ -32,6 +43,13 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
   void initState() {
     super.initState();
     _initializeAndFetchData();
+    _searchController.addListener(_applyFilters);
+  }
+  
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _initializeAndFetchData() async {
@@ -95,6 +113,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
         final tasks = response['tasks'] as List<dynamic>;
         setState(() {
           _tasks = tasks.map((task) => task as Map<String, dynamic>).toList();
+          _applyFilters();
           _isLoading = false;
         });
       } else {
@@ -109,6 +128,128 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
         });
       }
     }
+  }
+
+  // Apply search and filter
+  void _applyFilters() {
+    setState(() {
+      _filteredTasks = _tasks.where((task) {
+        // Search filter
+        final searchQuery = _searchController.text.toLowerCase();
+        if (searchQuery.isNotEmpty) {
+          final id = (task['id'] ?? '').toString().toLowerCase();
+          final location = _getTaskField(task, ['location', 'area'], '').toLowerCase();
+          final title = _getTaskField(task, ['task_title', 'taskTitle', 'title'], '').toLowerCase();
+          
+          if (!id.contains(searchQuery) && 
+              !location.contains(searchQuery) && 
+              !title.contains(searchQuery)) {
+            return false;
+          }
+        }
+        
+        // Status filter
+        if (_selectedStatusFilter != null && _selectedStatusFilter != 'All') {
+          final status = _getTaskField(task, ['status', 'statusTag'], '').toLowerCase();
+          if (!status.contains(_selectedStatusFilter!.toLowerCase())) {
+            return false;
+          }
+        }
+        
+        return true;
+      }).toList();
+      
+      // Apply sorting by date
+      _sortByDate();
+      
+      // Reset to first page when filters change
+      _currentPage = 0;
+    });
+  }
+  
+  // Sort tasks by date
+  void _sortByDate() {
+    _filteredTasks.sort((a, b) {
+      final dateA = _parseDate(a['created_at'] ?? a['dateCreated'] ?? a['scheduled_date']);
+      final dateB = _parseDate(b['created_at'] ?? b['dateCreated'] ?? b['scheduled_date']);
+      
+      if (dateA == null && dateB == null) return 0;
+      if (dateA == null) return 1;
+      if (dateB == null) return -1;
+      
+      return _sortAscending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
+    });
+  }
+  
+  DateTime? _parseDate(dynamic date) {
+    if (date == null) return null;
+    try {
+      if (date is String) {
+        return DateTime.parse(date);
+      }
+      if (date is DateTime) {
+        return date;
+      }
+    } catch (e) {
+      // Invalid date format
+    }
+    return null;
+  }
+  
+  // Toggle sort order
+  void _toggleSortOrder() {
+    setState(() {
+      _sortAscending = !_sortAscending;
+      _sortByDate();
+    });
+  }
+  
+  // Get paginated tasks
+  List<Map<String, dynamic>> get _paginatedTasks {
+    final startIndex = _currentPage * _itemsPerPage;
+    final endIndex = (startIndex + _itemsPerPage).clamp(0, _filteredTasks.length);
+    
+    if (startIndex >= _filteredTasks.length) {
+      return [];
+    }
+    
+    return _filteredTasks.sublist(startIndex, endIndex);
+  }
+  
+  // Get total pages
+  int get _totalPages {
+    return (_filteredTasks.length / _itemsPerPage).ceil();
+  }
+  
+  // Convert status to title case
+  String _toTitleCase(String text) {
+    if (text.isEmpty) return text;
+    return text.split('_').map((word) {
+      if (word.isEmpty) return word;
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    }).join(' ');
+  }
+
+  // Format maintenance ID with MT-2025-XXXXX pattern
+  String _formatMaintenanceId(dynamic id) {
+    if (id == null) return 'N/A';
+    
+    final idStr = id.toString();
+    
+    // If already formatted with MT-2025 prefix, return as is
+    if (idStr.startsWith('MT-2025-') || idStr.startsWith('SPECIAL-')) {
+      return idStr;
+    }
+    
+    // Extract numeric ID and pad to 5 digits
+    final numericId = int.tryParse(idStr);
+    if (numericId != null) {
+      final paddedId = numericId.toString().padLeft(5, '0');
+      return 'MT-2025-$paddedId';
+    }
+    
+    // If can't parse, return original
+    return idStr;
   }
 
   // Helper function to convert routeKey to actual route path
@@ -479,7 +620,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "Work Orders",
+                      "Task Management",
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
@@ -509,7 +650,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                             foregroundColor: Colors.black,
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
-                          child: const Text('Work Orders'),
+                          child: const Text('Task Management'),
                         ),
                         const Icon(
                           Icons.chevron_right,
@@ -628,50 +769,102 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                         ),
                         Row(
                           children: [
-                            
-                            const SizedBox(width: 8),
+                            // Search box
                             Container(
-                              width: 240,
+                              width: 300,
                               height: 40,
                               decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
+                                color: Colors.grey[100],
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: TextField(
+                                controller: _searchController,
                                 decoration: InputDecoration(
-                                  suffixIcon: Icon(
-                                    Icons.search,
-                                    color: Colors.grey[500],
-                                    size: 20,
-                                  ),
-                                  hintText: "Search",
+                                  hintText: "Search by ID, location, or title...",
                                   hintStyle: TextStyle(
-                                    color: Colors.grey[500],
+                                    color: Colors.grey[400],
                                     fontSize: 14,
+                                  ),
+                                  prefixIcon: Icon(
+                                    Icons.search,
+                                    color: Colors.grey[400],
+                                    size: 20,
                                   ),
                                   border: InputBorder.none,
                                   contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 7,
+                                    horizontal: 16,
+                                    vertical: 12,
                                   ),
                                 ),
                               ),
                             ),
                             const SizedBox(width: 12),
-                            Container(
-                              height: 40,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
+                            
+                            // Filter button with dropdown
+                            PopupMenuButton<String>(
+                              initialValue: _selectedStatusFilter,
+                              onSelected: (value) {
+                                setState(() {
+                                  _selectedStatusFilter = value == 'All' ? null : value;
+                                  _applyFilters();
+                                });
+                              },
+                              itemBuilder: (context) => [
+                                const PopupMenuItem(
+                                  value: 'All',
+                                  child: Text('All Status'),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'New',
+                                  child: Text('New'),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'Scheduled',
+                                  child: Text('Scheduled'),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'In Progress',
+                                  child: Text('In Progress'),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'Completed',
+                                  child: Text('Completed'),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'Assigned',
+                                  child: Text('Assigned'),
+                                ),
+                              ],
+                              child: Container(
+                                height: 40,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  border: Border.all(color: Colors.grey[300]!),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.filter_list,
+                                      size: 20,
+                                      color: Colors.grey[700],
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _selectedStatusFilter ?? 'Filter',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey[700],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: IconButton(
-                              onPressed: _fetchMaintenanceTasks,
-                              icon: const Icon(Icons.refresh),
-                              tooltip: 'Refresh',
-                            ),
                             ),
                           ],
                         ),
@@ -705,7 +898,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                         ),
                       ),
                     )
-                  else if (_tasks.isEmpty)
+                  else if (_filteredTasks.isEmpty)
                     const Padding(
                       padding: EdgeInsets.all(40.0),
                       child: Center(
@@ -747,97 +940,94 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                           DataColumn(
                             label: _fixedCell(3, const Text("STATUS")),
                           ),
-                          DataColumn(label: _fixedCell(4, const Text("DATE"))),
+                          DataColumn(
+                            label: _fixedCell(4, InkWell(
+                              onTap: _toggleSortOrder,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text("DATE"),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    _sortAscending 
+                                      ? Icons.arrow_upward 
+                                      : Icons.arrow_downward,
+                                    size: 14,
+                                    color: Colors.grey[600],
+                                  ),
+                                ],
+                              ),
+                            )),
+                          ),
                           DataColumn(
                             label: _fixedCell(5, const Text("RECURRENCE")),
                           ),
                           DataColumn(label: _fixedCell(6, const Text(""))),
                         ],
-                        rows:
-                            _tasks.map((task) {
-                              final taskId = _getTaskField(task, ['id', 'formatted_id', 'task_code'], 'N/A');
-                              final location = _getTaskField(task, ['location'], 'N/A');
-                              final title = _getTaskField(task, ['task_title', 'taskTitle', 'title'], 'N/A');
-                              final status = _getTaskField(task, ['status'], 'scheduled');
-                              final scheduledDate = task['scheduled_date'] ?? task['startDate'] ?? task['start_date'];
-                              final recurrence = _getTaskField(task, ['recurrence', 'recurrence_type', 'recurrence_pattern'], 'none');
-                              
-                              return DataRow(
-                                cells: [
-                                  DataCell(
-                                    _fixedCell(
-                                      0,
-                                      _ellipsis(
-                                        taskId,
-                                        style: TextStyle(
-                                          color: Colors.grey[700],
-                                          fontSize: 13,
+                        rows: _paginatedTasks.map((maintenance) {
+                          final rawId = _getTaskField(maintenance, ['id', 'formatted_id'], 'N/A');
+                          final id = _formatMaintenanceId(rawId);
+                          final location = _getTaskField(maintenance, ['location', 'area'], 'N/A');
+                          final title = _getTaskField(maintenance, ['task_title', 'taskTitle', 'title'], 'N/A');
+                          final rawStatus = _getTaskField(maintenance, ['status', 'statusTag'], 'N/A');
+                          final status = _toTitleCase(rawStatus);
+                          final dateValue = maintenance['created_at'] ?? 
+                                          maintenance['dateCreated'] ?? 
+                                          maintenance['scheduled_date'];
+                          final date = _formatDate(dateValue);
+                          final recurrence = _getTaskField(
+                            maintenance, 
+                            ['recurrence', 'recurrence_type', 'recurrenceType'], 
+                            'None'
+                          );
+
+                          return DataRow(
+                            cells: [
+                              DataCell(_fixedCell(0, _ellipsis(id))),
+                              DataCell(_fixedCell(1, _ellipsis(location))),
+                              DataCell(_fixedCell(2, _ellipsis(title))),
+                              DataCell(
+                                _fixedCell(3, _buildStatusChip(status)),
+                              ),
+                              DataCell(_fixedCell(4, _ellipsis(date))),
+                              DataCell(_fixedCell(5, _ellipsis(recurrence))),
+                              DataCell(
+                                _fixedCell(
+                                  6,
+                                  Builder(
+                                    builder: (context) {
+                                      return IconButton(
+                                        icon: const Icon(
+                                          Icons.more_vert,
+                                          size: 20,
                                         ),
-                                      ),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    _fixedCell(
-                                      1,
-                                      _ellipsis(location),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    _fixedCell(
-                                      2,
-                                      _ellipsis(title),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    _fixedCell(
-                                      3,
-                                      _buildStatusChip(status),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    _fixedCell(
-                                      4,
-                                      _ellipsis(_formatDate(scheduledDate)),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    _fixedCell(
-                                      5,
-                                      _ellipsis(recurrence),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    _fixedCell(
-                                      6,
-                                      Builder(
-                                        builder: (context) {
-                                          return IconButton(
-                                            onPressed: () {
-                                              final rbx =
-                                                  context.findRenderObject()
-                                                      as RenderBox;
-                                              final position = rbx
-                                                  .localToGlobal(Offset.zero);
-                                              _showActionMenu(
-                                                context,
-                                                task,
-                                                position,
-                                              );
-                                            },
-                                            icon: Icon(
-                                              Icons.more_vert,
-                                              color: Colors.grey[400],
-                                              size: 20,
-                                            ),
+                                        onPressed: () {
+                                          final RenderBox button = context
+                                              .findRenderObject() as RenderBox;
+                                          final RenderBox overlay = Navigator.of(
+                                            context,
+                                          ).overlay!.context.findRenderObject()
+                                              as RenderBox;
+                                          final position = button.localToGlobal(
+                                            Offset.zero,
+                                            ancestor: overlay,
+                                          );
+
+                                          _showActionMenu(
+                                            context,
+                                            maintenance,
+                                            position,
                                           );
                                         },
-                                      ),
-                                      align: Alignment.center,
-                                    ),
+                                      );
+                                    },
                                   ),
-                                ],
-                              );
-                            }).toList(),
+                                  align: Alignment.center,
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
                       ),
                     ),
                   Divider(height: 1, thickness: 1, color: Colors.grey[400]),
@@ -849,64 +1039,93 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "Showing 1 to ${_tasks.length} of ${_tasks.length} entries",
+                          'Showing ${_paginatedTasks.isEmpty ? 0 : _currentPage * _itemsPerPage + 1} to ${(_currentPage * _itemsPerPage + _paginatedTasks.length)} of ${_filteredTasks.length} entries',
                           style: TextStyle(
-                            color: Colors.grey[600],
                             fontSize: 14,
+                            color: Colors.grey[600],
                           ),
                         ),
                         Row(
                           children: [
                             IconButton(
-                              onPressed: null,
-                              icon: Icon(
-                                Icons.chevron_left,
-                                color: Colors.grey[400],
-                              ),
+                              icon: const Icon(Icons.chevron_left),
+                              onPressed: _currentPage > 0
+                                  ? () {
+                                      setState(() {
+                                        _currentPage--;
+                                      });
+                                    }
+                                  : null,
+                              color: Colors.grey[700],
                             ),
-                            Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1976D2),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  "01",
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 13,
+                            ...List.generate(
+                              _totalPages.clamp(0, 5),
+                              (index) {
+                                // Show first 2, current page ± 1, and last 2
+                                int pageNumber;
+                                if (_totalPages <= 5) {
+                                  pageNumber = index;
+                                } else if (_currentPage < 2) {
+                                  pageNumber = index;
+                                } else if (_currentPage > _totalPages - 3) {
+                                  pageNumber = _totalPages - 5 + index;
+                                } else {
+                                  pageNumber = _currentPage - 2 + index;
+                                }
+
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
                                   ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[100],
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  "02",
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 13,
+                                  child: InkWell(
+                                    onTap: () {
+                                      setState(() {
+                                        _currentPage = pageNumber;
+                                      });
+                                    },
+                                    child: Container(
+                                      width: 36,
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        color: _currentPage == pageNumber
+                                            ? const Color(0xFF1976D2)
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(
+                                          color: _currentPage == pageNumber
+                                              ? const Color(0xFF1976D2)
+                                              : Colors.grey[300]!,
+                                        ),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          '${pageNumber + 1}',
+                                          style: TextStyle(
+                                            color: _currentPage == pageNumber
+                                                ? Colors.white
+                                                : Colors.grey[700],
+                                            fontWeight:
+                                                _currentPage == pageNumber
+                                                    ? FontWeight.w600
+                                                    : FontWeight.normal,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
+                                );
+                              },
                             ),
                             IconButton(
-                              onPressed: () {},
-                              icon: Icon(
-                                Icons.chevron_right,
-                                color: Colors.grey[600],
-                              ),
+                              icon: const Icon(Icons.chevron_right),
+                              onPressed: _currentPage < _totalPages - 1
+                                  ? () {
+                                      setState(() {
+                                        _currentPage++;
+                                      });
+                                    }
+                                  : null,
+                              color: Colors.grey[700],
                             ),
                           ],
                         ),

@@ -18,6 +18,67 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   
   // Dynamic data from API
   List<Map<String, dynamic>> _repairTasks = [];
+  List<Map<String, dynamic>> _filteredTasks = [];
+  
+  // Pagination state
+  int _currentPage = 0;
+  final int _itemsPerPage = 10;
+  
+  // Sorting state
+  bool _sortAscending = false;
+  
+  // Get paginated tasks
+  List<Map<String, dynamic>> get _paginatedTasks {
+    final startIndex = _currentPage * _itemsPerPage;
+    final endIndex = (startIndex + _itemsPerPage).clamp(0, _filteredTasks.length);
+    
+    if (startIndex >= _filteredTasks.length) {
+      return [];
+    }
+    
+    return _filteredTasks.sublist(startIndex, endIndex);
+  }
+  
+  // Get total pages
+  int get _totalPages {
+    return (_filteredTasks.length / _itemsPerPage).ceil();
+  }
+  
+  // Sort by date
+  void _sortByDate() {
+    setState(() {
+      _filteredTasks.sort((a, b) {
+        final dateA = _parseDate(a['schedule']);
+        final dateB = _parseDate(b['schedule']);
+        
+        if (dateA == null && dateB == null) return 0;
+        if (dateA == null) return 1;
+        if (dateB == null) return -1;
+        
+        return _sortAscending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
+      });
+    });
+  }
+  
+  // Parse date helper
+  DateTime? _parseDate(dynamic dateStr) {
+    if (dateStr == null) return null;
+    try {
+      if (dateStr is DateTime) return dateStr;
+      if (dateStr is String) return DateTime.parse(dateStr);
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+  
+  // Toggle sort order
+  void _toggleSortOrder() {
+    setState(() {
+      _sortAscending = !_sortAscending;
+      _sortByDate();
+    });
+  }
   
   // Staff data for assignment
   List<Map<String, dynamic>> _staffMembers = [];
@@ -25,6 +86,11 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   
   // Error handling
   String? _errorMessage;
+  
+  // Dropdown values for filtering
+  String _selectedDepartment = 'All Departments';
+  String _selectedStatus = 'All Status';
+  String _selectedConcernType = 'Job Service';
   // Helper function to convert routeKey to actual route path
   String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
@@ -119,6 +185,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       if (mounted) {
         setState(() {
           _repairTasks = tasks;
+          _filteredTasks = List.from(tasks);
           _isLoading = false;
           _errorMessage = null;
         });
@@ -128,17 +195,65 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       if (mounted) {
         setState(() {
           _repairTasks = [];
+          _filteredTasks = [];
           _isLoading = false;
           _errorMessage = 'Failed to load job services: $e';
         });
       }
     }
   }
+  
+  // Apply filters
+  void _applyFilters() {
+    setState(() {
+      _filteredTasks = _repairTasks.where((task) {
+        // Department filter
+        if (_selectedDepartment != 'All Departments') {
+          final taskDept = task['department']?.toString().toLowerCase() ?? '';
+          final selectedDept = _selectedDepartment.toLowerCase();
+          
+          if (selectedDept == 'others') {
+            // For "Others", match pest control, hvac, security, fire safety, general, etc.
+            if (!['carpentry', 'electrical', 'masonry', 'plumbing'].contains(taskDept)) {
+              // This is an "other" department
+            } else {
+              return false;
+            }
+          } else if (!taskDept.contains(selectedDept)) {
+            return false;
+          }
+        }
+        
+        // Status filter
+        if (_selectedStatus != 'All Status') {
+          final taskStatus = task['status']?.toString() ?? '';
+          if (taskStatus != _selectedStatus) {
+            return false;
+          }
+        }
+        
+        return true;
+      }).toList();
+      
+      // Reset to first page when filters change
+      _currentPage = 0;
+    });
+  }
 
   // Process job service data from API to match UI format
   Map<String, dynamic> _processJobServiceData(Map<String, dynamic> jobService) {
+    // Format Job Service ID with JS- prefix
+    String serviceId = 'N/A';
+    if (jobService['formatted_id'] != null) {
+      serviceId = jobService['formatted_id'].toString();
+    } else if (jobService['id'] != null) {
+      final id = jobService['id'].toString();
+      // Add JS- prefix if not already present
+      serviceId = id.startsWith('JS-') ? id : 'JS-$id';
+    }
+    
     return {
-      'serviceId': jobService['formatted_id'] ?? jobService['id'] ?? 'N/A',
+      'serviceId': serviceId,
       'id': jobService['concern_slip_id'] ?? jobService['id'] ?? 'N/A',
       'buildingUnit': jobService['location'] ?? jobService['unit_id'] ?? 'N/A',
       'schedule': _formatDate(jobService['scheduled_date'] ?? jobService['created_at']),
@@ -151,6 +266,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       'requestedBy': jobService['reported_by'] ?? 'N/A',
       'department': _mapCategoryToDepartment(jobService['category']),
       'description': jobService['description'] ?? '',
+      'rawData': jobService, // Store raw data for detailed view and checks
       // assessment and recommendation will be fetched from concern slip in _loadJobServices
     };
   }
@@ -172,17 +288,25 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       case 'pending':
         return 'Pending';
       case 'assigned':
-        return 'Assigned';
+        return 'To Inspect';
       case 'in_progress':
         return 'In Progress';
+      case 'assessed':
+        return 'Assessed';
+      case 'sent':
+        return 'Sent to Client';
+      case 'approved':
+        return 'Approved';
+      case 'rejected':
+        return 'Rejected';
       case 'completed':
         return 'Completed';
+      case 'returned_to_tenant':
+        return 'Returned to Tenant';
       case 'cancelled':
         return 'Cancelled';
       default:
-        return status.split('_').map((word) => 
-          word.isEmpty ? '' : word[0].toUpperCase() + word.substring(1)
-        ).join(' ');
+        return 'Pending';
     }
   }
 
@@ -224,10 +348,25 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     }
   }
 
-  // Dropdown values for filtering
-  String _selectedRole = 'All Roles';
-  String _selectedStatus = 'All Status';
-  String _selectedConcernType = 'Job Service';
+  // Dropdown values for filtering - REMOVED (moved to top of class)
+
+  // Check if task can be assigned to staff
+  bool _canAssignStaff(Map<String, dynamic> task) {
+    final status = task['status']?.toString().toLowerCase();
+    return status == 'pending' || status == 'evaluated';
+  }
+
+  // Check if resolution type can be set (status is assessed)
+  bool _canSetResolutionType(Map<String, dynamic> task) {
+    final status = task['status']?.toString().toLowerCase();
+    return status == 'assessed';
+  }
+
+  // Check if action buttons should be disabled
+  bool _areActionButtonsDisabled(Map<String, dynamic> task) {
+    final status = task['status']?.toString().toLowerCase();
+    return status == 'to inspect' && task['rawData']?['assessed_by'] == null;
+  }
 
   // Action dropdown menu methods
   void _showActionMenu(
@@ -630,7 +769,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          "Work Orders",
+          "Task Management",
           style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.bold,
@@ -656,7 +795,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
-              child: const Text('Work Orders'),
+              child: const Text('Task Management'),
             ),
             const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
             TextButton(
@@ -717,7 +856,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
           ),
           const SizedBox(width: 16),
 
-          // Role Dropdown
+          // Department Dropdown
           Expanded(
             child: Container(
               height: 40,
@@ -729,23 +868,26 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
-                  value: _selectedRole,
+                  value: _selectedDepartment,
                   onChanged: (String? newValue) {
                     setState(() {
-                      _selectedRole = newValue!;
+                      _selectedDepartment = newValue!;
+                      _applyFilters();
                     });
                   },
                   items:
                       <String>[
-                        'All Roles',
-                        'Admin',
-                        'Technician',
-                        'Manager',
+                        'All Departments',
+                        'Carpentry',
+                        'Electrical',
+                        'Masonry',
+                        'Plumbing',
+                        'Other',
                       ].map<DropdownMenuItem<String>>((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
                           child: Text(
-                            'Role: $value',
+                            value == 'All Departments' ? value : 'Dept: $value',
                             style: const TextStyle(fontSize: 14),
                           ),
                         );
@@ -772,14 +914,21 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                   onChanged: (String? newValue) {
                     setState(() {
                       _selectedStatus = newValue!;
+                      _applyFilters();
                     });
                   },
                   items:
                       <String>[
                         'All Status',
                         'Pending',
+                        'To Inspect',
                         'In Progress',
+                        'Assessed',
+                        'Sent to Client',
+                        'Approved',
+                        'Rejected',
                         'Completed',
+                        'Returned to Tenant',
                         'Cancelled',
                       ].map<DropdownMenuItem<String>>((String value) {
                         return DropdownMenuItem<String>(
@@ -942,10 +1091,13 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                       ],
                     ),
                   )
-                : SingleChildScrollView(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
+                : Column(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: DataTable(
                   columnSpacing: 50,
                   headingRowHeight: 56,
                   dataRowHeight: 64,
@@ -961,18 +1113,39 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                     color: Colors.black87,
                   ),
                   columns: [
-                    DataColumn(label: _fixedCell(0, const Text("SERVICE ID"))),
+                    DataColumn(label: _fixedCell(0, const Text("JOB SERVICE ID"))),
                     DataColumn(label: _fixedCell(1, const Text("CONCERN ID"))),
                     DataColumn(
                       label: _fixedCell(2, const Text("BUILDING & UNIT")),
                     ),
-                    DataColumn(label: _fixedCell(3, const Text("SCHEDULE"))),
+                    DataColumn(
+                      label: _fixedCell(
+                        3,
+                        InkWell(
+                          onTap: _toggleSortOrder,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text("SCHEDULE DATE"),
+                              const SizedBox(width: 4),
+                              Icon(
+                                _sortAscending 
+                                  ? Icons.arrow_upward 
+                                  : Icons.arrow_downward,
+                                size: 16,
+                                color: Colors.grey[600],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                     DataColumn(label: _fixedCell(4, const Text("STATUS"))),
                     DataColumn(label: _fixedCell(5, const Text("PRIORITY"))),
                     DataColumn(label: _fixedCell(6, const Text(""))),
                   ],
                   rows:
-                      _repairTasks.map((task) {
+                      _paginatedTasks.map((task) {
                         return DataRow(
                           cells: [
                             DataCell(
@@ -1052,74 +1225,96 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                         );
                       }).toList(),
                 ),
-                    ),
+                          ),
+                        ),
+                      ),
+                      // Pagination Section
+                      Divider(height: 1, thickness: 1, color: Colors.grey[400]),
+                      Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              _filteredTasks.isEmpty
+                                  ? "No entries"
+                                  : "Showing ${_currentPage * _itemsPerPage + 1} to ${((_currentPage + 1) * _itemsPerPage).clamp(0, _filteredTasks.length)} of ${_filteredTasks.length} ${_filteredTasks.length == 1 ? 'entry' : 'entries'}",
+                              style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                            ),
+                            Row(
+                              children: [
+                                // Previous button
+                                IconButton(
+                                  onPressed: _currentPage > 0
+                                      ? () {
+                                          setState(() {
+                                            _currentPage--;
+                                          });
+                                        }
+                                      : null,
+                                  icon: const Icon(Icons.chevron_left),
+                                  color: Colors.blue,
+                                  disabledColor: Colors.grey[300],
+                                ),
+                                // Page numbers
+                                ...List.generate(
+                                  _totalPages,
+                                  (index) => Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                                    child: InkWell(
+                                      onTap: () {
+                                        setState(() {
+                                          _currentPage = index;
+                                        });
+                                      },
+                                      child: Container(
+                                        width: 32,
+                                        height: 32,
+                                        decoration: BoxDecoration(
+                                          color: _currentPage == index
+                                              ? Colors.blue
+                                              : Colors.transparent,
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(
+                                            color: _currentPage == index
+                                                ? Colors.blue
+                                                : Colors.grey[300]!,
+                                          ),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          '${index + 1}',
+                                          style: TextStyle(
+                                            color: _currentPage == index
+                                                ? Colors.white
+                                                : Colors.black87,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // Next button
+                                IconButton(
+                                  onPressed: _currentPage < _totalPages - 1
+                                      ? () {
+                                          setState(() {
+                                            _currentPage++;
+                                          });
+                                        }
+                                      : null,
+                                  icon: const Icon(Icons.chevron_right),
+                                  color: Colors.blue,
+                                  disabledColor: Colors.grey[300],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-          ),
-          Divider(height: 1, thickness: 1, color: Colors.grey[400]),
-
-          // Pagination Section
-          Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  _repairTasks.isEmpty 
-                    ? "No entries found"
-                    : "Showing 1 to ${_repairTasks.length} of ${_repairTasks.length} entries",
-                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                ),
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: null,
-                      icon: Icon(Icons.chevron_left, color: Colors.grey[400]),
-                    ),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1976D2),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          "01",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Center(
-                        child: Text(
-                          "02",
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () {},
-                      icon: Icon(Icons.chevron_right, color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-              ],
-            ),
           ),
         ],
       ),
@@ -1170,8 +1365,8 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     Color textColor;
     switch (status) {
       case 'In Progress':
-        bgColor = const Color.fromARGB(49, 82, 131, 205);
-        textColor = const Color.fromARGB(255, 0, 93, 232);
+        bgColor = const Color(0xFFFFF3E0);
+        textColor = const Color(0xFFFF8F00);
         break;
       case 'Pending':
         bgColor = const Color(0xFFFFEBEE);
@@ -1184,6 +1379,30 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       case 'Cancelled':
         bgColor = Colors.grey[100]!;
         textColor = Colors.grey[700]!;
+        break;
+      case 'To Inspect':
+        bgColor = const Color(0xFFE3F2FD);
+        textColor = const Color(0xFF1976D2);
+        break;
+      case 'Assessed':
+        bgColor = const Color(0xFFF3E5F5);
+        textColor = const Color(0xFF7B1FA2);
+        break;
+      case 'Sent to Client':
+        bgColor = const Color(0xFFE0F2F1);
+        textColor = const Color(0xFF00695C);
+        break;
+      case 'Approved':
+        bgColor = const Color(0xFFE8F5E8);
+        textColor = const Color(0xFF2E7D32);
+        break;
+      case 'Rejected':
+        bgColor = const Color(0xFFFFEBEE);
+        textColor = const Color(0xFFD32F2F);
+        break;
+      case 'Returned to Tenant':
+        bgColor = const Color(0xFFFFF8E1);
+        textColor = const Color(0xFFFF8F00);
         break;
       default:
         bgColor = Colors.grey[100]!;

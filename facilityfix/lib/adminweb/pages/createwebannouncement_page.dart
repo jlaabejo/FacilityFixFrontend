@@ -533,12 +533,25 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                         size: 16,
                       ),
                       TextButton(
-                        onPressed: null,
+                        onPressed: () => context.go('/announcement'),
                         style: TextButton.styleFrom(
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                         ),
                         child: const Text('Announcement'),
+                      ),
+                      const Icon(
+                        Icons.chevron_right,
+                        color: Colors.grey,
+                        size: 16,
+                      ),
+                      TextButton(
+                        onPressed: null,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                        child: const Text('Create'),
                       ),
                     ],
                   ),
@@ -581,7 +594,9 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                       const SizedBox(height: 24),
 
                       // ===== Audience & Type =====
+                      // First row: audience input and type dropdown aligned
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // Audience
                           Expanded(
@@ -589,20 +604,24 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 _fieldLabel("Audience"),
-                                DropdownButtonFormField<String>(
-                                  value: _selectedAudience,
-                                  decoration: _decoration("Select recipients..."),
-                                  items: _audienceOptions.map((audience) {
-                                    return DropdownMenuItem(
-                                      value: audience,
-                                      child: Text(audience),
-                                    );
-                                  }).toList(),
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _selectedAudience = value;
-                                    });
-                                  },
+                                Container(
+                                  height: 48,
+                                  child: DropdownButtonFormField<String>(
+                                    value: _selectedAudience,
+                                    decoration: _decoration("Select recipients..."),
+                                    isExpanded: true,
+                                    items: _audienceOptions.map((audience) {
+                                      return DropdownMenuItem(
+                                        value: audience,
+                                        child: Text(audience),
+                                      );
+                                    }).toList(),
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _selectedAudience = value;
+                                      });
+                                    },
+                                  ),
                                 ),
                               ],
                             ),
@@ -614,37 +633,53 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 _fieldLabel("Announcement Type"),
-                                DropdownButtonFormField<String>(
-                                  value: _selectedType,
-                                  decoration: _decoration("Select type..."),
-                                  items: _typeOptions.map((type) {
-                                    return DropdownMenuItem<String>(
-                                      value: type['value'] as String,
-                                      child: Text(type['label'] as String),
-                                    );
-                                  }).toList(),
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _selectedType = value;
-                                      _showCustomType = value == 'Others';
-                                      if (!_showCustomType) {
-                                        _customTypeController.clear();
-                                      }
-                                    });
-                                  },
-                                ),
-                                if (_showCustomType) ...[
-                                  const SizedBox(height: 12),
-                                  TextFormField(
-                                    controller: _customTypeController,
-                                    decoration: _decoration("Enter custom type..."),
+                                Container(
+                                  height: 48,
+                                  child: DropdownButtonFormField<String>(
+                                    value: _selectedType,
+                                    decoration: _decoration("Select type..."),
+                                    isExpanded: true,
+                                    items: _typeOptions.map((type) {
+                                      return DropdownMenuItem<String>(
+                                        value: type['value'] as String,
+                                        child: Text(type['label'] as String),
+                                      );
+                                    }).toList(),
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _selectedType = value;
+                                        _showCustomType = value == 'Others';
+                                        if (!_showCustomType) {
+                                          _customTypeController.clear();
+                                        }
+                                      });
+                                    },
                                   ),
-                                ],
+                                ),
                               ],
                             ),
                           ),
                         ],
                       ),
+
+                      // Second row: optional custom type input aligned under Type column
+                      if (_showCustomType) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // empty left column to keep alignment under Type
+                            Expanded(child: const SizedBox()),
+                            const SizedBox(width: 24),
+                            Expanded(
+                              child: TextFormField(
+                                controller: _customTypeController,
+                                decoration: _decoration("Enter custom type..."),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 24),
 
                       // ===== Post Details =====
@@ -848,25 +883,23 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                       ],
                       const SizedBox(height: 8),
 
-                      // ===== Bottom Actions =====
+                      // Bottom row: Pin control on the left; actions (Cancel/Publish) on the right
+                      const SizedBox(height: 12),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          // Pin control (left)
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
                               vertical: 12,
                             ),
-                            margin: const EdgeInsets.only(
-                              top: 12,
-                            ), // spacing from above
                             decoration: BoxDecoration(
                               color: Colors.grey[100],
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(color: Colors.grey[300]!),
                             ),
                             child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text(
                                   "Pin to Dashboard",
@@ -876,37 +909,62 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                                     color: Colors.black87,
                                   ),
                                 ),
+                                const SizedBox(width: 8),
                                 Switch(
-                                  value: _pinToDashboard, // bool state
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _pinToDashboard = value;
-                                    });
-                                  },
+                                  value: _pinToDashboard,
+                                  onChanged: (value) => setState(() => _pinToDashboard = value),
                                 ),
                               ],
                             ),
                           ),
-                          ElevatedButton(
-                            onPressed: _submitForm,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1976D2),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 32,
-                                vertical: 16,
+
+                          // Actions (right)
+                          Row(
+                            children: [
+                              ElevatedButton(
+                                onPressed: () => context.go('/announcement'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.grey[300],
+                                  foregroundColor: Colors.black87,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 32,
+                                    vertical: 16,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: const Text(
+                                  "Cancel",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
+                                ),
                               ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                              const SizedBox(width: 16),
+                              ElevatedButton(
+                                onPressed: _submitForm,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1976D2),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 32,
+                                    vertical: 16,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: const Text(
+                                  "Publish",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
+                                ),
                               ),
-                            ),
-                            child: const Text(
-                              "Publish",
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
-                              ),
-                            ),
+                            ],
                           ),
                         ],
                       ),
