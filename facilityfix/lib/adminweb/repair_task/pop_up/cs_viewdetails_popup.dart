@@ -690,23 +690,32 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
   
   Widget _buildStaffDetailsSection() {
     final assignedStaff = widget.task['rawData']?['assigned_staff'];
-    
+    final staffProfile = widget.task['rawData']?['staff_profile'];
+
     // Debug: Print what we're getting
     print('[StaffDetails] rawData: ${widget.task['rawData']}');
     print('[StaffDetails] assigned_staff: $assignedStaff');
-    
-    if (assignedStaff == null) {
+    print('[StaffDetails] staff_profile: $staffProfile');
+
+    // For completed status, prioritize staff_profile over assigned_staff
+    final useProfile = _isCompletedStatus && staffProfile != null;
+    final staffData = useProfile ? staffProfile : assignedStaff;
+
+    if (staffData == null && assignedStaff == null) {
       print('[StaffDetails] No assigned staff found');
       return const SizedBox.shrink();
     }
-    
-    final staffName = assignedStaff['name'] ?? 
-                     '${assignedStaff['first_name'] ?? ''} ${assignedStaff['last_name'] ?? ''}'.trim();
+
+    final staffName = staffData?['name'] ??
+                     '${staffData?['first_name'] ?? ''} ${staffData?['last_name'] ?? ''}'.trim();
     final assessedAt = widget.task['rawData']?['assessed_at'];
-    
+    final phoneNumber = staffProfile?['phone_number'];
+    final staffId = staffProfile?['staff_id'];
+
     print('[StaffDetails] Staff name: $staffName');
     print('[StaffDetails] Assessed at: $assessedAt');
-    
+    print('[StaffDetails] Phone: $phoneNumber, ID: $staffId');
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -721,21 +730,62 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
                 _buildSimpleAvatar(staffName.isNotEmpty ? staffName : 'Staff Member', size: 48),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: Text(
-                    staffName.isNotEmpty ? staffName : 'Staff Member',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        staffName.isNotEmpty ? staffName : 'Staff Member',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      // Show staff ID for completed status
+                      if (_isCompletedStatus && staffId != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          staffId,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            
-            // Date Assessed
-            if (assessedAt != null)
+
+            // Additional details row for completed status
+            if (_isCompletedStatus && (phoneNumber != null || assessedAt != null))
+              Row(
+                children: [
+                  // Phone Number
+                  if (phoneNumber != null)
+                    Expanded(
+                      child: _buildDetailItem(
+                        'CONTACT NUMBER',
+                        phoneNumber,
+                      ),
+                    ),
+                  if (phoneNumber != null && assessedAt != null)
+                    const SizedBox(width: 24),
+                  // Date Assessed
+                  if (assessedAt != null)
+                    Expanded(
+                      child: _buildDetailItem(
+                        'DATE ASSESSED',
+                        _formatScheduleAvailability(assessedAt),
+                      ),
+                    ),
+                ],
+              )
+            else if (assessedAt != null && !_isCompletedStatus)
+              // For non-completed status, just show date assessed
               _buildDetailItem(
                 'DATE ASSESSED',
                 _formatScheduleAvailability(assessedAt),
