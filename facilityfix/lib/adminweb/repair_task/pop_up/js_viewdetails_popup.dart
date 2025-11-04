@@ -410,7 +410,7 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
             Expanded(
               child: _buildDetailItem(
                 'REQUESTED BY',
-                widget.task['requestedBy'] ?? 'N/A',
+                widget.task['created_by'] ?? 'N/A',
               ),
             ),
             const SizedBox(width: 24),
@@ -470,7 +470,7 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
 
   // Assessment Section (matching WOP dialog style)
   Widget _buildAssessmentSection() {
-    final staffName = widget.task['staffName'] ?? widget.task['rawData']?['staff_name'] ?? 'Staff Member';
+    final staffName = widget.task['staffName'] ?? widget.task['rawData']?['staff_profile']['first_name'] + ' ' + (widget.task['rawData']?['staff_profile']['last_name'] ?? '') ?? 'Staff Member';
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

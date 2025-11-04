@@ -510,7 +510,7 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
             Expanded(
               child: _buildDetailItem(
                 'REQUESTED BY',
-                widget.task['rawData']?['requester_name'] ?? 'Erika De Guzman',
+                widget.task['rawData']?['reported_by'] ?? 'Erika De Guzman',
               ),
             ),
             const SizedBox(width: 24),

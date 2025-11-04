@@ -263,7 +263,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       // Additional task data
       'title': jobService['title'] ?? 'Job Service Request',
       'dateRequested': _formatDate(jobService['created_at']),
-      'requestedBy': jobService['reported_by'] ?? 'N/A',
+      'created_by': jobService['created_by'] ?? 'N/A',
       'department': _mapCategoryToDepartment(jobService['category']),
       'description': jobService['description'] ?? '',
       'rawData': jobService, // Store raw data for detailed view and checks
