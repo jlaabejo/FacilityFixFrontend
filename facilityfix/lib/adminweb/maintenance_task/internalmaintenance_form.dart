@@ -693,7 +693,27 @@ class _InternalMaintenanceFormPageState
       _taskTitleController.text = data['task_title'] ?? data['taskTitle'] ?? '';
       _codeIdController.text = data['task_code'] ?? data['id']?.toString() ?? '';
       _descriptionController.text = data['task_description'] ?? data['description'] ?? '';
-      _estimatedDurationController.text = data['estimated_duration'] ?? '';
+
+      // Handle estimated_duration - convert from minutes (int) back to readable format
+      final durationMinutes = data['estimated_duration'];
+      if (durationMinutes != null && durationMinutes is int && durationMinutes > 0) {
+        if (durationMinutes >= 60) {
+          final hours = durationMinutes ~/ 60;
+          final remainingMins = durationMinutes % 60;
+          if (remainingMins > 0) {
+            _estimatedDurationController.text = '$hours hrs $remainingMins mins';
+          } else {
+            _estimatedDurationController.text = '$hours hrs';
+          }
+        } else {
+          _estimatedDurationController.text = '$durationMinutes mins';
+        }
+      } else if (durationMinutes is String) {
+        _estimatedDurationController.text = durationMinutes;
+      } else {
+        _estimatedDurationController.text = '';
+      }
+
       _remarksController.text = data['remarks'] ?? '';
       
       // Dropdowns - validate values are in options list
@@ -839,6 +859,16 @@ class _InternalMaintenanceFormPageState
       _estimatedDurationController.text.trim(),
     );
 
+    // Ensure we have a valid duration (greater than 0)
+    // If parsing failed or returned 0, this should not happen due to validation
+    // But we add this check for safety
+    if (durationInMinutes <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid estimated duration. Please check the format.')),
+      );
+      return;
+    }
+
     final maintenance = <String, dynamic>{
       'id': id,
       'maintenanceType': 'Internal',
@@ -850,7 +880,6 @@ class _InternalMaintenanceFormPageState
       'location': _selectedLocation ?? '',
       'description': _descriptionController.text.trim(),
       'recurrence': _selectedRecurrence,
-      'estimatedDuration': _estimatedDurationController.text.trim(),
       'startDate': _startDateController.text,
       'nextDueDate': _nextDueDateController.text,
       'assigneeName': _assignedStaffController.text.trim(),
@@ -1342,6 +1371,107 @@ class _InternalMaintenanceFormPageState
                       ),
                       const SizedBox(height: 24),
 
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Left side - Checklist
+                          Expanded(
+                            flex: 1,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    _fieldLabel('Checklist / Task Steps'),
+                                    ElevatedButton(
+                                      onPressed: _addChecklistItem,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.blue,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 8,
+                                        ),
+                                      ),
+                                      child: const Text("Add"),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                _fieldBox(
+                                  child: TextFormField(
+                                    controller: _checklistItemController,
+                                    decoration: _decoration('Add task step...'),
+                                    onFieldSubmitted: (_) => _addChecklistItem(),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Show checklist items or placeholder
+                                if (_checklistItems.isNotEmpty)
+                                  Container(
+                                    constraints: const BoxConstraints(maxHeight: 260),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[50],
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.grey[200]!),
+                                    ),
+                                    child: ListView.separated(
+                                      shrinkWrap: true,
+                                      itemCount: _checklistItems.length,
+                                      separatorBuilder: (_, __) => const Divider(height: 1),
+                                      itemBuilder: (context, index) {
+                                        final item = _checklistItems[index];
+                                        return ListTile(
+                                          dense: true,
+                                          leading: Icon(
+                                            item['completed'] == true
+                                                ? Icons.check_box
+                                                : Icons.check_box_outline_blank,
+                                            size: 20,
+                                            color: item['completed'] == true
+                                                ? Colors.green
+                                                : Colors.grey[700],
+                                          ),
+                                          title: Text(
+                                            item['task'],
+                                            style: const TextStyle(fontSize: 14),
+                                          ),
+                                          trailing: IconButton(
+                                            icon: const Icon(
+                                              Icons.delete_outline,
+                                              size: 20,
+                                            ),
+                                            onPressed: () => _removeChecklistItem(item['id']),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  )
+                                else
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[50],
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.grey[200]!),
+                                    ),
+                                    child: Text(
+                                      'No checklist items added yet',
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 13,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(width: 32),
+
                           // Right side - Schedule fields (paired rows)
                           Expanded(
                             flex: 1,
@@ -1457,107 +1587,6 @@ class _InternalMaintenanceFormPageState
                                     ),
                                   ],
                                 ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 32),
-
-                          
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Left side - Checklist
-                          Expanded(
-                            flex: 1,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    _fieldLabel('Checklist / Task Steps'),
-                                    ElevatedButton(
-                                      onPressed: _addChecklistItem,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.blue,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 8,
-                                        ),
-                                      ),
-                                      child: const Text("Add"),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                _fieldBox(
-                                  child: TextFormField(
-                                    controller: _checklistItemController,
-                                    decoration: _decoration('Add task step...'),
-                                    onFieldSubmitted: (_) => _addChecklistItem(),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                
-                                // Show checklist items or placeholder
-                                if (_checklistItems.isNotEmpty)
-                                  Container(
-                                    constraints: const BoxConstraints(maxHeight: 260),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[50],
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.grey[200]!),
-                                    ),
-                                    child: ListView.separated(
-                                      shrinkWrap: true,
-                                      itemCount: _checklistItems.length,
-                                      separatorBuilder: (_, __) => const Divider(height: 1),
-                                      itemBuilder: (context, index) {
-                                        final item = _checklistItems[index];
-                                        return ListTile(
-                                          dense: true,
-                                          leading: Icon(
-                                            item['completed'] == true
-                                                ? Icons.check_box
-                                                : Icons.check_box_outline_blank,
-                                            size: 20,
-                                            color: item['completed'] == true
-                                                ? Colors.green
-                                                : Colors.grey[700],
-                                          ),
-                                          title: Text(
-                                            item['task'],
-                                            style: const TextStyle(fontSize: 14),
-                                          ),
-                                          trailing: IconButton(
-                                            icon: const Icon(
-                                              Icons.delete_outline,
-                                              size: 20,
-                                            ),
-                                            onPressed: () => _removeChecklistItem(item['id']),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  )
-                                else
-                                  Container(
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[50],
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.grey[200]!),
-                                    ),
-                                    child: Text(
-                                      'No checklist items added yet',
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 13,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
                               ],
                             ),
                           ),

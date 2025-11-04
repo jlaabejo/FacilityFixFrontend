@@ -749,21 +749,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                     const SizedBox(height: 16),
 
                     // Critical Item Checkbox
-                    CheckboxListTile(
-                      title: const Text('Mark as Critical Item'),
-                      subtitle: const Text(
-                        'Critical items require immediate attention when stock is low',
-                      ),
-                      value: _isCritical,
-                      onChanged: (value) {
-                        setState(() {
-                          _isCritical = value ?? false;
-                        });
-                      },
-                      controlAffinity: ListTileControlAffinity.leading,
-                    ),
-                    const SizedBox(height: 32),
-
+                
                     // Action Buttons
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
