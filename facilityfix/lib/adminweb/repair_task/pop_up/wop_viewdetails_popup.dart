@@ -1,6 +1,8 @@
 import 'package:facilityfix/adminweb/widgets/tags.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
+import 'package:facilityfix/utils/ui_format.dart';
 
 class WorkOrderConcernSlipDialog extends StatefulWidget {
   final Map<String, dynamic> task;
@@ -460,16 +462,16 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
             Expanded(
               child: _buildDetailItem(
                 'SCHEDULED DATE',
-                widget.task['scheduledDate'] ?? widget.task['rawData']?['scheduled_date'] ?? 'July 18, 2025',
+                _formatScheduledDateAndTime(widget.task['scheduledDate'] ?? widget.task['rawData']?['scheduled_date'], widget.task['scheduledTime'] ?? widget.task['rawData']?['scheduled_time'])['date'] ?? 'N/A',
               ),
             ),
-            const SizedBox(width: 24),
-            Expanded(
-              child: _buildDetailItem(
-                'SCHEDULED TIME',
-                widget.task['scheduledTime'] ?? widget.task['rawData']?['scheduled_time'] ?? '2:00 PM - 4:00 PM',
-              ),
-            ),
+            // const SizedBox(width: 24),
+            // Expanded(
+            //   child: _buildDetailItem(
+            //     'SCHEDULED TIME',
+            //     _formatScheduledDateAndTime(widget.task['scheduledDate'] ?? widget.task['rawData']?['scheduled_date'], widget.task['scheduledTime'] ?? widget.task['rawData']?['scheduled_time'])['time'] ?? 'N/A',
+            //   ),
+            // ),
           ],
         ),
         
@@ -809,6 +811,129 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
       ],
     );
   }
+
+  /// Helper: format separate scheduled date and time fields into displayable strings.
+  /// Returns a map with keys 'date' and 'time'.
+  Map<String, String> _formatScheduledDateAndTime(dynamic dateField, dynamic timeField) {
+    String dateOut = 'N/A';
+    String timeOut = 'N/A';
+
+    try {
+      final dateStr = dateField?.toString() ?? '';
+      final timeStr = timeField?.toString() ?? '';
+
+      DateTime? datePart;
+      if (dateStr.isNotEmpty) {
+        if (dateStr.contains('T')) {
+          datePart = DateTime.parse(dateStr);
+        } else if (RegExp(r'^\d{4}-\d{2}-\d{2}\$').hasMatch(dateStr)) {
+          final p = dateStr.split('-');
+          datePart = DateTime(int.parse(p[0]), int.parse(p[1]), int.parse(p[2]));
+        } else {
+          try {
+            datePart = DateFormat('MMM d, yyyy').parse(dateStr);
+          } catch (_) {}
+        }
+      }
+
+      if (datePart != null) dateOut = UiDateUtils.fullDate(datePart);
+
+      if (timeStr.isNotEmpty) {
+        // time might be a range
+        if (timeStr.contains('-')) {
+          final parts = timeStr.split('-');
+          final left = parts[0].trim();
+          final right = parts[1].trim();
+          try {
+            final t1 = DateFormat('h:mm a').parse(left);
+            final t2 = DateFormat('h:mm a').parse(right);
+            if (datePart != null) {
+              final start = DateTime(datePart.year, datePart.month, datePart.day, t1.hour, t1.minute);
+              final end = DateTime(datePart.year, datePart.month, datePart.day, t2.hour, t2.minute);
+              timeOut = '${DateFormat('h:mm a').format(start)} - ${DateFormat('h:mm a').format(end)}';
+              // also provide a combined schedule string if desired
+            } else {
+              timeOut = '$left - $right';
+            }
+          } catch (_) {
+            timeOut = timeStr;
+          }
+        } else {
+          timeOut = timeStr;
+        }
+      }
+    } catch (e) {
+      print('[WOPDialog] Error formatting scheduled date/time: $e');
+    }
+
+    return {'date': dateOut, 'time': timeOut};
+  }
+}
+
+/// Format arbitrary schedule strings into a friendly representation using UiDateUtils when possible.
+String _formatScheduleString(String? raw) {
+  if (raw == null || raw.isEmpty) return 'N/A';
+  final s = raw.trim();
+  try {
+    if (s.contains(' - ')) {
+      final parts = s.split(' - ');
+      final left = parts[0].trim();
+      final right = parts[1].trim();
+
+      DateTime? start;
+      DateTime? end;
+      try {
+        start = DateTime.parse(left);
+      } catch (_) {
+        try {
+          start = DateFormat('MMM d, yyyy h:mm a').parse(left);
+        } catch (_) {
+          try {
+            final d = DateFormat('MMM d, yyyy').parse(left);
+            start = DateTime(d.year, d.month, d.day, 9, 0);
+          } catch (_) {}
+        }
+      }
+
+      // parse right (may be time-only)
+      try {
+        final t = DateFormat('h:mm a').parse(right);
+        if (start != null) end = DateTime(start.year, start.month, start.day, t.hour, t.minute);
+      } catch (_) {
+        try {
+          end = DateTime.parse(right);
+        } catch (_) {
+          try {
+            end = DateFormat('MMM d, yyyy h:mm a').parse(right);
+          } catch (_) {}
+        }
+      }
+
+      if (start != null && end != null) return UiDateUtils.dateTimeRange(start, end);
+      return s;
+    }
+
+    if (s.contains('T')) {
+      final d = DateTime.parse(s);
+      return UiDateUtils.dateTimeRange(d);
+    }
+
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}\$').hasMatch(s)) {
+      final parts = s.split('-');
+      final d = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+      return UiDateUtils.fullDate(d);
+    }
+
+    try {
+      final d = DateFormat('MMM d, yyyy h:mm a').parse(s);
+      return UiDateUtils.dateTimeRange(d);
+    } catch (_) {}
+
+    return s;
+  } catch (e) {
+    print('[WOPDialog] Error formatting schedule: $e');
+  }
+  return raw;
 }
 
 // Keep the WorkOrderPermitDialog class unchanged below...
@@ -1106,7 +1231,7 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
         const SizedBox(height: 16),
         _buildDetailItem(
           'SCHEDULE VISIBILITY',
-          widget.task['schedule'] ?? 'July 21, 2025 – From 9:00 AM to 11:30 AM',
+          _formatScheduleString(widget.task['schedule'] ?? widget.task['rawData']?['schedule'] ?? widget.task['rawData']?['schedule_availability'] ?? widget.task['schedule'] ?? ''),
         ),
         const SizedBox(height: 24),
         
@@ -1167,7 +1292,7 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
         const SizedBox(height: 24),
         _buildDetailItem('CONTRACTOR', widget.task['contractorName'] ?? 'AC Pro Services'),
         const SizedBox(height: 24),
-        _buildDetailItem('SCHEDULE', widget.task['schedule'] ?? 'July 21, 2025 – From 9:00 AM to 11:30 AM'),
+  _buildDetailItem('SCHEDULE', _formatScheduleString(widget.task['schedule'] ?? widget.task['rawData']?['schedule'] ?? widget.task['rawData']?['schedule_availability'] ?? '')),
       ],
     );
   }

@@ -755,7 +755,8 @@ class _ExternalMaintenanceFormPageState
                               validator: (v) => v == null ? 'Required' : null,
                             ),
                           ),
-                          const Expanded(child: SizedBox()), // Empty space on right
+                          const SizedBox(width: 24),
+                          const Expanded(child: SizedBox()), // keep right column space
                         ],
                       ),
                       const SizedBox(height: 24),
@@ -825,6 +826,7 @@ class _ExternalMaintenanceFormPageState
                                 validator: _req,
                               ),
                             ),
+                            const SizedBox(width: 24),
                             const Expanded(child: SizedBox()),
                           ],
                         ),
@@ -836,6 +838,7 @@ class _ExternalMaintenanceFormPageState
                         Row(
                           children: [
                             const Expanded(child: SizedBox()),
+                            const SizedBox(width: 24),
                             Expanded(
                               child: _buildTextField(
                                 label: 'Specify Service Category',
@@ -907,6 +910,107 @@ class _ExternalMaintenanceFormPageState
                       ),
                       const SizedBox(height: 24),
                       const Divider(color: Color(0xFFE2E8F0), height: 1, thickness: 1),
+                      const SizedBox(height: 24),
+
+                      // Inventory / Parts used
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey[200]!),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Inventory / Parts',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                TextButton.icon(
+                                  onPressed: _addInventoryItem,
+                                  icon: const Icon(Icons.add, size: 18),
+                                  label: const Text('Add Item'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            if (_selectedInventoryItems.isEmpty)
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[50],
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.grey[200]!),
+                                ),
+                                child: Text(
+                                  'No inventory items selected for this task.',
+                                  style: TextStyle(color: Colors.grey[600]),
+                                ),
+                              )
+                            else
+                              Column(
+                                children: _selectedInventoryItems
+                                    .asMap()
+                                    .entries
+                                    .map((entry) {
+                                  final idx = entry.key;
+                                  final item = entry.value;
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: Colors.grey[200]!),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                item['item_name'] ?? 'Unknown Item',
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                'Code: ${item['item_code'] ?? 'N/A'}',
+                                                style: TextStyle(color: Colors.grey[600]),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                          children: [
+                                            Text('Qty: ${item['quantity'] ?? 1}'),
+                                            const SizedBox(height: 8),
+                                            TextButton(
+                                              onPressed: () => _removeInventoryItem(idx),
+                                              child: const Text('Remove'),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 32),
 
                       // Recurrence & Schedule
@@ -1418,7 +1522,7 @@ class _ExternalMaintenanceFormPageState
                         children: [
                           Expanded(
                             child: _buildDateField(
-                              label: "Service Date (Actual)",
+                              label: "Assessment Date",
                               selectedDate: _serviceDateActual,
                               placeholder: "Auto-generated",
                               onDateSelected:
@@ -1662,7 +1766,12 @@ class _ExternalMaintenanceFormPageState
     
     // Required Arrays
     'checklist_completed': <Map<String, dynamic>>[],
-    'parts_used': <Map<String, dynamic>>[],
+    'parts_used': _selectedInventoryItems.map((it) => {
+      'inventory_id': it['inventory_id'] ?? it['id'],
+      'item_name': it['item_name'],
+      'item_code': it['item_code'],
+      'quantity': it['quantity'] ?? 1,
+    }).toList(),
     'tools_used': <String>[],
     'photos': <String>[],
   };

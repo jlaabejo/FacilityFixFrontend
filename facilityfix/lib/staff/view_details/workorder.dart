@@ -447,6 +447,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     return JobServiceDetails(
       // Basic
       id: w.id,
+      // formattedId: w.formattedId,
       concernSlipId: w.concernSlipId ?? '—',
       createdAt: w.createdAt,
       updatedAt: w.updatedAt,
@@ -475,9 +476,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       assessedAt: w.assessedAt,
       assessment: w.assessment,
       staffAttachments: w.staffAttachments,
-
-      // Tracking
-      materialsUsed: w.materialsUsed,
     );
   }
 

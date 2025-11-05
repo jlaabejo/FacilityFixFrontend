@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
+import '../../utils/ui_format.dart';
+import 'externalmaintenance_form.dart';
 
 class ExternalViewTaskPage extends StatefulWidget {
   /// Deep-linkable view with optional edit mode.
@@ -168,11 +170,11 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
         taskData['createdBy']?.toString() ?? 
         'Unknown';
     
-    // Fix date created parsing
-    final dateCreated = taskData['created_at'] ?? 
-                        taskData['date_created'] ?? 
-                        taskData['dateCreated'];
-    _dateCreatedCtrl.text = _formatDate(dateCreated);
+  // Fix date created parsing and present as full human date
+  final dateCreated = taskData['created_at'] ??
+    taskData['date_created'] ??
+    taskData['dateCreated'];
+  _dateCreatedCtrl.text = _formatDateFull(dateCreated);
 
     // Recurrence & Schedule - fix mapping
     final recurrence = taskData['recurrence_type']?.toString() ?? 
@@ -187,13 +189,8 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
       _recurrenceCtrl.text = 'None';
     }
     
-    _startDateCtrl.text = 
-        _formatDate(taskData['start_date'] ?? 
-                    taskData['startDate'] ?? 
-                    taskData['scheduled_date']);
-    _nextDueCtrl.text = 
-        _formatDate(taskData['next_due_date'] ?? 
-                    taskData['nextDueDate']);
+  _startDateCtrl.text = _formatDateFull(taskData['start_date'] ?? taskData['startDate'] ?? taskData['scheduled_date']);
+  _nextDueCtrl.text = _formatDateFull(taskData['next_due_date'] ?? taskData['nextDueDate']);
 
     // Task Scope & Description
     _locationCtrl.text = 
@@ -204,9 +201,7 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
         taskData['description']?.toString() ?? '';
 
     // Assessment Tracking - set default to 'No' if not specified
-    _serviceDateActualCtrl.text =
-        _formatDate(taskData['service_date_actual'] ?? 
-                    taskData['serviceDateActual']);
+  _serviceDateActualCtrl.text = _formatDateFull(taskData['service_date_actual'] ?? taskData['serviceDateActual']);
     
     final assessmentValue = taskData['assessment_received']?.toString() ??
                             taskData['assessmentReceived']?.toString();
@@ -218,8 +213,7 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
         taskData['logged_by']?.toString() ??
         taskData['loggedBy']?.toString() ?? 
         'Auto-filled';
-    _loggedDateCtrl.text = 
-        _formatDate(taskData['logged_date'] ?? taskData['loggedDate']);
+  _loggedDateCtrl.text = _formatDateFull(taskData['logged_date'] ?? taskData['loggedDate']);
 
     // Contractor Information
     _contractorNameCtrl.text =
@@ -246,20 +240,29 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
   String? _error;
 
   // Helper method to format dates consistently
-  String _formatDate(dynamic date) {
+  // Format a raw date/string into UiDateUtils.fullDate presentation. Returns empty string if invalid.
+  String _formatDateFull(dynamic date) {
     if (date == null) return '';
     try {
-      if (date is String) {
-        if (date.isEmpty) return '';
-        final dt = DateTime.parse(date);
-        return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+      DateTime? dt;
+      if (date is DateTime) dt = date;
+      else if (date is String && date.isNotEmpty) {
+        dt = DateTime.tryParse(date) ?? UiDateUtils.parse(date);
       }
-      if (date is DateTime) {
-        return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-      }
-      return date.toString();
+      return dt != null ? UiDateUtils.fullDate(dt) : '';
     } catch (e) {
       return '';
+    }
+  }
+
+  // Helper to format a raw display string (used in banners) falling back to raw value
+  String _formatDateForDisplay(String raw) {
+    if (raw.trim().isEmpty) return '';
+    try {
+      final dt = DateTime.tryParse(raw) ?? UiDateUtils.parse(raw);
+      return dt != null ? UiDateUtils.fullDate(dt) : raw;
+    } catch (_) {
+      return raw;
     }
   }
 
@@ -595,7 +598,7 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
 
   // -------- Notification banner (uses next due) --------
   Widget _buildNotificationBanner() {
-    final nextDue = _nextDueCtrl.text.trim();
+  final nextDue = _formatDateForDisplay(_nextDueCtrl.text.trim());
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -657,11 +660,17 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
               ),
             ),
             const SizedBox(height: 8),
+            // Show formatted id (if backend provides it) and the underlying request id.
             Text(
-              widget.taskId,
+              _currentTaskData['formatted_id'] ?? _currentTaskData['maintenance_id'] ?? widget.taskId,
               style: TextStyle(fontSize: 16, color: Colors.grey[600]),
             ),
             const SizedBox(height: 4),
+            Text(
+              'Request ID: ${_currentTaskData['id'] ?? _currentTaskData['request_id'] ?? widget.taskId}',
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+            ),
+            const SizedBox(height: 6),
             Text(
               "Assigned To: $assignedTo",
               style: const TextStyle(fontSize: 14, color: Colors.grey),
@@ -826,7 +835,6 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
                 "Service Date (Actual)",
                 _serviceDateActualCtrl,
                 validator: _dateValidator,
-                trailingCalendarIconWhenView: true,
               ),
 
               // Assessment Received
@@ -1204,7 +1212,17 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
             width: 200,
             height: 48,
             child: ElevatedButton(
-              onPressed: _enterEditMode,
+              onPressed: () {
+                // Open the external maintenance form in edit mode and pass the current task data
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => ExternalMaintenanceFormPage(
+                      maintenanceData: _currentTaskData,
+                      isEditMode: true,
+                    ),
+                  ),
+                );
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1976D2),
                 foregroundColor: Colors.white,

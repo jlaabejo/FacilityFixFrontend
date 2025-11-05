@@ -11,15 +11,16 @@ import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/staff/workorder.dart';
+import 'package:facilityfix/widgets/chat.dart' as chat_widget;
 
-class ChatPage extends StatefulWidget {
+class TenantChatPage extends StatefulWidget {
   final String? roomId;
   final String? roomCode;
   final String? concernSlipId;
   final String? maintenanceId;
   final String? jobServiceId;
-  
-  const ChatPage({
+
+  const TenantChatPage({
     super.key,
     this.roomId,
     this.roomCode,
@@ -29,10 +30,10 @@ class ChatPage extends StatefulWidget {
   });
 
   @override
-  State<ChatPage> createState() => _ChatPageState();
+  State<TenantChatPage> createState() => _TenantChatPageState();
 }
 
-class _ChatPageState extends State<ChatPage> {
+class _TenantChatPageState extends State<TenantChatPage> {
   final int _selectedIndex = 1;
   final FirebaseChatService _chatService = FirebaseChatService();
   String? _currentUserId;
@@ -178,37 +179,12 @@ class _ChatPageState extends State<ChatPage> {
             color: Colors.white,
           ),
         ),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                _getRoomTitle(room),
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-            if (room.roomCode.isNotEmpty)
-              GestureDetector(
-                onTap: () => _copyRoomCode(room.roomCode),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF213ED7).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    room.roomCode,
-                    style: const TextStyle(
-                      color: Color(0xFF213ED7),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-          ],
+        title: Text(
+          _getRoomTitle(room),
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+          ),
         ),
         subtitle: lastMessage != null
             ? Text(

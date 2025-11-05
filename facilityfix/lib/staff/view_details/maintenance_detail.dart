@@ -8,6 +8,7 @@ import 'package:facilityfix/staff/form/assessment_form.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/view_details.dart';
 import 'package:facilityfix/widgets/modals.dart';
+import 'package:facilityfix/widgets/buttons.dart' as fx;
 import 'package:flutter/material.dart';
 
 // Maintenance Detail Screen using MaintenanceDetails widget
@@ -559,6 +560,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
           },
         ),
       ),
+      
     );
   }
 
@@ -642,6 +644,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
                     ],
                   ),
                 ),
+
                 const SizedBox(height: 16),
               ],
               
@@ -719,6 +722,58 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
             ],
           ),
         ),
+      ),
+      // Bottom bar: On Hold and Create Assessment (similar to Concern Slip)
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.task['assigned_to'] != null &&
+              (widget.task['status'] == 'assigned' ||
+                  widget.task['status'] == 'on_hold' ||
+                  widget.task['status'] == 'pending' ||
+                  widget.task['status'] == 'in_progress' ||
+                  widget.task['status'] == 'scheduled' ||
+                  widget.task['status'] == 'new'))
+            SafeArea(
+              top: false,
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+                ),
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: fx.OutlinedPillButton(
+                          label: holdMeta.isNotEmpty && widget.task['status'] == 'on_hold' ? 'Resume Task' : 'On Hold',
+                          icon: holdMeta.isNotEmpty && widget.task['status'] == 'on_hold' ? Icons.play_arrow : Icons.pause,
+                          borderColor: const Color(0xFF005CE7),
+                          foregroundColor: const Color(0xFF005CE7),
+                          onPressed: _onHoldPressed,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: fx.FilledButton(
+                          label: 'Create Assessment',
+                          backgroundColor: const Color(0xFF005CE7),
+                          textColor: Colors.white,
+                          withOuterBorder: false,
+                          onPressed: _createAssessment,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

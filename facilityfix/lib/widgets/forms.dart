@@ -333,6 +333,15 @@ class _MultiContractorInputFieldState extends State<MultiContractorInputField> {
       return;
     }
 
+    // Validate contact number format
+    final validationError = _validatePhoneNumber(contact);
+    if (validationError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(validationError)),
+      );
+      return;
+    }
+
     setState(() {
       _contractors.add({'name': name, 'company': company, 'contact': contact});
       _nameController.clear();
@@ -341,6 +350,49 @@ class _MultiContractorInputFieldState extends State<MultiContractorInputField> {
     });
 
     widget.onChanged(List<Map<String, String>>.from(_contractors));
+  }
+
+  String? _validatePhoneNumber(String contact) {
+    // Remove spaces and dashes for validation
+    final cleanContact = contact.replaceAll(RegExp(r'[\s\-\(\)]'), '');
+    
+    // Check if starts with 09 (11 digits required)
+    if (cleanContact.startsWith('09')) {
+      if (cleanContact.length != 11) {
+        return 'Phone numbers starting with 09 must be exactly 11 digits';
+      }
+      // Check if all characters are digits
+      if (!RegExp(r'^\d+$').hasMatch(cleanContact)) {
+        return 'Phone number must contain only digits';
+      }
+      return null;
+    }
+    
+    // Check if starts with 639 (12 digits required)
+    if (cleanContact.startsWith('639')) {
+      if (cleanContact.length != 12) {
+        return 'Phone numbers starting with 639 must be exactly 12 digits';
+      }
+      // Check if all characters are digits
+      if (!RegExp(r'^\d+$').hasMatch(cleanContact)) {
+        return 'Phone number must contain only digits';
+      }
+      return null;
+    }
+    
+    // Check if starts with +639 (13 characters with +)
+    if (contact.startsWith('+639')) {
+      if (contact.length != 13) {
+        return 'Phone numbers starting with +639 must be exactly 13 characters';
+      }
+      // Check if all characters after + are digits
+      if (!RegExp(r'^\+\d+$').hasMatch(contact)) {
+        return 'Phone number must contain only digits after +';
+      }
+      return null;
+    }
+    
+    return 'Phone number must start with 09 (11 digits) or 639 (12 digits)';
   }
 
   void _removeContractor(int index) {
@@ -489,7 +541,7 @@ class _MultiContractorInputFieldState extends State<MultiContractorInputField> {
                   final c = entry.value;
                   return Chip(
                     label: Text(
-                      '${c['name']} - ${c['contact']}',
+                      '${c['name']} - ${c['company']} - ${c['contact']}',
                       style: const TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 12,
@@ -619,10 +671,10 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
     required Widget? suffixIcon,
   }) {
     // If caller didn’t provide, fall back to comfy defaults
-    final bool dense = widget.isDense ?? true;
+    final bool dense = widget.isDense ?? false;
     final EdgeInsetsGeometry padding =
         widget.contentPadding ??
-        EdgeInsets.symmetric(horizontal: 16, vertical: dense ? 10 : 14);
+        const EdgeInsets.symmetric(horizontal: 16, vertical: 14);
 
     return InputDecoration(
       hintText: hintText,
@@ -1125,6 +1177,197 @@ class ChecklistSection extends StatelessWidget {
           }),
         ),
       ],
+    );
+  }
+}
+
+// Time Picker Field (9 AM - 5 PM only)
+class TimePickerField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final bool isRequired;
+  final String? hintText;
+  final String? errorText;
+  final VoidCallback? onTap;
+
+  static const _titleStyle = TextStyle(
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: FontWeight.w600,
+    color: Color(0xFF475467),
+  );
+
+  const TimePickerField({
+    super.key,
+    required this.label,
+    required this.controller,
+    this.isRequired = false,
+    this.hintText,
+    this.errorText,
+    this.onTap,
+  });
+
+  Future<void> _selectTime(BuildContext context) async {
+    // Parse existing time if any
+    TimeOfDay initialTime = const TimeOfDay(hour: 9, minute: 0);
+    if (controller.text.isNotEmpty) {
+      try {
+        final parts = controller.text.split(':');
+        if (parts.length == 2) {
+          int hour = int.parse(parts[0]);
+          int minute = int.parse(parts[1].split(' ')[0]);
+          final isPM = controller.text.contains('PM');
+          if (isPM && hour != 12) hour += 12;
+          if (!isPM && hour == 12) hour = 0;
+          
+          // Clamp to 9 AM - 5 PM range
+          if (hour < 9) hour = 9;
+          if (hour >= 17) hour = 17;
+          
+          initialTime = TimeOfDay(hour: hour, minute: minute);
+        }
+      } catch (e) {
+        // Use default time if parsing fails
+      }
+    }
+
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      // Validate time is between 9 AM and 5 PM
+      final hour = picked.hour;
+      
+      if (hour < 9 || hour >= 17) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please select a time between 9:00 AM and 5:00 PM'),
+              backgroundColor: Color(0xFFDC2626),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Format time to 12-hour format
+      final formattedTime = _formatTime(picked);
+      controller.text = formattedTime;
+      onTap?.call();
+    }
+  }
+
+  String _formatTime(TimeOfDay time) {
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute $period';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool hasExternalError = errorText != null && errorText!.trim().isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: _titleStyle),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: controller,
+            readOnly: true,
+            onTap: () => _selectTime(context),
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 14,
+              color: Color(0xFF101828),
+            ),
+            decoration: InputDecoration(
+              hintText: hintText ?? 'Select time (9 AM - 5 PM)',
+              hintStyle: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 14,
+                color: Color(0xFF98A2B3),
+              ),
+              isDense: true,
+              errorText: hasExternalError ? '' : null,
+              errorStyle: const TextStyle(fontSize: 0, height: 0),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF475467)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF475467)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                  color: Color(0xFF005CE7),
+                  width: 1.5,
+                ),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                  color: Color(0xFFD92D20),
+                  width: 1.5,
+                ),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                  color: Color(0xFFD92D20),
+                  width: 1.5,
+                ),
+              ),
+              suffixIcon: const Icon(
+                Icons.access_time,
+                color: Color(0xFF475467),
+                size: 20,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+            ),
+            validator: isRequired
+                ? (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return '';
+                    }
+                    return null;
+                  }
+                : null,
+          ),
+          if (hasExternalError) ...[
+            const SizedBox(height: 4),
+            Text(
+              errorText!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFFD92D20),
+                height: 1.0,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

@@ -567,7 +567,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
+                      color: Colors.black.withOpacity(0.03),
                       blurRadius: 10,
                       offset: const Offset(0, 2),
                     ),
@@ -584,13 +584,29 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                         'Basic Information',
                         'General details about the announcement',
                       ),
-                      const SizedBox(height: 24),
-                      // ===== Title =====
-                      _fieldLabel("Title"),
-                      TextFormField(
-                        controller: _titleController,
-                        decoration: _decoration("e.g., Scheduled Water Interruption"),
-                      ),
+                        const SizedBox(height: 24),
+                        // ===== Title (left side only) =====
+                        Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Left column with the title field
+                          Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                            _fieldLabel("Title"),
+                            TextFormField(
+                              controller: _titleController,
+                              decoration: _decoration("e.g., Scheduled Water Interruption"),
+                            ),
+                            ],
+                          ),
+                          ),
+                          const SizedBox(width: 24),
+                          // Right column intentionally left empty so the title stays on the left
+                          const Expanded(child: SizedBox()),
+                        ],
+                        ),
                       const SizedBox(height: 24),
 
                       // ===== Audience & Type =====
@@ -709,15 +725,15 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 _fieldLabel("Location Affected (Optional)"),
-                                DropdownButtonFormField<String>(
+                                DropdownButtonFormField<String?>(
                                   value: _selectedLocation,
                                   decoration: _decoration("Select location..."),
                                   items: [
-                                    const DropdownMenuItem(
+                                    DropdownMenuItem<String?>(
                                       value: null,
                                       child: Text("None"),
                                     ),
-                                    ..._locationOptions.map((loc) => DropdownMenuItem(
+                                    ..._locationOptions.map((loc) => DropdownMenuItem<String?>(
                                       value: loc,
                                       child: Text(loc),
                                     )),
@@ -886,39 +902,9 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                       // Bottom row: Pin control on the left; actions (Cancel/Publish) on the right
                       const SizedBox(height: 12),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          // Pin control (left)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[100],
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.grey[300]!),
-                            ),
-                            child: Row(
-                              children: [
-                                const Text(
-                                  "Pin to Dashboard",
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Switch(
-                                  value: _pinToDashboard,
-                                  onChanged: (value) => setState(() => _pinToDashboard = value),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Actions (right)
+                          // spacer to push buttons to the right
+                          const Expanded(child: SizedBox()),
                           Row(
                             children: [
                               ElevatedButton(
@@ -967,11 +953,6 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                             ],
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "Keep visible at top",
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
                     ],
                   ),

@@ -48,8 +48,8 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   void _sortByDate() {
     setState(() {
       _filteredTasks.sort((a, b) {
-        final dateA = _parseDate(a['schedule']);
-        final dateB = _parseDate(b['schedule']);
+        final dateA = _parseDate(a['dateRequested']);
+        final dateB = _parseDate(b['dateRequested']);
         
         if (dateA == null && dateB == null) return 0;
         if (dateA == null) return 1;
@@ -886,53 +886,57 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
           ),
           const SizedBox(width: 16),
 
-          // Status Dropdown
-          Expanded(
-            child: Container(
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.grey[300]!),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _selectedStatus,
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedStatus = newValue!;
-                      _applyFilters();
-                    });
-                  },
-                  items:
-                      <String>[
-                        'All Status',
-                        'Pending',
-                        'To Inspect',
-                        'In Progress',
-                        'Assessed',
-                        'Sent to Client',
-                        'Approved',
-                        'Rejected',
-                        'Completed',
-                        'Returned to Tenant',
-                        'Cancelled',
-                      ].map<DropdownMenuItem<String>>((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(
-                            'Status: $value',
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        );
-                      }).toList(),
+          // Status Dropdown - width adapts to content
+          IntrinsicWidth(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 120, maxWidth: 300),
+              child: Container(
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: Colors.grey[300]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    isDense: true,
+                    value: _selectedStatus,
+                    onChanged: (String? newValue) {
+                      setState(() {
+                        _selectedStatus = newValue!;
+                        _applyFilters();
+                      });
+                    },
+                    items: <String>[
+                      'All Status',
+                      'Pending',
+                      'To Inspect',
+                      'In Progress',
+                      'Assessed',
+                      'Sent to Client',
+                      'Approved',
+                      'Rejected',
+                      'Completed',
+                      'Returned to Tenant',
+                      'Cancelled',
+                    ].map<DropdownMenuItem<String>>((String value) {
+                      return DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(
+                          'Status: $value',
+                          style: const TextStyle(fontSize: 14),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 300),
-
+          // Use a flexible spacer instead of a fixed width to avoid overflow
+          const Spacer(),
           // Refresh Button
           Container(
             height: 40,
@@ -1102,19 +1106,16 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                   ),
                   columns: [
                     DataColumn(label: _fixedCell(0, const Text("JOB SERVICE ID"))),
-                    DataColumn(label: _fixedCell(1, const Text("CONCERN ID"))),
-                    DataColumn(
-                      label: _fixedCell(2, const Text("BUILDING & UNIT")),
-                    ),
+                    DataColumn(label: _fixedCell(1, const Text("TASK TITLE"))),
                     DataColumn(
                       label: _fixedCell(
-                        3,
+                        2,
                         InkWell(
                           onTap: _toggleSortOrder,
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Text("SCHEDULE DATE"),
+                              const Text("DATE REQUESTED"),
                               const SizedBox(width: 4),
                               Icon(
                                 _sortAscending 
@@ -1128,8 +1129,9 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                         ),
                       ),
                     ),
-                    DataColumn(label: _fixedCell(4, const Text("STATUS"))),
-                    DataColumn(label: _fixedCell(5, const Text("PRIORITY"))),
+                    DataColumn(label: _fixedCell(3, const Text("PRIORITY"))),
+                    DataColumn(label: _fixedCell(4, const Text("DEPARTMENT"))),
+                    DataColumn(label: _fixedCell(5, const Text("STATUS"))),
                     DataColumn(label: _fixedCell(6, const Text(""))),
                   ],
                   rows:
@@ -1148,11 +1150,12 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                                 ),
                               ),
                             ),
+                            // TASK TITLE
                             DataCell(
                               _fixedCell(
                                 1,
                                 _ellipsis(
-                                  task['concernId'],
+                                  task['title'] ?? 'Job Service Request',
                                   style: TextStyle(
                                     color: Colors.grey[700],
                                     fontSize: 13,
@@ -1160,22 +1163,28 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                                 ),
                               ),
                             ),
+
+                            // DATE REQUESTED
                             DataCell(
-                              _fixedCell(2, _ellipsis(task['buildingUnit'])),
-                            ),
-                            DataCell(
-                              _fixedCell(3, _ellipsis(task['schedule'])),
+                              _fixedCell(2, _ellipsis(task['dateRequested'] ?? 'N/A')),
                             ),
 
-                            // Chips get a fixed box too (and aligned left)
-                            DataCell(
-                              _fixedCell(4, _buildStatusChip(task['status'])),
-                            ),
+                            // PRIORITY
                             DataCell(
                               _fixedCell(
-                                5,
+                                3,
                                 _buildPriorityChip(task['priority']),
                               ),
+                            ),
+
+                            // DEPARTMENT
+                            DataCell(
+                              _fixedCell(4, _ellipsis(task['department'] ?? 'N/A')),
+                            ),
+
+                            // STATUS
+                            DataCell(
+                              _fixedCell(5, _buildStatusChip(task['status'])),
                             ),
 
                             // Action menu cell (narrow, centered)

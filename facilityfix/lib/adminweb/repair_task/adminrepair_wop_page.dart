@@ -952,8 +952,10 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
           const SizedBox(width: 16),
 
           // Status Dropdown
-          Expanded(
+          IntrinsicWidth(
             child: Container(
+              // allow the container to size itself to the dropdown text
+              constraints: const BoxConstraints(minWidth: 120, maxWidth: 320),
               height: 40,
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
@@ -964,34 +966,36 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   value: _selectedStatus,
+                  // don't expand to fill parent so width matches content
+                  isExpanded: false,
+                  isDense: true,
                   onChanged: (String? newValue) {
                     setState(() {
                       _selectedStatus = newValue!;
                       _applyFilters();
                     });
                   },
-                  items:
-                      <String>[
-                        'All Status',
-                        'Pending',
-                        'To Inspect',
-                        'In Progress',
-                        'Assessed',
-                        'Sent to Client',
-                        'Approved',
-                        'Rejected',
-                        'Completed',
-                        'Returned to Tenant',
-                        'Cancelled',
-                      ].map<DropdownMenuItem<String>>((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(
-                            'Status: $value',
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        );
-                      }).toList(),
+                  items: <String>[
+                    'All Status',
+                    'Pending',
+                    'To Inspect',
+                    'In Progress',
+                    'Assessed',
+                    'Sent to Client',
+                    'Approved',
+                    'Rejected',
+                    'Completed',
+                    'Returned to Tenant',
+                    'Cancelled',
+                  ].map<DropdownMenuItem<String>>((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(
+                        'Status: $value',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
             ),

@@ -117,6 +117,11 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
         
         // Debug: Print available fields
         print('[JobService] Available data fields:');
+        print('  id: ${data['id']}');
+        print('  formatted_id: ${data['formatted_id']}');
+        print('  job_service_id: ${data['job_service_id']}');
+        print('  js_id: ${data['js_id']}');
+        print('  concern_slip_id: ${data['concern_slip_id']}');
         print('  requested_by: ${data['requested_by']}');
         print('  requested_by_name: ${data['requested_by_name']}');
         print('  requester_name: ${data['requester_name']}');
@@ -672,7 +677,12 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
                         if (_jobServiceData != null) ...[
                           JobServiceDetails(
                             // Basic Information
-                            id: _jobServiceData!['formatted_id'] ?? _jobServiceData!['id'] ?? '',
+                            // Use job_service_id or js_id if available, otherwise use formatted_id
+                            id: _jobServiceData!['job_service_id']?.toString() ?? 
+                                _jobServiceData!['js_id']?.toString() ?? 
+                                _jobServiceData!['formatted_id'] ?? 
+                                _jobServiceData!['id'] ?? '',
+                            formattedId: _jobServiceData!['formatted_id'],
                             concernSlipId: _jobServiceData!['concern_slip_id']?.toString() ?? '',
                             createdAt: _parseDateTime(_jobServiceData!['created_at']) ?? DateTime.now(),
                             updatedAt: _parseDateTime(_jobServiceData!['updated_at']),
@@ -707,9 +717,6 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
                             assessedAt: _parseDateTime(_jobServiceData!['assessed_at']),
                             assessment: _jobServiceData!['assessment'] ?? _jobServiceData!['staff_assessment'],
                             staffAttachments: _parseStringList(_jobServiceData!['staff_attachments'] ?? _jobServiceData!['attachments']),
-                            
-                            // Tracking
-                            materialsUsed: _parseStringList(_jobServiceData!['materials_used']),
                             
                             // Callbacks
                             onViewConcernSlip: _viewConcernSlip,

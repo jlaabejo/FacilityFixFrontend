@@ -32,14 +32,6 @@ class AnnouncementDetailDialog extends StatefulWidget {
 }
 
 class _AnnouncementDetailDialogState extends State<AnnouncementDetailDialog> {
-  bool isPinnedToDashboard = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Initialize pin state from announcement data
-    isPinnedToDashboard = widget.announcement['isPinned'] ?? false;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -77,13 +69,16 @@ class _AnnouncementDetailDialogState extends State<AnnouncementDetailDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Announcement Title
-                    Text(
-                      widget.announcement['title'] ?? 'No Title',
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
+                    // Announcement Title (left aligned)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        widget.announcement['title'] ?? 'No Title',
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -360,42 +355,8 @@ class _AnnouncementDetailDialogState extends State<AnnouncementDetailDialog> {
       ),
       child: Row(
         children: [
-          // Pin to Dashboard toggle
-          Row(
-            children: [
-              Icon(
-                Icons.push_pin,
-                color: isPinnedToDashboard ? Colors.red[600] : Colors.grey[400],
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Pin to Dashboard',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey[700],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Keep visible at top',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[500],
-                ),
-              ),
-              const SizedBox(width: 16),
-              Switch(
-                value: isPinnedToDashboard,
-                onChanged: (value) => _togglePin(value),
-                activeColor: Colors.blue[600],
-              ),
-            ],
-          ),
           const Spacer(),
-          
-          // Action button
+          // Action button (Edit)
           OutlinedButton.icon(
             onPressed: () => _editAnnouncement(),
             icon: const Icon(Icons.edit, size: 18),
@@ -598,67 +559,6 @@ class _AnnouncementDetailDialogState extends State<AnnouncementDetailDialog> {
   }
 
   // Event handlers for backend integration
-  void _togglePin(bool value) async {
-    // Update the state first
-    setState(() {
-      isPinnedToDashboard = value;
-    });
-    
-    // Update backend API to persist the pin status
-    await _updateAnnouncementPinStatus(widget.announcement['id'], value);
-    
-    // Close the dialog
-    if (mounted) {
-      Navigator.of(context).pop();
-    
-      // Show the snackbar
-      ScaffoldMessenger.of(widget.rootContext).showSnackBar(
-        SnackBar(
-          content: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  value ? Icons.push_pin : Icons.push_pin_outlined,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Flexible(
-                child: Text(
-                  value 
-                    ? 'Announcement pinned to dashboard' 
-                    : 'Announcement unpinned from dashboard',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: value ? const Color(0xFF66BB6A) : const Color(0xFF9E9E9E),
-          behavior: SnackBarBehavior.floating,
-          margin: EdgeInsets.only(
-            left: 24,
-            bottom: 24,
-            right: MediaQuery.of(widget.rootContext).size.width * 0.7,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          duration: const Duration(seconds: 3),
-          elevation: 2,
-        ),
-      );
-    }
-  }
 
   void _editAnnouncement() {
     Navigator.of(context).pop();
@@ -768,14 +668,4 @@ class _AnnouncementDetailDialogState extends State<AnnouncementDetailDialog> {
   }
 
   // Backend API methods (implement these according to your backend)
-  Future<void> _updateAnnouncementPinStatus(String id, bool isPinned) async {
-    // TODO: Implement API call to update pin status
-    try {
-      // Example API call structure:
-      // await AnnouncementService.updatePinStatus(id, isPinned);
-      print('Updating pin status for announcement $id to $isPinned');
-    } catch (e) {
-      print('Error updating pin status: $e');
-    }
-  }
 }

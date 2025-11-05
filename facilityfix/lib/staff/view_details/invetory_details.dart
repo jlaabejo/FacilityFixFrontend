@@ -16,12 +16,14 @@ class InventoryDetails extends StatefulWidget {
   final String selectedTabLabel;
   final String? itemId;  // For inventory items
   final String? requestId;  // For inventory requests
+  final String? maintenanceTaskId; // optional reference to maintenance task
 
   const InventoryDetails({
     super.key, 
     required this.selectedTabLabel,
     this.itemId,
     this.requestId,
+    this.maintenanceTaskId,
   });
 
   @override
@@ -387,25 +389,49 @@ class _InventoryDetailsState extends State<InventoryDetails> {
                   // Submit button
                   custom_buttons.FilledButton(
                     label: 'Submit Request',
-                    onPressed: () {
-                      if (formKey.currentState?.validate() ?? false) {
-                        final payload = {
-                          'itemId': itemId,
-                          'itemName': itemName,
-                          'quantity': int.parse(qtyCtrl.text.trim()),
-                          'unit': defaultUnit,
-                          'dateNeeded': neededDate!.toIso8601String(),
-                          'notes': notesCtrl.text.trim().isEmpty
-                              ? null
-                              : notesCtrl.text.trim(),
-                          'requestedAt': DateTime.now().toIso8601String(),
-                          'requestedBy': 'Current User', // TODO: bind to auth
-                          'status': 'Pending',
-                        };
+                    onPressed: () async {
+                      if (!(formKey.currentState?.validate() ?? false)) return;
 
-                        Navigator.of(ctx).pop(); // close sheet
-                        // Show success dialog and route to Announcements
-                        _showRequestDialog(context);
+                      final quantity = int.parse(qtyCtrl.text.trim());
+
+                      try {
+                        // Resolve current user/building from profile
+                        final profile = await _apiService.fetchCurrentUserProfile();
+                        final buildingId = (profile != null && profile['building_id'] != null)
+                            ? profile['building_id'].toString()
+                            : 'default_building_id';
+                        final requestedBy = (profile != null && (profile['user_id'] ?? profile['uid'] ?? profile['id']) != null)
+                            ? (profile['user_id'] ?? profile['uid'] ?? profile['id']).toString()
+                            : 'unknown';
+
+                        final purpose = notesCtrl.text.trim().isEmpty ? 'Staff inventory request' : notesCtrl.text.trim();
+
+                        // Call API to create inventory request so it appears on admin side
+                        final response = await _apiService.createInventoryRequest(
+                          inventoryId: itemId,
+                          buildingId: buildingId,
+                          quantityRequested: quantity,
+                          purpose: purpose,
+                          requestedBy: requestedBy,
+                        );
+
+                        // Close sheet and show success
+                        Navigator.of(ctx).pop();
+
+                        if (response['success'] == true) {
+                          _showRequestDialog(context);
+                        } else {
+                          // If response isn't success, show fallback dialog
+                          final err = response['message'] ?? response['detail'] ?? 'Failed to create request';
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Error: $err'), backgroundColor: Colors.red),
+                          );
+                        }
+                      } catch (e) {
+                        Navigator.of(ctx).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error creating request: $e'), backgroundColor: Colors.red),
+                        );
                       }
                     },
                     height: 48,
@@ -420,6 +446,61 @@ class _InventoryDetailsState extends State<InventoryDetails> {
         );
       },
     );
+  }
+
+  // Quick request: create a simple request immediately (quantity=1) with confirmation
+  Future<void> _createQuickRequest() async {
+    if (_itemData == null) return;
+
+    final itemId = (_itemData?['item_code'] ?? _itemData?['id'] ?? '').toString();
+    final itemName = (_itemData?['item_name'] ?? 'Item').toString();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Request Item'),
+        content: Text('Request 1 × $itemName and add it to Inventory Requests?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Confirm')),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      // Resolve current user/building from profile
+      final profile = await _apiService.fetchCurrentUserProfile();
+      final buildingId = (profile != null && profile['building_id'] != null)
+          ? profile['building_id'].toString()
+          : 'default_building_id';
+      final requestedBy = (profile != null && (profile['user_id'] ?? profile['uid'] ?? profile['id']) != null)
+          ? (profile['user_id'] ?? profile['uid'] ?? profile['id']).toString()
+          : 'unknown';
+
+      final response = await _apiService.createInventoryRequest(
+        inventoryId: itemId,
+        buildingId: buildingId,
+        quantityRequested: 1,
+        purpose: 'Quick request from staff',
+        requestedBy: requestedBy,
+        maintenanceTaskId: widget.maintenanceTaskId,
+      );
+
+      if (response['success'] == true) {
+        _showRequestDialog(context);
+      } else {
+        final err = response['message'] ?? response['detail'] ?? 'Failed to create request';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $err'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error creating request: $e'), backgroundColor: Colors.red),
+      );
+    }
   }
 
   // Content (without the button; button is sticky in bottomNavigationBar)
@@ -550,11 +631,10 @@ class _InventoryDetailsState extends State<InventoryDetails> {
 
   // Sticky button builder (only for Inventory Details tab)
   Widget _buildStickyRequestBar() {
-    // Use actual item data if available, otherwise use defaults
-    final itemName = _itemData?['item_name'] ?? 'Unknown Item';
-    final itemId = _itemData?['item_code'] ?? _itemData?['id'] ?? 'N/A';
-    final defaultUnit = _itemData?['unit_of_measure'] ?? 'pcs';
-
+  // Use actual item data if available, otherwise use defaults
+  final itemName = _itemData?['item_name'] ?? 'Unknown Item';
+  final itemId = _itemData?['item_code'] ?? _itemData?['id'] ?? 'N/A';
+  final defaultUnit = _itemData?['unit_of_measure'] ?? 'pcs';
     return SafeArea(
       top: false,
       child: Container(
@@ -563,23 +643,27 @@ class _InventoryDetailsState extends State<InventoryDetails> {
           border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
         ),
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-        child: SizedBox(
+          child: SizedBox(
           width: double.infinity,
           height: 48,
-          child: custom_buttons.FilledButton(
-            label: 'Request Item',
-            onPressed: () {
+          child: GestureDetector(
+            onLongPress: () {
+              // Long-press opens the full request sheet for more options
               if (_itemData != null) {
-                _openRequestItemSheet(
-                  itemName: itemName,
-                  itemId: itemId,
-                  defaultUnit: defaultUnit,
-                );
+                _openRequestItemSheet(itemName: itemName, itemId: itemId, defaultUnit: defaultUnit);
               }
             },
-            borderRadius: 12,
-            backgroundColor: const Color(0xFF005CE7), // primary blue
-            withOuterBorder: false, // <-- remove outer border line
+            child: custom_buttons.FilledButton(
+              label: 'Request Item',
+              onPressed: () {
+                if (_itemData != null) {
+                  _createQuickRequest();
+                }
+              },
+              borderRadius: 12,
+              backgroundColor: const Color(0xFF005CE7), // primary blue
+              withOuterBorder: false, // <-- remove outer border line
+            ),
           ),
         ),
       ),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'inventoryrestock_popup.dart';
+import '../../popupwidgets/stock_management_popup.dart';
 import 'inventoryitem_history_popup.dart';
 import '../../widgets/tags.dart';
+import '../../services/api_service.dart';
+import '../../../services/auth_storage.dart';
 
 class InventoryItemDetailsDialog {
   static Future<Map<String, dynamic>?> show(
@@ -317,7 +319,9 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
         children: [
           OutlinedButton.icon(
             onPressed: () async {
-              final result = await RestockDialog.show(
+              // Use the centralized StockManagementPopup which contains
+              // the preferred validation and stock update logic.
+              final result = await StockManagementPopup.show(
                 context,
                 {
                   'id': _itemData['itemCode'],
@@ -328,32 +332,34 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
                 },
               );
 
-              if (result != null && result['success'] == true) {
-                final addedQuantity = (result['quantity'] as int?) ?? 0;
-                final currentStock = int.tryParse((_itemData['quantityInStock'] ?? '0').toString()) ?? 0;
-                final newStock = currentStock + addedQuantity;
+                if (result == true) {
+                  // StockManagementPopup returns a bool (true on success).
+                  // Refresh item data from API to get updated stock and history.
+                  try {
+                    final api = ApiService();
+                    final token = await AuthStorage.getToken();
+                    if (token != null && token.isNotEmpty) api.setAuthToken(token);
 
-                setState(() {
-                  _itemData['quantityInStock'] = newStock;
-                  _itemData['currentStock'] = newStock;
-                  _itemData['updatedBy'] = result['actor'] ?? 'Admin';
-
-          final existingHistory = ((_itemData['history'] as List?) ?? [])
-            .whereType<Map>()
-            .map((entry) => Map<String, dynamic>.from(entry))
-            .toList();
-
-                  existingHistory.insert(0, {
-                    'timestamp': result['timestamp'],
-                    'action': result['action'] ?? 'Stock Updated',
-                    'quantity': addedQuantity,
-                    'note': result['note'] ?? 'Stock adjusted from $currentStock to $newStock',
-                    'actor': result['actor'] ?? 'Admin',
-                  });
-
-                  _itemData['history'] = existingHistory;
-                });
-              }
+                    final itemId = _itemData['id'] ?? _itemData['itemCode'] ?? _itemData['_doc_id'];
+                    if (itemId != null) {
+                      final resp = await api.getInventoryItem(itemId.toString());
+                      if (resp['success'] == true && resp['data'] is Map) {
+                        final updated = Map<String, dynamic>.from(resp['data']);
+                        setState(() {
+                          // Normalize keys used in this dialog
+                          _itemData['quantityInStock'] = updated['current_stock'] ?? updated['quantity_in_stock'] ?? updated['quantityInStock'] ?? _itemData['quantityInStock'];
+                          _itemData['currentStock'] = _itemData['quantityInStock'];
+                          _itemData['updatedBy'] = updated['updated_by'] ?? updated['updatedBy'] ?? _itemData['updatedBy'];
+                          _itemData['history'] = updated['history'] ?? _itemData['history'];
+                          _itemData['reorderLevel'] = updated['reorder_level'] ?? updated['reorderLevel'] ?? _itemData['reorderLevel'];
+                        });
+                      }
+                    }
+                  } catch (e) {
+                    // If refresh fails, silently ignore — the popup already updated server-side
+                    print('[InventoryDetails] Failed to refresh item after stock update: $e');
+                  }
+                }
             },
             icon: const Icon(Icons.add_circle_outline, size: 16),
             label: const Text('Update Stock'),
@@ -364,20 +370,20 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
               textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
             ),
           ),
-          const SizedBox(width: 8),
-          OutlinedButton.icon(
-            onPressed: () {
-              InventoryItemHistoryDialog.show(context, _itemData);
-            },
-            icon: const Icon(Icons.history, size: 16),
-            label: const Text('View History'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.grey[700],
-              side: BorderSide(color: Colors.grey[300]!),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-            ),
-          ),
+          // const SizedBox(width: 8),
+          // OutlinedButton.icon(
+          //   onPressed: () {
+          //     InventoryItemHistoryDialog.show(context, _itemData);
+          //   },
+          //   icon: const Icon(Icons.history, size: 16),
+          //   label: const Text('View History'),
+          //   style: OutlinedButton.styleFrom(
+          //     foregroundColor: Colors.grey[700],
+          //     side: BorderSide(color: Colors.grey[300]!),
+          //     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          //     textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          //   ),
+          // ),
           const SizedBox(width: 8),
           OutlinedButton.icon(
             onPressed: () {

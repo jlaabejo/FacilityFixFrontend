@@ -974,11 +974,13 @@ class RepairCard extends StatelessWidget {
                 const SizedBox(height: 12),
 
                 // Footer: assignees (compact) | date | chat — single line, no scroll
+                // Chat only available for "assigned" and "in progress" statuses
                 Row(
                   children: [
                     leftCluster,
                     const Spacer(),
-                    IconPill(icon: Icons.chat_bubble_outline, onTap: onChatTap),
+                    if (_shouldShowChat())
+                      IconPill(icon: Icons.chat_bubble_outline, onTap: onChatTap),
                   ],
                 ),
               ],
@@ -990,6 +992,20 @@ class RepairCard extends StatelessWidget {
   }
 
   // ---- Helpers ----------------------------------------------------------------
+
+  // Check if chat should be shown (only for assigned, in progress, and on hold statuses)
+  // Chat is disabled for work permits (concern_slip)
+  bool _shouldShowChat() {
+    if (onChatTap == null) return false;
+    
+    // Disable chat for work permits
+    final resType = (resolutionType ?? '').toLowerCase().trim();
+    if (resType == 'concern_slip') return false;
+    
+    // Only show chat for assigned, in progress, and on hold statuses
+    final status = statusTag.toLowerCase().trim();
+    return status == 'assigned' || status == 'in progress' || status == 'on hold';
+  }
 
   // Returns: "Work Order • ..." (kept as-is; only date logic changed per request)
   String _requestTypeLabel() {
@@ -1243,13 +1259,11 @@ class MaintenanceCard extends StatelessWidget {
                 const Divider(height: 1, color: Color(0xFFE6E7EA)),
                 const SizedBox(height: 12),
 
-                // Footer
+                // Footer (no chat button for maintenance cards)
                 Row(
                   children: [
                     leftCluster,
                     const Spacer(),
-                    if (onChatTap != null)
-                      IconPill(icon: Icons.chat_bubble_outline, onTap: onChatTap),
                   ],
                 ),
               ],

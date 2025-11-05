@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../widgets/tags.dart';
 import '../../../services/api_services.dart';
+import '../../../utils/ui_format.dart';
+import 'package:intl/intl.dart';
 
 // Temporary extension to provide the missing APIService method so the file compiles.
 // Replace or remove this once assignStaffToJobService is implemented inside services/api_services.dart.
@@ -81,21 +83,42 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
   }
   
   void _initializeScheduleDate() {
-    final scheduleDate = widget.task['schedule'] ?? widget.task['dateRequested'];
-    if (scheduleDate != null && scheduleDate.isNotEmpty) {
+    final raw = widget.task['rawData']?['schedule_availability'] ?? widget.task['schedule'] ?? widget.task['dateRequested'] ?? widget.task['availability'];
+    final sa = raw?.toString() ?? '';
+    if (sa.isNotEmpty) {
       try {
-        if (scheduleDate.toString().contains('T')) {
-          selectedDate = DateTime.parse(scheduleDate.toString());
+        // Tenant often sends ranges like: "Oct 12, 2025 9:00 AM - 11:00 AM"
+        if (sa.contains(' - ')) {
+          final parts = sa.split(' - ');
+          final left = parts[0].trim();
+          try {
+            // Try full datetime
+            selectedDate = DateTime.parse(left);
+          } catch (_) {
+            try {
+              selectedDate = DateFormat('MMM d, yyyy h:mm a').parse(left);
+            } catch (e) {
+              try {
+                final dateOnly = DateFormat('MMM d, yyyy').parse(left);
+                selectedDate = DateTime(dateOnly.year, dateOnly.month, dateOnly.day, 9, 0);
+              } catch (e2) {
+                // ignore
+              }
+            }
+          }
+        } else if (sa.contains('T')) {
+          selectedDate = DateTime.parse(sa);
+        } else if (RegExp(r'^\d{4}-\d{2}-\d{2}\$').hasMatch(sa)) {
+          final parts = sa.split('-');
+          selectedDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]), 9, 0);
         } else {
-          final parts = scheduleDate.toString().split('-');
-          if (parts.length == 3) {
-            selectedDate = DateTime(
-              int.parse(parts[0]),
-              int.parse(parts[1]),
-              int.parse(parts[2]),
-              9,
-              0,
-            );
+          try {
+            selectedDate = DateTime.parse(sa);
+          } catch (_) {
+            // last resort: try UiDateUtils.parse
+            try {
+              selectedDate = UiDateUtils.parse(sa);
+            } catch (_) {}
           }
         }
       } catch (e) {
@@ -243,18 +266,64 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
   String _formatScheduleDate(String? dateString) {
     if (dateString == null || dateString.isEmpty) return 'N/A';
     try {
-      DateTime date;
-      if (dateString.contains('T')) {
-        date = DateTime.parse(dateString);
-      } else {
-        final parts = dateString.split('-');
-        if (parts.length == 3) {
-          date = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-        } else {
-          return dateString;
+      final s = dateString.trim();
+      if (s.contains(' - ')) {
+        final parts = s.split(' - ');
+        final left = parts[0].trim();
+        final right = parts[1].trim();
+        DateTime? start;
+        DateTime? end;
+
+        // Parse start
+        try {
+          start = DateTime.parse(left);
+        } catch (_) {
+          try {
+            start = DateFormat('MMM d, yyyy h:mm a').parse(left);
+          } catch (_) {
+            try {
+              final d = DateFormat('MMM d, yyyy').parse(left);
+              start = DateTime(d.year, d.month, d.day, 9, 0);
+            } catch (_) {}
+          }
         }
+
+        // Parse end (may be time-only)
+        try {
+          final t = DateFormat('h:mm a').parse(right);
+          if (start != null) end = DateTime(start.year, start.month, start.day, t.hour, t.minute);
+        } catch (_) {
+          try {
+            end = DateTime.parse(right);
+          } catch (_) {
+            try {
+              end = DateFormat('MMM d, yyyy h:mm a').parse(right);
+            } catch (_) {}
+          }
+        }
+
+        if (start != null && end != null) return UiDateUtils.dateTimeRange(start, end);
+        return s;
       }
-      return '${date.month}/${date.day}/${date.year}';
+
+      if (s.contains('T')) {
+        final d = DateTime.parse(s);
+        return UiDateUtils.dateTimeRange(d);
+      }
+
+      if (RegExp(r'^\d{4}-\d{2}-\d{2}\$').hasMatch(s)) {
+        final parts = s.split('-');
+        final d = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        return UiDateUtils.fullDate(d);
+      }
+
+      // Try to parse generic tenant formats
+      try {
+        final d = DateFormat('MMM d, yyyy h:mm a').parse(s);
+        return UiDateUtils.dateTimeRange(d);
+      } catch (_) {}
+
+      return s;
     } catch (e) {
       print('[JobServiceDialog] Error formatting schedule: $e');
     }
@@ -515,32 +584,32 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
                 ],
               ),
             ),
-            const SizedBox(width: 24),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'RECOMMENDATION',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[600],
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    widget.task['recommendation'] ?? 'No recommendation available',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: widget.task['recommendation'] != null ? Colors.black87 : Colors.grey[400],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            // const SizedBox(width: 24),
+            // Expanded(
+            //   child: Column( 
+            //     crossAxisAlignment: CrossAxisAlignment.start,
+            //     children: [
+            //       Text(
+            //         'RECOMMENDATION',
+            //         style: TextStyle(
+            //           fontSize: 14,
+            //           fontWeight: FontWeight.w600,
+            //           color: Colors.grey[600],
+            //           letterSpacing: 0.5,
+            //         ),
+            //       ),
+            //       const SizedBox(height: 8),
+            //       Text(
+            //         widget.task['recommendation'] ?? 'No recommendation available',
+            //         style: TextStyle(
+            //           fontSize: 16,
+            //           fontWeight: FontWeight.w500,
+            //           color: widget.task['recommendation'] != null ? Colors.black87 : Colors.grey[400],
+            //         ),
+            //       ),
+            //     ],
+            //   ),
+            // ),
           ],
         ),
         const SizedBox(height: 24),

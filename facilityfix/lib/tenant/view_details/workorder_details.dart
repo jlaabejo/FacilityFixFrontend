@@ -6,6 +6,7 @@ import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/workorder.dart';
 import 'package:facilityfix/tenant/announcement.dart';
 import 'package:facilityfix/tenant/profile.dart';
+import 'package:facilityfix/tenant/view_details/concern_slip_details.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/view_details.dart';
 import 'package:facilityfix/services/api_services.dart';
@@ -251,6 +252,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
 
   WorkOrderDetails _jobServiceToWorkOrderDetails(JobService js) => WorkOrderDetails(
         id: js.id,
+        // formattedId: js.formattedId,
         createdAt: js.createdAt,
         updatedAt: js.updatedAt,
         requestTypeTag: js.requestTypeTag,
@@ -341,6 +343,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     if (id.startsWith('JS-') || idLower.startsWith('js_')) {
       return JobServiceDetails(
         id: w.id,
+        // formattedId: w.formattedId,
         concernSlipId: w.concernSlipId ?? '—',
         createdAt: w.createdAt,
         updatedAt: w.updatedAt,
@@ -360,7 +363,9 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         assessedAt: w.assessedAt,
         assessment: w.assessment,
         staffAttachments: w.staffAttachments,
-        materialsUsed: w.materialsUsed,
+        onViewConcernSlip: (w.concernSlipId != null && w.concernSlipId != '—')
+            ? () => _navigateToConcernSlip(w.concernSlipId!)
+            : null,
       );
     }
 
@@ -376,6 +381,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       resolutionType: w.resolutionType,
       requestedBy: w.requestedBy ?? '—',
       unitId: w.unitId,
+      title: w.title, // Add title field
       contractorName: w.contractorName ?? '—',
       contractorNumber: w.contractorNumber ?? '—',
       contractorCompany: w.contractorCompany,
@@ -386,6 +392,20 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       approvalDate: w.approvalDate,
       denialReason: w.denialReason,
       adminNotes: w.adminNotes,
+      onViewConcernSlip: (w.concernSlipId != null && w.concernSlipId != '—')
+          ? () => _navigateToConcernSlip(w.concernSlipId!)
+          : null,
+    );
+  }
+
+  void _navigateToConcernSlip(String concernSlipId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TenantConcernSlipDetailPage(
+          concernSlipId: concernSlipId,
+        ),
+      ),
     );
   }
 

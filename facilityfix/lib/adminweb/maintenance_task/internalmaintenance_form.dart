@@ -51,7 +51,9 @@ class _InternalMaintenanceFormPageState
   final _taskTitleController = TextEditingController();
   final _codeIdController =
       TextEditingController(); // Auto-generated, read-only
-  final _assignedStaffController = TextEditingController(text: 'Staff Name'); // Now editable, default placeholder
+  final _assignedStaffController = TextEditingController(
+    text: 'Staff Name',
+  ); // Now editable, default placeholder
   final _dateCreatedController = TextEditingController(); // read-only display
   final _descriptionController = TextEditingController();
   final _estimatedDurationController = TextEditingController();
@@ -159,12 +161,12 @@ class _InternalMaintenanceFormPageState
       final firstName = profile['first_name'] ?? '';
       final lastName = profile['last_name'] ?? '';
       final fullName = '$firstName $lastName'.trim();
-      
+
       // Set the Created By name
       setState(() {
         _createdByName = fullName.isNotEmpty ? fullName : 'Admin User';
       });
-      
+
       // Also set assigned staff controller
       if (fullName.isNotEmpty) {
         _assignedStaffController.text = fullName;
@@ -680,7 +682,7 @@ class _InternalMaintenanceFormPageState
   void initState() {
     super.initState();
     _initAutoFields();
-    
+
     // If in edit mode, populate fields with existing data
     if (widget.isEditMode && widget.maintenanceData != null) {
       _populateFormFields(widget.maintenanceData!);
@@ -691,17 +693,22 @@ class _InternalMaintenanceFormPageState
     setState(() {
       // Basic fields
       _taskTitleController.text = data['task_title'] ?? data['taskTitle'] ?? '';
-      _codeIdController.text = data['task_code'] ?? data['id']?.toString() ?? '';
-      _descriptionController.text = data['task_description'] ?? data['description'] ?? '';
+      _codeIdController.text =
+          data['task_code'] ?? data['id']?.toString() ?? '';
+      _descriptionController.text =
+          data['task_description'] ?? data['description'] ?? '';
 
       // Handle estimated_duration - convert from minutes (int) back to readable format
       final durationMinutes = data['estimated_duration'];
-      if (durationMinutes != null && durationMinutes is int && durationMinutes > 0) {
+      if (durationMinutes != null &&
+          durationMinutes is int &&
+          durationMinutes > 0) {
         if (durationMinutes >= 60) {
           final hours = durationMinutes ~/ 60;
           final remainingMins = durationMinutes % 60;
           if (remainingMins > 0) {
-            _estimatedDurationController.text = '$hours hrs $remainingMins mins';
+            _estimatedDurationController.text =
+                '$hours hrs $remainingMins mins';
           } else {
             _estimatedDurationController.text = '$hours hrs';
           }
@@ -715,51 +722,81 @@ class _InternalMaintenanceFormPageState
       }
 
       _remarksController.text = data['remarks'] ?? '';
-      
+
       // Dropdowns - validate values are in options list
       // Priority: Low, Medium, High
       final priority = data['priority']?.toString();
       final validPriorities = ['Low', 'Medium', 'High'];
       _selectedPriority = validPriorities.contains(priority) ? priority : null;
-      
+
       // Status: can be any value from backend, keep as is
       _selectedStatus = data['status'];
-      
+
       // Location: validate against location options
       final location = data['location'] ?? data['area'];
       final validLocations = [
-        'Swimming pool', 'Basketball Court', 'Gym', 'Parking area',
-        'Lobby', 'Elevators', 'Halls', 'Garden', 'Corridors', 'Other'
+        'Swimming pool',
+        'Basketball Court',
+        'Gym',
+        'Parking area',
+        'Lobby',
+        'Elevators',
+        'Halls',
+        'Garden',
+        'Corridors',
+        'Other',
       ];
-      _selectedLocation = (location != null && validLocations.contains(location.toString())) 
-          ? location.toString() 
-          : null;
-      
+      _selectedLocation =
+          (location != null && validLocations.contains(location.toString()))
+              ? location.toString()
+              : null;
+
       // Recurrence - capitalize first letter to match dropdown options
       final recurrence = data['recurrence_type'] ?? data['recurrence'];
       if (recurrence != null) {
-        final recurrenceCapitalized = recurrence.toString().split('_').map((word) {
-          if (word.isEmpty) return word;
-          return word[0].toUpperCase() + word.substring(1).toLowerCase();
-        }).join(' ');
+        final recurrenceCapitalized = recurrence
+            .toString()
+            .split('_')
+            .map((word) {
+              if (word.isEmpty) return word;
+              return word[0].toUpperCase() + word.substring(1).toLowerCase();
+            })
+            .join(' ');
         // Valid recurrence options: Daily, Weekly, Monthly, Quarterly, Annually
-        final validRecurrences = ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually'];
-        _selectedRecurrence = validRecurrences.contains(recurrenceCapitalized) ? recurrenceCapitalized : null;
+        final validRecurrences = [
+          'Daily',
+          'Weekly',
+          'Monthly',
+          'Quarterly',
+          'Annually',
+        ];
+        _selectedRecurrence =
+            validRecurrences.contains(recurrenceCapitalized)
+                ? recurrenceCapitalized
+                : null;
       }
-      
+
       // Department: validate against department options
       final department = data['department'];
-      final validDepartments = ['Maintenance', 'Housekeeping', 'Security', 'Engineering'];
-      _selectedDepartment = (department != null && validDepartments.contains(department.toString())) 
-          ? department.toString() 
-          : null;
-      
+      final validDepartments = [
+        'Maintenance',
+        'Housekeeping',
+        'Security',
+        'Engineering',
+      ];
+      _selectedDepartment =
+          (department != null &&
+                  validDepartments.contains(department.toString()))
+              ? department.toString()
+              : null;
+
       // Staff assignment
       if (data['assigned_to'] != null) {
         _selectedStaffUserId = data['assigned_to'];
-        _assignedStaffController.text = data['assigned_staff_name'] ?? 'Staff Name';
+        _assignedStaffController.text =
+            data['assigned_staff_name'] ?? 'Staff Name';
       }
-      
+
       // Dates
       if (data['created_at'] != null) {
         try {
@@ -769,7 +806,7 @@ class _InternalMaintenanceFormPageState
           print('Error parsing created_at: $e');
         }
       }
-      
+
       if (data['start_date'] != null) {
         try {
           _startDate = DateTime.parse(data['start_date']);
@@ -778,7 +815,7 @@ class _InternalMaintenanceFormPageState
           print('Error parsing start_date: $e');
         }
       }
-      
+
       if (data['next_due_date'] != null) {
         try {
           _nextDueDate = DateTime.parse(data['next_due_date']);
@@ -787,19 +824,20 @@ class _InternalMaintenanceFormPageState
           print('Error parsing next_due_date: $e');
         }
       }
-      
+
       // Checklist items
       if (data['checklist'] != null && data['checklist'] is List) {
         _checklistItems.clear();
         for (var item in data['checklist']) {
           _checklistItems.add({
-            'id': item['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+            'id':
+                item['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
             'task': item['task'] ?? item['description'] ?? '',
             'completed': item['completed'] ?? false,
           });
         }
       }
-      
+
       // Inventory items
       if (data['parts_used'] != null && data['parts_used'] is List) {
         _selectedInventoryItems.clear();
@@ -812,7 +850,7 @@ class _InternalMaintenanceFormPageState
           });
         }
       }
-      
+
       // Created by
       _createdByName = data['created_by'] ?? 'Admin User';
     });
@@ -864,7 +902,9 @@ class _InternalMaintenanceFormPageState
     // But we add this check for safety
     if (durationInMinutes <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid estimated duration. Please check the format.')),
+        const SnackBar(
+          content: Text('Invalid estimated duration. Please check the format.'),
+        ),
       );
       return;
     }
@@ -919,15 +959,20 @@ class _InternalMaintenanceFormPageState
         // UPDATE existing task
         final taskId = widget.maintenanceData!['id']?.toString() ?? id;
         print('[v0] Updating maintenance task: $taskId');
-        
-        final result = await _apiService.updateMaintenanceTask(taskId, maintenance);
+
+        final result = await _apiService.updateMaintenanceTask(
+          taskId,
+          maintenance,
+        );
         print('[v0] Maintenance task updated successfully');
         print('[v0] Backend response: $result');
-        
+
         // Navigate back to maintenance list
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Maintenance task updated successfully!')),
+            const SnackBar(
+              content: Text('Maintenance task updated successfully!'),
+            ),
           );
           context.go('/work/maintenance');
         }
@@ -947,7 +992,9 @@ class _InternalMaintenanceFormPageState
         print('[v0] Using task ID for inventory requests: $actualTaskId');
 
         // Create inventory requests for selected items with the correct task ID
-        final inventoryRequestIds = await _createInventoryRequests(actualTaskId);
+        final inventoryRequestIds = await _createInventoryRequests(
+          actualTaskId,
+        );
 
         // Update the maintenance task with the inventory request IDs
         if (inventoryRequestIds.isNotEmpty) {
@@ -1349,7 +1396,7 @@ class _InternalMaintenanceFormPageState
                             ),
                           ],
                         ),
-                      
+
                       if (_selectedLocation == 'Others')
                         const SizedBox(height: 24),
 
@@ -1364,235 +1411,250 @@ class _InternalMaintenanceFormPageState
 
                       const SizedBox(height: 40),
 
-                      // ===== Checklist & Schedule =====
+                      // ===== Schedule and Checklist =====
                       _buildSectionHeader(
-                        "Checklist & Schedule",
+                        "Schedule and Checklist",
                         "Define task steps and scheduling",
                       ),
                       const SizedBox(height: 24),
 
+                      // ===== Recurrence & Schedule =====
+                      // Row 1: Recurrence and Estimated Duration
                       Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Left side - Checklist
+                          // Recurrence
                           Expanded(
-                            flex: 1,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    _fieldLabel('Checklist / Task Steps'),
-                                    ElevatedButton(
-                                      onPressed: _addChecklistItem,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.blue,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 8,
-                                        ),
-                                      ),
-                                      child: const Text("Add"),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
+                                _fieldLabel('Recurrence Frequency'),
                                 _fieldBox(
-                                  child: TextFormField(
-                                    controller: _checklistItemController,
-                                    decoration: _decoration('Add task step...'),
-                                    onFieldSubmitted: (_) => _addChecklistItem(),
+                                  child: DropdownButtonFormField<String>(
+                                    value: _selectedRecurrence,
+                                    validator: _reqDropdown,
+                                    decoration: _decoration(
+                                      'Select frequency...',
+                                    ),
+                                    items:
+                                        const [
+                                              'Daily',
+                                              'Weekly',
+                                              'Monthly',
+                                              'Quarterly',
+                                              'Annually',
+                                            ]
+                                            .map(
+                                              (v) => DropdownMenuItem(
+                                                value: v,
+                                                child: Text(v),
+                                              ),
+                                            )
+                                            .toList(),
+                                    onChanged: _handleRecurrenceChange,
                                   ),
                                 ),
-                                const SizedBox(height: 12),
-
-                                // Show checklist items or placeholder
-                                if (_checklistItems.isNotEmpty)
-                                  Container(
-                                    constraints: const BoxConstraints(maxHeight: 260),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[50],
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.grey[200]!),
-                                    ),
-                                    child: ListView.separated(
-                                      shrinkWrap: true,
-                                      itemCount: _checklistItems.length,
-                                      separatorBuilder: (_, __) => const Divider(height: 1),
-                                      itemBuilder: (context, index) {
-                                        final item = _checklistItems[index];
-                                        return ListTile(
-                                          dense: true,
-                                          leading: Icon(
-                                            item['completed'] == true
-                                                ? Icons.check_box
-                                                : Icons.check_box_outline_blank,
-                                            size: 20,
-                                            color: item['completed'] == true
-                                                ? Colors.green
-                                                : Colors.grey[700],
-                                          ),
-                                          title: Text(
-                                            item['task'],
-                                            style: const TextStyle(fontSize: 14),
-                                          ),
-                                          trailing: IconButton(
-                                            icon: const Icon(
-                                              Icons.delete_outline,
-                                              size: 20,
-                                            ),
-                                            onPressed: () => _removeChecklistItem(item['id']),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  )
-                                else
-                                  Container(
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[50],
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.grey[200]!),
-                                    ),
-                                    child: Text(
-                                      'No checklist items added yet',
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 13,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
                               ],
                             ),
                           ),
+                          const SizedBox(width: 24),
 
-                          const SizedBox(width: 32),
-
-                          // Right side - Schedule fields (paired rows)
+                          // Estimated Duration
                           Expanded(
-                            flex: 1,
                             child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Row 1: Recurrence (left) | Estimated Duration (right)
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          _fieldLabel('Recurrence Frequency'),
-                                          _fieldBox(
-                                            child: DropdownButtonFormField<String>(
-                                              value: _selectedRecurrence,
-                                              decoration: _decoration('Select Frequency...'),
-                                              items: [
-                                                'None',
-                                                'Daily',
-                                                'Weekly',
-                                                'Monthly',
-                                                'Quarterly',
-                                                'Annually',
-                                              ]
-                                                  .map(
-                                                    (f) => DropdownMenuItem(
-                                                      value: f,
-                                                      child: Text(f),
-                                                    ),
-                                                  )
-                                                  .toList(),
-                                              onChanged: (v) => _handleRecurrenceChange(
-                                                v == 'None' ? null : v,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                _fieldLabel('Estimated Duration'),
+                                _fieldBox(
+                                  child: TextFormField(
+                                    controller: _estimatedDurationController,
+                                    validator: _durationValidator,
+                                    decoration: _decoration(
+                                      'e.g., 3 hrs / 45 mins',
                                     ),
-
-                                    const SizedBox(width: 24),
-
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          _fieldLabel('Estimated Duration'),
-                                          _fieldBox(
-                                            child: TextFormField(
-                                              controller: _estimatedDurationController,
-                                              validator: _durationValidator,
-                                              decoration: _decoration(
-                                                'e.g., "3 hrs" or "45 mins"',
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-
-                                const SizedBox(height: 24),
-
-                                // Row 2: Start Date (left) | Next Due Date (right)
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          _fieldLabel('Start Date'),
-                                          _fieldBox(
-                                            child: TextFormField(
-                                              controller: _startDateController,
-                                              readOnly: true,
-                                              validator: _req,
-                                              decoration: _decoration(
-                                                'Select Start Date...',
-                                              ).copyWith(
-                                                suffixIcon: const Icon(
-                                                  Icons.calendar_today,
-                                                  size: 18,
-                                                ),
-                                              ),
-                                              onTap: () => _pickDate(
-                                                initial: _startDate ?? DateTime.now(),
-                                                onPick: _handleStartDateChange,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-
-                                    const SizedBox(width: 24),
-
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          _fieldLabel('Next Due Date'),
-                                          _fieldBox(
-                                            child: TextFormField(
-                                              controller: _nextDueDateController,
-                                              enabled: false,
-                                              decoration: _decoration('Auto-calculated'),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                         ],
                       ),
+                      const SizedBox(height: 24),
+
+                      // Row 2: Start Date and Next Due Date
+                      Row(
+                        children: [
+                          // Start Date
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Start Date'),
+                                _fieldBox(
+                                  child: TextFormField(
+                                    controller: _startDateController,
+                                    validator: _req,
+                                    readOnly: true,
+                                    onTap:
+                                        () => _pickDate(
+                                          initial: _startDate ?? DateTime.now(),
+                                          onPick: _handleStartDateChange,
+                                        ),
+                                    decoration: _decoration(
+                                      'YYYY-MM-DD',
+                                    ).copyWith(
+                                      suffixIcon: const Icon(
+                                        Icons.calendar_today,
+                                        size: 18,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 24),
+
+                          // Next Due Date
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Next Due Date'),
+                                _fieldBox(
+                                  child: TextFormField(
+                                    controller: _nextDueDateController,
+                                    validator: _req,
+                                    readOnly: true,
+                                    decoration: _decoration(
+                                      'YYYY-MM-DD',
+                                    ).copyWith(
+                                      suffixIcon: const Icon(
+                                        Icons.calendar_today,
+                                        size: 18,
+                                      ),
+                                      filled: true,
+                                      fillColor: Colors.grey[50],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Recurrence summary (placed below Start Date / Next Due Date)
                       _buildRecurrenceSummary(),
+                      const SizedBox(height: 24),
+                      // Checklist input field with Add Task button beside it - Left side only
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 6,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Checklist/Task Step'),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _fieldBox(
+                                        child: TextFormField(
+                                          controller: _checklistItemController,
+                                          decoration: _decoration(
+                                            'Add a task step...',
+                                          ),
+                                          onFieldSubmitted:
+                                              (_) => _addChecklistItem(),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    _fieldBox(
+                                      child: ElevatedButton(
+                                        onPressed: _addChecklistItem,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.blue,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 20,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                          minimumSize: const Size(
+                                            0,
+                                            _kFieldHeight,
+                                          ),
+                                        ),
+                                        child: const Text("Add Task"),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Expanded(flex: 4, child: SizedBox()),
+                        ],
+                      ),
+
+                      // Display added checklist items - Left side only (match Add Task field width)
+                      if (_checklistItems.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 6, // same flex as the Add Task input column
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey[300]!),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: ListView.separated(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: _checklistItems.length,
+                                  separatorBuilder:
+                                      (context, index) => Divider(
+                                        height: 1,
+                                        color: Colors.grey[300],
+                                      ),
+                                  itemBuilder: (context, index) {
+                                    final item = _checklistItems[index];
+                                    return ListTile(
+                                      dense: true,
+                                      leading: Icon(
+                                        Icons.check_circle_outline,
+                                        color: Colors.grey[600],
+                                        size: 20,
+                                      ),
+                                      title: Text(
+                                        item['task'],
+                                        style: const TextStyle(fontSize: 14),
+                                      ),
+                                      trailing: IconButton(
+                                        icon: const Icon(
+                                          Icons.delete_outline,
+                                          size: 20,
+                                        ),
+                                        color: Colors.red[400],
+                                        onPressed:
+                                            () => _removeChecklistItem(
+                                              item['id'],
+                                            ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                            const Expanded(flex: 4, child: SizedBox()),
+                          ],
+                        ),
+                      ],
 
                       const SizedBox(height: 40),
 
@@ -1955,60 +2017,74 @@ class _InternalMaintenanceFormPageState
                                                         },
                                                       ),
                                                     ),
-
-                                                    // Increment button
+                                                    // Increment button (robust parsing & clamping)
                                                     IconButton(
                                                       icon: const Icon(
-                                                        Icons.add,
-                                                        size: 16,
+                                                      Icons.add,
+                                                      size: 16,
                                                       ),
                                                       padding:
-                                                          const EdgeInsets.all(
-                                                            4,
-                                                          ),
+                                                        const EdgeInsets.all(
+                                                        4,
+                                                        ),
                                                       constraints:
-                                                          const BoxConstraints(
-                                                            minWidth: 32,
-                                                            minHeight: 32,
-                                                          ),
+                                                        const BoxConstraints(
+                                                        minWidth: 32,
+                                                        minHeight: 32,
+                                                        ),
                                                       onPressed: () {
-                                                        setState(() {
-                                                          final currentQty =
-                                                              item['quantity']
-                                                                  as int;
-                                                          final availableStock =
-                                                              item['available_stock']
-                                                                  as int;
-                                                          if (currentQty <
-                                                              availableStock) {
-                                                            _selectedInventoryItems[index]['quantity'] =
-                                                                currentQty + 1;
-                                                          } else {
-                                                            ScaffoldMessenger.of(
-                                                              context,
-                                                            ).showSnackBar(
-                                                              const SnackBar(
-                                                                content: Text(
-                                                                  'Cannot exceed available stock',
-                                                                ),
-                                                                duration:
-                                                                    Duration(
-                                                                      seconds:
-                                                                          2,
-                                                                    ),
-                                                              ),
-                                                            );
-                                                          }
-                                                        });
+                                                      setState(() {
+                                                        // Safely parse values that may be int or String
+                                                        final currentQty =
+                                                          int.tryParse(
+                                                          item['quantity']
+                                                              ?.toString() ??
+                                                            '0',
+                                                          ) ??
+                                                          0;
+                                                        final availableStock =
+                                                          int.tryParse(
+                                                          item['available_stock']
+                                                              ?.toString() ??
+                                                            '0',
+                                                          ) ??
+                                                          0;
+
+                                                        if (availableStock <=
+                                                          0) {
+                                                        ScaffoldMessenger.of(
+                                                          context,
+                                                        ).showSnackBar(
+                                                          const SnackBar(
+                                                          content: Text(
+                                                            'No stock available',
+                                                          ),
+                                                          duration:
+                                                            Duration(
+                                                              seconds:
+                                                                2,
+                                                            ),
+                                                          ),
+                                                        );
+                                                        return;
+                                                        }
+
+                                                        // Compute the new quantity and ensure it stays within [1, availableStock]
+                                                        final newQty = (currentQty + 1)
+                                                          .clamp(1, availableStock);
+
+                                                        _selectedInventoryItems[index]['quantity'] =
+                                                          newQty;
+                                                      });
                                                       },
                                                       color: const Color(
-                                                        0xFF2E7D32,
+                                                      0xFF2E7D32,
                                                       ),
                                                     ),
-                                                  ],
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
+                                                    ],
+                                                  ),
+                                                  ),
+                                                  const SizedBox(width: 8),
 
                                               // Delete button
                                               IconButton(
@@ -2039,61 +2115,6 @@ class _InternalMaintenanceFormPageState
 
                       const SizedBox(height: 40),
                       _buildSectionHeader(
-                        "Attachments",
-                        "Upload files or photos related to this task",
-                      ),
-                      const SizedBox(height: 24),
-                      Container(
-                        height: 140,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: Colors.grey[300]!,
-                            width: 2,
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: InkWell(
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'File upload - Feature coming soon!',
-                                ),
-                              ),
-                            );
-                          },
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.upload_outlined,
-                                size: 32,
-                                color: Colors.grey[400],
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                "Drop files here or click to upload",
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                "PDF, PNG, JPG up to 10MB",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 40),
-                      _buildSectionHeader(
                         "Add Admin Note",
                         "Notes for admins and post-task remarks",
                       ),
@@ -2111,25 +2132,6 @@ class _InternalMaintenanceFormPageState
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          OutlinedButton(
-                            onPressed: _saveDraft,
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Colors.grey),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 16,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 16),
                           ElevatedButton(
                             onPressed: _onNext, // VALIDATE then NAVIGATE
                             style: ElevatedButton.styleFrom(
@@ -2144,7 +2146,9 @@ class _InternalMaintenanceFormPageState
                               ),
                             ),
                             child: Text(
-                              widget.isEditMode ? "Save Changes" : "Submit Internal Task",
+                              widget.isEditMode
+                                  ? "Save Changes"
+                                  : "Submit Internal Task",
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,

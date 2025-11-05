@@ -67,6 +67,120 @@ class _RequestFormState extends State<RequestForm> {
     }
   }
 
+  void _showInfoSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle bar
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            // Title with info icon
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDCF2FF),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.info_outline,
+                    color: Color(0xFF0EA5E9),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Request Information',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
+                    fontFamily: 'Inter',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Request type definitions
+            const Text(
+              'Request Types',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.black,
+                fontFamily: 'Inter',
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildInfoItem(
+              'Concern Slip',
+              'The initial report or request for repair or maintenance raised by a tenant or staff.',
+            ),
+            const SizedBox(height: 12),
+            _buildInfoItem(
+              'Job Service',
+              'An internal maintenance task assigned to in-house staff for inspection or repair.',
+            ),
+            const SizedBox(height: 12),
+            _buildInfoItem(
+              'Work Order',
+              'A permit or request issued for outsourced or external service providers to perform the required work.',
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoItem(String title, String description) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.black,
+            fontFamily: 'Inter',
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          description,
+          style: const TextStyle(
+            fontSize: 13,
+            color: Color(0xFF667085),
+            fontFamily: 'Inter',
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
+
   // ----- Form + validation -----
   final _formKey = GlobalKey<FormState>();
   bool _submitted = false; // <- drives inline error visibility
@@ -178,6 +292,25 @@ class _RequestFormState extends State<RequestForm> {
     });
   }
 
+  // Date picking only (for Work Order Valid From/To)
+  Future<void> _pickDateOnly(TextEditingController controller) async {
+    final now = DateTime.now();
+
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (pickedDate == null) return;
+
+    setState(() {
+      controller.text = DateFormat('MMM d, yyyy').format(pickedDate);
+      // Recompute inline errors after picking a date
+      _formKey.currentState?.validate();
+    });
+  }
+
   // Helper method to format TimeOfDay
   String _formatTimeOfDay(TimeOfDay time) {
     final hour = time.hourOfPeriod;
@@ -202,12 +335,14 @@ class _RequestFormState extends State<RequestForm> {
   final TextEditingController contractorNumberController = TextEditingController();
   final TextEditingController contractorCompanyController = TextEditingController();
   final TextEditingController entryEquipmentsController = TextEditingController();
+  final TextEditingController othersRequestTypeController = TextEditingController();
 
   // Local state
   String _requestTypeValue = ''; // dropdown selection for work order type
   bool _hasContractors = false; // list not empty?
   List<Map<String, String>> _contractors = []; // Store contractor list
   PlatformFile? selectedFile;
+  List<PlatformFile> _attachments = []; // Store selected attachments
 
   @override
   void initState() {
@@ -359,27 +494,12 @@ class _RequestFormState extends State<RequestForm> {
             formattedId = 'REQ-$year-00001';
         }
       } catch (e) {
-        switch (widget.requestType) {
-          case 'Concern Slip':
-            formattedId = await apiService.getNextConcernSlipId();
-            break;
-          case 'Job Service':
-            formattedId = await apiService.getNextJobServiceId();
-            break;
-          case 'Work Order':
-            formattedId = await apiService.getNextWorkOrderId();
-            break;
-          default:
-            formattedId = 'REQ-$year-00001';
-        }
-      } catch (e) {
         print('Error getting next ID from backend: $e');
         // Fallback ID generation
         final dayOfYear = now.difference(DateTime(now.year, 1, 1)).inDays + 1;
-        final prefix =
-            widget.requestType == 'Concern Slip'
-                ? 'CS'
-                : widget.requestType == 'Job Service'
+        final prefix = widget.requestType == 'Concern Slip'
+            ? 'CS'
+            : widget.requestType == 'Job Service'
                 ? 'JS'
                 : 'WP';
         formattedId = '$prefix-$year-${dayOfYear.toString().padLeft(5, '0')}';
@@ -453,6 +573,7 @@ class _RequestFormState extends State<RequestForm> {
     contractorNumberController.dispose();
     contractorCompanyController.dispose();
     entryEquipmentsController.dispose();
+    othersRequestTypeController.dispose();
     super.dispose();
   }
 
@@ -480,9 +601,15 @@ class _RequestFormState extends State<RequestForm> {
   // ----- Parsing + inline error helpers -----
   DateTime? _parseDT(String value) {
     try {
+      // Try date-time format first
       return DateFormat('MMM d, yyyy h:mm a').parseStrict(value);
     } catch (_) {
-      return null;
+      try {
+        // Try date-only format
+        return DateFormat('MMM d, yyyy').parseStrict(value);
+      } catch (_) {
+        return null;
+      }
     }
   }
 
@@ -615,22 +742,28 @@ class _RequestFormState extends State<RequestForm> {
     if (!_submitted) return null;
     switch (key) {
       case 'type':
-        return _requestTypeValue.trim().isEmpty
-            ? 'Request type is required.'
-            : null;
+        if (_requestTypeValue.trim().isEmpty) {
+          return 'Request type is required.';
+        }
+        // If "Others" is selected, check if the text field is filled
+        if (_requestTypeValue.toLowerCase() == 'others' &&
+            othersRequestTypeController.text.trim().isEmpty) {
+          return 'Please specify the request type.';
+        }
+        return null;
       case 'from':
         if (validFromController.text.trim().isEmpty)
-          return 'Start is required.';
+          return 'Start date is required.';
         return _parseDT(validFromController.text.trim()) == null
-            ? 'Invalid date & time.'
+            ? 'Invalid date.'
             : null;
       case 'to':
-        if (validToController.text.trim().isEmpty) return 'End is required.';
+        if (validToController.text.trim().isEmpty) return 'End date is required.';
         final from = _parseDT(validFromController.text.trim());
         final to = _parseDT(validToController.text.trim());
-        if (to == null) return 'Invalid date & time.';
+        if (to == null) return 'Invalid date.';
         if (from != null && !to.isAfter(from))
-          return 'End must be later than start.';
+          return 'End date must be later than start date.';
         return null;
       case 'contractors':
         return !_hasContractors
@@ -975,7 +1108,14 @@ class _RequestFormState extends State<RequestForm> {
                 ),
               ),
               const SizedBox(height: 8),
-              const FileAttachmentPicker(label: 'Upload Attachment'),
+              FileAttachmentPicker(
+                label: 'Upload Attachment',
+                onChanged: (files) {
+                  setState(() {
+                    _attachments = files;
+                  });
+                },
+              ),
             ],
           ),
         ];
@@ -1067,7 +1207,14 @@ class _RequestFormState extends State<RequestForm> {
                 ),
               ),
               const SizedBox(height: 8),
-              const FileAttachmentPicker(label: 'Upload Attachment'),
+              FileAttachmentPicker(
+                label: 'Upload Attachment',
+                onChanged: (files) {
+                  setState(() {
+                    _attachments = files;
+                  });
+                },
+              ),
             ],
           ),
         ];
@@ -1144,13 +1291,33 @@ class _RequestFormState extends State<RequestForm> {
                 value: _requestTypeValue.isEmpty ? null : _requestTypeValue,
                 items: _requestTypes,
                 onChanged: (v) {
-                  setState(() => _requestTypeValue = v ?? '');
+                  setState(() {
+                    _requestTypeValue = v ?? '';
+                    // Clear others field when not "Others"
+                    if (v?.toLowerCase() != 'others') {
+                      othersRequestTypeController.clear();
+                    }
+                  });
                   _formKey.currentState?.validate();
                 },
                 isRequired: _submitted, // only show built-in error after submit
                 requiredMessage: 'Request type is required.',
                 hintText: 'Select request type',
+                isDense: true, // Match InputField height
               ),
+              // Show "Others" text field when "Others" is selected
+              if (_requestTypeValue.toLowerCase() == 'others') ...[
+                const SizedBox(height: 8),
+                InputField(
+                  label: 'Specify Request Type',
+                  controller: othersRequestTypeController,
+                  hintText: 'Enter request type details',
+                  isRequired: true,
+                  errorText: _submitted && othersRequestTypeController.text.trim().isEmpty
+                      ? 'Please specify the request type'
+                      : null,
+                ),
+              ],
               // Also show our explicit errorText slot if your DropdownField supports it:
               if (_errWO('type') != null)
                 Padding(
@@ -1168,12 +1335,12 @@ class _RequestFormState extends State<RequestForm> {
                 children: [
                   Expanded(
                     child: GestureDetector(
-                      onTap: () => _pickDateTimeInto(validFromController),
+                      onTap: () => _pickDateOnly(validFromController),
                       child: AbsorbPointer(
                         child: InputField(
                           label: 'Valid From',
                           controller: validFromController,
-                          hintText: 'Select date & time',
+                          hintText: 'Select date',
                           isRequired: true,
                           suffixIcon: const Icon(
                             Icons.calendar_today_rounded,
@@ -1188,12 +1355,12 @@ class _RequestFormState extends State<RequestForm> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: GestureDetector(
-                      onTap: () => _pickDateTimeInto(validToController),
+                      onTap: () => _pickDateOnly(validToController),
                       child: AbsorbPointer(
                         child: InputField(
                           label: 'Valid To',
                           controller: validToController,
-                          hintText: 'Select date & time',
+                          hintText: 'Select date',
                           isRequired: true,
                           suffixIcon: const Icon(
                             Icons.calendar_today_rounded,
@@ -1258,7 +1425,18 @@ class _RequestFormState extends State<RequestForm> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: CustomAppBar(title: title, leading: const BackButton()),
+      appBar: CustomAppBar(
+        title: title,
+        leading: const BackButton(),
+        actions: [
+          if (!widget.isEditing)
+            IconButton(
+              icon: const Icon(Icons.info_outline, color: Color(0xFF0EA5E9)),
+              onPressed: _showInfoSheet,
+              tooltip: 'Request Information',
+            ),
+        ],
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.only(

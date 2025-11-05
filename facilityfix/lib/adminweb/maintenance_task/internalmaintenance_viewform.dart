@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart'; 
 import '../../services/api_services.dart'; 
+import '../../utils/ui_format.dart';
+import 'internalmaintenance_form.dart';
 
 
 class InternalTaskViewPage extends StatefulWidget {
@@ -291,16 +293,30 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     // Assign from incoming data with fallback keys
     setText(_titleCtrl, ['task_title', 'taskTitle', 'title']);
     setText(_departmentCtrl, ['department', 'assigneeDept']);
-    setText(_createdByCtrl, ['created_by', 'assigneeName', 'assigned_staff_name']);
+  setText(_createdByCtrl, ['created_by', 'assigneeName', 'assigned_staff_name', 'createdBy']);
     setText(_estimatedDurationCtrl, ['estimated_duration', 'estimatedDuration']);
     setText(_locationCtrl, ['location']);
     setText(_descriptionCtrl, ['task_description', 'description']);
     setText(_recurrenceCtrl, ['recurrence_type', 'recurrence']);
     setText(_startDateCtrl, ['scheduled_date', 'startDate', 'start_date']);
     setText(_nextDueCtrl, ['next_occurrence', 'nextDueDate', 'next_due_date']);
-    setText(_assigneeNameCtrl, ['assigned_staff_name', 'assigneeName', 'assigned_to']);
-    setText(_assigneeDeptCtrl, ['department', 'assigneeDept']);
-    setText(_adminNotifyCtrl, ['admin_notification', 'adminNotify']);
+    // Be generous with fallback keys for assignee name & department
+    setText(_assigneeNameCtrl, [
+      'assigned_staff_name',
+      'assigneeName',
+      'assigned_to',
+      'assignee',
+      'assignee_name',
+      'created_by'
+    ]);
+    setText(_assigneeDeptCtrl, [
+      'department',
+      'assigneeDept',
+      'assignee_department',
+      'assigned_staff_department',
+      'staff_department'
+    ]);
+  setText(_adminNotifyCtrl, ['admin_notification', 'adminNotify', 'remarks']);
     setText(_staffNotifyCtrl, ['staff_notification', 'staffNotify']);
 
     // Set selected staff ID if available
@@ -566,6 +582,31 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
   String? _req(String? v) =>
       (v == null || v.trim().isEmpty) ? 'Required' : null;
 
+  String _toTitleCase(String s) {
+    if (s.trim().isEmpty) return s;
+    return s
+        .trim()
+        .split(RegExp(r'\s+'))
+        .map((w) => w.isEmpty
+            ? w
+            : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
+        .join(' ');
+  }
+
+  String _formatDateString(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return '';
+    DateTime? dt = DateTime.tryParse(value);
+    if (dt == null) {
+      try {
+        dt = UiDateUtils.parse(value);
+      } catch (_) {
+        dt = null;
+      }
+    }
+    return dt != null ? UiDateUtils.fullDate(dt) : value;
+  }
+
   // ------------------------ UI ------------------------
   @override
   Widget build(BuildContext context) {
@@ -673,16 +714,26 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                                       ),
                                     ),
                               const SizedBox(height: 4),
+                              // Show formatted maintenance identifier if available, else fall back to the route taskId
                               Text(
-                                widget.taskId,
+                                _taskData?['formatted_id'] ?? _taskData?['maintenance_id'] ?? widget.taskId,
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: Colors.grey[600],
                                 ),
                               ),
                               const SizedBox(height: 4),
+                              // Also show the backend numeric/database id (UID/request id) for clarity
                               Text(
-                                "Assigned To: ${_assigneeNameCtrl.text}",
+                                'Request ID: ${_taskData?['id'] ?? _taskData?['request_id'] ?? widget.taskId}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[500],
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Assigned To: ${_assigneeNameCtrl.text.isNotEmpty ? _assigneeNameCtrl.text : (_selectedStaffName ?? 'Unassigned')}',
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: Colors.grey[600],
@@ -692,13 +743,12 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                           ),
                         ),
                         const SizedBox(width: 16),
-                        // Right: chips then toolbar
+                        // Right: chips (toolbar moved to bottom-right)
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             _buildTaskTags(),
                             const SizedBox(height: 8),
-                            _buildBottomActionBar(),
                           ],
                         ),
                       ],
@@ -722,6 +772,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                               _buildInventoryRequestsCard(),
                               const SizedBox(height: 24),
                               _buildAdminNotesCard(),
+                              const SizedBox(height: 24),
                             ],
                           ),
                         ),
@@ -735,7 +786,12 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                               _buildScheduleCard(),
                               const SizedBox(height: 24),
                               _buildAssignmentCard(),
-                         
+                              const SizedBox(height: 8),
+                              // Place the main Edit/Save action under the Assign Staff card (right column)
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: _buildBottomActionBar(),
+                              ),
                               const SizedBox(height: 24),
                     
                             ],
@@ -836,8 +892,21 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
 
   // ------------------------ Notification Banner (top of container) ------------------------
   Widget _buildNotificationBanner() {
-    final nextDue = _nextDueCtrl.text.trim();
-    final hasNextDue = nextDue.isNotEmpty && nextDue != 'N/A';
+    final rawNextDue = _nextDueCtrl.text.trim();
+    String formattedNext = rawNextDue;
+    DateTime? parsedNext;
+    if (rawNextDue.isNotEmpty) {
+      parsedNext = DateTime.tryParse(rawNextDue);
+      if (parsedNext == null) {
+        try {
+          parsedNext = UiDateUtils.parse(rawNextDue);
+        } catch (_) {
+          parsedNext = null;
+        }
+      }
+      if (parsedNext != null) formattedNext = UiDateUtils.fullDate(parsedNext);
+    }
+    final hasNextDue = formattedNext.isNotEmpty && formattedNext != 'N/A';
     
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -865,7 +934,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
           Expanded(
             child: Text(
               hasNextDue
-                  ? "Next Service: $nextDue"
+                  ? "Next Service: $formattedNext"
                   : "No next service date scheduled",
               style: TextStyle(color: Colors.grey[700], fontSize: 14),
               overflow: TextOverflow.ellipsis,
@@ -884,7 +953,58 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           ElevatedButton.icon(
-            onPressed: _enterEditMode,
+            onPressed: () {
+              // Prepare an editable payload for the edit form. Attempt to include checklist and parts
+              final Map<String, dynamic> editData = Map<String, dynamic>.from(_taskData ?? {});
+
+              // Ensure remarks/admin notes are present
+              if ((editData['remarks'] == null || editData['remarks'].toString().isEmpty) && _adminNotifyCtrl.text.trim().isNotEmpty) {
+                editData['remarks'] = _adminNotifyCtrl.text.trim();
+              }
+
+              // Normalize checklist: prefer existing server checklist, else synthesize from local checklist items
+              if (editData['checklist'] == null) {
+                if (_checklistItems.isNotEmpty) {
+                  editData['checklist'] = _checklistItems.map((e) => {
+                        'task': e['text'] ?? '',
+                        'completed': e['completed'] ?? false,
+                      }).toList();
+                } else if (editData['checklist_completed'] != null) {
+                  editData['checklist'] = editData['checklist_completed'];
+                }
+              }
+
+              // Normalize parts/parts_used from linked inventory requests if not present
+              if (editData['parts_used'] == null && _linkedInventoryRequests.isNotEmpty) {
+                editData['parts_used'] = _linkedInventoryRequests.map((r) => {
+                      'inventory_id': r['inventory_id'],
+                      'item_name': r['item_name'] ?? r['name'] ?? r['item_name'],
+                      'item_code': r['item_code'],
+                      'quantity_requested': r['quantity_requested'] ?? r['quantity'] ?? 1,
+                      'status': r['status'],
+                    }).toList();
+              }
+
+              // Ensure date fields are available for the form
+              if ((editData['scheduled_date'] == null || editData['scheduled_date'].toString().isEmpty) && _startDateCtrl.text.isNotEmpty) {
+                editData['scheduled_date'] = _startDateCtrl.text;
+                editData['start_date'] = _startDateCtrl.text;
+              }
+              if ((editData['next_due_date'] == null || editData['next_due_date'].toString().isEmpty) && _nextDueCtrl.text.isNotEmpty) {
+                editData['next_due_date'] = _nextDueCtrl.text;
+                editData['nextDueDate'] = _nextDueCtrl.text;
+              }
+
+              // Open the full edit form and pass the prepared payload so it can populate fields
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => InternalMaintenanceFormPage(
+                    maintenanceData: editData,
+                    isEditMode: true,
+                  ),
+                ),
+              );
+            },
             icon: const Icon(Icons.edit, size: 20),
             label: const Text("Edit Task"),
             style: ElevatedButton.styleFrom(
@@ -980,16 +1100,22 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
       title: 'Schedule',
       child: Column(
         children: [
-          _editableRow(
-            'Recurrence',
-            _recurrenceCtrl,
-            validator: _req,
-            hint: 'e.g., Every 1 month',
-          ),
+          // Show editable input in edit mode, otherwise display title-cased recurrence
+          _isEditMode
+              ? _editableRow(
+                  'Recurrence',
+                  _recurrenceCtrl,
+                  validator: _req,
+                  hint: 'e.g., Every 1 month',
+                )
+              : _readOnlyRow(
+                  'Recurrence',
+                  _toTitleCase(_recurrenceCtrl.text),
+                ),
           _buildStartDateRow(),
           _readOnlyRow(
             'Next Due Date',
-            _nextDueCtrl.text,
+            _formatDateString(_nextDueCtrl.text),
             highlight: true,
           ),
         ],
@@ -1040,14 +1166,16 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                         suffixIcon: Icon(Icons.calendar_today, size: 18),
                       ),
                       child: Text(
-                        _startDateCtrl.text.isNotEmpty ? _startDateCtrl.text : 'Select date',
+                        _startDateCtrl.text.isNotEmpty
+                            ? _formatDateString(_startDateCtrl.text)
+                            : 'Select date',
                         style: TextStyle(
                           color: _startDateCtrl.text.isEmpty ? Colors.grey : Colors.black87,
                         ),
                       ),
                     ),
                   )
-                : Text(_startDateCtrl.text, style: valueStyle),
+                : Text(_formatDateString(_startDateCtrl.text), style: valueStyle),
           ),
         ],
       ),
@@ -1058,7 +1186,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     return _card(
       icon: Icons.person,
       iconBg: Colors.grey[200]!,
-      title: 'Assignment',
+      title: 'Assign Staff',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1154,41 +1282,21 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                 },
                 validator: (value) => value == null || value.isEmpty ? 'Please select a staff member' : null,
               ),
-          ] else ...[
-            // In view mode: show read-only assignment info
-            Row(
+            ] else ...[
+            // In view mode: show read-only assignment info (compact, no left padding)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.person_outline,
-                    color: Colors.grey[600],
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _readOnlyRow(
-                        'Assignee Name',
-                        _assigneeNameCtrl.text,
-                        compact: true,
-                      ),
-                      _readOnlyRow(
-                        'Department',
-                        _assigneeDeptCtrl.text,
-                        compact: true,
-                      ),
-                    ],
-                  ),
-                ),
+              _readOnlyRow(
+                'Assignee Name',
+                _assigneeNameCtrl.text,
+                compact: true,
+              ),
+              _readOnlyRow(
+                'Department',
+                _assigneeDeptCtrl.text,
+                compact: true,
+              ),
               ],
             ),
           ],
@@ -1430,7 +1538,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                             ),
                             if (startDate.isNotEmpty)
                               Text(
-                                'Requested: $startDate',
+                                'Requested: ${_formatDateString(startDate)}',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey[500],
@@ -1479,20 +1587,64 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
   }
 
   Widget _buildAdminNotesCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
+    // Show the admin notes card only when there is text in view mode.
+    // In edit mode the card is shown so the user can add/edit notes.
+    final hasAdminNotes = _adminNotifyCtrl.text.trim().isNotEmpty;
+    if (!hasAdminNotes && !_isEditMode) {
+      // Nothing to show in view mode and not editing -> hide entirely
+      return const SizedBox.shrink();
+    }
+
+    final card = _card(
+      icon: Icons.note,
+      iconBg: Colors.grey[200]!,
+      title: 'Admin Notes',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _isEditMode
+              ? TextFormField(
+                  controller: _adminNotifyCtrl,
+                  minLines: 3,
+                  maxLines: 8,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    hintText: 'Enter admin notes...',
+                  ),
+                )
+              : Text(
+                  _adminNotifyCtrl.text.trim().isNotEmpty
+                      ? _adminNotifyCtrl.text
+                      : 'No admin notes available.',
+                  style: const TextStyle(fontSize: 14, height: 1.5),
+                ),
         ],
       ),
-      padding: const EdgeInsets.all(24),
-      );
+    );
+
+    // If in view mode and there are notes, show an Edit button below the card.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        card,
+        if (!_isEditMode && hasAdminNotes) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _enterEditMode,
+              icon: const Icon(Icons.edit, size: 18),
+              label: const Text('Edit Notes'),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
   }
 
 

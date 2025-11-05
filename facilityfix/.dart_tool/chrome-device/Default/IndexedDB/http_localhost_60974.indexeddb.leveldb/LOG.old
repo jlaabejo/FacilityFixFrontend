@@ -1,0 +1,18 @@
+2025/11/05-16:08:46.385 fa04 Creating DB C:\Users\Asset\AppData\Local\Temp\flutter_tools.c89ca65a\flutter_tools_chrome_device.57116c79\Default\IndexedDB\http_localhost_60974.indexeddb.leveldb since it was missing.
+2025/11/05-16:08:46.414 fa04 Reusing MANIFEST C:\Users\Asset\AppData\Local\Temp\flutter_tools.c89ca65a\flutter_tools_chrome_device.57116c79\Default\IndexedDB\http_localhost_60974.indexeddb.leveldb/MANIFEST-000001
+2025/11/05-16:08:46.485 fa04 Level-0 table #5: started
+2025/11/05-16:08:46.502 fa04 Level-0 table #5: 1311 bytes OK
+2025/11/05-16:08:46.505 fa04 Delete type=0 #3
+2025/11/05-16:08:46.515 fa04 Manual compaction at level-0 from '\x00\x01\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x02\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/11/05-16:51:16.034 fa04 Level-0 table #7: started
+2025/11/05-16:51:16.097 fa04 Level-0 table #7: 384908 bytes OK
+2025/11/05-16:51:16.103 fa04 Delete type=0 #4
+2025/11/05-16:51:16.107 fa04 Manual compaction at level-0 from (begin) .. (end); will stop at (end)
+2025/11/05-16:51:16.109 fa04 Manual compaction at level-1 from (begin) .. (end); will stop at '\x00\x04\x0f \x04\x04\x01\x05\x00r\x00o\x00o\x00m\x00s\x04\x02\x03\x00\x00@\x98\xc1B\xdaA\x03\x00\x00\x00\x04Nm\xc3A\x04\x00\x01\x14\x002\x00L\x00x\x00g\x00z\x00i\x00H\x00K\x00Q\x003\x00d\x00x\x00W\x00i\x00U\x00e\x00z\x00g\x00X\x00U\x00\x04\x04\x04\x00\x01\x05\x00r\x00o\x00o\x00m\x00s\x04\x02\x03\x00\x00@\x98\xc1B\xdaA\x03\x00\x00\x00\x04Nm\xc3A\x01\x14\x002\x00L\x00x\x00g\x00z\x00i\x00H\x00K\x00Q\x003\x00d\x00x\x00W\x00i\x00U\x00e\x00z\x00g\x00X\x00U' @ 2653 : 1
+2025/11/05-16:51:16.109 fa04 Compacting 1@1 + 1@2 files
+2025/11/05-16:51:16.117 fa04 Generated table #8@1: 311 keys, 10538 bytes
+2025/11/05-16:51:16.117 fa04 Compacted 1@1 + 1@2 files => 10538 bytes
+2025/11/05-16:51:16.119 fa04 compacted to: files[ 0 0 1 0 0 0 0 ]
+2025/11/05-16:51:16.120 fa04 Delete type=2 #5
+2025/11/05-16:51:16.121 fa04 Delete type=2 #7
+2025/11/05-16:51:16.122 fa04 Manual compaction at level-1 from '\x00\x04\x0f \x04\x04\x01\x05\x00r\x00o\x00o\x00m\x00s\x04\x02\x03\x00\x00@\x98\xc1B\xdaA\x03\x00\x00\x00\x04Nm\xc3A\x04\x00\x01\x14\x002\x00L\x00x\x00g\x00z\x00i\x00H\x00K\x00Q\x003\x00d\x00x\x00W\x00i\x00U\x00e\x00z\x00g\x00X\x00U\x00\x04\x04\x04\x00\x01\x05\x00r\x00o\x00o\x00m\x00s\x04\x02\x03\x00\x00@\x98\xc1B\xdaA\x03\x00\x00\x00\x04Nm\xc3A\x01\x14\x002\x00L\x00x\x00g\x00z\x00i\x00H\x00K\x00Q\x003\x00d\x00x\x00W\x00i\x00U\x00e\x00z\x00g\x00X\x00U' @ 2653 : 1 .. (end); will stop at (end)

@@ -353,6 +353,7 @@ class ConcernSlipDetails extends StatelessWidget {
 class JobServiceDetails extends StatelessWidget {
   //  Basic Information
   final String id;
+  final String? formattedId; // Backend-provided formatted ID
   final String concernSlipId; // link to concern slip
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -385,9 +386,6 @@ class JobServiceDetails extends StatelessWidget {
   final String? assessment;
   final List<String>? staffAttachments;
 
-  // Tracking
-  final List<String>? materialsUsed;
-
   // Callbacks
   final VoidCallback? onViewConcernSlip;
 
@@ -396,6 +394,7 @@ class JobServiceDetails extends StatelessWidget {
 
     // Basic Information
     required this.id,
+    this.formattedId,
     required this.concernSlipId,
     required this.createdAt,
     this.updatedAt,
@@ -425,9 +424,6 @@ class JobServiceDetails extends StatelessWidget {
     this.assessedAt,
     this.assessment,
     this.staffAttachments,
-
-    // Tracking
-    this.materialsUsed,
 
     // Callbacks
     this.onViewConcernSlip,
@@ -472,8 +468,6 @@ class JobServiceDetails extends StatelessWidget {
         (completionAt != null) ||
         (assessment?.trim().isNotEmpty ?? false) ||
         ((staffAttachments ?? const []).isNotEmpty);
-
-    final bool hasTracking = (materialsUsed?.isNotEmpty ?? false);
 
     final displayType = _effectiverequestTypeTag();
     final headerTitle = displayType.isNotEmpty ? displayType : 'Job Service';
@@ -520,74 +514,51 @@ class JobServiceDetails extends StatelessWidget {
               if (_displayStatus.isNotEmpty) StatusTag(status: _displayStatus),
             ],
           ),
-          SizedBox(height: 4 * s),
+          SizedBox(height: 8 * s),
 
-          // IDs row (Job Service ID + linked Concern Slip ID)
-          Row(
+          // ID and View Concern Slip button on the left
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  UiIdFormatter.formatJobServiceId(id),
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 12 * s,
-                    color: const Color(0xFF475467),
-                    fontWeight: FontWeight.w500,
-                    height: 1.2,
-                  ),
+              Text(
+                UiIdFormatter.formatJobServiceId(id, formattedId: formattedId),
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12 * s,
+                  color: const Color(0xFF475467),
+                  fontWeight: FontWeight.w500,
+                  height: 1.2,
                 ),
               ),
-              SizedBox(width: 8 * s),
-              if (concernSlipId.isNotEmpty && onViewConcernSlip != null)
+              if (concernSlipId.isNotEmpty && onViewConcernSlip != null) ...[
+                SizedBox(height: 8 * s),
                 GestureDetector(
                   onTap: onViewConcernSlip,
-                  child: Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 12 * s,
-                      vertical: 6 * s,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF005CE7),
-                      borderRadius: BorderRadius.circular(6 * s),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF005CE7).withOpacity(0.2),
-                          blurRadius: 4 * s,
-                          offset: Offset(0, 2 * s),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.description_outlined,
+                        size: 14 * s,
+                        color: const Color(0xFF005CE7),
+                      ),
+                      SizedBox(width: 6 * s),
+                      Text(
+                        'View Concern Slip',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12 * s,
+                          color: const Color(0xFF005CE7),
+                          fontWeight: FontWeight.w600,
+                          decoration: TextDecoration.underline,
+                          decorationColor: const Color(0xFF005CE7),
                         ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.description_outlined,
-                          size: 16 * s,
-                          color: Colors.white,
-                        ),
-                        SizedBox(width: 6 * s),
-                        Text(
-                          'View Concern Slip',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 12 * s,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                        SizedBox(width: 4 * s),
-                        Icon(
-                          Icons.arrow_forward,
-                          size: 14 * s,
-                          color: Colors.white,
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                )
-              else if (concernSlipId.isNotEmpty)
+                ),
+              ] else if (concernSlipId.isNotEmpty) ...[
+                SizedBox(height: 4 * s),
                 Text(
                   'From Slip: $concernSlipId',
                   style: TextStyle(
@@ -597,6 +568,7 @@ class JobServiceDetails extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
+              ],
             ],
           ),
 
@@ -810,25 +782,6 @@ class JobServiceDetails extends StatelessWidget {
                 ],
               ),
             ),
-
-            // ----- Divider -----
-            SizedBox(height: 14 * s),
-          ],
-
-          // ===== Tracking =====
-          if (hasTracking) ...[
-            _Section(
-              title: 'Materials Used',
-              child: Wrap(
-                spacing: 8 * s,
-                runSpacing: 8 * s,
-                children:
-                    materialsUsed!
-                        .where((m) => m.trim().isNotEmpty)
-                        .map((m) => _materialChip(m.trim(), s))
-                        .toList(),
-              ),
-            ),
           ],
         ],
       ),
@@ -876,6 +829,9 @@ class WorkOrderPermitDetails extends StatelessWidget {
   final String requestedBy; // tenant user_id/display
   final String? unitId;
 
+  // Request Details
+  final String? title; // Task title
+
   // Permit Specific Details
   final String contractorName; // required
   final String contractorNumber; // required
@@ -898,6 +854,7 @@ class WorkOrderPermitDetails extends StatelessWidget {
   // Callbacks
   final Future<void> Function(String permitId, String? completionNotes)?
   onComplete;
+  final VoidCallback? onViewConcernSlip;
 
   const WorkOrderPermitDetails({
     super.key,
@@ -915,6 +872,9 @@ class WorkOrderPermitDetails extends StatelessWidget {
     // Tenant / Requester
     required this.requestedBy,
     this.unitId,
+
+    // Request Details
+    this.title,
 
     // Permit Specific Details
     required this.contractorName,
@@ -935,6 +895,7 @@ class WorkOrderPermitDetails extends StatelessWidget {
 
     // Callbacks
     this.onComplete,
+    this.onViewConcernSlip,
   });
 
   // ---- Behavior derived from resolutionType ---------------------------------
@@ -994,8 +955,11 @@ class WorkOrderPermitDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = uiScale(context); // 0.85..1.0 on phones
     final displayType = _effectiverequestTypeTag();
-    final headerTitle =
-        displayType.isNotEmpty ? displayType : 'Work Order Permit';
+    
+    // Use title if available, otherwise fall back to displayType
+    final headerTitle = (title?.trim().isNotEmpty ?? false) 
+        ? title!.trim() 
+        : (displayType.isNotEmpty ? displayType : 'Work Order Permit');
 
     final hasApprovalBits =
         (approvedBy?.trim().isNotEmpty ?? false) ||
@@ -1042,36 +1006,62 @@ class WorkOrderPermitDetails extends StatelessWidget {
               if (_displayStatus.isNotEmpty) StatusTag(status: _displayStatus),
             ],
           ),
-          SizedBox(height: 4 * s),
+          SizedBox(height: 8 * s),
 
-          // IDs row (permit ID + linked Concern Slip ID)
-          Row(
+          // ID and View Concern Slip button on the left
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if ((id ?? '').isNotEmpty)
-                Expanded(
-                  child: Text(
-                    UiIdFormatter.formatWorkOrderPermitId(id!),
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 12 * s,
-                      color: const Color(0xFF475467),
-                      fontWeight: FontWeight.w500,
-                      height: 1.2,
-                    ),
+                Text(
+                  UiIdFormatter.formatWorkOrderPermitId(id!),
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12 * s,
+                    color: const Color(0xFF475467),
+                    fontWeight: FontWeight.w500,
+                    height: 1.2,
                   ),
-                )
-              else
-                const Spacer(),
-              SizedBox(width: 8 * s),
-              Text(
-                'From Slip: $concernSlipId',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 11.5 * s,
-                  color: const Color(0xFF667085),
-                  fontWeight: FontWeight.w500,
                 ),
-              ),
+              if (concernSlipId.isNotEmpty && onViewConcernSlip != null) ...[
+                SizedBox(height: 8 * s),
+                GestureDetector(
+                  onTap: onViewConcernSlip,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.description_outlined,
+                        size: 14 * s,
+                        color: const Color(0xFF005CE7),
+                      ),
+                      SizedBox(width: 6 * s),
+                      Text(
+                        'View Concern Slip',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12 * s,
+                          color: const Color(0xFF005CE7),
+                          fontWeight: FontWeight.w600,
+                          decoration: TextDecoration.underline,
+                          decorationColor: const Color(0xFF005CE7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else if (concernSlipId.isNotEmpty) ...[
+                SizedBox(height: 4 * s),
+                Text(
+                  'From Slip: $concernSlipId',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11.5 * s,
+                    color: const Color(0xFF667085),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ],
           ),
 
@@ -1218,20 +1208,30 @@ class WorkOrderPermitDetails extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Show approval date first if available
+                  if (approvalDate != null) ...[
+                    Text(
+                      'Approved on ${UiDateUtils.fullDate(approvalDate!)}',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12 * s,
+                        color: const Color(0xFF667085),
+                        fontWeight: FontWeight.w500,
+                        height: 1.4,
+                      ),
+                    ),
+                    SizedBox(height: 12 * s),
+                  ],
+                  
+                  // Show approved by with avatar/initials
                   if ((approvedBy?.trim().isNotEmpty ?? false)) ...[
                     _AvatarNameBlock(
                       name: approvedBy!.trim(),
-                      departmentTag: 'Admin',
+                      departmentTag: null, // Remove department tag
                     ),
                     SizedBox(height: 10 * s),
                   ],
-                  if (approvalDate != null) ...[
-                    KeyValueRow.text(
-                      label: 'Approval Date',
-                      valueText: UiDateUtils.fullDate(approvalDate!),
-                    ),
-                    SizedBox(height: 6 * s),
-                  ],
+                  
                   if ((denialReason?.trim().isNotEmpty ?? false)) ...[
                     _SectionCard(
                       title: 'Denial Reason',
@@ -1249,6 +1249,14 @@ class WorkOrderPermitDetails extends StatelessWidget {
                       hideIfEmpty: false,
                     ),
                     SizedBox(height: 8 * s),
+                  ],
+                  if ((adminNotes?.trim().isNotEmpty ?? false)) ...[
+                    _SectionCard(
+                      title: 'Admin Notes',
+                      content: adminNotes!.trim(),
+                      padding: EdgeInsets.all(14 * s),
+                      hideIfEmpty: false,
+                    ),
                   ],
                 ],
               ),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:facilityfix/services/firebase_chat_service.dart';
+import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/models/chat_models.dart';
 import 'package:facilityfix/services/auth_storage.dart';
 import 'package:facilityfix/staff/announcement.dart';
@@ -9,6 +11,7 @@ import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
+import 'package:facilityfix/widgets/chat.dart' as chat_widget;
 
 class StaffChatListPage extends StatefulWidget {
   const StaffChatListPage({super.key});
@@ -278,9 +281,9 @@ class StaffChatDetailPage extends StatefulWidget {
 
 class _StaffChatDetailPageState extends State<StaffChatDetailPage> {
   final FirebaseChatService _chatService = FirebaseChatService();
-  final TextEditingController _messageController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
+  final APIService _apiService = APIService();
   String? _currentUserId;
+  String _otherParticipantName = 'Loading...';
 
   @override
   void initState() {
@@ -297,50 +300,56 @@ class _StaffChatDetailPageState extends State<StaffChatDetailPage> {
     if (_currentUserId != null && _currentUserId!.isNotEmpty) {
       // Mark messages as read when entering the chat
       await _chatService.markMessagesAsRead(widget.room.id, _currentUserId!);
+      // Load other participant's name
+      await _loadOtherParticipantName();
     }
   }
 
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
-  }
-
-  Future<void> _sendMessage() async {
-    final text = _messageController.text.trim();
-    if (text.isEmpty || _currentUserId == null) return;
-
-    print('[StaffChat] Sending message: "$text" to room: ${widget.room.id}');
-
+  Future<void> _loadOtherParticipantName() async {
     try {
-      await _chatService.sendMessage(
-        roomId: widget.room.id,
-        message: text,
-      );
-      _messageController.clear();
+      // Get other participant ID (not current user)
+      final otherParticipantId = widget.room.participants
+          .firstWhere((id) => id != _currentUserId, orElse: () => '');
       
-      print('[StaffChat] Message sent successfully');
-      
-      // Scroll to bottom after sending message
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollToBottom();
+      if (otherParticipantId.isNotEmpty) {
+        // Fetch user profile from API
+        final userData = await _apiService.getUserById(otherParticipantId);
+        
+        if (userData != null) {
+          // Extract the user's name from the profile
+          String displayName = 'User';
+          
+          // Try different name fields based on the API response structure
+          if (userData['first_name'] != null && userData['last_name'] != null) {
+            displayName = '${userData['first_name']} ${userData['last_name']}';
+          } else if (userData['name'] != null) {
+            displayName = userData['name'];
+          } else if (userData['username'] != null) {
+            displayName = userData['username'];
+          } else if (userData['email'] != null) {
+            displayName = userData['email'].split('@')[0];
+          }
+          
+          setState(() {
+            _otherParticipantName = displayName;
+          });
+          
+          print('[StaffChat] Loaded participant name: $displayName for ID: $otherParticipantId');
+        } else {
+          setState(() {
+            _otherParticipantName = 'User';
+          });
         }
-      });
-    } catch (e) {
-      print('[StaffChat] Error sending message: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to send message: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      } else {
+        setState(() {
+          _otherParticipantName = 'Chat Room';
+        });
       }
+    } catch (e) {
+      print('[StaffChat] Error loading participant name: $e');
+      setState(() {
+        _otherParticipantName = 'User';
+      });
     }
   }
 
@@ -362,87 +371,81 @@ class _StaffChatDetailPageState extends State<StaffChatDetailPage> {
   }
 
   String _getRoomTitle() {
-    String baseTitle;
-    if (widget.room.concernSlipId != null) {
-      baseTitle = 'Concern Slip Chat';
-    } else if (widget.room.maintenanceId != null) {
-      baseTitle = 'Maintenance Chat';
-    } else if (widget.room.jobServiceId != null) {
-      baseTitle = 'Job Service Chat';
-    } else {
-      baseTitle = 'General Chat';
-    }
-    
-    // Append room code to title if available
-    if (widget.room.roomCode.isNotEmpty) {
-      return '$baseTitle (${widget.room.roomCode})';
-    }
-    return baseTitle;
+    // Show only the participant name, hide room code
+    return _otherParticipantName;
   }
+  Future<void> _editMessage(String messageId, String newText) async {
+    try {
+      // Directly update the message document in Firestore to avoid relying
+      // on a possibly-missing method in FirebaseChatService.
+      final roomId = widget.room.id;
+      final messageRef = FirebaseFirestore.instance
+          .collection('chat_rooms')
+          .doc(roomId)
+          .collection('messages')
+          .doc(messageId);
 
-  void _copyRoomCode() {
-    if (widget.room.roomCode.isNotEmpty) {
-      Clipboard.setData(ClipboardData(text: widget.room.roomCode));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Room code ${widget.room.roomCode} copied to clipboard'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
-  }
+      await messageRef.update({
+        'message': newText,
+        'edited': true,
+        'editedAt': FieldValue.serverTimestamp(),
+      });
 
-  void _shareRoomCode() {
-    if (widget.room.roomCode.isNotEmpty) {
-      final shareText = 'Join this chat room with code: ${widget.room.roomCode}';
-      Clipboard.setData(ClipboardData(text: shareText));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Room code copied for sharing'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    }
-  }
-
-  void _showRoomInfo() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(_getRoomTitle()),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (widget.room.roomCode.isNotEmpty) ...[
-              Text('Room Code: ${widget.room.roomCode}'),
-              const SizedBox(height: 8),
-            ],
-            Text('Participants: ${widget.room.participants.length}'),
-            const SizedBox(height: 8),
-            Text('Created: ${_formatTimestamp(widget.room.createdAt)}'),
-            if (widget.room.concernSlipId != null) ...[
-              const SizedBox(height: 8),
-              Text('Concern Slip ID: ${widget.room.concernSlipId}'),
-            ],
-            if (widget.room.maintenanceId != null) ...[
-              const SizedBox(height: 8),
-              Text('Maintenance ID: ${widget.room.maintenanceId}'),
-            ],
-            if (widget.room.jobServiceId != null) ...[
-              const SizedBox(height: 8),
-              Text('Job Service ID: ${widget.room.jobServiceId}'),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Message updated'),
+            duration: Duration(seconds: 2),
           ),
-        ],
-      ),
-    );
+        );
+      }
+    } catch (e) {
+      print('[StaffChat] Error editing message: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to edit message: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteMessage(List<String> messageIds) async {
+    try {
+      // Delete each message directly from Firestore since FirebaseChatService
+      // does not expose a deleteMessage method.
+      final roomId = widget.room.id;
+      final messagesCollection = FirebaseFirestore.instance
+          .collection('chat_rooms')
+          .doc(roomId)
+          .collection('messages');
+
+      for (final messageId in messageIds) {
+        final messageRef = messagesCollection.doc(messageId);
+        await messageRef.delete();
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${messageIds.length} message${messageIds.length > 1 ? 's' : ''} deleted'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      print('[StaffChat] Error deleting messages: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete messages: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -465,276 +468,91 @@ class _StaffChatDetailPageState extends State<StaffChatDetailPage> {
       appBar: CustomAppBar(
         title: _getRoomTitle(),
         leading: const BackButton(),
-        actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
-            onSelected: (value) {
-              switch (value) {
-                case 'room_info':
-                  _showRoomInfo();
-                  break;
-                case 'copy_code':
-                  _copyRoomCode();
-                  break;
-                case 'share_code':
-                  _shareRoomCode();
-                  break;
+      ),
+      body: StreamBuilder<List<ChatMessage>>(
+        stream: _chatService.getMessagesStream(widget.room.id),
+        builder: (context, snapshot) {
+          print('[StaffChat] Messages stream state: ${snapshot.connectionState}');
+          if (snapshot.hasData) {
+            print('[StaffChat] Received ${snapshot.data!.length} messages');
+          }
+          if (snapshot.hasError) {
+            print('[StaffChat] Messages stream error: ${snapshot.error}');
+          }
+          
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: Color(0xFF919EAB),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Error loading messages',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Color(0xFF919EAB),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          final messages = snapshot.data ?? [];
+
+          // Convert ChatMessage models to chat_widget.ChatMessage format
+          final chatMessages = messages.map((msg) {
+            final isSender = msg.sentBy == _currentUserId;
+            return chat_widget.ChatMessage(
+              id: msg.id,
+              text: msg.message,
+              time: _formatTimestamp(msg.timestamp),
+              isSender: isSender,
+            );
+          }).toList();
+
+          // Use the ChatScreen widget
+          return chat_widget.ChatScreen(
+            assigneeName: _getRoomTitle(),
+            messages: chatMessages,
+            onSend: (message) async {
+              if (message.trim().isEmpty) return;
+              
+              print('[StaffChat] Sending message: "$message" to room: ${widget.room.id}');
+              
+              try {
+                await _chatService.sendMessage(
+                  roomId: widget.room.id,
+                  message: message,
+                );
+                
+                print('[StaffChat] Message sent successfully');
+              } catch (e) {
+                print('[StaffChat] Error sending message: $e');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to send message: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
               }
             },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'room_info',
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, size: 20),
-                    SizedBox(width: 8),
-                    Text('Room Info'),
-                  ],
-                ),
-              ),
-              if (widget.room.roomCode.isNotEmpty) ...[
-                PopupMenuItem(
-                  value: 'copy_code',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.copy, size: 20),
-                      const SizedBox(width: 8),
-                      Text('Copy Code (${widget.room.roomCode})'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'share_code',
-                  child: Row(
-                    children: [
-                      Icon(Icons.share, size: 20),
-                      SizedBox(width: 8),
-                      Text('Share Room Code'),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Messages List
-          Expanded(
-            child: StreamBuilder<List<ChatMessage>>(
-              stream: _chatService.getMessagesStream(widget.room.id),
-              builder: (context, snapshot) {
-                print('[StaffChat] Messages stream state: ${snapshot.connectionState}');
-                if (snapshot.hasData) {
-                  print('[StaffChat] Received ${snapshot.data!.length} messages');
-                }
-                if (snapshot.hasError) {
-                  print('[StaffChat] Messages stream error: ${snapshot.error}');
-                }
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          size: 64,
-                          color: Color(0xFF919EAB),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Error loading messages',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            color: Color(0xFF919EAB),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                final messages = snapshot.data ?? [];
-
-                if (messages.isEmpty) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          size: 64,
-                          color: Color(0xFF919EAB),
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'No messages yet',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Color(0xFF919EAB),
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Start the conversation',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Color(0xFF919EAB),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                // Auto scroll to bottom when new messages arrive
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (_scrollController.hasClients) {
-                    _scrollToBottom();
-                  }
-                });
-
-                return ListView.separated(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.all(16),
-                  itemCount: messages.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 16),
-                  itemBuilder: (context, index) {
-                    final message = messages[index];
-                    final isSender = message.sentBy == _currentUserId;
-
-                    return Align(
-                      alignment: isSender
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
-                      child: Column(
-                        crossAxisAlignment: isSender
-                            ? CrossAxisAlignment.end
-                            : CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            constraints: const BoxConstraints(maxWidth: 240),
-                            decoration: ShapeDecoration(
-                              color: isSender
-                                  ? const Color(0xFFD3FCD2)
-                                  : const Color(0xFFF6F7F9),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            child: Text(
-                              message.message,
-                              style: const TextStyle(
-                                color: Color(0xFF161C24),
-                                fontSize: 14,
-                                fontFamily: 'Inter',
-                                fontWeight: FontWeight.w400,
-                                height: 1.71,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _formatTimestamp(message.timestamp),
-                            style: const TextStyle(
-                              color: Color(0xFF919EAB),
-                              fontSize: 10,
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w400,
-                              height: 1.8,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-
-          // Message Input
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(
-                top: BorderSide(color: Color(0xFFF6F7F9)),
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 4),
-                    decoration: ShapeDecoration(
-                      color: const Color(0xFFF6F7F9),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                    ),
-                    child: TextField(
-                      controller: _messageController,
-                      maxLines: null,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _sendMessage(),
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontSize: 16,
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w400,
-                        height: 1.5,
-                      ),
-                      decoration: const InputDecoration(
-                        hintText: 'Type a message',
-                        border: InputBorder.none,
-                        hintStyle: TextStyle(
-                          color: Color(0xFF919EAB),
-                          fontSize: 16,
-                          fontFamily: 'Inter',
-                          fontWeight: FontWeight.w400,
-                          height: 1.5,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF213ED7),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.send,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                    onPressed: _sendMessage,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+            onEdit: _editMessage,
+            onDelete: _deleteMessage,
+          );
+        },
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _messageController.dispose();
-    _scrollController.dispose();
-    super.dispose();
   }
 }

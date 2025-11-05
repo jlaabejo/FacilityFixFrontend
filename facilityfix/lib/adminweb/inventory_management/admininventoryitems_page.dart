@@ -193,19 +193,8 @@ class _InventoryManagementItemsPageState
             ],
           ),
         ),
-        PopupMenuItem(
-          value: 'manage_stock',
-          child: Row(
-            children: [
-              Icon(Icons.inventory, color: Colors.purple[600], size: 18),
-              const SizedBox(width: 12),
-              Text(
-                'Manage Stock',
-                style: TextStyle(color: Colors.purple[600], fontSize: 14),
-              ),
-            ],
-          ),
-        ),
+        // 'Manage Stock' action removed — use Details -> Update Stock which
+        // delegates to the centralized StockManagementPopup for validation.
         PopupMenuItem(
           value: 'edit',
           child: Row(
@@ -349,10 +338,39 @@ class _InventoryManagementItemsPageState
                  classification.contains(searchLower);
         }).toList();
       }
-      
+
+      // Sort by status low->high: Out of Stock, Low Stock, In Stock
+      items.sort((a, b) {
+        final statusA = _getItemStatus(a);
+        final statusB = _getItemStatus(b);
+        final rankA = _statusRank(statusA);
+        final rankB = _statusRank(statusB);
+        if (rankA != rankB) return rankA.compareTo(rankB);
+
+        // Within same status, sort by quantity ascending (lower stock first)
+        final stockA = (a['current_stock'] ?? 0) as num;
+        final stockB = (b['current_stock'] ?? 0) as num;
+        final stockComp = stockA.compareTo(stockB);
+        if (stockComp != 0) return stockComp;
+
+        // Fallback: sort by item name
+        final nameA = (a['item_name'] ?? '').toString().toLowerCase();
+        final nameB = (b['item_name'] ?? '').toString().toLowerCase();
+        return nameA.compareTo(nameB);
+      });
+
       _filteredItems = items;
       _currentPage = 1; // Reset to first page when filter changes
     });
+  }
+
+  // Helper to rank statuses so sorting places low stock items first
+  int _statusRank(String status) {
+    final s = status.toLowerCase();
+    if (s.contains('out')) return 0;
+    if (s.contains('low')) return 1;
+    // default / in stock / high
+    return 2;
   }
 
   void _showFilterMenu(BuildContext context, Offset position) {
@@ -361,9 +379,9 @@ class _InventoryManagementItemsPageState
 
     final List<String> statusOptions = [
       'All',
-      'In Stock',
-      'Low Stock',
       'Out of Stock',
+      'Low Stock',
+      'In Stock',
     ];
 
     showMenu(
@@ -728,6 +746,27 @@ class _InventoryManagementItemsPageState
                                     horizontal: 12,
                                     vertical: 7,
                                   ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            // Refresh Button (copied from requests page)
+                            Container(
+                              height: 40,
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                border: Border.all(color: Colors.grey[300]!),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: InkWell(
+                                onTap: _loadInventoryItems,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.refresh_rounded, size: 20, color: Colors.blue[600]),
+                                    const SizedBox(width: 8),
+                                  ],
                                 ),
                               ),
                             ),

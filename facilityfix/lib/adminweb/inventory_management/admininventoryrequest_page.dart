@@ -648,13 +648,18 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     if (_searchController.text.isNotEmpty) {
       final searchLower = _searchController.text.toLowerCase();
       filtered = filtered.where((item) {
-        final requestId = (item['_doc_id'] ?? item['id'] ?? '').toString().toLowerCase();
-        final maintenanceId = (item['maintenance_task_id'] ?? item['reference_id'] ?? '').toString().toLowerCase();
+        // Match against displayed/formatted IDs as well as raw fields
+        final rawRequestId = (item['_doc_id'] ?? item['id'] ?? '').toString().toLowerCase();
+        final rawMaintenanceId = (item['maintenance_task_id'] ?? item['reference_id'] ?? '').toString().toLowerCase();
+        final formattedRequestId = _formatId(item['_doc_id'] ?? item['id'], 'REQ').toString().toLowerCase();
+        final formattedMaintenanceId = _formatId(item['maintenance_task_id'] ?? item['reference_id'], 'MT').toString().toLowerCase();
         final itemName = (item['item_name'] ?? '').toString().toLowerCase();
         final quantity = (item['quantity_requested'] ?? '').toString().toLowerCase();
-        
-        return requestId.contains(searchLower) ||
-               maintenanceId.contains(searchLower) ||
+
+        return rawRequestId.contains(searchLower) ||
+               formattedRequestId.contains(searchLower) ||
+               rawMaintenanceId.contains(searchLower) ||
+               formattedMaintenanceId.contains(searchLower) ||
                itemName.contains(searchLower) ||
                quantity.contains(searchLower);
       }).toList();
@@ -952,6 +957,27 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                                     horizontal: 12,
                                     vertical: 7,
                                   ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            // Refresh Button
+                            Container(
+                              height: 40,
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                border: Border.all(color: Colors.grey[300]!),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: InkWell(
+                                onTap: _loadInventoryRequests,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.refresh_rounded, size: 20, color: Colors.blue[600]),
+                                    const SizedBox(width: 8),
+                                  ],
                                 ),
                               ),
                             ),

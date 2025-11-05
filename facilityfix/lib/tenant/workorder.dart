@@ -188,50 +188,14 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
             primaryText: 'Yes, Continue',
             onPrimaryPressed: () {
               Navigator.of(context).pop();
-              showDialog(
-                context: context,
-                builder:
-                    (_) => Dialog(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder:
+                      (_) => const RequestForm(
+                        requestType: 'Concern Slip',
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 20,
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text(
-                              'Create a new Concern Slip?',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 16),
-                            ListTile(
-                              leading: const Icon(Icons.assignment_outlined),
-                              title: const Text('Concern Slip'),
-                              onTap: () {
-                                Navigator.of(context).pop();
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder:
-                                        (_) => const RequestForm(
-                                          requestType: 'Concern Slip',
-                                        ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                ),
               );
             },
             secondaryText: 'Cancel',
@@ -454,14 +418,13 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
             MaterialPageRoute(
               builder: (_) => JobServiceDetails(
                 id: concernSlipId,
+                formattedId: r['formatted_id'],
                 concernSlipId: concernSlipId,
                 createdAt: createdAt,
                 requestTypeTag: r['request_type'] ?? 'Job Service',
                 statusTag: r['status'] ?? 'pending',
                 requestedBy: r['assigned_staff'] ?? '',
                 unitId: r['unit_id'] ?? '',
-                materialsUsed: r['materials_used'],
-                // Add other required fields as needed
               ),
             ),
           );
