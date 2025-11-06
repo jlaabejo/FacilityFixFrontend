@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 /// Firebase Configuration and Helper Class
 /// 
@@ -25,12 +26,81 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// ```
 class FirebaseConfig {
   static FirebaseFirestore get firestore => FirebaseFirestore.instance;
-  
+  static FirebaseStorage get storage => FirebaseStorage.instance;
+
   // Collection references
   static CollectionReference get rooms => firestore.collection('rooms');
-  static CollectionReference messagesCollection(String roomId) => 
+  static CollectionReference messagesCollection(String roomId) =>
       rooms.doc(roomId).collection('messages');
-  
+
+  // Storage references
+  static Reference get storageRoot => storage.ref();
+  static Reference userProfileImages(String userId) =>
+      storageRoot.child('users/$userId/profile');
+  static Reference userDocuments(String userId) =>
+      storageRoot.child('users/$userId/documents');
+
+  /// Get download URL from a Firebase Storage path or URL
+  /// Handles multiple input formats:
+  /// - gs://bucket/path/to/file
+  /// - https://storage.googleapis.com/bucket/path/to/file
+  /// - users/userId/profile/image.jpg (relative path)
+  static Future<String?> getDownloadUrl(String pathOrUrl) async {
+    try {
+      print('[FirebaseConfig] Getting download URL for: $pathOrUrl');
+
+      String path;
+
+      // Handle gs:// URLs
+      if (pathOrUrl.startsWith('gs://')) {
+        // Extract path from gs://bucket-name/path/to/file
+        final uri = Uri.parse(pathOrUrl);
+        path = uri.path.substring(1); // Remove leading slash
+        print('[FirebaseConfig] Extracted path from gs:// URL: $path');
+      }
+      // Handle https://storage.googleapis.com URLs
+      else if (pathOrUrl.contains('storage.googleapis.com')) {
+        // Extract path from URL
+        final uri = Uri.parse(pathOrUrl);
+        // Format: https://storage.googleapis.com/bucket-name/path/to/file
+        final segments = uri.pathSegments;
+        if (segments.length > 1) {
+          // Skip bucket name and get the rest
+          path = segments.sublist(1).join('/');
+          print('[FirebaseConfig] Extracted path from googleapis URL: $path');
+        } else {
+          print('[FirebaseConfig] Invalid googleapis URL format');
+          return null;
+        }
+      }
+      // Handle firebasestorage.googleapis.com URLs (already authenticated)
+      else if (pathOrUrl.contains('firebasestorage.googleapis.com')) {
+        print('[FirebaseConfig] URL already authenticated, returning as-is');
+        return pathOrUrl;
+      }
+      // Assume it's a relative path
+      else {
+        path = pathOrUrl;
+        print('[FirebaseConfig] Using relative path: $path');
+      }
+
+      // Get the download URL from Firebase Storage
+      final ref = storage.ref(path);
+      final downloadUrl = await ref.getDownloadURL();
+
+      print('[FirebaseConfig] Download URL obtained successfully');
+      return downloadUrl;
+
+    } catch (e) {
+      print('[FirebaseConfig] Error getting download URL: $e');
+      // If it's already a valid URL, return it
+      if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
+        return pathOrUrl;
+      }
+      return null;
+    }
+  }
+
   // Helper method to configure Firestore settings
   static void configureFirestore() {
     try {

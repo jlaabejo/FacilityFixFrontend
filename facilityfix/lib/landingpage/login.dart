@@ -144,6 +144,7 @@ class _LogInState extends State<LogIn> {
         'birth_date': profile['birth_date'],
         'email': res['email'] ?? profile['email'] ?? email,
         'phone_number': profile['phone_number'],
+        'profile_image_url': profile['profile_image_url'],
         'role': role,
         'building_unit': profile['building_unit'],
 

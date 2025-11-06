@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/services/auth_storage.dart';
+import 'package:file_picker/file_picker.dart';
 
 class APIService {
   /// The app-configured role used to pick a default base URL at construction.
@@ -636,6 +637,34 @@ class APIService {
     };
   }
 
+
+
+  Future<http.Response> uploadMultipartFile({
+  required String path,
+  required PlatformFile file,
+  required Map<String, String> fields,
+}) async {
+  final token = await _requireToken();
+  
+  final request = http.MultipartRequest('POST', _u(path))
+    ..headers.addAll(_authHeaders(token))
+    ..fields.addAll(fields);
+  
+  if (file.bytes != null) {
+    request.files.add(http.MultipartFile.fromBytes(
+      'file',
+      file.bytes!,
+      filename: file.name,
+    ));
+  }
+  
+  final streamedResponse = await request.send();
+  return await http.Response.fromStream(streamedResponse);
+}
+
+
+
+
   // ===== Concern Slips - Direct Firebase Integration =====
 
   Future<Map<String, dynamic>> submitConcernSlip({
@@ -645,16 +674,19 @@ class APIService {
     required String category,
     String priority = 'medium',
     String? unitId,
-    List<String>? attachments,
+    List<PlatformFile> attachments = const [],
     String? scheduleAvailability,
   }) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
+
       // Get user profile for additional context
       final profile = await getUserProfile();
       final userId = profile?['id'] ?? profile?['user_id'];
+
+
 
       final body = {
         'title': title,
@@ -665,7 +697,6 @@ class APIService {
         'schedule_availability': scheduleAvailability,
         if (unitId != null) 'unit_id': unitId,
         if (userId != null) 'user_id': userId,
-        'attachments': attachments ?? [],
         'request_type': 'Concern Slip',
         'status': 'pending',
         'submitted_at': DateTime.now().toIso8601String(),
@@ -682,7 +713,24 @@ class APIService {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final result = jsonDecode(response.body) as Map<String, dynamic>;
 
-        // Generate formatted ID if not provided
+
+
+      // upload files to firebase storage 
+
+    for (final file in attachments) {
+        final uploadResponse = await uploadMultipartFile(
+          path: '/files/upload',
+          file: file,
+          fields: {
+            'entity_type': 'concern_slips',
+            'entity_id': result['id'],
+            'file_type': 'any',
+            if (description != null) 'description': description,
+          },
+        );
+
+    }
+   // Generate formatted ID if not provided
         if (!result.containsKey('formatted_id') && result.containsKey('id')) {
           final now = DateTime.now();
           final year = now.year;
@@ -712,6 +760,10 @@ class APIService {
       throw Exception('Failed to submit concern slip: $e');
     }
   }
+
+
+
+
 
   // ===== Job Services =====
 
@@ -3102,3 +3154,4 @@ class APIService {
     }
   }
 }
+

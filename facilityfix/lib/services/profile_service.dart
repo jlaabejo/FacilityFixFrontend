@@ -1,6 +1,9 @@
 // lib/services/profile_service.dart
+import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/services/auth_storage.dart';
+import 'package:facilityfix/services/firebase_config.dart';
 
 class ProfileService {
   static final ProfileService _instance = ProfileService._internal();
@@ -10,6 +13,10 @@ class ProfileService {
   final APIService _apiService = APIService();
   Map<String, dynamic>? _cachedProfile;
   DateTime? _lastFetchTime;
+
+  // Cache for Firebase Storage download URLs
+  final Map<String, String> _downloadUrlCache = {};
+  final Map<String, DateTime> _downloadUrlCacheTime = {};
 
   /// Get cached profile data if available and recent
   Map<String, dynamic>? get cachedProfile => _cachedProfile;
@@ -249,6 +256,8 @@ class ProfileService {
   void clearCache() {
     _cachedProfile = null;
     _lastFetchTime = null;
+    _downloadUrlCache.clear();
+    _downloadUrlCacheTime.clear();
   }
 
   /// Get profile completion percentage
@@ -292,5 +301,159 @@ class ProfileService {
     return requiredFields.every(
       (field) => (profile[field]?.toString() ?? '').isNotEmpty,
     );
+  }
+
+  /// Get profile image provider from various sources (async version)
+  /// Checks in order: local file, Firebase Storage URL (with proper auth), legacy URLs
+  /// Returns null if no valid image source is found
+  Future<ImageProvider?> getProfileImageProviderAsync(
+    Map<String, dynamic>? profile,
+    File? localImageFile,
+  ) async {
+    if (profile == null) return null;
+
+    print('[ProfileService] Loading profile image...');
+
+    // 1. Check for local file override (recently uploaded)
+    if (localImageFile != null && localImageFile.existsSync()) {
+      print('[ProfileService] Using local file: ${localImageFile.path}');
+      return FileImage(localImageFile);
+    }
+
+    // 2. Check for Firebase Storage URL (profile_image_url)
+    final imageUrl = profile['profile_image_url']?.toString() ?? '';
+    if (imageUrl.isNotEmpty) {
+      try {
+        // Check if URL is already authenticated (firebasestorage.googleapis.com with token)
+        if (imageUrl.contains('firebasestorage.googleapis.com')) {
+          print('[ProfileService] Using authenticated Firebase Storage URL');
+          return NetworkImage(imageUrl);
+        }
+
+        // For unauthenticated URLs, get proper download URL from Firebase Storage
+        print('[ProfileService] Fetching authenticated download URL...');
+
+        // Check cache first (URLs expire after 1 hour, so cache for 50 minutes)
+        final cachedUrl = _downloadUrlCache[imageUrl];
+        final cacheTime = _downloadUrlCacheTime[imageUrl];
+
+        if (cachedUrl != null && cacheTime != null) {
+          final minutesSinceCache = DateTime.now().difference(cacheTime).inMinutes;
+          if (minutesSinceCache < 50) {
+            print('[ProfileService] Using cached download URL');
+            return NetworkImage(cachedUrl);
+          }
+        }
+
+        // Fetch new download URL
+        final downloadUrl = await FirebaseConfig.getDownloadUrl(imageUrl);
+
+        if (downloadUrl != null) {
+          // Cache the download URL
+          _downloadUrlCache[imageUrl] = downloadUrl;
+          _downloadUrlCacheTime[imageUrl] = DateTime.now();
+
+          print('[ProfileService] Using Firebase Storage download URL');
+          return NetworkImage(downloadUrl);
+        }
+      } catch (e) {
+        print('[ProfileService] Error loading Firebase Storage URL: $e');
+      }
+    }
+
+    // 3. Check for local file path stored in profile
+    final photoPath = profile['photo_path']?.toString() ?? '';
+    if (photoPath.isNotEmpty) {
+      try {
+        final file = File(photoPath);
+        if (file.existsSync()) {
+          print('[ProfileService] Using stored local file: $photoPath');
+          return FileImage(file);
+        }
+      } catch (e) {
+        print('[ProfileService] Error loading local file: $e');
+      }
+    }
+
+    // 4. Check for legacy photo_url (direct URL)
+    final photoUrl = profile['photo_url']?.toString() ?? '';
+    if (photoUrl.isNotEmpty) {
+      try {
+        print('[ProfileService] Using legacy photo_url: $photoUrl');
+        return NetworkImage(photoUrl);
+      } catch (e) {
+        print('[ProfileService] Error loading legacy photo URL: $e');
+      }
+    }
+
+    print('[ProfileService] No valid profile image found');
+    return null;
+  }
+
+  /// Synchronous version that returns cached data only (for immediate rendering)
+  /// Use getProfileImageProviderAsync for fresh data with proper authentication
+  ImageProvider? getProfileImageProvider(
+    Map<String, dynamic>? profile,
+    File? localImageFile,
+  ) {
+    if (profile == null) return null;
+
+    // 1. Check for local file override (recently uploaded)
+    if (localImageFile != null && localImageFile.existsSync()) {
+      return FileImage(localImageFile);
+    }
+
+    // 2. Check for cached authenticated URL
+    final imageUrl = profile['profile_image_url']?.toString() ?? '';
+    if (imageUrl.isNotEmpty) {
+      final cachedUrl = _downloadUrlCache[imageUrl];
+      if (cachedUrl != null) {
+        return NetworkImage(cachedUrl);
+      }
+
+      // If it's already authenticated, use it directly
+      if (imageUrl.contains('firebasestorage.googleapis.com')) {
+        return NetworkImage(imageUrl);
+      }
+    }
+
+    // 3. Check for local file path
+    final photoPath = profile['photo_path']?.toString() ?? '';
+    if (photoPath.isNotEmpty) {
+      try {
+        final file = File(photoPath);
+        if (file.existsSync()) {
+          return FileImage(file);
+        }
+      } catch (_) {}
+    }
+
+    // 4. Check for legacy photo_url
+    final photoUrl = profile['photo_url']?.toString() ?? '';
+    if (photoUrl.isNotEmpty) {
+      return NetworkImage(photoUrl);
+    }
+
+    return null;
+  }
+
+  /// Get user initials for avatar fallback
+  String getUserInitials(Map<String, dynamic>? profile) {
+    final displayName = getDisplayName(profile);
+
+    if (displayName.isEmpty || displayName == 'User') {
+      return '?';
+    }
+
+    final parts = displayName.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) {
+      // First and last name initials
+      return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+    } else if (parts.isNotEmpty && parts.first.isNotEmpty) {
+      // Just first letter of single name
+      return parts.first[0].toUpperCase();
+    }
+
+    return '?';
   }
 }

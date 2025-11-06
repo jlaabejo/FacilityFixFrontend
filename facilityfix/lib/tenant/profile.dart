@@ -57,37 +57,38 @@ class _ProfilePageState extends State<ProfilePage> {
   // Tenant id (user_id) to display as Tenant ID
   String _tenantId = '';
 
+  /// Get profile image provider using ProfileService helper
   ImageProvider? get _profileImageProvider {
-    if (_profileImageFile != null) return FileImage(_profileImageFile!);
-
-    // Use new profile data first
-    if (_profileData != null &&
-        _profileData!['photo_url'] != null &&
-        _profileData!['photo_url'].toString().isNotEmpty) {
-      try {
-        return NetworkImage(_profileData!['photo_url'].toString());
-      } catch (_) {
-        // fallthrough
-      }
-    }
-
-    // Fallback to legacy profile map
-    if (_profileMap != null &&
-        _profileMap!['photo_url'] != null &&
-        _profileMap!['photo_url'].toString().isNotEmpty) {
-      try {
-        return NetworkImage(_profileMap!['photo_url'].toString());
-      } catch (_) {
-        // fallthrough
-      }
-    }
-    return null; // Return null to show initials
+    // Use ProfileService helper to load image from multiple sources
+    // Priority: local file > Firebase Storage URL > legacy URLs
+    return _profileService.getProfileImageProvider(
+      _profileData ?? _profileMap,
+      _profileImageFile,
+    );
   }
 
   @override
   void initState() {
     super.initState();
     _loadUserProfile();
+  }
+
+  /// Load profile image asynchronously with Firebase Storage authentication
+  Future<void> _loadProfileImageAsync(Map<String, dynamic> profile) async {
+    try {
+      // This fetches the authenticated download URL from Firebase Storage
+      final imageProvider = await _profileService.getProfileImageProviderAsync(
+        profile,
+        _profileImageFile,
+      );
+
+      if (imageProvider != null && mounted) {
+        // Trigger a rebuild to show the image
+        setState(() {});
+      }
+    } catch (e) {
+      print('[TenantProfile] Error loading profile image: $e');
+    }
   }
 
   /// Load user profile using the new ProfileService
@@ -108,17 +109,20 @@ class _ProfilePageState extends State<ProfilePage> {
           _profileData = profile;
           _isLoadingProfile = false;
         });
-        
+
         // Update controllers with new data
         _updateControllersFromProfile(profile);
-        
+
         // Also save to legacy profile map for backward compatibility
         _profileMap = Map<String, dynamic>.from(profile);
         _tenantId =
             (_profileMap!['tenant_id'] ?? _profileMap!['id'] ?? '').toString();
-        
+
         print("TENANT PROFILE: _profileMap=$_profileMap");
         print('[TenantProfile] Profile loaded successfully');
+
+        // Load profile image asynchronously (fetches authenticated Firebase Storage URL)
+        _loadProfileImageAsync(profile);
       } else {
         // Try loading from legacy storage as fallback
         await _loadSavedProfile();

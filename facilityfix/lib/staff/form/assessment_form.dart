@@ -10,11 +10,13 @@ import 'package:facilityfix/widgets/buttons.dart'; // FilledButton
 import 'package:facilityfix/widgets/forms.dart';   // InputField, FileAttachmentPicker
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/modals.dart';  // <-- CustomPopup
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide FilledButton;
-
+import 'package:facilityfix/services/api_services.dart';
 class AssessmentForm extends StatefulWidget {
   /// The concern slip ID to submit assessment for
   final String? concernSlipId;
+
   
   /// The concern slip data to pre-fill form fields
   final Map<String, dynamic>? concernSlipData;
@@ -48,6 +50,8 @@ class _AssessmentFormState extends State<AssessmentForm> {
     NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),
   ];
+  
+  List<PlatformFile>? attachments = const [];
 
   void _onTabTapped(int index) {
     final destinations = [
@@ -179,7 +183,6 @@ class _AssessmentFormState extends State<AssessmentForm> {
       // Build request body
       final Map<String, dynamic> requestBody = {
         'assessment': assessmentController.text.trim(),
-        'attachments': [], // TODO: Add file attachments if available
       };
       
       // Only include resolution_type for concern slips
@@ -195,7 +198,28 @@ class _AssessmentFormState extends State<AssessmentForm> {
         },
         body: jsonEncode(requestBody),
       );
-      
+
+
+      final APIService api = APIService(roleOverride: AppRole.staff);
+
+      final concern_slip_id = widget.concernSlipId;
+
+
+      print('Uploading ${attachments?.length ?? 0} attachments...');
+      print(concern_slip_id);
+      for (final file in attachments!) {
+        final uploadResponse = await api.uploadMultipartFile(
+          path: '/files/upload',
+          file: file,
+          fields: {
+            'entity_type': 'concern_slip_assessment',
+            'entity_id': concern_slip_id!,
+            'file_type': 'any',
+            'description': 'Assessment Attachment',
+          },
+        );
+
+    }
 
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -426,7 +450,14 @@ class _AssessmentFormState extends State<AssessmentForm> {
                 const SizedBox(height: 16),
                 const Text('Attachment', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
-                const FileAttachmentPicker(label: 'Upload Attachment'),
+                FileAttachmentPicker(label: 'Upload Attachment', isRequired: false, onChanged: (files) {
+                  // Handle file selection if needed
+
+                  setState(() {
+                    attachments = files;
+                  });
+
+                }),
               ],
             ),
           ),

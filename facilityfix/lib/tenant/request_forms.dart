@@ -881,6 +881,7 @@ class _RequestFormState extends State<RequestForm> {
               _aiPriority.isNotEmpty ? _aiPriority.toLowerCase() : 'medium',
           unitId: unitController.text.trim(),
           scheduleAvailability: availabilityController.text.trim(),
+          attachments: _attachments,
         );
       } else if (type == 'Job Service') {
         print('[SUBMIT] Submitting job service to Firebase...');

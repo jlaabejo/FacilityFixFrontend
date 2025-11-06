@@ -95,6 +95,7 @@ class _LoginPageState extends State<LoginPage> {
             '${(profile['first_name'] ?? '').toString()} ${(profile['last_name'] ?? '').toString()}'
                 .trim(),
         'birth_date': profile['birth_date'],
+        'profile_image_url': profile['profile_image_url'],
         'email': res['email'] ?? profile['email'] ?? email,
         'phone_number': profile['phone_number'],
         'role': role,

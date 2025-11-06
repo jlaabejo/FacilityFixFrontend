@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:facilityfix/widgets/forms.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
@@ -7,7 +8,8 @@ import '../services/api_service.dart';
 import '../services/round_robin_assignment_service.dart';
 import '../../services/auth_storage.dart';
 import '../../services/api_services.dart' as main_api;
-
+import 'package:file_picker/file_picker.dart';
+import 'package:facilityfix/services/api_services.dart' as SecondaryAPI;
 class InternalMaintenanceFormPage extends StatefulWidget {
   final Map<String, dynamic>? maintenanceData;
   final bool isEditMode;
@@ -16,7 +18,10 @@ class InternalMaintenanceFormPage extends StatefulWidget {
     super.key,
     this.maintenanceData,
     this.isEditMode = false,
+    
   });
+
+  
 
   @override
   State<InternalMaintenanceFormPage> createState() =>
@@ -29,6 +34,7 @@ class _InternalMaintenanceFormPageState
   final _formKey = GlobalKey<FormState>();
   AutovalidateMode _autoMode =
       AutovalidateMode.disabled; // turn on after first submit
+  final SecondaryAPI.APIService api = SecondaryAPI.APIService();
 
   // For consistent field heights (match external design)
   static const double _kFieldHeight = 48;
@@ -47,6 +53,10 @@ class _InternalMaintenanceFormPageState
     'Dec',
   ];
 
+
+
+
+  List<PlatformFile>? attachments = const [];
   // -------------------- CONTROLLERS --------------------
   final _taskTitleController = TextEditingController();
   final _codeIdController =
@@ -967,6 +977,29 @@ class _InternalMaintenanceFormPageState
         print('[v0] Maintenance task updated successfully');
         print('[v0] Backend response: $result');
 
+
+  
+
+
+      // upload files to firebase storage 
+
+      for (final file in attachments!) {
+          final uploadResponse = await api.uploadMultipartFile(
+            path: '/files/upload',
+            file: file,
+            fields: {
+              'entity_type': 'Internal Maintenance Attachments',
+              'entity_id': result['task']['id'],
+              'file_type': 'any',
+              'description': 'Attachment for maintenance task ${result['id']}',
+            },
+          );
+
+      }
+
+
+
+
         // Navigate back to maintenance list
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -999,10 +1032,36 @@ class _InternalMaintenanceFormPageState
         // Update the maintenance task with the inventory request IDs
         if (inventoryRequestIds.isNotEmpty) {
           try {
-            await _apiService.updateMaintenanceTask(actualTaskId, {
+            final response = await _apiService.updateMaintenanceTask(actualTaskId, {
               'inventory_request_ids': inventoryRequestIds,
             });
+
+            final result = response;
+
+            // upload files to firebase storage
+
+      for (final file in attachments!) {
+          final uploadResponse = await api.uploadMultipartFile(
+            path: '/files/upload',
+            file: file,
+            fields: {
+              'entity_type': 'Internal Maintenance Attachments',
+              'entity_id': actualTaskId,
+              'file_type': 'any',
+              'description': 'Attachment for maintenance task ${result['id']}',
+            },
+          );
+
+      }
+
+
+
+
+
+
+
             print(
+
               '[v0] Updated maintenance task with inventory request IDs: $inventoryRequestIds',
             );
           } catch (e) {
@@ -2118,6 +2177,22 @@ class _InternalMaintenanceFormPageState
                         "Add Admin Note",
                         "Notes for admins and post-task remarks",
                       ),
+
+
+
+                     const SizedBox(height: 40),
+                     FileAttachmentPicker(label: "Attachments", isRequired: false,
+                     onChanged: (files) {
+
+                        setState(() {
+                          attachments = files;
+                        });
+
+                     }
+                     
+                     ),
+                      
+
                       const SizedBox(height: 24),
 
                       TextFormField(
