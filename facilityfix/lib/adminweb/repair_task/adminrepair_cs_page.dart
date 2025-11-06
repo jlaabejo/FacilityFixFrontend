@@ -45,7 +45,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   }
   
   // Dropdown values for filtering
-  String _selectedDepartment = 'All Departments';
+  String _selectedDepartment = 'All Categories';
   String _selectedStatus = 'All Status';
   String _selectedConcernType = 'Concern Slip';
   String _searchQuery = '';
@@ -90,6 +90,22 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     _loadConcernSlips();
   }
 
+  // Helper method to get priority weight for sorting
+  int _getPriorityWeight(String priority) {
+    switch (priority.toLowerCase()) {
+      case 'critical':
+        return 4;
+      case 'high':
+        return 3;
+      case 'medium':
+        return 2;
+      case 'low':
+        return 1;
+      default:
+        return 0;
+    }
+  }
+
   Future<void> _loadConcernSlips() async {
     setState(() {
       _isLoading = true;
@@ -117,6 +133,14 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                 'rawData': slip, // Store raw data for detailed view
               };
             }).toList();
+
+        // Sort tasks by priority (high to low)
+        _repairTasks.sort((a, b) {
+          final priorityA = _getPriorityWeight(a['priority']);
+          final priorityB = _getPriorityWeight(b['priority']);
+          return priorityB.compareTo(priorityA); // Descending order
+        });
+
         _filteredTasks = List.from(_repairTasks);
         _isLoading = false;
       });
@@ -236,17 +260,17 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                   _searchQuery.toLowerCase(),
                 );
 
-            // Department filter
+            // Category filter
             bool matchesDepartment = true;
-            if (_selectedDepartment != 'All Departments') {
+            if (_selectedDepartment != 'All Categories') {
               final taskDept = task['department']?.toString().toLowerCase() ?? '';
               final selectedDept = _selectedDepartment.toLowerCase();
               
-              if (selectedDept == 'others') {
-                // For "Others", match pest control, hvac, security, fire safety, maintenance, general
-                matchesDepartment = !['carpentry', 'electrical', 'masonry', 'plumbing'].contains(taskDept);
+              if (selectedDept == 'other') {
+                // For "Other", match HVAC and Pest Control categories
+                matchesDepartment = taskDept == 'hvac' || taskDept == 'pest control';
               } else {
-                matchesDepartment = taskDept.contains(selectedDept);
+                matchesDepartment = taskDept == selectedDept;
               }
             }
 
@@ -575,13 +599,13 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   }
 
   final List<double> _colW = <double>[
-    100, // CONCERN ID
-    140, // TITLE
+    85, // CONCERN ID
+    130, // TITLE
     130, // DATE REQUESTED
     100, // BUILDING & UNIT
-    80, // PRIORITY
-    90, // DEPARTMENT
-    70, // STATUS
+    70, // PRIORITY
+    100, // DEPARTMENT
+    90, // STATUS
     38, // ACTION
   ];
 
@@ -732,7 +756,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
           ),
           const SizedBox(width: 16),
 
-          // Department Dropdown
+          // Category Dropdown
           Expanded(
             child: Container(
               height: 40,
@@ -753,7 +777,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                   },
                   items:
                       <String>[
-                        'All Departments',
+                        'All Categories',
                         'Carpentry',
                         'Electrical',
                         'Masonry',
@@ -763,7 +787,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                         return DropdownMenuItem<String>(
                           value: value,
                           child: Text(
-                            value == 'All Departments' ? value : 'Dept: $value',
+                            value == 'All Categories' ? value : 'Category: $value',
                             style: const TextStyle(fontSize: 14),
                           ),
                         );
@@ -797,11 +821,9 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                       <String>[
                         'All Status',
                         'Pending',
-                        'Assigned',
-                        'In Progress',
-                        'Assessed',
+                        'To Inspect',
+                        'Sent to Client',
                         'Completed',
-                        'Cancelled',
                       ].map<DropdownMenuItem<String>>((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
@@ -815,7 +837,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
               ),
             ),
           ),
-          const SizedBox(width: 300),
+          const SizedBox(width: 150),
 
           // Refresh Button
           Container(

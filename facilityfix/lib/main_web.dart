@@ -14,7 +14,7 @@ import 'adminweb/layout/facilityfix_layout.dart';
 import 'adminweb/pages/login_page.dart';
 import 'adminweb/pages/adminwebdash_page.dart';
 import 'adminweb/user/adminwebuser_page.dart';
-import 'adminweb/user/adminrole_page.dart';
+import 'adminweb/pages/adminrole_page.dart';
 import 'adminweb/maintenance_task/adminmaintenance_page.dart';
 import 'adminweb/repair_task/adminrepair_cs_page.dart';
 import 'adminweb/repair_task/adminrepair_js_page.dart';

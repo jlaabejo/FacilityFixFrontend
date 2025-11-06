@@ -26,9 +26,9 @@ class _AdminUserPageState extends State<AdminUserPage> {
 
   List<Map<String, dynamic>> _allUsers = [];
   
-  // Pagination
+  // Pagination - Max 10 items per page
   int _currentPage = 1;
-  int _itemsPerPage = 10;
+  final int _itemsPerPage = 10;
 
   // ---- Filtered Users List ----
   List<Map<String, dynamic>> get _filteredUsers {
@@ -836,11 +836,10 @@ class _AdminUserPageState extends State<AdminUserPage> {
   // Column widths for fixed table layout
   final List<double> _colW = <double>[
     50,  // CHECKBOX
-    80, // USER ID
-    200, // USER (name + email)
-    100, // ROLE
-    130, // DEPARTMENT
-    80, // STATUS
+    100, // USER ID
+    250, // USER NAME
+    120, // ROLE
+    150, // DEPARTMENT/UNIT
     80,  // ACTION
   ];
 
@@ -893,19 +892,27 @@ class _AdminUserPageState extends State<AdminUserPage> {
   // Get list of selected users
   List<Map<String, dynamic>> _getSelectedUsers() {
     List<Map<String, dynamic>> selectedUsers = [];
-    for (int i = 0; i < _filteredUsers.length; i++) {
-      if (i < _selectedRows.length && _selectedRows[i]) {
-        selectedUsers.add(_filteredUsers[i]);
+    final paginatedUsers = _getPaginatedUsers();
+    for (int i = 0; i < paginatedUsers.length; i++) {
+      final globalIndex = _filteredUsers.indexOf(paginatedUsers[i]);
+      if (globalIndex != -1 && globalIndex < _selectedRows.length && _selectedRows[globalIndex]) {
+        selectedUsers.add(paginatedUsers[i]);
       }
     }
     return selectedUsers;
   }
 
-  // Toggle select all
+  // Toggle select all (only for current page)
   void _toggleSelectAll(bool? value) {
     setState(() {
       _selectAll = value ?? false;
-      _selectedRows = List.generate(_filteredUsers.length, (index) => _selectAll);
+      final paginatedUsers = _getPaginatedUsers();
+      for (var user in paginatedUsers) {
+        final index = _filteredUsers.indexOf(user);
+        if (index != -1 && index < _selectedRows.length) {
+          _selectedRows[index] = _selectAll;
+        }
+      }
     });
   }
 
@@ -1129,8 +1136,6 @@ class _AdminUserPageState extends State<AdminUserPage> {
     return pageButtons;
   }
 
-  
-
   @override
   Widget build(BuildContext context) {
     return FacilityFixLayout(
@@ -1196,14 +1201,22 @@ class _AdminUserPageState extends State<AdminUserPage> {
             // ---- Search and Filter Controls ----
             Row(
               children: [
-                // Search Field
-                Expanded(
-                  flex: 2,
+                // Search Field with white background
+                SizedBox(
+                  width: 400,
                   child: Container(
                     height: 40,
                     decoration: BoxDecoration(
+                      color: Colors.white,
                       border: Border.all(color: Colors.grey[300]!),
                       borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.02),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: TextField(
                       controller: _searchController,
@@ -1214,7 +1227,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
                           color: Colors.grey[500],
                           size: 20,
                         ),
-                        hintText: "Search",
+                        hintText: "Search by name, email, or user ID",
                         hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(
@@ -1273,7 +1286,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 32),
+                const SizedBox(width: 16),
 
                 // Delete Selected Button (only show if users are selected)
                 if (_getSelectedUsers().isNotEmpty)
@@ -1304,18 +1317,13 @@ class _AdminUserPageState extends State<AdminUserPage> {
                       ),
                     ),
                   ),
-
-                
-                const Spacer(),
-
-                
               ],
             ),
             const SizedBox(height: 32),
 
             // ---- Users Table ----
             Container(
-              height: 650, // Fixed height like concern slip page
+              height: 650,
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
@@ -1414,7 +1422,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
                                     child: SingleChildScrollView(
                                       scrollDirection: Axis.horizontal,
                                       child: DataTable(
-                                        columnSpacing: 65,
+                                        columnSpacing: 70,
                                         headingRowHeight: 56,
                                         dataRowHeight: 64,
                                         headingRowColor: WidgetStateProperty.all(
@@ -1453,10 +1461,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
                                             label: _fixedCell(4, const Text("DEPARTMENT/UNIT")),
                                           ),
                                           DataColumn(
-                                            label: _fixedCell(5, const Text("STATUS")),
-                                          ),
-                                          DataColumn(
-                                            label: _fixedCell(6, const Text("")),
+                                            label: _fixedCell(5, const Text("")),
                                           ),
                                         ],
                                         rows: _getPaginatedUsers().map((user) {
@@ -1495,7 +1500,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
                                                   ),
                                                 ),
                                               ),
-                                              // User (Name + Email)
+                                              // User Name
                                               DataCell(
                                                 _fixedCell(
                                                   2,
@@ -1538,17 +1543,10 @@ class _AdminUserPageState extends State<AdminUserPage> {
                                                       : DepartmentTag(user['department']),
                                                 ),
                                               ),
-                                              // Status
-                                              DataCell(
-                                                _fixedCell(
-                                                  5,
-                                                  _buildStatusBadge(user['status']),
-                                                ),
-                                              ),
                                               // Action
                                               DataCell(
                                                 _fixedCell(
-                                                  6,
+                                                  5,
                                                   Builder(
                                                     builder: (context) {
                                                       return IconButton(

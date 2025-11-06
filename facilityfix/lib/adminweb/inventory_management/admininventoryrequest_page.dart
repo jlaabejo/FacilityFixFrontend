@@ -418,14 +418,145 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
       if (requestId == null) {
         throw Exception('Request ID not found');
       }
+
+      // Check if this is a reserved request (from maintenance)
+      final status = (item['status'] ?? 'pending').toString().toLowerCase();
+      final isReserved = status == 'reserved';
+      final maintenanceTaskId = item['maintenance_task_id'] ?? item['reference_id'];
+
+      // Get inventory item ID and requested quantity
+      final inventoryId = item['inventory_id']?.toString();
+      final quantityRequested = (item['quantity_requested'] ?? item['quantity'] ?? 0) as num;
       
+      if (isReserved) {
+        // Reserved items (from maintenance) should NOT be approved via this flow
+        // They are automatically "allocated" when maintenance is scheduled
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Reserved items cannot be approved. They are allocated for maintenance tasks.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Step 1: Check available stock before approval
+      if (inventoryId != null && quantityRequested > 0) {
+        try {
+          // Get current inventory item data
+          final itemResp = await _apiService.getInventoryItem(inventoryId);
+          if (itemResp['success'] == true && itemResp['data'] is Map) {
+            final inventoryData = Map<String, dynamic>.from(itemResp['data']);
+            final currentStock = (inventoryData['current_stock'] ?? inventoryData['quantity_in_stock'] ?? 0) as num;
+            
+            // Calculate reserved stock from all reserved requests for this item
+            int reservedStock = 0;
+            try {
+              final reservedResp = await _apiService.getInventoryRequests(
+                buildingId: _buildingId,
+                status: 'reserved',
+              );
+              if (reservedResp['success'] == true && reservedResp['data'] is List) {
+                for (var req in reservedResp['data']) {
+                  if (req['inventory_id']?.toString() == inventoryId) {
+                    reservedStock += (req['quantity_requested'] ?? req['quantity'] ?? 0) as int;
+                  }
+                }
+              }
+            } catch (_) {}
+
+            // Calculate available stock (current - reserved)
+            final availableStock = currentStock - reservedStock;
+            
+            // Check if we have enough stock
+            if (availableStock < quantityRequested) {
+              if (mounted) {
+                // Show error dialog with stock details
+                await showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Insufficient Stock'),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Cannot approve request. Insufficient stock available.'),
+                        const SizedBox(height: 16),
+                        Text('Current Stock: $currentStock'),
+                        Text('Reserved Stock: $reservedStock'),
+                        Text('Available Stock: $availableStock'),
+                        Text('Requested Quantity: $quantityRequested'),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Need ${quantityRequested - availableStock} more units.',
+                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                        ),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('OK'),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              return; // Block approval
+            }
+          }
+        } catch (stockCheckError) {
+          print('[v0] Error checking stock: $stockCheckError');
+          // If stock check fails, show error and block approval
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error checking stock availability: $stockCheckError'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+      }
+      
+      // Step 2: Approve the request in the backend
       await _apiService.approveInventoryRequest(requestId);
+
+      // Step 3: Deduct stock from the inventory item
+      if (inventoryId != null && quantityRequested > 0) {
+        try {
+          // Get current inventory item data again (in case it changed)
+          final itemResp = await _apiService.getInventoryItem(inventoryId);
+          if (itemResp['success'] == true && itemResp['data'] is Map) {
+            final inventoryData = Map<String, dynamic>.from(itemResp['data']);
+            final currentStock = (inventoryData['current_stock'] ?? inventoryData['quantity_in_stock'] ?? 0) as num;
+            
+            // Calculate new stock (deduct the approved quantity)
+            final newStock = (currentStock - quantityRequested).toInt();
+
+            // Update the inventory item with new stock
+            await _apiService.updateInventoryItem(inventoryId, {
+              'current_stock': newStock,
+              'quantity_in_stock': newStock,
+            });
+            
+            print('[v0] Stock deducted: $inventoryId, Old: $currentStock, New: $newStock');
+          }
+        } catch (stockError) {
+          print('[v0] Error deducting stock: $stockError');
+          // Request was approved, but stock deduction failed - log but don't fail the whole operation
+        }
+      }
+
       // Reload the list
       _loadInventoryRequests();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Request $requestId approved'),
+            content: Text('Request $requestId approved and stock deducted'),
             backgroundColor: Colors.green,
           ),
         );
@@ -612,10 +743,54 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
       case 'denied':
       case 'rejected':
         return 'rejected';
+      case 'reserved':
+        return 'reserved';
       case 'pending':
       default:
         return 'pending';
     }
+  }
+
+  // Check if approving this request would cause insufficient stock
+  Future<bool> _hasInsufficientStock(Map<String, dynamic> item) async {
+    try {
+      final inventoryId = item['inventory_id']?.toString();
+      final quantityRequested = (item['quantity_requested'] ?? item['quantity'] ?? 0) as num;
+      
+      if (inventoryId == null || quantityRequested <= 0) return false;
+
+      // Get current inventory item data
+      final itemResp = await _apiService.getInventoryItem(inventoryId);
+      if (itemResp['success'] == true && itemResp['data'] is Map) {
+        final inventoryData = Map<String, dynamic>.from(itemResp['data']);
+        final currentStock = (inventoryData['current_stock'] ?? inventoryData['quantity_in_stock'] ?? 0) as num;
+        
+        // Calculate reserved stock from all reserved requests for this item
+        int reservedStock = 0;
+        try {
+          final reservedResp = await _apiService.getInventoryRequests(
+            buildingId: _buildingId,
+            status: 'reserved',
+          );
+          if (reservedResp['success'] == true && reservedResp['data'] is List) {
+            for (var req in reservedResp['data']) {
+              if (req['inventory_id']?.toString() == inventoryId) {
+                reservedStock += (req['quantity_requested'] ?? req['quantity'] ?? 0) as int;
+              }
+            }
+          }
+        } catch (_) {}
+
+        // Calculate available stock (current - reserved)
+        final availableStock = currentStock - reservedStock;
+        
+        // Return true if insufficient stock
+        return availableStock < quantityRequested;
+      }
+    } catch (e) {
+      print('[v0] Error checking stock: $e');
+    }
+    return false;
   }
   
   // Format ID with prefix
@@ -1189,7 +1364,37 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                                     ),
                                   ),
                                   DataCell(_fixedCell(2, _ellipsis(itemName))),
-                                  DataCell(_fixedCell(3, _ellipsis(quantity))),
+                                  DataCell(
+                                    _fixedCell(
+                                      3,
+                                      // Show warning icon if insufficient stock for pending requests
+                                      FutureBuilder<bool>(
+                                        future: (status == 'pending' || status == 'reserved') 
+                                            ? _hasInsufficientStock(item)
+                                            : Future.value(false),
+                                        builder: (context, snapshot) {
+                                          final hasWarning = snapshot.data == true;
+                                          return Row(
+                                            children: [
+                                              if (hasWarning)
+                                                Padding(
+                                                  padding: const EdgeInsets.only(right: 4),
+                                                  child: Tooltip(
+                                                    message: 'Insufficient stock available',
+                                                    child: Icon(
+                                                      Icons.warning_amber_rounded,
+                                                      color: Colors.orange,
+                                                      size: 16,
+                                                    ),
+                                                  ),
+                                                ),
+                                              Flexible(child: _ellipsis(quantity)),
+                                            ],
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ),
                                   DataCell(_fixedCell(4, _ellipsis(date))),
                                   DataCell(
                                     _fixedCell(5, StatusTag(status: status)),

@@ -1856,13 +1856,16 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
+      // If the request is created as part of a maintenance task, mark it
+      // as 'reserved' so inventory UI can show the item as reserved until
+      // the staff receives/fulfills it. Otherwise default to 'pending'.
       final body = jsonEncode({
         'inventory_id': inventoryId,
         'building_id': buildingId,
         'quantity_requested': quantityRequested,
         'purpose': purpose,
         'requested_by': requestedBy,
-        'status': 'pending',
+        'status': maintenanceTaskId != null ? 'reserved' : 'pending',
         if (maintenanceTaskId != null) 'maintenance_task_id': maintenanceTaskId,
         if (maintenanceTaskId != null) 'reference_type': 'maintenance_task',
         if (maintenanceTaskId != null) 'reference_id': maintenanceTaskId,

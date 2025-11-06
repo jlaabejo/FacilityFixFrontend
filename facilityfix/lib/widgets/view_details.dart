@@ -1,5 +1,6 @@
 import 'package:facilityfix/utils/ui_format.dart';
 import 'package:facilityfix/widgets/buttons.dart' as fx;
+import 'package:facilityfix/widgets/modals.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/tag.dart'; // StatusTag, PriorityTag, requestTypeTagTag, DepartmentTag
 
@@ -1846,7 +1847,57 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                           request['stock_quantity'] ??
                           0;
                       final status = request['status'] ?? 'pending';
-                      final unit = request['unit'] ?? '';
+                        final unit = request['unit'] ?? '';
+
+                        // Show RestockBottomSheet when Request is tapped.
+                        // Provide a Received handler (placeholder) and a Request handler
+                        // that opens the bottom sheet. The returned `actionButtons`
+                        // widget can be used in the item row (replace the small status
+                        // chip container with `actionButtons`).
+                        final void Function()? _onReceivedPressed = () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                          content: Text('Marked "$itemName" as received'),
+                          ),
+                        );
+                        };
+
+                        final void Function()? _onRequestPressed = () {
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          builder: (_) => RestockBottomSheet(
+                          // pass relevant data — change params as needed
+                          itemName: '', itemId: '', unit: '',
+                          ),
+                        );
+                        };
+
+                        final Widget actionButtons = Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ElevatedButton(
+                          onPressed: _onReceivedPressed,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF059669),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                            minimumSize: const Size(0, 0),
+                          ),
+                          child: const Text('Received'),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton(
+                          onPressed: _onRequestPressed,
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFF005CE7)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          ),
+                          child: const Text('Request'),
+                          ),
+                        ],
+                        );
                       final category = request['category'] ?? '';
 
                       // Determine if item is received

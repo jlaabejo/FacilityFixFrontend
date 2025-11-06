@@ -6,7 +6,9 @@ import '../services/api_service.dart';
 import '../../services/auth_storage.dart';
 
 class InventoryItemCreatePage extends StatefulWidget {
-  const InventoryItemCreatePage({super.key});
+  final String? itemId; // if provided, page acts as edit page
+
+  const InventoryItemCreatePage({super.key, this.itemId});
 
   @override
   State<InventoryItemCreatePage> createState() =>
@@ -73,6 +75,64 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
   void initState() {
     super.initState();
     _initializeAuth();
+    if (widget.itemId != null) {
+      // Load existing item data for edit
+      _loadExistingItem();
+    }
+  }
+
+  bool get _isEditing => widget.itemId != null;
+
+  Future<void> _loadExistingItem() async {
+    try {
+      final token = await AuthStorage.getToken();
+      if (token != null && token.isNotEmpty) _apiService.setAuthToken(token);
+
+      final resp = await _apiService.getInventoryItem(widget.itemId!);
+      if (resp['success'] == true && resp['data'] is Map) {
+        final data = Map<String, dynamic>.from(resp['data']);
+        setState(() {
+          _itemNameController.text = (data['item_name'] ?? data['name'] ?? '').toString();
+          _itemCodeController.text = (data['item_code'] ?? data['itemCode'] ?? '').toString();
+          _brandNameController.text = (data['brand_name'] ?? data['brand'] ?? '').toString();
+          _quantityController.text = (data['current_stock'] ?? data['quantity_in_stock'] ?? data['quantity'] ?? 0).toString();
+          _reorderLevelController.text = (data['reorder_level'] ?? 0).toString();
+          _supplierController.text = (data['supplier'] ?? '').toString();
+          _warrantyDateController.text = (data['warranty_until'] ?? '').toString();
+          
+          // Normalize classification to match dropdown values (case-insensitive)
+          final classification = (data['classification'] ?? '').toString();
+          _selectedClassification = _normalizeDropdownValue(classification, _classifications);
+          
+          // Normalize department to match dropdown values (case-insensitive)
+          final department = (data['department'] ?? '').toString();
+          _selectedDepartment = _normalizeDropdownValue(department, _departments);
+          
+          // Normalize unit to match dropdown values (case-insensitive)
+          final unit = (data['unit'] ?? '').toString();
+          _selectedUnit = _normalizeDropdownValue(unit, _units);
+          
+          _selectedTag = ((data['is_critical'] ?? false) as bool) ? 'Critical' : (_selectedTag ?? 'Standard');
+        });
+      }
+    } catch (e) {
+      print('[InventoryCreate] Failed to load existing item: $e');
+    }
+  }
+
+  /// Normalize a value to match one of the available dropdown options (case-insensitive)
+  String? _normalizeDropdownValue(String value, List<String> options) {
+    if (value.isEmpty) return null;
+    
+    final valueLower = value.toLowerCase();
+    for (final option in options) {
+      if (option.toLowerCase() == valueLower) {
+        return option;
+      }
+    }
+    
+    // If no match found, return null to avoid dropdown error
+    return null;
   }
 
   Future<void> _initializeAuth() async {
@@ -276,7 +336,12 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
     };
 
     try {
-      final response = await _apiService.createInventoryItem(itemData);
+      Map<String, dynamic> response;
+      if (_isEditing) {
+        response = await _apiService.updateInventoryItem(widget.itemId!, itemData);
+      } else {
+        response = await _apiService.createInventoryItem(itemData);
+      }
 
       if (mounted) {
         setState(() {
@@ -284,21 +349,26 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
         });
 
         if (response['success'] == true) {
-          final createdItemId = response['item_id'] ?? itemData['item_code'];
+          final savedItemId = response['item_id'] ?? itemData['item_code'] ?? widget.itemId;
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Item created successfully!'),
+              content: Text('Saved successfully'),
               backgroundColor: Colors.green,
             ),
           );
 
-          context.go('/inventory/item/$createdItemId');
+          if (_isEditing) {
+            // Return to the caller with success flag and updated data
+            Navigator.of(context).pop({'saved': true, 'itemId': savedItemId, 'data': response['data']});
+          } else {
+            context.go('/inventory/item/$savedItemId');
+          }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                'Error: ${response['message'] ?? 'Failed to create item'}',
+                'Error: ${response['message'] ?? 'Failed to save item'}',
               ),
               backgroundColor: Colors.red,
             ),
@@ -306,7 +376,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
         }
       }
     } catch (e) {
-      print('[v0] Error creating inventory item: $e');
+      print('[v0] Error creating/updating inventory item: $e');
       if (mounted) {
         setState(() {
           _isSaving = false;

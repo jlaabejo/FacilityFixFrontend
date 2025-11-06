@@ -935,8 +935,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
               ),
             ),
           ),
-          // Use a flexible spacer instead of a fixed width to avoid overflow
-          const Spacer(),
+          const SizedBox(width: 150),
           // Refresh Button
           Container(
             height: 40,

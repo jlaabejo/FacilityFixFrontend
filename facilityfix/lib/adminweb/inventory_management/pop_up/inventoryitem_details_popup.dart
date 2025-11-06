@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../popupwidgets/stock_management_popup.dart';
-import 'inventoryitem_history_popup.dart';
+import 'inventoryrestock_popup.dart';
 import '../../widgets/tags.dart';
 import '../../services/api_service.dart';
 import '../../../services/auth_storage.dart';
+import '../createwebinventoryitems_page.dart';
 
 class InventoryItemDetailsDialog {
   static Future<Map<String, dynamic>?> show(
@@ -53,11 +53,63 @@ class _InventoryItemDetailsContent extends StatefulWidget {
 
 class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsContent> {
   late Map<String, dynamic> _itemData;
+  final ApiService _api = ApiService();
+  final String _buildingId = 'default_building_id';
 
   @override
   void initState() {
     super.initState();
     _itemData = Map<String, dynamic>.from(widget.itemData);
+    // Try to populate reservedStock by querying reserved inventory requests
+    // for this item if backend did not already include it.
+    _maybeLoadReservedStock();
+  }
+
+  Future<void> _maybeLoadReservedStock() async {
+    try {
+      final id = _itemData['id'] ?? _itemData['itemCode'] ?? _itemData['item_code'];
+      if (id == null) return;
+
+      final token = await AuthStorage.getToken();
+      if (token != null && token.isNotEmpty) {
+        _api.setAuthToken(token);
+      }
+
+      // Fetch ALL inventory requests with status='reserved' for this item
+      // These are requests created by maintenance tasks that allocate inventory
+      final resp = await _api.getInventoryRequests(buildingId: _buildingId, status: 'reserved');
+      if (resp['success'] == true && resp['data'] is List) {
+        final List list = resp['data'];
+        int reservedTotal = 0;
+        List<Map<String, dynamic>> reservedRequests = [];
+        
+        for (var r in list) {
+          try {
+            final invId = r['inventory_id'] ?? r['inventoryId'] ?? r['item_id'];
+            if (invId != null && invId.toString() == id.toString()) {
+              final qty = (r['quantity_requested'] ?? r['quantity'] ?? 0) as int;
+              reservedTotal += qty;
+              reservedRequests.add({
+                'requestId': r['_doc_id'] ?? r['id'],
+                'maintenanceTaskId': r['maintenance_task_id'] ?? r['reference_id'],
+                'quantity': qty,
+                'date': r['requested_date'],
+              });
+            }
+          } catch (_) {}
+        }
+
+        if (reservedTotal > 0 || reservedRequests.isNotEmpty) {
+          setState(() {
+            _itemData['reservedStock'] = reservedTotal;
+            _itemData['reserved_stock'] = reservedTotal;
+            _itemData['reservedRequests'] = reservedRequests; // Store for display
+          });
+        }
+      }
+    } catch (e) {
+      print('[InventoryDetails] Failed to load reserved stock: $e');
+    }
   }
 
   @override
@@ -145,6 +197,14 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
                     SizedBox(
                       width: 220,
                       child: _buildInfoTile(
+                        "Reserved Stock",
+                        "${_itemData['reservedStock'] ?? 0} ${_itemData['unit'] ?? 'pcs'}",
+                        valueColor: const Color(0xFFEF6C00),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 220,
+                      child: _buildInfoTile(
                         "Unit",
                         _itemData['unit'] ?? 'pcs',
                       ),
@@ -155,6 +215,73 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
                 const SizedBox(height: 24),
                 Divider(color: Colors.grey[200], thickness: 1, height: 1),
                 const SizedBox(height: 24),
+
+                // Reserved by maintenance tasks (if any)
+                if ((_itemData['reservedRequests'] as List?)?.isNotEmpty == true) ...[
+                  _buildSectionTitle("Reserved by Maintenance Tasks"),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange[200]!),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.build_circle_outlined, size: 18, color: Colors.orange[700]),
+                            const SizedBox(width: 8),
+                            Text(
+                              'This item is reserved for scheduled maintenance',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.orange[900],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        ...(_itemData['reservedRequests'] as List).map((req) {
+                          final taskId = req['maintenanceTaskId'] ?? 'Unknown';
+                          final qty = req['quantity'] ?? 0;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 4,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange[700],
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'Task $taskId: $qty ${_itemData['unit'] ?? 'pcs'}',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey[800],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Divider(color: Colors.grey[200], thickness: 1, height: 1),
+                  const SizedBox(height: 24),
+                ],
 
                 // Supplier details
                 _buildSectionTitle("Supplier Information"),
@@ -319,47 +446,52 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
         children: [
           OutlinedButton.icon(
             onPressed: () async {
-              // Use the centralized StockManagementPopup which contains
-              // the preferred validation and stock update logic.
-              final result = await StockManagementPopup.show(
-                context,
-                {
-                  'id': _itemData['itemCode'],
-                  'name': _itemData['itemName'],
-                  'unit': _itemData['unit'],
-                  'currentStock': _itemData['quantityInStock'],
-                  'performedBy': _itemData['updatedBy'] ?? _itemData['managedBy'] ?? 'Admin',
-                },
-              );
+              // Use RestockDialog for manual restocking. After a successful
+              // restock, refresh the item from the API and close this dialog
+              // returning the updated item so the parent page can sync.
+              final result = await RestockDialog.show(context, {
+                'id': _itemData['id'] ?? _itemData['itemCode'] ?? _itemData['_doc_id'],
+                'name': _itemData['itemName'] ?? _itemData['name'],
+                'unit': _itemData['unit'] ?? 'pcs',
+                'currentStock': _itemData['quantityInStock'] ?? _itemData['currentStock'] ?? 0,
+                'performedBy': _itemData['updatedBy'] ?? _itemData['managedBy'] ?? 'Admin',
+              });
 
-                if (result == true) {
-                  // StockManagementPopup returns a bool (true on success).
-                  // Refresh item data from API to get updated stock and history.
-                  try {
-                    final api = ApiService();
-                    final token = await AuthStorage.getToken();
-                    if (token != null && token.isNotEmpty) api.setAuthToken(token);
+              if (result != null && result['success'] == true) {
+                try {
+                  final api = ApiService();
+                  final token = await AuthStorage.getToken();
+                  if (token != null && token.isNotEmpty) api.setAuthToken(token);
 
-                    final itemId = _itemData['id'] ?? _itemData['itemCode'] ?? _itemData['_doc_id'];
-                    if (itemId != null) {
-                      final resp = await api.getInventoryItem(itemId.toString());
-                      if (resp['success'] == true && resp['data'] is Map) {
-                        final updated = Map<String, dynamic>.from(resp['data']);
-                        setState(() {
-                          // Normalize keys used in this dialog
-                          _itemData['quantityInStock'] = updated['current_stock'] ?? updated['quantity_in_stock'] ?? updated['quantityInStock'] ?? _itemData['quantityInStock'];
-                          _itemData['currentStock'] = _itemData['quantityInStock'];
-                          _itemData['updatedBy'] = updated['updated_by'] ?? updated['updatedBy'] ?? _itemData['updatedBy'];
-                          _itemData['history'] = updated['history'] ?? _itemData['history'];
-                          _itemData['reorderLevel'] = updated['reorder_level'] ?? updated['reorderLevel'] ?? _itemData['reorderLevel'];
-                        });
-                      }
+                  final itemId = _itemData['id'] ?? _itemData['itemCode'] ?? _itemData['_doc_id'];
+                  if (itemId != null) {
+                    final resp = await api.getInventoryItem(itemId.toString());
+                    if (resp['success'] == true && resp['data'] is Map) {
+                      final updated = Map<String, dynamic>.from(resp['data']);
+                      setState(() {
+                        // Normalize keys used in this dialog
+                        _itemData['quantityInStock'] = updated['current_stock'] ?? updated['quantity_in_stock'] ?? updated['quantityInStock'] ?? _itemData['quantityInStock'];
+                        _itemData['currentStock'] = _itemData['quantityInStock'];
+                        _itemData['updatedBy'] = updated['updated_by'] ?? updated['updatedBy'] ?? _itemData['updatedBy'];
+                        _itemData['history'] = updated['history'] ?? _itemData['history'];
+                        _itemData['reorderLevel'] = updated['reorder_level'] ?? updated['reorderLevel'] ?? _itemData['reorderLevel'];
+                        _itemData['current_stock'] = updated['current_stock'] ?? updated['quantity_in_stock'] ?? _itemData['current_stock'];
+                      });
+
+                      // Refresh reserved stock info (in case a maintenance-linked
+                      // inventory request was created/updated) before returning.
+                      await _maybeLoadReservedStock();
+
+                      // Close dialog and return updated data to caller
+                      Navigator.of(context).pop(_itemData);
                     }
-                  } catch (e) {
-                    // If refresh fails, silently ignore — the popup already updated server-side
-                    print('[InventoryDetails] Failed to refresh item after stock update: $e');
                   }
+                } catch (e) {
+                  // If refresh fails, still attempt to close and return current data
+                  print('[InventoryDetails] Failed to refresh item after restock: $e');
+                  Navigator.of(context).pop(_itemData);
                 }
+              }
             },
             icon: const Icon(Icons.add_circle_outline, size: 16),
             label: const Text('Update Stock'),
@@ -386,8 +518,50 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
           // ),
           const SizedBox(width: 8),
           OutlinedButton.icon(
-            onPressed: () {
-              Navigator.of(context).pop(_itemData);
+            onPressed: () async {
+              // Navigate to edit page
+              final itemId = _itemData['id'] ?? _itemData['itemCode'] ?? _itemData['_doc_id'];
+              if (itemId != null) {
+                final result = await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => InventoryItemCreatePage(itemId: itemId.toString()),
+                  ),
+                );
+                
+                // If edit was successful, refresh the item data
+                if (result != null && result['saved'] == true) {
+                  try {
+                    final api = ApiService();
+                    final token = await AuthStorage.getToken();
+                    if (token != null && token.isNotEmpty) api.setAuthToken(token);
+
+                    final resp = await api.getInventoryItem(itemId.toString());
+                    if (resp['success'] == true && resp['data'] is Map) {
+                      final updated = Map<String, dynamic>.from(resp['data']);
+                      setState(() {
+                        // Update all fields with normalized keys
+                        _itemData['itemName'] = updated['item_name'] ?? updated['name'] ?? updated['itemName'];
+                        _itemData['itemCode'] = updated['item_code'] ?? updated['itemCode'];
+                        _itemData['classification'] = updated['classification'];
+                        _itemData['department'] = updated['department'];
+                        _itemData['quantityInStock'] = updated['current_stock'] ?? updated['quantity_in_stock'] ?? updated['quantityInStock'];
+                        _itemData['currentStock'] = _itemData['quantityInStock'];
+                        _itemData['reorderLevel'] = updated['reorder_level'] ?? updated['reorderLevel'];
+                        _itemData['unit'] = updated['unit'];
+                        _itemData['supplier'] = updated['supplier'];
+                        _itemData['supplierContact'] = updated['supplier_contact'] ?? updated['supplierContact'];
+                        _itemData['supplierEmail'] = updated['supplier_email'] ?? updated['supplierEmail'];
+                        _itemData['status'] = updated['status'];
+                      });
+                      
+                      // Refresh reserved stock info
+                      await _maybeLoadReservedStock();
+                    }
+                  } catch (e) {
+                    print('[InventoryDetails] Failed to refresh item after edit: $e');
+                  }
+                }
+              }
             },
             icon: const Icon(Icons.edit_outlined, size: 16),
             label: const Text('Edit'),

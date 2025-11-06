@@ -398,24 +398,6 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
                     ],
                   ),
                 ),
-                
-                // Status Badge
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.green[50],
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.green[300]!),
-                  ),
-                  child: Text(
-                    _userData!['status'] ?? 'Active',
-                    style: TextStyle(
-                      color: Colors.green[800],
-                      fontSize: 14, // bigger font
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
               ],
             ),
             
@@ -497,16 +479,6 @@ class _AdminWebProfilePageState extends State<AdminWebProfilePage> {
                         setValid: (v) => isEmailValid = v,
                         isEmail: true,
                       ),
-
-                      // Department Field (was Bio)
-                      _buildInfoField(
-                        label: "Department",
-                        value: _userData!["staff_department"] ?? "",
-                        controller: _bioController,
-                        isValid: isDepartmentValid,
-                        setValid: (v) => isDepartmentValid = v,
-                      ),
-                      
                     ],
                   ),
                 ),

@@ -161,19 +161,31 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
         return true;
       }).toList();
       
-      // Apply sorting by date
-      _sortByDate();
+      // Sort by status first (scheduled first), then by date
+      _sortTasks();
       
       // Reset to first page when filters change
       _currentPage = 0;
     });
   }
   
-  // Sort tasks by date
-  void _sortByDate() {
+  // Sort tasks by status (scheduled first) and then by date
+  void _sortTasks() {
     _filteredTasks.sort((a, b) {
-      final dateA = _parseDate(a['created_at'] ?? a['dateCreated'] ?? a['scheduled_date']);
-      final dateB = _parseDate(b['created_at'] ?? b['dateCreated'] ?? b['scheduled_date']);
+      // Get status for both tasks
+      final statusA = _getTaskField(a, ['status', 'statusTag'], '').toLowerCase();
+      final statusB = _getTaskField(b, ['status', 'statusTag'], '').toLowerCase();
+      
+      // Priority: scheduled first, then others
+      final isScheduledA = statusA.contains('scheduled');
+      final isScheduledB = statusB.contains('scheduled');
+      
+      if (isScheduledA && !isScheduledB) return -1;
+      if (!isScheduledA && isScheduledB) return 1;
+      
+      // Within same status priority, sort by date
+      final dateA = _parseDate(a['scheduled_date'] ?? a['created_at'] ?? a['dateCreated']);
+      final dateB = _parseDate(b['scheduled_date'] ?? b['created_at'] ?? b['dateCreated']);
       
       if (dateA == null && dateB == null) return 0;
       if (dateA == null) return 1;
@@ -202,7 +214,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
   void _toggleSortOrder() {
     setState(() {
       _sortAscending = !_sortAscending;
-      _sortByDate();
+      _sortTasks();
     });
   }
   
@@ -299,12 +311,13 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
   }
 
   final List<double> _colW = <double>[
-    160, // ID
-    180, // LOCATION
-    250, // TASK TITLE
-    140, // STATUS
-    120, // DATE
-    100, // RECURRENCE
+    160, // MAINTENANCE ID
+    200, // TASK TITLE
+    170, // LOCATION
+    100, // TYPE
+    120, // STATUS
+    130, // SCHEDULE DATE
+    80, // RECURRENCE
     48, // ACTION
   ];
 
@@ -786,31 +799,31 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                         ),
                         Row(
                           children: [
-                            // Search box
+                            // Search field
                             Container(
-                              width: 300,
+                              width: 240,
                               height: 40,
                               decoration: BoxDecoration(
-                                color: Colors.grey[100],
+                                border: Border.all(color: Colors.grey[300]!),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: TextField(
                                 controller: _searchController,
                                 decoration: InputDecoration(
-                                  hintText: "Search by ID, location, or title...",
-                                  hintStyle: TextStyle(
-                                    color: Colors.grey[400],
-                                    fontSize: 14,
-                                  ),
-                                  prefixIcon: Icon(
+                                  suffixIcon: Icon(
                                     Icons.search,
-                                    color: Colors.grey[400],
+                                    color: Colors.grey[500],
                                     size: 20,
+                                  ),
+                                  hintText: "Search",
+                                  hintStyle: TextStyle(
+                                    color: Colors.grey[500],
+                                    fontSize: 14,
                                   ),
                                   border: InputBorder.none,
                                   contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 12,
+                                    horizontal: 12,
+                                    vertical: 7,
                                   ),
                                 ),
                               ),
@@ -930,7 +943,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
-                        columnSpacing: 16,
+                        columnSpacing: 13,
                         headingRowHeight: 56,
                         dataRowHeight: 64,
                         headingRowColor: MaterialStateProperty.all(
@@ -947,23 +960,26 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                           color: Colors.black87,
                         ),
                         columns: [
-                          DataColumn(label: _fixedCell(0, const Text("ID"))),
+                          DataColumn(label: _fixedCell(0, const Text("MAINTENANCE ID"))),
                           DataColumn(
-                            label: _fixedCell(1, const Text("LOCATION")),
+                            label: _fixedCell(1, const Text("TASK TITLE")),
                           ),
                           DataColumn(
-                            label: _fixedCell(2, const Text("TASK TITLE")),
+                            label: _fixedCell(2, const Text("LOCATION")),
                           ),
                           DataColumn(
-                            label: _fixedCell(3, const Text("STATUS")),
+                            label: _fixedCell(3, const Text("TYPE")),
                           ),
                           DataColumn(
-                            label: _fixedCell(4, InkWell(
+                            label: _fixedCell(4, const Text("STATUS")),
+                          ),
+                          DataColumn(
+                            label: _fixedCell(5, InkWell(
                               onTap: _toggleSortOrder,
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Text("DATE"),
+                                  const Text("SCHEDULE DATE"),
                                   const SizedBox(width: 4),
                                   Icon(
                                     _sortAscending 
@@ -977,21 +993,24 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                             )),
                           ),
                           DataColumn(
-                            label: _fixedCell(5, const Text("RECURRENCE")),
+                            label: _fixedCell(6, const Text("RECURRENCE")),
                           ),
-                          DataColumn(label: _fixedCell(6, const Text(""))),
+                          DataColumn(label: _fixedCell(7, const Text(""))),
                         ],
                         rows: _paginatedTasks.map((maintenance) {
                           final rawId = _getTaskField(maintenance, ['id', 'formatted_id'], 'N/A');
                           final id = _formatMaintenanceId(rawId);
-                          final location = _getTaskField(maintenance, ['location', 'area'], 'N/A');
                           final title = _getTaskField(maintenance, ['task_title', 'taskTitle', 'title'], 'N/A');
+                          final location = _getTaskField(maintenance, ['location', 'area'], 'N/A');
+                          final typeSlug = _resolveMaintenanceType(maintenance);
+                          final type = typeSlug.contains('internal') ? 'Internal' : 
+                                      typeSlug.contains('external') ? 'External' : 'N/A';
                           final rawStatus = _getTaskField(maintenance, ['status', 'statusTag'], 'N/A');
                           final status = _toTitleCase(rawStatus);
-                          final dateValue = maintenance['created_at'] ?? 
-                                          maintenance['dateCreated'] ?? 
-                                          maintenance['scheduled_date'];
-                          final date = _formatDate(dateValue);
+                          final scheduledDate = maintenance['scheduled_date'] ?? 
+                                               maintenance['dateCreated'] ?? 
+                                               maintenance['created_at'];
+                          final date = _formatDate(scheduledDate);
                           final recurrence = _getTaskField(
                             maintenance, 
                             ['recurrence', 'recurrence_type', 'recurrenceType'], 
@@ -1001,16 +1020,17 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                           return DataRow(
                             cells: [
                               DataCell(_fixedCell(0, _ellipsis(id))),
-                              DataCell(_fixedCell(1, _ellipsis(location))),
-                              DataCell(_fixedCell(2, _ellipsis(title))),
+                              DataCell(_fixedCell(1, _ellipsis(title))),
+                              DataCell(_fixedCell(2, _ellipsis(location))),
+                              DataCell(_fixedCell(3, _ellipsis(type))),
                               DataCell(
-                                _fixedCell(3, _buildStatusChip(status)),
+                                _fixedCell(4, _buildStatusChip(status)),
                               ),
-                              DataCell(_fixedCell(4, _ellipsis(date))),
-                              DataCell(_fixedCell(5, _ellipsis(recurrence))),
+                              DataCell(_fixedCell(5, _ellipsis(date))),
+                              DataCell(_fixedCell(6, _ellipsis(recurrence))),
                               DataCell(
                                 _fixedCell(
-                                  6,
+                                  7,
                                   Builder(
                                     builder: (context) {
                                       return IconButton(

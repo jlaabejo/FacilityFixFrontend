@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import '../../services/auth_storage.dart';
 import 'pop_up/inventoryitem_details_popup.dart';
 import '../popupwidgets/stock_management_popup.dart';
+import 'createwebinventoryitems_page.dart';
 import '../widgets/tags.dart';
 
 class InventoryManagementItemsPage extends StatefulWidget {
@@ -274,24 +275,41 @@ class _InventoryManagementItemsPageState
     // Show the details popup and get updated data
     final updatedData = await InventoryItemDetailsDialog.show(context, itemData);
     
-    // If data was updated, sync it back to the backend
+    // If data was updated, sync it back to the local list
     if (updatedData != null) {
       // Update the local item with new values
       final itemIndex = _inventoryItems.indexWhere((i) => i['id'] == item['id']);
       if (itemIndex != -1) {
-        // Get the updated stock value (could be in either field)
-        final newStock = updatedData['quantityInStock'] ?? updatedData['currentStock'];
-        
+        // Get the updated stock value. Accept multiple possible keys returned
+        // by various dialogs or API responses for robustness.
+        final newStock = updatedData['quantityInStock'] 
+            ?? updatedData['currentStock'] 
+            ?? updatedData['current_stock'] 
+            ?? updatedData['quantity'] 
+            ?? 0;
+
         setState(() {
+          // Normalize and write multiple key variants so other UI
+          // code reading either form will see the updated value.
           _inventoryItems[itemIndex]['current_stock'] = newStock;
           _inventoryItems[itemIndex]['quantity_in_stock'] = newStock;
-          _inventoryItems[itemIndex]['history'] = updatedData['history'];
-          _inventoryItems[itemIndex]['updated_by'] = updatedData['updatedBy'];
+          _inventoryItems[itemIndex]['quantityInStock'] = newStock;
+          _inventoryItems[itemIndex]['currentStock'] = newStock;
+
+          // Optional fields returned from the dialog
+          if (updatedData.containsKey('history')) {
+            _inventoryItems[itemIndex]['history'] = updatedData['history'];
+          }
+          if (updatedData.containsKey('updatedBy')) {
+            _inventoryItems[itemIndex]['updated_by'] = updatedData['updatedBy'];
+          } else if (updatedData.containsKey('updated_by')) {
+            _inventoryItems[itemIndex]['updated_by'] = updatedData['updated_by'];
+          }
         });
         _updateFilteredItems();
       }
-      
-      // TODO: Send update to backend API
+
+      // TODO: Send update to backend API if persistent sync is desired.
       // await _apiService.updateInventoryItem(item['id'], updatedData);
     }
   }
@@ -308,8 +326,22 @@ class _InventoryManagementItemsPageState
 
   // Edit item method
   void _editItem(Map<String, dynamic> item) {
-    // Implement edit functionality
-    // TODO: Implement edit item dialog
+    // Open the InventoryItemCreatePage in edit mode and reload list on save.
+    final itemId = item['id']?.toString() ?? item['item_code']?.toString();
+    if (itemId == null) return;
+
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (ctx) => InventoryItemCreatePage(itemId: itemId)))
+        .then((result) {
+      try {
+        if (result is Map && result['saved'] == true) {
+          // If edit/save succeeded, reload inventory items to reflect changes
+          _loadInventoryItems();
+        }
+      } catch (e) {
+        // ignore
+      }
+    });
   }
 
   void _updateFilteredItems() {

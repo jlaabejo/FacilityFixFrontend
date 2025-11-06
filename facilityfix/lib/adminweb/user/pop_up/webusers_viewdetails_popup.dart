@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../popupwidgets/webforgotpassword_popup.dart';
 import '../../services/api_service.dart';
 
@@ -39,17 +38,10 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
   
   // Available department options
   final List<String> availableDepartments = [
-    'Maintenance',
     'Carpentry',
     'Plumbing',
     'Electrical',
     'Masonry',
-    'HVAC',
-    'Fire Safety',
-    'Security',
-    'General',
-    'Janitorial',
-    'Landscaping',
   ];
 
   bool isFirstNameValid = true;
@@ -419,6 +411,8 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
 
   Widget _buildPersonalDetailsSection() {
     final rawUser = widget.user['_raw'] ?? widget.user;
+    // Determine role for this user so we can hide department for tenants
+    final String role = (rawUser['role'] ?? widget.user['role'] ?? 'tenant').toString().toLowerCase();
 
     return Container(
       width: double.infinity,
@@ -487,16 +481,14 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
           ),
           const SizedBox(height: 20),
 
-          // Department field (single select)
-          _buildDepartmentField(),
-          const SizedBox(height: 20),
+          // Department field (single select) - hide for tenants
+          if (role != 'tenant') ...[
+            _buildDepartmentField(),
+            const SizedBox(height: 20),
+          ],
 
           // Role (read-only)
           _buildReadOnlyField('Role', widget.user['role'] ?? 'Tenant'),
-          const SizedBox(height: 20),
-
-          // Status (read-only)
-          _buildReadOnlyField('Status', widget.user['status'] ?? 'Offline'),
           const SizedBox(height: 20),
 
           // Building ID (if available)
@@ -938,19 +930,25 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
         'last_name': lastNameController.text.trim(),
         'email': emailController.text.trim(),
         'phone_number': phoneController.text.trim(),
-        'department': selectedDepartment,  // Single department
+        // Note: department is added below only for non-tenant roles
       };
       
       // Add role-specific department fields for backward compatibility
       final role = widget.user['role']?.toString().toLowerCase() ?? 'tenant';
-      if (role == 'staff') {
-        updateData['staff_department'] = selectedDepartment;
-        // Also set departments array for backward compatibility
-        updateData['staff_departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
-        updateData['departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
-      } else {
-        // For non-staff roles, also set departments array
-        updateData['departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
+      // Only include department-related fields for non-tenant roles
+      if (role != 'tenant') {
+        // Include a simple department field for back-compat
+        updateData['department'] = selectedDepartment;
+
+        if (role == 'staff') {
+          updateData['staff_department'] = selectedDepartment;
+          // Also set departments array for backward compatibility
+          updateData['staff_departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
+          updateData['departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
+        } else {
+          // For other non-tenant roles (e.g., admin), set departments array
+          updateData['departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
+        }
       }
 
       print('[UserProfileDialog] Updating user $userId');

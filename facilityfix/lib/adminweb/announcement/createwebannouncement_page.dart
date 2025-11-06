@@ -603,8 +603,50 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                           ),
                           ),
                           const SizedBox(width: 24),
-                          // Right column intentionally left empty so the title stays on the left
-                          const Expanded(child: SizedBox()),
+                          // Right column: automated, read-only Announcement ID
+                          Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                            _fieldLabel("Announcement ID"),
+                            // Generate a stable-ish ID from the current timestamp + title snippet.
+                            // Note: this is generated on each build; if you need a single persistent
+                            // ID per create session, consider storing it in state (e.g. a field)
+                            // and initializing it once in initState().
+                            Builder(builder: (context) {
+                              // Determine prefix: use first 3 letters of the announcement type (letters only)
+                              String prefix = 'ANN';
+                              if (_selectedType != null && _selectedType!.isNotEmpty && _selectedType != 'Others') {
+                                final lettersOnly = _selectedType!.replaceAll(RegExp(r'[^A-Za-z]'), '');
+                                if (lettersOnly.isNotEmpty) {
+                                  prefix = lettersOnly.length >= 3
+                                      ? lettersOnly.substring(0, 3).toUpperCase()
+                                      : lettersOnly.toUpperCase().padRight(3, 'X');
+                                }
+                              }
+
+                              // Year part
+                              final year = DateTime.now().year.toString();
+
+                              // Pseudo sequence number (5 digits). Uses current milliseconds to generate a reasonably unique sequence.
+                              // This is a client-side fallback; real sequence should come from backend to avoid collisions.
+                              final seqNumber = (DateTime.now().millisecondsSinceEpoch % 100000).toString().padLeft(5, '0');
+
+                              final generatedId = '$prefix-$year-$seqNumber';
+
+                              // Use a local controller so the field updates when the widget rebuilds (e.g. on refresh)
+                              final controller = TextEditingController(text: generatedId);
+
+                              return TextFormField(
+                                controller: controller,
+                                readOnly: true,
+                                decoration: _decoration("Auto-generated ID").copyWith(
+                                ),
+                              );
+                            }),
+                            ],
+                          ),
+                          ),
                         ],
                         ),
                       const SizedBox(height: 24),

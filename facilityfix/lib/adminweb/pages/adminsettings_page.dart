@@ -289,8 +289,6 @@ class _AdminWebSettingsPageState extends State<AdminWebSettingsPage> {
 
             const SizedBox(height: 32),
 
-            
-
             // System Configuration Section
             _buildSettingsSection(
               title: "System Configuration",

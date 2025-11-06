@@ -40,6 +40,7 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
   bool _isLoading = true;
   bool _isSaving = false;
   String? _errorMessage;
+  String? _announcementId;
 
   // Dropdown options
   final List<String> _audienceOptions = ['Tenant', 'Staff', 'All'];
@@ -152,8 +153,9 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
       print('[Edit] Loaded announcement data: $response');
 
       setState(() {
-        // Populate form fields
-        _titleController.text = response['title'] ?? '';
+  // Populate form fields
+  _titleController.text = response['title'] ?? '';
+  _announcementId = response['formatted_id'] ?? response['announcement']?['formatted_id'] ?? response['id'] ?? response['announcement']?['id'] ?? widget.announcementId;
         _detailsController.text = response['content'] ?? '';
 
         // Set audience
@@ -208,7 +210,7 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
       });
     } catch (e) {
       print('[Edit] Error loading announcement: $e');
-      setState(() {
+  setState(() {
         _errorMessage = 'Failed to load announcement: $e';
         _isLoading = false;
       });
@@ -757,38 +759,74 @@ class _EditAnnouncementPageState extends State<EditAnnouncementPage> {
                               const SizedBox(height: 24),
 
                               // Title
-                              Text(
-                                "Title",
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.grey[700],
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Container(
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey[300]!),
-                                  borderRadius: BorderRadius.circular(8),
-                                  color: Colors.white,
-                                ),
-                                child: TextField(
-                                  controller: _titleController,
-                                  decoration: InputDecoration(
-                                    hintText:
-                                        "e.g., Scheduled Water Interruption",
-                                    hintStyle: TextStyle(
-                                      color: Colors.grey[400],
-                                      fontSize: 14,
-                                    ),
-                                    border: InputBorder.none,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 12,
+                              // Title + Announcement ID (read-only)
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        _fieldLabel("Title"),
+                                        const SizedBox(height: 4),
+                                        Container(
+                                          height: 48,
+                                          decoration: BoxDecoration(
+                                            border: Border.all(color: Colors.grey[300]!),
+                                            borderRadius: BorderRadius.circular(8),
+                                            color: Colors.white,
+                                          ),
+                                          child: TextField(
+                                            controller: _titleController,
+                                            decoration: InputDecoration(
+                                              hintText: "e.g., Scheduled Water Interruption",
+                                              hintStyle: TextStyle(
+                                                color: Colors.grey[400],
+                                                fontSize: 14,
+                                              ),
+                                              border: InputBorder.none,
+                                              contentPadding: const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 12,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ),
+                                  const SizedBox(width: 24),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        _fieldLabel("Announcement ID"),
+                                        const SizedBox(height: 4),
+                                        Container(
+                                          height: 48,
+                                          decoration: BoxDecoration(
+                                            border: Border.all(color: Colors.grey[300]!),
+                                            borderRadius: BorderRadius.circular(8),
+                                            color: Colors.grey[50],
+                                          ),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                            child: Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: Text(
+                                                _announcementId ?? 'N/A',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Colors.grey[800],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
                               const SizedBox(height: 24),
 

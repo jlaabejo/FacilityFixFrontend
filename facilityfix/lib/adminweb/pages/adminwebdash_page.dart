@@ -52,37 +52,104 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
 
       // Fetch all tenant requests (includes Concern Slips, Job Services, Work Orders with AI categorization)
       final allRequests = await _apiService.getAllTenantRequests();
-      
+
       // Fetch maintenance tasks
       final maintenanceTasks = await _apiService.getAllMaintenance();
 
+      // Fetch inventory requests so we can show a dashboard stat
+      List<Map<String, dynamic>> inventoryRequests = [];
+      try {
+        inventoryRequests = await _apiService.getInventoryRequests();
+      } catch (e) {
+        print('[AdminWebDash] Warning: failed to fetch inventory requests: $e');
+      }
+
       // Calculate dashboard statistics from real data
-      final activeJobs = allRequests.where((request) => 
-        request['status'] == 'assigned' || request['status'] == 'in_progress'
-      ).length;
+      final activeJobs =
+          allRequests
+              .where(
+                (request) =>
+                    request['status'] == 'assigned' ||
+                    request['status'] == 'in_progress',
+              )
+              .length;
 
-      final pendingConcerns = allRequests.where((request) => 
-        request['status'] == 'pending'
-      ).length;
+      final pendingConcerns =
+          allRequests.where((request) => request['status'] == 'pending').length;
 
-      final totalRequests = allRequests.length;
+      // Count repair-like requests (job/service/work) and combine with maintenance tasks
+      final repairCount =
+          allRequests.where((request) {
+            final rt = (request['request_type'] ?? '').toString().toLowerCase();
+            return rt.contains('repair') ||
+                rt.contains('job') ||
+                rt.contains('work') ||
+                rt.contains('service');
+          }).length;
 
-      final completedRequests = allRequests.where((request) => 
-        request['status'] == 'completed' || request['status'] == 'done'
-      ).length;
+      final totalRequests = repairCount + maintenanceTasks.length;
 
-      final completionRate = totalRequests > 0 
-        ? ((completedRequests / totalRequests) * 100).round()
-        : 0;
+      final completedRequests =
+          allRequests
+              .where(
+                (request) =>
+                    request['status'] == 'completed' ||
+                    request['status'] == 'done',
+              )
+              .length;
+
+      final completionRate =
+          totalRequests > 0
+              ? ((completedRequests / totalRequests) * 100).round()
+              : 0;
 
       // Generate mock trends data based on real request count
       final mockTrends = _generateMockTrends(allRequests);
+
+      // Compute timeframe-based counts
+      final now = DateTime.now();
+
+      // Repair: active requests (pending, assigned, in_progress) created in the current month
+      final repairMonthPending = allRequests.where((request) {
+        final rt = (request['request_type'] ?? '').toString().toLowerCase();
+        final isRepairLike = rt.contains('repair') || rt.contains('job') || rt.contains('work') || rt.contains('service');
+        if (!isRepairLike) return false;
+        final status = (request['status'] ?? '').toString().toLowerCase();
+        // Treat pending, assigned and in_progress as active
+        if (!(status == 'pending' || status == 'assigned' || status == 'in_progress')) return false;
+        final createdAt = DateTime.tryParse(request['created_at'] ?? request['submitted_at'] ?? '');
+        if (createdAt == null) return false;
+        return createdAt.month == now.month && createdAt.year == now.year;
+      }).length;
+
+  // Maintenance: scheduled tasks within the current week (Mon-Sat)
+  // weekStart = Monday, weekEnd = Saturday (6-day window)
+  final weekStart = now.subtract(Duration(days: now.weekday - 1));
+  final weekEnd = weekStart.add(const Duration(days: 5));
+      final maintenanceWeekScheduled = maintenanceTasks.where((task) {
+        final scheduled = DateTime.tryParse(task['scheduled_date'] ?? '');
+        if (scheduled == null) return false;
+        return !scheduled.isBefore(weekStart) && !scheduled.isAfter(weekEnd);
+      }).length;
+
+      // Inventory requests: requests created within the current week
+      final inventoryWeekRequests = inventoryRequests.where((req) {
+        final created = DateTime.tryParse(req['created_at'] ?? req['requested_at'] ?? req['submitted_at'] ?? '');
+        if (created == null) return false;
+        return !created.isBefore(weekStart) && !created.isAfter(weekEnd);
+      }).length;
 
       setState(() {
         _dashboardStats = {
           'active_jobs': activeJobs,
           'pending_concerns': pendingConcerns,
           'total_requests': totalRequests,
+          'repair_count': repairCount,
+          'repair_month_pending': repairMonthPending,
+          'maintenance_count': maintenanceTasks.length,
+          'maintenance_week_scheduled': maintenanceWeekScheduled,
+          'inventory_requests': inventoryRequests.length,
+          'inventory_week_requests': inventoryWeekRequests,
           'completion_rate': completionRate,
         };
         _allRequests = allRequests;
@@ -101,23 +168,24 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
 
   Map<String, dynamic> _generateMockTrends(List<dynamic> requests) {
     final Map<String, int> dailyBreakdown = {};
-    
+
     // Generate last 7 days of data based on actual requests
     for (int i = 0; i < 7; i++) {
       final date = DateTime.now().subtract(Duration(days: 6 - i));
       final dateKey = date.toString().split(' ')[0];
-      
+
       // Count requests for this day (mock distribution)
-      final dayRequests = requests.where((request) {
-        final createdAt = DateTime.tryParse(request['created_at'] ?? '');
-        if (createdAt == null) return false;
-        return createdAt.day == date.day && createdAt.month == date.month;
-      }).length;
-      
+      final dayRequests =
+          requests.where((request) {
+            final createdAt = DateTime.tryParse(request['created_at'] ?? '');
+            if (createdAt == null) return false;
+            return createdAt.day == date.day && createdAt.month == date.month;
+          }).length;
+
       // If no requests for this day, use a small random number
       dailyBreakdown[dateKey] = dayRequests > 0 ? dayRequests : (i % 3) + 1;
     }
-    
+
     return {'daily_breakdown': dailyBreakdown};
   }
 
@@ -248,22 +316,22 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                                 children: [
                                   Expanded(
                                     child: _buildStatCard(
-                                      'ACTIVE WORK\nORDERS',
-                                      '${_dashboardStats?['active_jobs'] ?? 0}',
-                                      '${_dashboardStats?['pending_concerns'] ?? 0} pending',
-                                      '${_dashboardStats?['completion_rate'] ?? 0}%',
+                                      'REPAIR TASKS\n(ALL TYPES)',
+                                      '${_dashboardStats?['repair_month_pending'] ?? 0}',
+                                      'Pending this month',
+                                      '',
                                       Colors.blue,
-                                      Icons.work_outline,
+                                      Icons.build_outlined,
                                       isIncrease: true,
-                                      routeKey: 'work_maintenance',
+                                      routeKey: 'work_repair',
                                     ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: _buildStatCard(
                                       'SCHEDULED\nMAINTENANCE',
-                                      '${_maintenanceTasks.length}',
-                                      'tasks this week',
+                                      '${_dashboardStats?['maintenance_week_scheduled'] ?? 0}',
+                                      'Tasks this week',
                                       '',
                                       Colors.green,
                                       Icons.schedule,
@@ -278,14 +346,14 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                                 children: [
                                   Expanded(
                                     child: _buildStatCard(
-                                      'REPAIR TASKS\n(ALL TYPES)',
-                                      '${_allRequests.length}',
-                                      'This month',
-                                      '',
+                                      'INVENTORY\nREQUESTS',
+                                      '${_dashboardStats?['inventory_week_requests'] ?? 0}',
+                                      '${_dashboardStats?['inventory_week_requests'] ?? 0} this week',
+                                      '${_dashboardStats?['completion_rate'] ?? 0}%',
                                       Colors.blue,
-                                      Icons.build_outlined,
+                                      Icons.inventory_2_outlined,
                                       isIncrease: true,
-                                      routeKey: 'work_repair',
+                                      routeKey: 'inventory_request',
                                     ),
                                   ),
                                   const SizedBox(width: 12),
@@ -293,7 +361,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                                     child: _buildStatCard(
                                       'TOTAL REQUESTS',
                                       '${_dashboardStats?['total_requests'] ?? 0}',
-                                      'All time',
+                                      '${_dashboardStats?['repair_count'] ?? 0} repairs • ${_dashboardStats?['maintenance_count'] ?? 0} maintenance',
                                       '',
                                       Colors.red,
                                       Icons.check_circle_outline,
@@ -310,35 +378,9 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                             children: [
                               Expanded(
                                 child: _buildStatCard(
-                                  'ACTIVE WORK\nORDERS',
-                                  '${_dashboardStats?['active_jobs'] ?? 0}',
-                                  '${_dashboardStats?['pending_concerns'] ?? 0} pending',
-                                  '${_dashboardStats?['completion_rate'] ?? 0}%',
-                                  Colors.blue,
-                                  Icons.work_outline,
-                                  isIncrease: true,
-                                  routeKey: 'work_maintenance',
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _buildStatCard(
-                                  'SCHEDULED\nMAINTENANCE',
-                                  '${_maintenanceTasks.length}',
-                                  'tasks this week',
-                                  '',
-                                  Colors.green,
-                                  Icons.schedule,
-                                  isIncrease: false,
-                                  routeKey: 'work_maintenance',
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _buildStatCard(
                                   'REPAIR TASKS\n(ALL TYPES)',
-                                  '${_allRequests.length}',
-                                  'This month',
+                                  '${_dashboardStats?['repair_month_pending'] ?? 0}',
+                                  'Pending this month',
                                   '',
                                   Colors.blue,
                                   Icons.build_outlined,
@@ -349,9 +391,35 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: _buildStatCard(
+                                  'SCHEDULED\nMAINTENANCE',
+                                  '${_dashboardStats?['maintenance_week_scheduled'] ?? 0}',
+                                  'Tasks this week',
+                                  '',
+                                  Colors.green,
+                                  Icons.schedule,
+                                  isIncrease: false,
+                                  routeKey: 'work_maintenance',
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                  child: _buildStatCard(
+                                    'INVENTORY\nREQUESTS',
+                                    '${_dashboardStats?['inventory_week_requests'] ?? 0}',
+                                    '${_dashboardStats?['inventory_week_requests'] ?? 0} this week',
+                                    '${_dashboardStats?['completion_rate'] ?? 0}%',
+                                    Colors.blue,
+                                    Icons.inventory_2_outlined,
+                                    isIncrease: true,
+                                    routeKey: 'inventory_request',
+                                  ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildStatCard(
                                   'TOTAL REQUESTS',
                                   '${_dashboardStats?['total_requests'] ?? 0}',
-                                  'All time',
+                                  '${_dashboardStats?['repair_count'] ?? 0} repairs • ${_dashboardStats?['maintenance_count'] ?? 0} maintenance',
                                   '',
                                   Colors.red,
                                   Icons.check_circle_outline,
@@ -563,13 +631,34 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
           // Map request data to table format with AI-generated category and priority
           final priority = request['priority'] ?? 'medium';
           final status = request['status'] ?? 'pending';
-          final category = request['category'] ?? 'general'; // AI-generated category
+          final category =
+              request['category'] ?? 'general'; // AI-generated category
 
-          final assignedToId = request['assigned_to'];
+          // Prefer explicit assigned_staff_name, then try assigned_to (which may be a name, a map, or an id)
           String displayName = 'Unassigned';
-          if (assignedToId != null && assignedToId.toString().isNotEmpty) {
-            displayName =
-                _userIdToNameMap[assignedToId] ?? assignedToId.toString();
+          final assignedStaffName = request['assigned_staff_name'];
+          final assignedTo = request['assigned_to'];
+
+          if (assignedStaffName != null &&
+              assignedStaffName.toString().isNotEmpty) {
+            displayName = assignedStaffName.toString();
+          } else if (assignedTo != null) {
+            if (assignedTo is Map) {
+              // try common name keys in the map
+              displayName =
+                  (assignedTo['name'] ??
+                          assignedTo['full_name'] ??
+                          assignedTo['display_name'] ??
+                          assignedTo['staff_name'] ??
+                          '')
+                      .toString();
+              if (displayName.isEmpty) displayName = 'Unassigned';
+            } else if (assignedTo is String) {
+              // if it's a plain string it might already be a name; if it's an id try the userId map
+              displayName = _userIdToNameMap[assignedTo] ?? assignedTo;
+            } else {
+              displayName = assignedTo.toString();
+            }
           }
 
           Color priorityColor;
@@ -602,7 +691,8 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
           return {
             'task': request['title'] ?? 'No title',
             'priority': priority.toString().toUpperCase(),
-            'name': displayName, // Use display name instead of ID
+            'name':
+                displayName, // Use display name (assigned_staff_name or assigned_to) instead of ID
             'status': status.toString().replaceAll('_', ' ').toUpperCase(),
             'priorityColor': priorityColor,
             'statusColor': statusColor,
@@ -745,7 +835,8 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                                 _fixedCell(
                                   0,
                                   Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       _ellipsis(
@@ -866,7 +957,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Maintenance Calendar',
+              'Task Calendar',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 20),
@@ -902,34 +993,88 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   color: Colors.orange,
                   shape: BoxShape.circle,
                 ),
-                markersMaxCount: 1,
-                markerDecoration: BoxDecoration(
-                  color: Colors.green,
-                  borderRadius: BorderRadius.circular(4),
-                ),
+                // allow up to 2 markers so we can show both repair (blue) and maintenance (green)
+                markersMaxCount: 2,
               ),
               eventLoader: (day) {
                 // Show events based on real maintenance tasks
                 final hasMaintenanceTask = _maintenanceTasks.any((task) {
-                  final scheduledDate = DateTime.tryParse(task['scheduled_date'] ?? '');
+                  final scheduledDate = DateTime.tryParse(
+                    task['scheduled_date'] ?? '',
+                  );
                   if (scheduledDate == null) return false;
-                  return scheduledDate.day == day.day && 
-                         scheduledDate.month == day.month &&
-                         scheduledDate.year == day.year;
-                });
-                
-                final hasRepairTask = _allRequests.any((request) {
-                  final createdAt = DateTime.tryParse(request['created_at'] ?? '');
-                  if (createdAt == null) return false;
-                  return createdAt.day == day.day && 
-                         createdAt.month == day.month &&
-                         createdAt.year == day.year;
+                  return scheduledDate.day == day.day &&
+                      scheduledDate.month == day.month &&
+                      scheduledDate.year == day.year;
                 });
 
-                if (hasMaintenanceTask) return ['maintenance'];
-                if (hasRepairTask) return ['repair'];
-                return [];
+                final hasRepairTask = _allRequests.any((request) {
+                  final createdAt = DateTime.tryParse(
+                    request['created_at'] ?? '',
+                  );
+                  if (createdAt == null) return false;
+                  return createdAt.day == day.day &&
+                      createdAt.month == day.month &&
+                      createdAt.year == day.year;
+                });
+
+                // return list of event identifiers so markerBuilder can render colored markers
+                final List<String> events = [];
+                if (hasRepairTask) events.add('repair');
+                if (hasMaintenanceTask) events.add('maintenance');
+                return events;
               },
+              // Custom marker builder so we can show repair tasks as blue and maintenance as green
+              calendarBuilders: CalendarBuilders(
+                markerBuilder: (context, date, markerEvents) {
+                  if (markerEvents.isEmpty) return const SizedBox.shrink();
+                  // Render a small row of colored dots (repair = blue, maintenance = green)
+                  // Build dot widgets explicitly to avoid any type inference issues
+                  final List<Widget> dots = [];
+                  // Prefer explicit contains checks to avoid type inference issues
+                  final hasRepairDot = markerEvents.contains('repair');
+                  final hasMaintenanceDot = markerEvents.contains(
+                    'maintenance',
+                  );
+                  if (hasRepairDot) {
+                    dots.add(
+                      Container(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 2,
+                          vertical: 1,
+                        ),
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.blue,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    );
+                  }
+                  if (hasMaintenanceDot) {
+                    dots.add(
+                      Container(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 2,
+                          vertical: 1,
+                        ),
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    );
+                  }
+
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: dots,
+                  );
+                },
+              ),
             ),
             const SizedBox(height: 16),
 
@@ -981,7 +1126,21 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
           return {
             'title': task['task_title'] ?? task['title'] ?? 'Maintenance Task',
             'assignee': assigneeName, // Use display name instead of ID
-            'date': task['scheduled_date'] ?? DateTime.now().toString(),
+            'date':
+                (() {
+                  final scheduled = task['scheduled_date'] ?? '';
+                  final parsed = DateTime.tryParse(scheduled);
+                  if (parsed != null) {
+                    return MaterialLocalizations.of(
+                      context,
+                    ).formatFullDate(parsed);
+                  }
+                  if (scheduled is String && scheduled.isNotEmpty)
+                    return scheduled;
+                  return MaterialLocalizations.of(
+                    context,
+                  ).formatFullDate(DateTime.now());
+                })(),
           };
         }).toList();
 
@@ -1023,10 +1182,10 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                 ),
                 TextButton(
                   onPressed: () {
-                    context.go('/calendar');
+                    context.go('/work/maintenance');
                   },
                   child: const Text(
-                    'Calendar',
+                    'All',
                     style: TextStyle(color: Colors.blue),
                   ),
                 ),
@@ -1159,6 +1318,13 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
   Widget _buildRepairChart() {
     final dailyBreakdown =
         _workOrderTrends?['daily_breakdown'] as Map<String, dynamic>? ?? {};
+    // Compute a sensible maxY for the chart based on trend data (fallback to 20)
+    int maxTrend = 0;
+    dailyBreakdown.values.forEach((v) {
+      final n = v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
+      if (n > maxTrend) maxTrend = n;
+    });
+    final computedMaxY = (maxTrend > 20) ? maxTrend.toDouble() : 20.0;
 
     // Convert daily breakdown to chart data points
     List<FlSpot> repairSpots = [];
@@ -1167,21 +1333,33 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
     // Get last 7 days of data
     for (int i = 0; i < 7; i++) {
       final date = DateTime.now().subtract(Duration(days: 6 - i));
-      final dateKey = date.toString().split(' ')[0];
-      final count = dailyBreakdown[dateKey] ?? 0;
 
       // Split between repair and maintenance based on actual data
-      final repairCount = _allRequests.where((request) {
-        final createdAt = DateTime.tryParse(request['created_at'] ?? '');
-        if (createdAt == null) return false;
-        return createdAt.day == date.day && createdAt.month == date.month;
-      }).length.toDouble();
+      final repairCount =
+          _allRequests
+              .where((request) {
+                final createdAt = DateTime.tryParse(
+                  request['created_at'] ?? '',
+                );
+                if (createdAt == null) return false;
+                return createdAt.day == date.day &&
+                    createdAt.month == date.month;
+              })
+              .length
+              .toDouble();
 
-      final maintenanceCount = _maintenanceTasks.where((task) {
-        final scheduledDate = DateTime.tryParse(task['scheduled_date'] ?? '');
-        if (scheduledDate == null) return false;
-        return scheduledDate.day == date.day && scheduledDate.month == date.month;
-      }).length.toDouble();
+      final maintenanceCount =
+          _maintenanceTasks
+              .where((task) {
+                final scheduledDate = DateTime.tryParse(
+                  task['scheduled_date'] ?? '',
+                );
+                if (scheduledDate == null) return false;
+                return scheduledDate.day == date.day &&
+                    scheduledDate.month == date.month;
+              })
+              .length
+              .toDouble();
 
       repairSpots.add(FlSpot(i.toDouble(), repairCount));
       maintenanceSpots.add(FlSpot(i.toDouble(), maintenanceCount));
@@ -1221,25 +1399,6 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   decoration: BoxDecoration(
                     color: Colors.blue.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Weekly',
-                        style: TextStyle(
-                          color: Colors.blue,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.keyboard_arrow_down,
-                        color: Colors.blue,
-                        size: 16,
-                      ),
-                    ],
                   ),
                 ),
               ],
@@ -1334,21 +1493,22 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   minX: 0,
                   maxX: 6,
                   minY: 0,
-                  maxY: 20,
+                  maxY: computedMaxY,
                   lineBarsData: [
                     // Repair Tasks line (green)
                     LineChartBarData(
-                      spots: repairSpots.isNotEmpty
-                          ? repairSpots
-                          : const [
-                              FlSpot(0, 3),
-                              FlSpot(1, 8),
-                              FlSpot(2, 2),
-                              FlSpot(3, 6),
-                              FlSpot(4, 4),
-                              FlSpot(5, 12),
-                              FlSpot(6, 5),
-                            ],
+                      spots:
+                          repairSpots.isNotEmpty
+                              ? repairSpots
+                              : const [
+                                FlSpot(0, 3),
+                                FlSpot(1, 8),
+                                FlSpot(2, 2),
+                                FlSpot(3, 6),
+                                FlSpot(4, 4),
+                                FlSpot(5, 12),
+                                FlSpot(6, 5),
+                              ],
                       isCurved: true,
                       gradient: LinearGradient(
                         colors: [Colors.green.withOpacity(0.8), Colors.green],
@@ -1370,17 +1530,18 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                     ),
                     // Maintenance line (blue)
                     LineChartBarData(
-                      spots: maintenanceSpots.isNotEmpty
-                          ? maintenanceSpots
-                          : const [
-                              FlSpot(0, 8),
-                              FlSpot(1, 12),
-                              FlSpot(2, 6),
-                              FlSpot(3, 14),
-                              FlSpot(4, 10),
-                              FlSpot(5, 16),
-                              FlSpot(6, 10),
-                            ],
+                      spots:
+                          maintenanceSpots.isNotEmpty
+                              ? maintenanceSpots
+                              : const [
+                                FlSpot(0, 8),
+                                FlSpot(1, 12),
+                                FlSpot(2, 6),
+                                FlSpot(3, 14),
+                                FlSpot(4, 10),
+                                FlSpot(5, 16),
+                                FlSpot(6, 10),
+                              ],
                       isCurved: true,
                       gradient: LinearGradient(
                         colors: [Colors.blue.withOpacity(0.8), Colors.blue],

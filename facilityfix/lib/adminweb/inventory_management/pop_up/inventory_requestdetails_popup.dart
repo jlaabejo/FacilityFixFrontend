@@ -58,6 +58,31 @@ class _InventoryRequestDetailsContentState
     _requestData = Map<String, dynamic>.from(widget.requestData);
   }
 
+  /// Format request ID to show as REQ-XXXXX
+  String _formatRequestId(dynamic id) {
+    if (id == null || id.toString() == 'N/A') return 'N/A';
+    
+    final idStr = id.toString();
+    
+    // If already formatted (starts with REQ-), return as is
+    if (idStr.toUpperCase().startsWith('REQ-')) {
+      return idStr.toUpperCase();
+    }
+    
+    // If it's a Firebase document ID (long alphanumeric), take last 8 chars
+    if (idStr.length > 15) {
+      return 'REQ-${idStr.substring(idStr.length - 8).toUpperCase()}';
+    }
+    
+    // If it's a short ID, format with padding
+    if (idStr.length <= 5) {
+      return 'REQ-${idStr.padLeft(5, '0')}';
+    }
+    
+    // Otherwise, use as is with REQ- prefix
+    return 'REQ-$idStr';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -90,58 +115,32 @@ class _InventoryRequestDetailsContentState
                       children: [
                         Expanded(
                           child: _buildInfoTile(
-                              "Item Name", _requestData['itemName'] ?? 'N/A'),
+                            "Item Name", _requestData['itemName'] ?? 'N/A'),
                         ),
                         const SizedBox(width: 48),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (_requestData['maintenanceTaskId'] != null &&
-                                  _requestData['maintenanceTaskId'].toString().isNotEmpty &&
-                                  _requestData['maintenanceTaskId'].toString() != 'N/A')
-                                OutlinedButton.icon(
-                                  onPressed: () {
-                                    // TODO: Navigate to maintenance task details
-                                  },
-                                  icon: const Icon(Icons.visibility_outlined, size: 16),
-                                  label: const Text('View Maintenance'),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: Colors.blue[700],
-                                    side: BorderSide(color: Colors.blue[300]!),
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                                  ),
-                                )
-                              else
-                                Text(
-                                  'No Maintenance Task',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey[500],
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                ),
-                            ],
+                          child: _buildInfoTile(
+                            "Maintenance Task ID",
+                            _requestData['maintenanceTaskId']?.toString() ?? 'No Maintenance Task',
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 24),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _buildInfoTile("Quantity Requested",
-                              _requestData['quantityRequested']?.toString() ?? '0'),
-                        ),
-                        const SizedBox(width: 48),
-                        Expanded(
-                          child: _buildInfoTile("Quantity Approved",
-                              _requestData['quantityApproved']?.toString() ?? '0'),
-                        ),
-                      ],
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _buildInfoTile("Quantity Requested",
+                          _requestData['quantityRequested']?.toString() ?? '0'),
                     ),
+                    const SizedBox(width: 48),
+                    Expanded(
+                      child: _buildInfoTile("Quantity Approved",
+                          _requestData['quantityApproved']?.toString() ?? '0'),
+                    ),
+                  ],
+                ),
                   ],
                 ),
 
@@ -157,12 +156,20 @@ class _InventoryRequestDetailsContentState
                   children: [
                     Expanded(
                       child: _buildInfoTile("Staff Name",
-                          _requestData['requestedBy'] ?? 'Unknown'),
+                          _requestData['requestedBy'] ?? 
+                          _requestData['requested_by'] ?? 
+                          _requestData['requester_name'] ?? 
+                          _requestData['staff_name'] ?? 
+                          'Unknown'),
                     ),
                     const SizedBox(width: 48),
                     Expanded(
                       child: _buildInfoTile("Staff Department",
-                          _requestData['staffDepartment'] ?? 'N/A'),
+                          _requestData['staffDepartment'] ?? 
+                          _requestData['staff_department'] ?? 
+                          _requestData['department'] ?? 
+                          _requestData['requester_department'] ?? 
+                          'N/A'),
                     ),
                   ],
                 ),
@@ -218,9 +225,8 @@ class _InventoryRequestDetailsContentState
             ),
           ),
         ),
-
         // Footer with action buttons
-        _buildFooter(context),
+        _buildFooter(),
       ],
     );
   }
@@ -271,7 +277,8 @@ class _InventoryRequestDetailsContentState
 
   // Request header with ID and status
   Widget _buildRequestHeader() {
-    final requestId = _requestData['requestId'] ?? 'N/A';
+    final rawRequestId = _requestData['requestId'] ?? _requestData['_doc_id'] ?? _requestData['id'] ?? 'N/A';
+    final requestId = _formatRequestId(rawRequestId);
     final itemName = _requestData['itemName'] ?? 'Unknown Item';
     final status = (_requestData['status'] ?? 'pending').toString();
     final requestedDate = _requestData['requestedDate'] ?? 'N/A';
@@ -319,7 +326,7 @@ class _InventoryRequestDetailsContentState
   }
 
   // Footer with divider and action buttons
-  Widget _buildFooter(BuildContext context) {
+  Widget _buildFooter() {
     final status = (_requestData['status'] ?? 'pending').toString().toLowerCase();
     final isPending = status == 'pending';
 

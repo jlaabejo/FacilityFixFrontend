@@ -360,58 +360,72 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       // Header action buttons
                       Row(
                         children: [
-                          Stack(
-                            children: [
+                            SizedBox(
+                            width: 48,
+                            height: 48,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
                               IconButton(
                                 icon: Icon(
-                                  _isLoadingNotifications 
-                                      ? Icons.hourglass_empty 
-                                      : Icons.notifications_outlined,
-                                  color: _isLoadingNotifications 
-                                      ? Colors.grey 
-                                      : null,
+                                Icons.notifications_outlined,
+                                color: _isLoadingNotifications ? Colors.grey : null,
                                 ),
-                                tooltip: _isLoadingNotifications 
-                                    ? 'Loading notifications...' 
-                                    : 'View notifications',
-                                onPressed: _isLoadingNotifications 
-                                    ? null 
-                                    : () {
-                                  NotificationDialog.show(
+                                tooltip: _isLoadingNotifications
+                                  ? 'Loading notifications...'
+                                  : 'View notifications',
+                                onPressed: _isLoadingNotifications
+                                  ? null
+                                  : () {
+                                    NotificationDialog.show(
                                     context,
                                     _notifications,
                                     onRefresh: _fetchNotifications,
-                                  );
-                                },
+                                    );
+                                  },
                               ),
-                              if (_unreadCount > 0)
-                                Positioned(
-                                  right: 8,
-                                  top: 8,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    constraints: const BoxConstraints(
-                                      minWidth: 16,
-                                      minHeight: 16,
-                                    ),
-                                    child: Text(
-                                      _unreadCount > 99
-                                          ? '99+'
-                                          : '$_unreadCount',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
+
+                              // Constrain the loading indicator to the icon area so it stays centered
+                              if (_isLoadingNotifications)
+                                Center(
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.blue),
                                   ),
                                 ),
-                            ],
+                                ),
+
+                              if (_unreadCount > 0)
+                                Positioned(
+                                right: 6,
+                                top: 6,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                  ),
+                                  constraints: const BoxConstraints(
+                                  minWidth: 16,
+                                  minHeight: 16,
+                                  ),
+                                  child: Text(
+                                  _unreadCount > 99 ? '99+' : '$_unreadCount',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  ),
+                                ),
+                                ),
+                              ],
+                            ),
                           ),
                           IconButton(
                             icon: const Icon(Icons.person, color: Colors.grey),

@@ -330,7 +330,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       case 'approved':
         return 'In Progress';
       case 'denied':
-        return 'Cancelled';
+        return 'Denied';
       case 'completed':
         return 'Completed';
       case 'assigned':
@@ -986,7 +986,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                     'Rejected',
                     'Completed',
                     'Returned to Tenant',
-                    'Cancelled',
+                    'Denied',
                   ].map<DropdownMenuItem<String>>((String value) {
                     return DropdownMenuItem<String>(
                       value: value,
@@ -1000,9 +1000,9 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
               ),
             ),
           ),
-          const SizedBox(width: 300),
+          const SizedBox(width: 150),
 
-          // Filter Button
+          // Refresh Button
           Container(
             height: 40,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1011,20 +1011,23 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
               border: Border.all(color: Colors.grey[300]!),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.tune, color: Colors.grey[600], size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  "Filter",
-                  style: TextStyle(
-                    color: Colors.grey[700],
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+            child: InkWell(
+              onTap: _fetchWorkOrderPermits,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.refresh_rounded, size: 20, color: Colors.blue[600]),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Refresh',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.blue[600],
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -1035,7 +1038,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   // Table Section Widget
   Widget _buildTableSection() {
     return Container(
-      height: 400, // Fixed height to avoid unbounded constraints
+      height: 650, // Fixed height to avoid unbounded constraints
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -1434,7 +1437,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
         bgColor = const Color(0xFFE8F5E8);
         textColor = const Color(0xFF2E7D32);
         break;
-      case 'Cancelled':
+      case 'Denied':
         bgColor = Colors.grey[100]!;
         textColor = Colors.grey[700]!;
         break;

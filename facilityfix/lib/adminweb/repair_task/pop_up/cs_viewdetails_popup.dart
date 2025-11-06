@@ -765,15 +765,15 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
               Row(
                 children: [
                   // Phone Number
-                  if (phoneNumber != null)
-                    Expanded(
-                      child: _buildDetailItem(
-                        'CONTACT NUMBER',
-                        phoneNumber,
-                      ),
-                    ),
-                  if (phoneNumber != null && assessedAt != null)
-                    const SizedBox(width: 24),
+                  // if (phoneNumber != null)
+                  //   Expanded(
+                  //     child: _buildDetailItem(
+                  //       'CONTACT NUMBER',
+                  //       phoneNumber,
+                  //     ),
+                  //   ),
+                  // if (phoneNumber != null && assessedAt != null)
+                  //   const SizedBox(width: 24),
                   // Date Assessed
                   if (assessedAt != null)
                     Expanded(
@@ -851,31 +851,31 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
             ),
             const SizedBox(width: 24),
             // Right column: Recommendation
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'RECOMMENDATION',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[600],
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    recommendation ?? 'N/A',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: recommendation != null ? Colors.black87 : Colors.grey[400],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            // Expanded(
+            //   child: Column(
+            //     crossAxisAlignment: CrossAxisAlignment.start,
+            //     children: [
+            //       Text(
+            //         'RECOMMENDATION',
+            //         style: TextStyle(
+            //           fontSize: 14,
+            //           fontWeight: FontWeight.w600,
+            //           color: Colors.grey[600],
+            //           letterSpacing: 0.5,
+            //         ),
+            //       ),
+            //       const SizedBox(height: 8),
+            //       Text(
+            //         recommendation ?? 'N/A',
+            //         style: TextStyle(
+            //           fontSize: 16,
+            //           fontWeight: FontWeight.w500,
+            //           color: recommendation != null ? Colors.black87 : Colors.grey[400],
+            //         ),
+            //       ),
+            //     ],
+            //   ),
+            // ),
           ],
         ),
         const SizedBox(height: 24),
