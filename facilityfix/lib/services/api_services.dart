@@ -415,21 +415,7 @@ class APIService {
   /// Get user profile with local-first approach (for backward compatibility)
   Future<Map<String, dynamic>?> getUserProfile() async {
     try {
-      // Try to get from local storage first
-      final local = await AuthStorage.getProfile();
 
-      // If we have local data and it's recent (less than 1 hour old), use it
-      if (local != null) {
-        final updatedAt = local['updated_at'] as String?;
-        if (updatedAt != null) {
-          final lastUpdate = DateTime.tryParse(updatedAt);
-          if (lastUpdate != null &&
-              DateTime.now().difference(lastUpdate).inHours < 1) {
-            print('[API] Using cached profile data');
-            return local;
-          }
-        }
-      }
 
       // Otherwise fetch from server
       print('[API] Fetching fresh profile data from server');

@@ -241,14 +241,16 @@ class ConcernSlipDetails extends StatelessWidget {
                   SizedBox(height: 12 * s),
                   const _SectionTitle('Attachments'),
                   SizedBox(height: 8 * s),
+
                   Wrap(
                     spacing: 8 * s,
                     runSpacing: 8 * s,
                     children:
                         attachments!
-                            .map((u) => _thumb(u, h: 80 * s, w: 140 * s))
+                            .map((u) => Image.network(u))
                             .toList(),
-                  ),
+                  ),  
+                  
                 ],
               ],
             ),

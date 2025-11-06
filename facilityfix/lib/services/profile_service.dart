@@ -1,5 +1,6 @@
 // lib/services/profile_service.dart
 import 'dart:io';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/services/auth_storage.dart';
@@ -32,22 +33,13 @@ class ProfileService {
     bool forceRefresh = false,
   }) async {
     try {
-      // Return cached data if it's still valid and not forcing refresh
-      if (!forceRefresh && isCacheValid) {
-        print('[ProfileService] Using cached profile data');
-        return _cachedProfile;
-      }
+  
 
       print('[ProfileService] Fetching fresh profile data...');
       
       // Fetch from API
       final profile = await _apiService.fetchCurrentUserProfile();
-      
-      if (profile != null) {
-        _cachedProfile = profile;
-        _lastFetchTime = DateTime.now();
-        print('[ProfileService] Profile cached successfully');
-      }
+
       
       return profile;
     } catch (e) {
@@ -402,6 +394,10 @@ class ProfileService {
     if (localImageFile != null && localImageFile.existsSync()) {
       return FileImage(localImageFile);
     }
+
+
+    final storageRef = FirebaseStorage.instance.ref();
+    
 
     // 2. Check for cached authenticated URL
     final imageUrl = profile['profile_image_url']?.toString() ?? '';
