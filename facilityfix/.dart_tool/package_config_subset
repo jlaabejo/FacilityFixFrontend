@@ -142,6 +142,18 @@ firebase_core_web
 3.4
 file:///C:/Users/Asset/AppData/Local/Pub/Cache/hosted/pub.dev/firebase_core_web-2.24.1/
 file:///C:/Users/Asset/AppData/Local/Pub/Cache/hosted/pub.dev/firebase_core_web-2.24.1/lib/
+firebase_storage
+3.2
+file:///C:/Users/Asset/AppData/Local/Pub/Cache/hosted/pub.dev/firebase_storage-12.4.10/
+file:///C:/Users/Asset/AppData/Local/Pub/Cache/hosted/pub.dev/firebase_storage-12.4.10/lib/
+firebase_storage_platform_interface
+3.2
+file:///C:/Users/Asset/AppData/Local/Pub/Cache/hosted/pub.dev/firebase_storage_platform_interface-5.2.10/
+file:///C:/Users/Asset/AppData/Local/Pub/Cache/hosted/pub.dev/firebase_storage_platform_interface-5.2.10/lib/
+firebase_storage_web
+3.4
+file:///C:/Users/Asset/AppData/Local/Pub/Cache/hosted/pub.dev/firebase_storage_web-3.10.17/
+file:///C:/Users/Asset/AppData/Local/Pub/Cache/hosted/pub.dev/firebase_storage_web-3.10.17/lib/
 fl_chart
 3.2
 file:///C:/Users/Asset/AppData/Local/Pub/Cache/hosted/pub.dev/fl_chart-0.69.2/
@@ -428,6 +440,6 @@ file:///C:/Users/Asset/AppData/Local/Pub/Cache/hosted/pub.dev/xml-6.6.1/
 file:///C:/Users/Asset/AppData/Local/Pub/Cache/hosted/pub.dev/xml-6.6.1/lib/
 facilityfix
 3.7
-file:///C:/Users/Asset/Documents/GitHub/FacilityFix/facilityfix/
-file:///C:/Users/Asset/Documents/GitHub/FacilityFix/facilityfix/lib/
+file:///C:/Users/Asset/Documents/GitHub/FacilityFixFrontend/facilityfix/
+file:///C:/Users/Asset/Documents/GitHub/FacilityFixFrontend/facilityfix/lib/
 2

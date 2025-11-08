@@ -585,8 +585,8 @@ class _RequestFormState extends State<RequestForm> {
           (_) => CustomPopup(
             title: 'Success',
             message:
-                'Your ${widget.requestType.toLowerCase()} ${formattedId != null ? '($formattedId)' : ''} has been submitted successfully and is now listed under Work Order Management.',
-            primaryText: 'Go to Work Orders',
+                'Your ${widget.requestType.toLowerCase()} ${formattedId != null ? '($formattedId)' : ''} has been submitted successfully and is now listed under Repair Request Management.',
+            primaryText: 'Go to Repair Request Management',
             onPrimaryPressed: () {
               Navigator.of(context).pop(); // close dialog
               Navigator.pushReplacement(

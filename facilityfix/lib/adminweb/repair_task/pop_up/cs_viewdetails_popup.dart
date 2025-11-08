@@ -1,26 +1,31 @@
 import 'package:facilityfix/adminweb/widgets/tags.dart';
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/utils/ui_format.dart';
+import 'package:facilityfix/adminweb/widgets/delete_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../services/api_service.dart' as admin_api;
 
 class ConcernSlipDetailDialog extends StatefulWidget {
   final Map<String, dynamic> task;
   final VoidCallback? onAssignmentComplete;
+  final bool isMaintenanceTask;
 
   const ConcernSlipDetailDialog({
-    super.key, 
+    super.key,
     required this.task,
     this.onAssignmentComplete,
+    this.isMaintenanceTask = false,
   });
 
   @override
   State<ConcernSlipDetailDialog> createState() => _ConcernSlipDetailDialogState();
 
   static void show(
-    BuildContext context, 
+    BuildContext context,
     Map<String, dynamic> task, {
     VoidCallback? onAssignmentComplete,
+    bool isMaintenanceTask = false,
   }) {
     showDialog(
       context: context,
@@ -29,6 +34,7 @@ class ConcernSlipDetailDialog extends StatefulWidget {
         return ConcernSlipDetailDialog(
           task: task,
           onAssignmentComplete: onAssignmentComplete,
+          isMaintenanceTask: isMaintenanceTask,
         );
       },
     );
@@ -38,9 +44,9 @@ class ConcernSlipDetailDialog extends StatefulWidget {
 class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
   final _formKey = GlobalKey<FormState>();
   final APIService _apiService = APIService();
+  final admin_api.ApiService _adminApiService = admin_api.ApiService();
   
   bool _formValid = false;
-  bool _isLoading = false;
   bool _isAssigning = false;
   bool _showAssignmentForm = false; // Track which view to show
   
@@ -122,10 +128,6 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
   }
   
   Future<void> _loadStaffMembers() async {
-    setState(() {
-      _isLoading = true;
-    });
-    
     try {
       String? taskCategory = widget.task['category']?.toString().toLowerCase();
       String? department;
@@ -161,14 +163,10 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
       
       setState(() {
         _staffList = staffData;
-        _isLoading = false;
       });
       
       print('[ConcernSlipDetail] Loaded ${_staffList.length} staff members');
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
       print('[ConcernSlipDetail] Error loading staff: $e');
     }
   }
@@ -294,15 +292,63 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
   }
   
   void _loadAssignedStaffDetails() {
-    // Load staff details from the task data
-    final assignedStaff = widget.task['rawData']?['assigned_staff'];
-    if (assignedStaff != null) {
+    // Load staff details from the task data (handle multiple possible shapes/keys)
+    final data = widget.task;
+
+    // Possible locations and keys where assigned staff info might exist
+    dynamic assignedStaff = data['rawData']?['assigned_staff'] ??
+        data['rawData']?['assigned_to'] ??
+        data['assigned_staff'] ??
+        data['assigned_to'] ??
+        data['assigned_staff_name'] ??
+        data['assigned_staff_id'];
+
+    if (assignedStaff == null) return;
+
+    // If it's a plain string, treat it as the staff name
+    if (assignedStaff is String) {
       setState(() {
-        selectedStaffId = assignedStaff['user_id'] ?? assignedStaff['id'];
-        selectedStaffName = assignedStaff['name'] ?? 
-                           '${assignedStaff['first_name'] ?? ''} ${assignedStaff['last_name'] ?? ''}'.trim();
+        selectedStaffName = assignedStaff;
+
+        // try to find an id from other fields
+        selectedStaffId = data['rawData']?['assigned_staff_id'] ??
+            data['assigned_staff_id'] ??
+            data['rawData']?['assigned_to'] ??
+            data['assigned_to'];
       });
+      return;
     }
+
+    // If it's a map-like object, pick common fields
+    if (assignedStaff is Map<String, dynamic>) {
+      setState(() {
+        selectedStaffId = assignedStaff['user_id'] ??
+            assignedStaff['id'] ??
+            assignedStaff['userId'] ??
+            data['rawData']?['assigned_staff_id'] ??
+            data['assigned_staff_id'];
+
+        selectedStaffName = assignedStaff['name'] ??
+            assignedStaff['full_name'] ??
+            ((assignedStaff['first_name'] ?? '') + ' ' + (assignedStaff['last_name'] ?? '')).trim();
+
+        if (selectedStaffName == null || selectedStaffName!.isEmpty) {
+          // Fallback to other possible string fields
+          final maybeName = data['rawData']?['assigned_staff_name'] ?? data['assigned_staff_name'];
+          if (maybeName != null && maybeName is String) selectedStaffName = maybeName;
+        }
+      });
+      return;
+    }
+
+    // Unknown shape: try to stringify
+    setState(() {
+      try {
+        selectedStaffName = assignedStaff.toString();
+      } catch (_) {
+        selectedStaffName = 'Staff Member';
+      }
+    });
   }
 
   @override
@@ -366,6 +412,16 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
             ),
           ),
           const Spacer(),
+          if (!_showAssignmentForm) ...[
+            IconButton(
+              onPressed: () => _deleteTask(),
+              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              tooltip: 'Delete Task',
+            ),
+            const SizedBox(width: 8),
+          ],
           IconButton(
             onPressed: _isAssigning ? null : () => Navigator.of(context).pop(),
             icon: const Icon(Icons.close, color: Colors.grey, size: 20),
@@ -454,7 +510,27 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Title with CS ID and Status/Priority
+        _buildConcernSlipDetails(),
+        if (_isAssignedStatus || _isSentStatus || _isCompletedStatus) ...[
+          const SizedBox(height: 24),
+          _buildAutoAssignedStaffDisplay(),
+        ],
+        if (_isSentStatus || _isCompletedStatus) ...[
+          const SizedBox(height: 24),
+          Divider(color: Colors.grey[200], thickness: 1, height: 1),
+          const SizedBox(height: 24),
+          _buildAssessmentSection(),
+        ],
+      ],
+    );
+  }
+
+  // --- Copied and adapted from JobServiceConcernSlipDialog ---
+  Widget _buildConcernSlipDetails() {
+    // Title, IDs, and meta info
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -500,17 +576,15 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
         const SizedBox(height: 24),
         Divider(color: Colors.grey[200], thickness: 1, height: 1),
         const SizedBox(height: 24),
-        
         // Requester Details
         _buildSectionTitle('Requester Details'),
         const SizedBox(height: 16),
-        
         Row(
           children: [
             Expanded(
               child: _buildDetailItem(
                 'REQUESTED BY',
-                widget.task['rawData']?['reported_by'] ?? 'Erika De Guzman',
+                widget.task['rawData']?['reported_by'] ?? 'N/A',
               ),
             ),
             const SizedBox(width: 24),
@@ -523,7 +597,6 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
           ],
         ),
         const SizedBox(height: 24),
-        
         Row(
           children: [
             Expanded(
@@ -542,10 +615,8 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
           ],
         ),
         const SizedBox(height: 24),
-        
         Divider(color: Colors.grey[200], thickness: 1, height: 1),
         const SizedBox(height: 24),
-        
         // Work Description
         _buildSectionTitle('Work Description'),
         const SizedBox(height: 16),
@@ -557,19 +628,179 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
             color: Colors.grey[700],
           ),
         ),
-        
-        // Staff Details Section (show for assigned, sent, or completed status)
-        if (_isAssignedStatus || _isSentStatus || _isCompletedStatus) ...[
+      ],
+    );
+  }
+
+  Widget _buildAutoAssignedStaffDisplay() {
+    // Use assigned staff or fallback to selectedStaffName
+    String staffName = selectedStaffName ?? '';
+    if (staffName.isEmpty) {
+      final data = widget.task;
+      dynamic assignedStaff = data['rawData']?['assigned_staff'] ??
+          data['rawData']?['assigned_to'] ??
+          data['assigned_staff'] ??
+          data['assigned_to'] ??
+          data['assigned_staff_name'];
+
+      if (assignedStaff != null) {
+        if (assignedStaff is String) {
+          staffName = assignedStaff;
+        } else if (assignedStaff is Map<String, dynamic>) {
+          staffName = assignedStaff['name'] ?? assignedStaff['full_name'] ??
+              ((assignedStaff['first_name'] ?? '') + ' ' + (assignedStaff['last_name'] ?? '')).trim();
+        } else {
+          staffName = assignedStaff.toString();
+        }
+      }
+    }
+    if (staffName.isEmpty) staffName = 'Staff Member';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Assigned Staff',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: Row(
+            children: [
+              _buildSimpleAvatar(staffName),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      staffName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.task['department'] ?? 'No Department',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.check_circle,
+                color: Colors.green[600],
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAssessmentSection() {
+    // Use assessment and recommendation from rawData
+    final assessment = widget.task['rawData']?['staff_assessment'];
+    final recommendation = widget.task['rawData']?['staff_recommendation'];
+    final resolutionType = widget.task['rawData']?['resolution_type'];
+
+    if (assessment == null && recommendation == null && resolutionType == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle('Assessment and Resolution Details'),
+        const SizedBox(height: 16),
+        if (resolutionType != null) ...[
+          Text(
+            'RESOLUTION TYPE',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[600],
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          RequestTypeTag(
+            resolutionType.toString().replaceAll('_', ' '),
+          ),
           const SizedBox(height: 24),
-          _buildStaffDetailsSection(),
         ],
-        
-        // Assessment Section (show for sent or completed status)
-        if (_isSentStatus || _isCompletedStatus) ...[
+        if (assessment != null) ...[
+          Text(
+            'ASSESSMENT',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[600],
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue[200]!),
+            ),
+            child: Text(
+              assessment,
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.6,
+                color: Colors.grey[800],
+              ),
+            ),
+          ),
+        ],
+        if (recommendation != null) ...[
           const SizedBox(height: 24),
-          Divider(color: Colors.grey[200], thickness: 1, height: 1),
-          const SizedBox(height: 24),
-          _buildAssessmentSection(),
+          Text(
+            'RECOMMENDATION',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[600],
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.green[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.green[200]!),
+            ),
+            child: Text(
+              recommendation,
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.6,
+                color: Colors.grey[800],
+              ),
+            ),
+          ),
         ],
       ],
     );
@@ -668,10 +899,7 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
             ),
           ],
         ),
-        const SizedBox(height: 24),
-        
-        // Admin Notes
-        _buildNotesSection(),
+
       ],
     );
   }
@@ -688,320 +916,6 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
     );
   }
   
-  Widget _buildStaffDetailsSection() {
-    final assignedStaff = widget.task['rawData']?['assigned_staff'];
-    final staffProfile = widget.task['rawData']?['staff_profile'];
-
-    // Debug: Print what we're getting
-    print('[StaffDetails] rawData: ${widget.task['rawData']}');
-    print('[StaffDetails] assigned_staff: $assignedStaff');
-    print('[StaffDetails] staff_profile: $staffProfile');
-
-    // For completed status, prioritize staff_profile over assigned_staff
-    final useProfile = _isCompletedStatus && staffProfile != null;
-    final staffData = useProfile ? staffProfile : assignedStaff;
-
-    if (staffData == null && assignedStaff == null) {
-      print('[StaffDetails] No assigned staff found');
-      return const SizedBox.shrink();
-    }
-
-    final staffName = staffData?['name'] ??
-                     '${staffData?['first_name'] ?? ''} ${staffData?['last_name'] ?? ''}'.trim();
-    final assessedAt = widget.task['rawData']?['assessed_at'];
-    final phoneNumber = staffProfile?['phone_number'];
-    final staffId = staffProfile?['staff_id'];
-
-    print('[StaffDetails] Staff name: $staffName');
-    print('[StaffDetails] Assessed at: $assessedAt');
-    print('[StaffDetails] Phone: $phoneNumber, ID: $staffId');
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('Assigned Staff'),
-        const SizedBox(height: 16),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Avatar and Name
-            Row(
-              children: [
-                _buildSimpleAvatar(staffName.isNotEmpty ? staffName : 'Staff Member', size: 48),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        staffName.isNotEmpty ? staffName : 'Staff Member',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      // Show staff ID for completed status
-                      if (_isCompletedStatus && staffId != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          staffId,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Additional details row for completed status
-            if (_isCompletedStatus && (phoneNumber != null || assessedAt != null))
-              Row(
-                children: [
-                  // Phone Number
-                  // if (phoneNumber != null)
-                  //   Expanded(
-                  //     child: _buildDetailItem(
-                  //       'CONTACT NUMBER',
-                  //       phoneNumber,
-                  //     ),
-                  //   ),
-                  // if (phoneNumber != null && assessedAt != null)
-                  //   const SizedBox(width: 24),
-                  // Date Assessed
-                  if (assessedAt != null)
-                    Expanded(
-                      child: _buildDetailItem(
-                        'DATE ASSESSED',
-                        _formatScheduleAvailability(assessedAt),
-                      ),
-                    ),
-                ],
-              )
-            else if (assessedAt != null && !_isCompletedStatus)
-              // For non-completed status, just show date assessed
-              _buildDetailItem(
-                'DATE ASSESSED',
-                _formatScheduleAvailability(assessedAt),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-  
-  Widget _buildAssessmentSection() {
-    final resolutionType = widget.task['rawData']?['resolution_type'];
-    final assessment = widget.task['rawData']?['staff_assessment'];
-    final recommendation = widget.task['rawData']?['staff_recommendation'];
-    
-    // Debug: Check what we're receiving
-    print('[Assessment] resolution_type: $resolutionType');
-    print('[Assessment] staff_assessment: $assessment');
-    
-    if (resolutionType == null && assessment == null && recommendation == null) {
-      return const SizedBox.shrink();
-    }
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('Assessment and Resolution Details'),
-        const SizedBox(height: 16),
-        
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Left column: Resolution Type
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'RESOLUTION TYPE',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[600],
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  if (resolutionType != null)
-                    RequestTypeTag(
-                      resolutionType.toString().replaceAll('_', ' '),
-                    )
-                  else
-                    Text(
-                      'N/A',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey[400],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 24),
-            // Right column: Recommendation
-            // Expanded(
-            //   child: Column(
-            //     crossAxisAlignment: CrossAxisAlignment.start,
-            //     children: [
-            //       Text(
-            //         'RECOMMENDATION',
-            //         style: TextStyle(
-            //           fontSize: 14,
-            //           fontWeight: FontWeight.w600,
-            //           color: Colors.grey[600],
-            //           letterSpacing: 0.5,
-            //         ),
-            //       ),
-            //       const SizedBox(height: 8),
-            //       Text(
-            //         recommendation ?? 'N/A',
-            //         style: TextStyle(
-            //           fontSize: 16,
-            //           fontWeight: FontWeight.w500,
-            //           color: recommendation != null ? Colors.black87 : Colors.grey[400],
-            //         ),
-            //       ),
-            //     ],
-            //   ),
-            // ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        
-        // Assessment section
-        if (assessment != null) ...[
-          Text(
-            'ASSESSMENT',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[600],
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.blue[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.blue[200]!),
-            ),
-            child: Text(
-              assessment,
-              style: TextStyle(
-                fontSize: 15,
-                height: 1.6,
-                color: Colors.grey[800],
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-  
-  Widget _buildAutoAssignedStaffDisplay() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Auto-assigned Staff',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey[300]!),
-          ),
-          child: _isLoading
-              ? Row(
-                  children: [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Theme.of(context).primaryColor,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text('Assigning staff...'),
-                  ],
-                )
-              : selectedStaffId == null
-                  ? Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.orange[700], size: 20),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _staffList.isEmpty 
-                                ? 'No staff available for this department'
-                                : 'No staff assigned yet',
-                            style: TextStyle(color: Colors.grey[700]),
-                          ),
-                        ),
-                      ],
-                    )
-                  : Row(
-                      children: [
-                        _buildSimpleAvatar(selectedStaffName ?? ''),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                selectedStaffName ?? 'Unknown Staff',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                widget.task['department'] ?? 'No Department',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Icon(
-                          Icons.check_circle,
-                          color: Colors.green[600],
-                          size: 20,
-                        ),
-                      ],
-                    ),
-        ),
-      ],
-    );
-  }
 
   Widget _buildDatePicker() {
     return Column(
@@ -1107,66 +1021,96 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
     }
   }
   
-  Widget _buildNotesSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Admin Notes (Optional)',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextFormField(
-          controller: notesController,
-          maxLines: 6,
-          decoration: InputDecoration(
-            hintText: 'Enter Notes....',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          inputFormatters: [LengthLimitingTextInputFormatter(500)],
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) return null;
-            if (v.trim().length < 5) return 'Add a bit more detail or leave blank';
-            return null;
-          },
-        ),
-      ],
-    );
-  }
-  
   Future<void> _handleSaveAndAssign() async {
     if (!_formValid || selectedStaffId == null) return;
     setState(() => _isAssigning = true);
-    
+
     try {
-      final concernSlipId = widget.task['rawData']?['id'] ?? 
-                           widget.task['rawData']?['_doc_id'] ?? 
-                           widget.task['id'];
-      if (concernSlipId == null) throw Exception('Concern slip ID not found');
-      
-      print('[ConcernSlipDetail] Assigning staff $selectedStaffId to concern slip $concernSlipId');
-      
-      final result = await _apiService.assignStaffToConcernSlip(
-        concernSlipId,
-        selectedStaffId!,
-      );
-      
-      print('[ConcernSlipDetail] Assignment successful: $result');
-      
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Staff assigned successfully to ${widget.task['id']}'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
+      if (widget.isMaintenanceTask) {
+        // Maintenance task path: may be a checklist item or whole maintenance task
+        final checklistItemId = widget.task['checklist_item_id'];
+
+        if (checklistItemId != null) {
+          // Assign to checklist item
+          final taskId = widget.task['task_id'];
+          if (taskId == null) throw Exception('Task ID not found');
+
+          print('[ConcernSlipDetail] Assigning staff $selectedStaffId to checklist item $checklistItemId');
+
+          final result = await _adminApiService.assignStaffToChecklistItem(
+            taskId,
+            checklistItemId,
+            selectedStaffId!,
+          );
+
+          print('[ConcernSlipDetail] Checklist item assignment successful: $result');
+
+          if (mounted) {
+            Navigator.of(context).pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Staff assigned successfully to checklist item'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+            widget.onAssignmentComplete?.call();
+          }
+        } else {
+          // Assign to whole maintenance task
+          final taskId = widget.task['id'] ?? widget.task['task_id'];
+          if (taskId == null) throw Exception('Maintenance task ID not found');
+
+          print('[ConcernSlipDetail] Assigning staff $selectedStaffId to maintenance task $taskId');
+
+          final result = await _adminApiService.assignStaffToMaintenanceTask(
+            taskId,
+            selectedStaffId!,
+            scheduledDate: selectedDate,
+            notes: notesController.text.trim().isNotEmpty ? notesController.text.trim() : null,
+          );
+
+          print('[ConcernSlipDetail] Maintenance task assignment successful: $result');
+
+          if (mounted) {
+            Navigator.of(context).pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Staff assigned successfully to maintenance task'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+            widget.onAssignmentComplete?.call();
+          }
+        }
+      } else {
+        // Concern slip assignment (existing behavior)
+        final concernSlipId = widget.task['rawData']?['id'] ??
+            widget.task['rawData']?['_doc_id'] ??
+            widget.task['id'];
+        if (concernSlipId == null) throw Exception('Concern slip ID not found');
+
+        print('[ConcernSlipDetail] Assigning staff $selectedStaffId to concern slip $concernSlipId');
+
+        final result = await _apiService.assignStaffToConcernSlip(
+          concernSlipId,
+          selectedStaffId!,
         );
-        widget.onAssignmentComplete?.call();
+
+        print('[ConcernSlipDetail] Assignment successful: $result');
+
+        if (mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Staff assigned successfully to ${widget.task['id']}'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          widget.onAssignmentComplete?.call();
+        }
       }
     } catch (e) {
       print('[ConcernSlipDetail] Assignment failed: $e');
@@ -1227,5 +1171,36 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
       }
     }
     return buildingUnit;
+  }
+
+  void _deleteTask() async {
+    final confirmed = await showDeleteDialog(
+      context,
+      itemName: 'Task',
+      description: 'Are you sure you want to delete this task ${widget.task['id']}? This action cannot be undone. All associated data will be permanently removed from the system.',
+    );
+
+    if (confirmed) {
+      try {
+        // Call API to delete the concern slip
+        await _apiService.deleteConcernSlip(widget.task['id']);
+        
+        // Close the dialog and show success message
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Task ${widget.task['id']} deleted successfully'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete task: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

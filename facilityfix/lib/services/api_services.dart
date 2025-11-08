@@ -2747,6 +2747,36 @@ class APIService {
     }
   }
 
+  /// Assign a staff member to a job service task
+  /// This will call the backend endpoint responsible for assigning a staff
+  /// user to the job service identified by [jobServiceId]. The backend is
+  /// expected to accept a JSON body with `staff_user_id` and return the
+  /// updated job service as JSON on success.
+  Future<Map<String, dynamic>> assignStaffToJobService(
+    String jobServiceId,
+    String staffUserId,
+  ) async {
+    try {
+      await _refreshRoleLabelFromToken();
+
+      final body = jsonEncode({'staff_user_id': staffUserId});
+
+      // Use the patch helper which will include auth headers.
+      final response = await patch('/job-services/$jobServiceId/assign', body: body);
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final msg = 'Assign staff to job service failed: ${response.statusCode} ${response.body}';
+        print('[API] $msg');
+        throw Exception(msg);
+      }
+    } catch (e) {
+      print('[API] Error assigning staff to job service: $e');
+      rethrow;
+    }
+  }
+
   // ===== Chat =====
 
   /// Create or get a chat room

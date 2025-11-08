@@ -175,7 +175,9 @@ class _TenantConcernSlipDetailPageState
 
     // Only allow editing if status is pending
     final status = (_concernSlipData!['status'] ?? '').toString().toLowerCase();
-    if (status != 'pending') {
+    // treat any status that starts with 'pending' as editable (covers 'pending', 'pending cs', 'pending js', 'pending wop')
+    final isPending = status.startsWith('pending');
+    if (!isPending) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Only pending requests can be edited'),
@@ -207,12 +209,14 @@ class _TenantConcernSlipDetailPageState
   void _showDeleteDialog() {
     if (_concernSlipData == null) return;
 
-    // Only allow deleting if status is complete/done
+    // Allow deleting if status is pending or complete/done
     final status = (_concernSlipData!['status'] ?? '').toString().toLowerCase();
-    if (status != 'complete' && status != 'completed' && status != 'done') {
+    // allow delete for any 'pending*' or completed statuses
+    final deletable = status.startsWith('pending') || status.contains('complete') || status == 'done';
+    if (!deletable) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Only completed requests can be deleted'),
+          content: Text('Only pending (including pending CS/JS/WOP) or completed requests can be deleted'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -276,9 +280,9 @@ class _TenantConcernSlipDetailPageState
 
   @override
   Widget build(BuildContext context) {
-    final status = (_concernSlipData?['status'] ?? '').toString().toLowerCase();
-    final isPending = status == 'pending';
-    final isComplete = status == 'complete' || status == 'completed' || status == 'done';
+  final status = (_concernSlipData?['status'] ?? '').toString().toLowerCase();
+  final isPending = status.startsWith('pending');
+  final isComplete = status.contains('complete') || status == 'done';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -291,8 +295,8 @@ class _TenantConcernSlipDetailPageState
         ),
         showMore: true,
         showHistory: true,
-        showEdit: isPending,
-        showDelete: isComplete,
+  showEdit: isPending,
+  showDelete: isPending || isComplete,
         onHistoryTap: _showHistorySheet,
         onEditTap: _showEditDialog,
         onDeleteTap: _showDeleteDialog,
@@ -390,7 +394,7 @@ class _TenantConcernSlipDetailPageState
                   : null,
           requestTypeTag: 'Concern Slip',
           statusTag: data['status'] ?? 'pending',
-          priority: data['priority'] ?? 'medium',
+          priority: data['priority'] ?? '',
           departmentTag: data['category'],
           requestedBy: data['reported_by_name'] ?? data['reported_by'] ?? '',
           unitId: data['unit_id'] ?? '',
@@ -427,112 +431,40 @@ class _TenantConcernSlipDetailPageState
            ['job_service', 'work_order', 'work_permit'].contains(resolutionType);
   }
 
-  Widget _buildEmbeddedForm(String resolutionType, Map<String, dynamic> concernData) {
-    final String formType;
-    
-    // Map resolution_type to form type
-    if (resolutionType == 'job_service') {
-      formType = 'Job Service';
-    } else if (resolutionType == 'work_order' || resolutionType == 'work_permit') {
-      formType = 'Work Order';
-    } else {
-      return const SizedBox.shrink();
-    }
+  /// Build an embedded form widget for job service / work order resolution types.
+  /// This returns a RequestFormWrapper so the user can open/submit the corresponding form inline.
+  Widget _buildEmbeddedForm(String resolutionType, Map<String, dynamic> data) {
+    // Normalize resolutionType to a human-friendly request type label
+    final requestType = resolutionType == 'job_service'
+        ? 'Job Service'
+        : (resolutionType == 'work_permit' ? 'Work Order' : 'Work Order');
 
-    return Container(
-      margin: const EdgeInsets.only(top: 24),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF3B82F6).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.assignment,
-                  color: Color(0xFF3B82F6),
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Proceed with $formType',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Complete the form below to proceed with your request',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Divider(),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => EmbeddedRequestFormPage(
-                    requestType: formType,
-                    concernSlipId: concernData['id'] ?? '',
-                    concernSlipData: concernData,
-                  ),
-                ),
-              ).then((submitted) {
-                if (submitted == true) {
-                  // Refresh the concern slip data after form submission
-                  _loadConcernSlipData();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('$formType submitted successfully'),
-                      backgroundColor: Colors.green,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                }
-              });
-            },
-            icon: const Icon(Icons.edit_document),
-            label: Text('Fill $formType Form'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF3B82F6),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+          // Informational header
+          Text(
+            '$requestType for this Request',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF0F172A),
             ),
+          ),
+          const SizedBox(height: 12),
+          // Use the RequestFormWrapper which will open the full RequestForm when tapped.
+          RequestFormWrapper(
+            requestType: requestType,
+            concernSlipId: widget.concernSlipId,
+            concernSlipData: data,
           ),
         ],
       ),
     );
   }
+
 }
 
 class ConcernSlipHistorySheet extends StatelessWidget {

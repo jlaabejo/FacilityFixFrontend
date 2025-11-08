@@ -342,6 +342,77 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
     return [];
   }
 
+  bool _isDeletableStatus(dynamic status) {
+    if (status == null) return false;
+    final s = status.toString().toLowerCase().trim();
+    return s == 'pending' || s == 'complete' || s == 'completed' || s == 'done';
+  }
+
+  void _showDeleteDialog() {
+    if (_jobServiceData == null) return;
+
+    final status = (_jobServiceData!['status'] ?? '').toString().toLowerCase();
+    if (!_isDeletableStatus(status)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Only pending or completed requests can be deleted'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Request'),
+        content: const Text('Are you sure you want to delete this request? This action cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _deleteJobService();
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteJobService() async {
+    try {
+      final apiService = APIService(roleOverride: AppRole.staff);
+      await apiService.deleteJobService(widget.jobServiceId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Request deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete request: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _openStatusUpdateSheet() async {
     if (_jobServiceData == null || _statusOptions.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -625,7 +696,9 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
       appBar: CustomAppBar(
         leading: const BackButton(),
         title: 'Job Service Details',
-        actions: null,
+        showMore: true,
+        showDelete: _jobServiceData != null && _isDeletableStatus(_jobServiceData!['status']),
+        onDeleteTap: _showDeleteDialog,
       ),
       body: SafeArea(
         child: _isLoading

@@ -1,11 +1,12 @@
+import 'package:facilityfix/adminweb/inventory_management/inventory_item_create_page.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
+import '../widgets/delete_popup.dart';
 import '../services/api_service.dart';
-import '../../services/auth_storage.dart';
+// auth storage not required here — ApiService handles auth internally
 import 'pop_up/inventoryitem_details_popup.dart';
 import '../popupwidgets/stock_management_popup.dart';
-import 'createwebinventoryitems_page.dart';
 import '../widgets/tags.dart';
 
 class InventoryManagementItemsPage extends StatefulWidget {
@@ -46,43 +47,37 @@ class _InventoryManagementItemsPageState
     });
 
     try {
-      final token = await AuthStorage.getToken();
-      if (token != null && token.isNotEmpty) {
-        _apiService.setAuthToken(token);
-        print('[v0] Auth token retrieved and set in API service');
-      } else {
-        print('[v0] Warning: No auth token found in storage');
-        setState(() {
-          _errorMessage = 'Authentication required. Please log in again.';
-          _isLoading = false;
-        });
-        return;
+  // Use the ApiService helper that fetches items for a building
+  // typed as dynamic because the backend may return different shapes
+  final dynamic data = await _apiService.getInventoryItems(buildingId: _buildingId);
+
+      List<Map<String, dynamic>> items = [];
+
+      // Backend usually returns a map like { success: true, data: [...] }
+      if (data is Map) {
+        final maybeList = data['data'] ?? data['items'] ?? data['results'] ?? data['inventory_items'];
+        if (maybeList is List) {
+          items = List<Map<String, dynamic>>.from(maybeList);
+        }
+      } else if (data is List) {
+        items = List<Map<String, dynamic>>.from(data);
       }
 
-      final response = await _apiService.getInventoryItems(
-        buildingId: _buildingId,
-      );
-
-      if (response['success'] == true) {
+      if (mounted) {
         setState(() {
-          _inventoryItems = List<Map<String, dynamic>>.from(
-            response['data'] ?? [],
-          );
+          _inventoryItems = items;
           _updateFilteredItems();
-          _isLoading = false;
-        });
-      } else {
-        setState(() {
-          _errorMessage = 'Failed to load inventory items';
           _isLoading = false;
         });
       }
     } catch (e) {
       print('[v0] Error fetching inventory items: $e');
-      setState(() {
-        _errorMessage = 'Error: ${e.toString()}';
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Error: ${e.toString()}';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -331,7 +326,7 @@ class _InventoryManagementItemsPageState
     if (itemId == null) return;
 
     Navigator.of(context)
-        .push(MaterialPageRoute(builder: (ctx) => InventoryItemCreatePage(itemId: itemId)))
+        .push(MaterialPageRoute(builder: (ctx) => InventoryItemCreatePage()))
         .then((result) {
       try {
         if (result is Map && result['saved'] == true) {
@@ -451,38 +446,36 @@ class _InventoryManagementItemsPageState
   }
 
   void _deleteItem(Map<String, dynamic> item) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Delete Item'),
-          content: Text(
-            'Are you sure you want to delete item ${item['item_name']}?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+    final itemName = item['item_name'] ?? item['id'] ?? 'Item';
+
+    showDeleteDialog(
+      context,
+      itemName: itemName.toString(),
+      description: 'Are you sure you want to delete item $itemName? This action cannot be undone.',
+    ).then((confirmed) async {
+      if (confirmed != true) return;
+
+      try {
+        await _apiService.deleteInventoryItem(item['id']);
+        // Reload the list
+        await _loadInventoryItems();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Item $itemName deleted'),
+              backgroundColor: Colors.green,
             ),
-            TextButton(
-              onPressed: () async {
-                Navigator.of(context).pop();
-                try {
-                  await _apiService.deleteInventoryItem(item['id']);
-                  // Reload the list
-                  _loadInventoryItems();
-                } catch (e) {
-                  // Error occurred during deletion
-                  print('Error deleting item: $e');
-                }
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
-    );
+          );
+        }
+      } catch (e) {
+        print('Error deleting item: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete item: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    });
   }
 
   String _getItemStatus(Map<String, dynamic> item) {

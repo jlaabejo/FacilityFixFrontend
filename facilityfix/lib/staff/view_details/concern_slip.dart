@@ -291,6 +291,77 @@ class _StaffConcernSlipDetailPageState
     return [];
   }
 
+  bool _isDeletableStatus(dynamic status) {
+    if (status == null) return false;
+    final s = status.toString().toLowerCase().trim();
+    return s == 'pending' || s == 'complete' || s == 'completed' || s == 'done';
+  }
+
+  void _showDeleteDialog() {
+    if (_concernSlipData == null) return;
+
+    final status = (_concernSlipData!['status'] ?? '').toString().toLowerCase();
+    if (!_isDeletableStatus(status)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Only pending or completed requests can be deleted'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Request'),
+        content: const Text('Are you sure you want to delete this request? This action cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _deleteConcernSlip();
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteConcernSlip() async {
+    try {
+      final apiService = APIService(roleOverride: AppRole.staff);
+      await apiService.deleteConcernSlip(widget.concernSlipId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Request deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const WorkOrderPage()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete request: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -298,6 +369,10 @@ class _StaffConcernSlipDetailPageState
       appBar: CustomAppBar(
         leading: const BackButton(),
         title: 'Concern Slip Details',
+        showMore: true,
+        // Show delete when status is pending or completed
+        showDelete: _concernSlipData != null && _isDeletableStatus(_concernSlipData!['status']),
+        onDeleteTap: _showDeleteDialog,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

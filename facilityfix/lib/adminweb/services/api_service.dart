@@ -601,6 +601,29 @@ class ApiService {
     }
   }
 
+  /// Delete a concern slip (admin)
+  Future<Map<String, dynamic>> deleteConcernSlip(String concernSlipId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.delete(
+        Uri.parse('$baseUrl/concern-slips/$concernSlipId'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        if (response.body.isNotEmpty) {
+          return json.decode(response.body);
+        }
+        return {'success': true};
+      } else {
+        throw Exception('Failed to delete concern slip: ${response.statusCode} ${response.body}');
+      }
+    } catch (e) {
+      print('[v0] Error deleting concern slip: $e');
+      rethrow;
+    }
+  }
+
   // ============================================
   // JOB SERVICES ENDPOINTS
   // ============================================
@@ -660,6 +683,29 @@ class ApiService {
       }
     } catch (e) {
       print('[v0] Error fetching job service: $e');
+      rethrow;
+    }
+  }
+
+  /// Delete a job service
+  Future<Map<String, dynamic>> deleteJobService(String jobServiceId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.delete(
+        Uri.parse('$baseUrl/job-services/$jobServiceId'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        if (response.body.isNotEmpty) {
+          return json.decode(response.body);
+        }
+        return {'success': true};
+      } else {
+        throw Exception('Failed to delete job service: ${response.statusCode} ${response.body}');
+      }
+    } catch (e) {
+      print('[v0] Error deleting job service: $e');
       rethrow;
     }
   }
@@ -997,6 +1043,29 @@ class ApiService {
     }
   }
 
+  /// Delete a work order
+  Future<Map<String, dynamic>> deleteWorkOrder(String workOrderId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.delete(
+        Uri.parse('$baseUrl/work-orders/$workOrderId'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        if (response.body.isNotEmpty) {
+          return json.decode(response.body);
+        }
+        return {'success': true};
+      } else {
+        throw Exception('Failed to delete work order: ${response.statusCode} ${response.body}');
+      }
+    } catch (e) {
+      print('[v0] Error deleting work order: $e');
+      rethrow;
+    }
+  }
+
   Future<Map<String, dynamic>> updateMaintenanceTaskChecklist(
     String taskId,
     List<Map<String, dynamic>> checklistCompleted,
@@ -1165,6 +1234,32 @@ class ApiService {
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
+        // If the backend uses a different slug format (dashes vs underscores)
+        // try common variants before failing to reduce 404s caused by naming.
+        if (response.statusCode == 404) {
+          final variants = <String>[
+            taskKey.replaceAll('_', '-'),
+            taskKey.replaceAll('_', ''),
+            taskKey.toLowerCase(),
+          ];
+
+          for (final variant in variants) {
+            if (variant == taskKey) continue;
+            try {
+              final retryResp = await http.get(
+                Uri.parse('$baseUrl/maintenance/special/$variant'),
+                headers: headers,
+              );
+              if (retryResp.statusCode == 200) {
+                print('[v0] getSpecialMaintenanceTask: succeeded with variant $variant');
+                return json.decode(retryResp.body);
+              }
+            } catch (_) {
+              // ignore and try next variant
+            }
+          }
+        }
+
         throw Exception(
           'Failed to load special maintenance task: ${response.statusCode}',
         );
@@ -2030,6 +2125,29 @@ class ApiService {
       }
     } catch (e) {
       print('[v0] Error fulfilling inventory request: $e');
+      rethrow;
+    }
+  }
+
+  /// Delete (cancel) an inventory request
+  Future<Map<String, dynamic>> deleteInventoryRequest(String requestId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.delete(
+        Uri.parse('$baseUrl/inventory/requests/$requestId'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        if (response.body.isNotEmpty) {
+          return json.decode(response.body);
+        }
+        return {'success': true};
+      } else {
+        throw Exception('Failed to delete inventory request: ${response.statusCode} ${response.body}');
+      }
+    } catch (e) {
+      print('[v0] Error deleting inventory request: $e');
       rethrow;
     }
   }

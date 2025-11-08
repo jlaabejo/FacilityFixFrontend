@@ -1,9 +1,9 @@
+import 'package:facilityfix/adminweb/inventory_management/inventory_item_create_page.dart';
 import 'package:flutter/material.dart';
 import 'inventoryrestock_popup.dart';
 import '../../widgets/tags.dart';
 import '../../services/api_service.dart';
 import '../../../services/auth_storage.dart';
-import '../createwebinventoryitems_page.dart';
 
 class InventoryItemDetailsDialog {
   static Future<Map<String, dynamic>?> show(
@@ -524,7 +524,7 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
               if (itemId != null) {
                 final result = await Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (context) => InventoryItemCreatePage(itemId: itemId.toString()),
+                    builder: (context) => InventoryItemCreatePage(),
                   ),
                 );
                 

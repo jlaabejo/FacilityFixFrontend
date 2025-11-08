@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
+import '../widgets/delete_popup.dart';
 import 'pop_up/wop_viewdetails_popup.dart';
 import '../services/api_service.dart';
 
@@ -18,52 +19,55 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   List<Map<String, dynamic>> _repairTasks = [];
   List<Map<String, dynamic>> _filteredTasks = [];
   String _errorMessage = '';
-  
+
   // Pagination state
   int _currentPage = 0;
   final int _itemsPerPage = 10;
-  
+
   // Sorting state
   bool _sortAscending = false;
-  
+
   // Get paginated tasks
   List<Map<String, dynamic>> get _paginatedTasks {
     final startIndex = _currentPage * _itemsPerPage;
-    final endIndex = (startIndex + _itemsPerPage).clamp(0, _filteredTasks.length);
-    
+    final endIndex = (startIndex + _itemsPerPage).clamp(
+      0,
+      _filteredTasks.length,
+    );
+
     if (startIndex >= _filteredTasks.length) {
       return [];
     }
-    
+
     return _filteredTasks.sublist(startIndex, endIndex);
   }
-  
+
   // Get total pages
   int get _totalPages {
     return (_filteredTasks.length / _itemsPerPage).ceil();
   }
-  
+
   // Dropdown values for filtering
   String _selectedDepartment = 'All Departments';
   String _selectedStatus = 'All Status';
   String _selectedConcernType = 'Work Order Permit';
-  
+
   // Sort by date
   void _sortByDate() {
     setState(() {
       _filteredTasks.sort((a, b) {
         final dateA = _parseDate(a['dateRequested']);
         final dateB = _parseDate(b['dateRequested']);
-        
+
         if (dateA == null && dateB == null) return 0;
         if (dateA == null) return 1;
         if (dateB == null) return -1;
-        
+
         return _sortAscending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
       });
     });
   }
-  
+
   // Parse date helper
   DateTime? _parseDate(dynamic dateStr) {
     if (dateStr == null) return null;
@@ -75,7 +79,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       return null;
     }
   }
-  
+
   // Toggle sort order
   void _toggleSortOrder() {
     setState(() {
@@ -83,44 +87,51 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       _sortByDate();
     });
   }
-  
+
   // Apply filters
   void _applyFilters() {
     setState(() {
-      _filteredTasks = _repairTasks.where((task) {
-        // Department filter
-        if (_selectedDepartment != 'All Departments') {
-          final taskDept = task['department']?.toString().toLowerCase() ?? '';
-          final selectedDept = _selectedDepartment.toLowerCase();
-          
-          if (selectedDept == 'others') {
-            // For "Others", match pest control, hvac, security, fire safety, general, etc.
-            if (!['carpentry', 'electrical', 'masonry', 'plumbing'].contains(taskDept)) {
-              // This is an "other" department
-            } else {
-              return false;
+      _filteredTasks =
+          _repairTasks.where((task) {
+            // Department filter
+            if (_selectedDepartment != 'All Departments') {
+              final taskDept =
+                  task['department']?.toString().toLowerCase() ?? '';
+              final selectedDept = _selectedDepartment.toLowerCase();
+
+              if (selectedDept == 'others') {
+                // For "Others", match pest control, hvac, security, fire safety, etc.
+                if (![
+                  'carpentry',
+                  'electrical',
+                  'masonry',
+                  'plumbing',
+                ].contains(taskDept)) {
+                  // This is an "other" department
+                } else {
+                  return false;
+                }
+              } else if (!taskDept.contains(selectedDept)) {
+                return false;
+              }
             }
-          } else if (!taskDept.contains(selectedDept)) {
-            return false;
-          }
-        }
-        
-        // Status filter
-        if (_selectedStatus != 'All Status') {
-          final taskStatus = task['status']?.toString() ?? '';
-          if (taskStatus != _selectedStatus) {
-            return false;
-          }
-        }
-        
-        return true;
-      }).toList();
-      
+
+            // Status filter
+            if (_selectedStatus != 'All Status') {
+              final taskStatus = task['status']?.toString() ?? '';
+              if (taskStatus != _selectedStatus) {
+                return false;
+              }
+            }
+
+            return true;
+          }).toList();
+
       // Reset to first page when filters change
       _currentPage = 0;
     });
   }
-  
+
   // Helper function to convert routeKey to actual route path
   String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
@@ -190,10 +201,14 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
           'permitId': permit['id'] ?? 'N/A', // Add permit ID for actions
           'title': permit['title'] ?? 'Untitled Work Order',
           'buildingUnit': permit['location'] ?? 'N/A',
-          'schedule': _formatDateRange(permit['valid_from'], permit['valid_to']),
+          'schedule': _formatDateRange(
+            permit['valid_from'],
+            permit['valid_to'],
+          ),
           'priority': _mapStatusToPriority(permit['status']),
-          'status': _mapStatusToDisplay(permit['status']),
-          'rawStatus': permit['status'] ?? 'pending', // Keep raw status for actions
+          'status': _mapStatus(permit['status'], permit['workflow']),
+          'rawStatus':
+              permit['status'] ?? 'pending', // Keep raw status for actions
           'concernId': permit['concern_slip_id'] ?? 'N/A',
           // Additional task data
           'dateRequested': _formatDate(permit['created_at']),
@@ -213,13 +228,21 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
             final concernSlip = await _apiService.getConcernSlip(concernSlipId);
 
             // Add assessment and recommendation from concern slip
-            taskData['assessment'] = concernSlip['staff_assessment'] ?? 'No assessment available';
-            taskData['recommendation'] = concernSlip['staff_recommendation'] ?? 'No recommendation available';
-            taskData['accountType'] = concernSlip['category'] ?? taskData['department'];
+            taskData['assessment'] =
+                concernSlip['staff_assessment'] ?? 'No assessment available';
+            taskData['recommendation'] =
+                concernSlip['staff_recommendation'] ??
+                'No recommendation available';
+            taskData['accountType'] =
+                concernSlip['category'] ?? taskData['department'];
 
-            print('[Work Order Permits] Fetched concern slip $concernSlipId: assessment=${concernSlip['staff_assessment']}, recommendation=${concernSlip['staff_recommendation']}');
+            print(
+              '[Work Order Permits] Fetched concern slip $concernSlipId: assessment=${concernSlip['staff_assessment']}, recommendation=${concernSlip['staff_recommendation']}',
+            );
           } catch (e) {
-            print('[Work Order Permits] Error fetching concern slip $concernSlipId: $e');
+            print(
+              '[Work Order Permits] Error fetching concern slip $concernSlipId: $e',
+            );
             // Set default values if concern slip fetch fails
             taskData['assessment'] = 'Unable to load assessment';
             taskData['recommendation'] = 'Unable to load recommendation';
@@ -250,7 +273,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
 
   String _formatDate(dynamic date) {
     if (date == null) return 'N/A';
-    
+
     try {
       DateTime dateTime;
       if (date is String) {
@@ -268,20 +291,20 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
 
   String _formatDateRange(dynamic startDate, dynamic endDate) {
     if (startDate == null && endDate == null) return 'N/A';
-    
+
     final start = _formatDateWithTime(startDate);
     final end = _formatDateWithTime(endDate);
-    
+
     if (start == 'N/A' && end == 'N/A') return 'N/A';
     if (start == 'N/A') return 'Until $end';
     if (end == 'N/A') return 'From $start';
-    
+
     return '$start - $end';
   }
 
   String _formatDateWithTime(dynamic date) {
     if (date == null) return 'N/A';
-    
+
     try {
       DateTime dateTime;
       if (date is String) {
@@ -291,17 +314,32 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       } else {
         return 'N/A';
       }
-      
+
       // Format: "Oct 15, 2025 4:10 AM"
-      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      final months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
       final month = months[dateTime.month - 1];
       final day = dateTime.day;
       final year = dateTime.year;
-      final hour = dateTime.hour > 12 ? dateTime.hour - 12 : (dateTime.hour == 0 ? 12 : dateTime.hour);
+      final hour =
+          dateTime.hour > 12
+              ? dateTime.hour - 12
+              : (dateTime.hour == 0 ? 12 : dateTime.hour);
       final minute = dateTime.minute.toString().padLeft(2, '0');
       final ampm = dateTime.hour >= 12 ? 'PM' : 'AM';
-      
+
       return '$month $day, $year $hour:$minute $ampm';
     } catch (e) {
       return 'N/A';
@@ -323,46 +361,41 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     }
   }
 
-  String _mapStatusToDisplay(String? status) {
-    switch (status?.toLowerCase()) {
-      case 'pending':
-        return 'Pending';
-      case 'approved':
-        return 'In Progress';
-      case 'denied':
-        return 'Denied';
-      case 'completed':
-        return 'Completed';
-      case 'assigned':
-        return 'To Inspect';
-      case 'in_progress':
-        return 'In Progress';
-      case 'assessed':
-        return 'Assessed';
-      case 'sent':
-        return 'Sent to Client';
-      case 'rejected':
-        return 'Rejected';
-      case 'returned_to_tenant':
-        return 'Returned to Tenant';
-      default:
-        return 'Pending';
-    }
+  String _mapStatus(dynamic status, dynamic workflow) {
+    // Custom mapping logic for Work Order Permit (WOP)
+  final s = (status ?? '').toString().toLowerCase();
+
+    if (s == 'completed') return 'Completed';
+    if (s == 'cancelled') return 'Cancelled';
+    if (s == 'rejected') return 'Rejected';
+    if (s == 'returned_to_tenant') return 'Returned to Tenant';
+    if (s == 'pending') return 'Pending';
+    if (s == 'assigned') return 'To Inspect';
+    if (s == 'in_progress') return 'In Progress';
+    if (s == 'assessed') return 'Assessed';
+    if (s == 'sent') return 'Sent to Client';
+    if (s == 'approved') return 'Approved';
+    // fallback
+    return 'Pending';
   }
 
   // Map category to department name
   String _mapCategoryToDepartment(String? category) {
-    if (category == null || category.isEmpty) return 'General';
-    
+    if (category == null || category.isEmpty) {
+      return 'Others';
+    }
+
     final categoryLower = category.toLowerCase();
-    
+
     if (categoryLower.contains('electrical')) {
       return 'Electrical';
     } else if (categoryLower.contains('plumbing')) {
       return 'Plumbing';
-    } else if (categoryLower.contains('carpentry') || categoryLower.contains('carpenter')) {
+    } else if (categoryLower.contains('carpentry') ||
+        categoryLower.contains('carpenter')) {
       return 'Carpentry';
-    } else if (categoryLower.contains('masonry') || categoryLower.contains('mason')) {
+    } else if (categoryLower.contains('masonry') ||
+        categoryLower.contains('mason')) {
       return 'Masonry';
     } else {
       return 'Others';
@@ -379,7 +412,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   ) {
     final RenderBox overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox;
-    
+
     final isPending = task['rawStatus']?.toLowerCase() == 'pending';
     final isApproved = task['rawStatus']?.toLowerCase() == 'approved';
 
@@ -413,7 +446,11 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
             value: 'approve',
             child: Row(
               children: [
-                Icon(Icons.check_circle_outline, color: Colors.green[600], size: 18),
+                Icon(
+                  Icons.check_circle_outline,
+                  color: Colors.green[600],
+                  size: 18,
+                ),
                 const SizedBox(width: 12),
                 Text(
                   'Approve',
@@ -428,7 +465,11 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
             value: 'deny',
             child: Row(
               children: [
-                Icon(Icons.cancel_outlined, color: Colors.orange[700], size: 18),
+                Icon(
+                  Icons.cancel_outlined,
+                  color: Colors.orange[700],
+                  size: 18,
+                ),
                 const SizedBox(width: 12),
                 Text(
                   'Deny',
@@ -504,14 +545,16 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   // Approve permit method
   Future<void> _approvePermit(Map<String, dynamic> task) async {
     final permitId = task['permitId'];
-    
+
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Approve Work Order Permit'),
-          content: Text('Are you sure you want to approve permit ${task['serviceId']}?'),
+          content: Text(
+            'Are you sure you want to approve permit ${task['serviceId']}?',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -530,17 +573,19 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     if (confirmed == true) {
       try {
         setState(() => _isLoading = true);
-        
+
         // Call API to approve permit
         await _apiService.approveWorkOrderPermit(permitId);
-        
+
         // Refresh the list
         await _fetchWorkOrderPermits();
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Permit ${task['serviceId']} approved successfully'),
+              content: Text(
+                'Permit ${task['serviceId']} approved successfully',
+              ),
               backgroundColor: Colors.green,
             ),
           );
@@ -563,7 +608,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   Future<void> _denyPermit(Map<String, dynamic> task) async {
     final permitId = task['permitId'];
     final reasonController = TextEditingController();
-    
+
     // Show dialog to get denial reason
     final confirmed = await showDialog<bool>(
       context: context,
@@ -574,7 +619,9 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Are you sure you want to deny permit ${task['serviceId']}?'),
+              Text(
+                'Are you sure you want to deny permit ${task['serviceId']}?',
+              ),
               const SizedBox(height: 16),
               TextField(
                 controller: reasonController,
@@ -605,13 +652,13 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     if (confirmed == true && reasonController.text.isNotEmpty) {
       try {
         setState(() => _isLoading = true);
-        
+
         // Call API to deny permit
         await _apiService.denyWorkOrderPermit(permitId, reasonController.text);
-        
+
         // Refresh the list
         await _fetchWorkOrderPermits();
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -638,7 +685,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   Future<void> _completePermit(Map<String, dynamic> task) async {
     final permitId = task['permitId'];
     final notesController = TextEditingController();
-    
+
     // Show dialog to get completion notes
     final confirmed = await showDialog<bool>(
       context: context,
@@ -682,18 +729,17 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     if (confirmed == true) {
       try {
         setState(() => _isLoading = true);
-        
+
         // Call API to complete permit with notes
         await _apiService.completeWorkOrderPermit(
           permitId,
-          completionNotes: notesController.text.isNotEmpty 
-              ? notesController.text 
-              : null,
+          completionNotes:
+              notesController.text.isNotEmpty ? notesController.text : null,
         );
-        
+
         // Refresh the list
         await _fetchWorkOrderPermits();
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -717,39 +763,26 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   }
 
   // Delete task method
-  void _deleteTask(Map<String, dynamic> task) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Delete Task'),
-          content: Text('Are you sure you want to delete task ${task['id']}?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                // Remove task from list
-                setState(() {
-                  _repairTasks.removeWhere((t) => t['id'] == task['id']);
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Task ${task['id']} deleted'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
+  void _deleteTask(Map<String, dynamic> task) async {
+    final confirmed = await showDeleteDialog(
+      context,
+      itemName: 'Task',
+      description:
+          'Are you sure you want to delete this task ${task['id']}? This action cannot be undone. All associated data will be permanently removed from the system.',
     );
+
+    if (confirmed) {
+      setState(() {
+        _repairTasks.removeWhere((t) => t['id'] == task['id']);
+        _filteredTasks.removeWhere((t) => t['id'] == task['id']);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Task ${task['id']} deleted'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   final List<double> _colW = <double>[
@@ -880,14 +913,22 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
-          // Search Field
-          Expanded(
-            flex: 2,
+          // Search Field with white background
+          SizedBox(
+            width: 400,
             child: Container(
               height: 40,
               decoration: BoxDecoration(
+                color: Colors.white,
                 border: Border.all(color: Colors.grey[300]!),
                 borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.02),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: TextField(
                 decoration: InputDecoration(
@@ -975,27 +1016,28 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                       _applyFilters();
                     });
                   },
-                  items: <String>[
-                    'All Status',
-                    'Pending',
-                    'To Inspect',
-                    'In Progress',
-                    'Assessed',
-                    'Sent to Client',
-                    'Approved',
-                    'Rejected',
-                    'Completed',
-                    'Returned to Tenant',
-                    'Denied',
-                  ].map<DropdownMenuItem<String>>((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(
-                        'Status: $value',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    );
-                  }).toList(),
+                  items:
+                      <String>[
+                        'All Status',
+                        'Pending',
+                        'To Inspect',
+                        'In Progress',
+                        'Assessed',
+                        'Sent to Client',
+                        'Approved',
+                        'Rejected',
+                        'Completed',
+                        'Returned to Tenant',
+                        'Denied',
+                      ].map<DropdownMenuItem<String>>((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(
+                            'Status: $value',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        );
+                      }).toList(),
                 ),
               ),
             ),
@@ -1016,7 +1058,11 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.refresh_rounded, size: 20, color: Colors.blue[600]),
+                  Icon(
+                    Icons.refresh_rounded,
+                    size: 20,
+                    color: Colors.blue[600],
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'Refresh',
@@ -1089,7 +1135,9 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                             } else if (newValue == 'Job Service') {
                               context.go('/adminweb/pages/adminrepair_js_page');
                             } else if (newValue == 'Work Order Permit') {
-                              context.go('/adminweb/pages/adminrepair_wop_page');
+                              context.go(
+                                '/adminweb/pages/adminrepair_wop_page',
+                              );
                             }
                           },
                           items:
@@ -1118,260 +1166,325 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
 
           // Loading/Error/Data Display
           Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _errorMessage.isNotEmpty
+            child:
+                _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _errorMessage.isNotEmpty
                     ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
-                            const SizedBox(height: 16),
-                            Text(
-                              _errorMessage,
-                              style: TextStyle(color: Colors.red[700]),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 16),
-                            ElevatedButton(
-                              onPressed: _fetchWorkOrderPermits,
-                              child: const Text('Retry'),
-                            ),
-                          ],
-                        ),
-                      )
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 48,
+                            color: Colors.red[300],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _errorMessage,
+                            style: TextStyle(color: Colors.red[700]),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: _fetchWorkOrderPermits,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    )
                     : _filteredTasks.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'No work order permits found',
-                              style: TextStyle(color: Colors.grey),
+                    ? const Center(
+                      child: Text(
+                        'No work order permits found',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    )
+                    : Column(
+                      children: [
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: SingleChildScrollView(
+                              child: DataTable(
+                                columnSpacing: 16,
+                                headingRowHeight: 56,
+                                dataRowHeight: 64,
+                                headingRowColor: WidgetStateProperty.all(
+                                  Colors.grey[50],
+                                ),
+                                headingTextStyle: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[600],
+                                  letterSpacing: 0.5,
+                                ),
+                                dataTextStyle: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black87,
+                                ),
+                                columns: [
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      0,
+                                      const Text("SERVICE ID"),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      1,
+                                      const Text("CONCERN ID"),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(2, const Text("TITLE")),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      3,
+                                      const Text("BUILDING & UNIT"),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      4,
+                                      InkWell(
+                                        onTap: _toggleSortOrder,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Text("SCHEDULE DATE"),
+                                            const SizedBox(width: 4),
+                                            Icon(
+                                              _sortAscending
+                                                  ? Icons.arrow_upward
+                                                  : Icons.arrow_downward,
+                                              size: 16,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(5, const Text("STATUS")),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      6,
+                                      const Text("PRIORITY"),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(7, const Text("")),
+                                  ),
+                                ],
+                                rows:
+                                    _paginatedTasks.map((task) {
+                                      return DataRow(
+                                        cells: [
+                                          DataCell(
+                                            _fixedCell(
+                                              0,
+                                              _ellipsis(
+                                                task['serviceId'],
+                                                style: TextStyle(
+                                                  color: Colors.grey[700],
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            _fixedCell(
+                                              1,
+                                              _ellipsis(
+                                                task['concernId'],
+                                                style: TextStyle(
+                                                  color: Colors.grey[700],
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            _fixedCell(
+                                              2,
+                                              _ellipsis(task['title']),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            _fixedCell(
+                                              3,
+                                              _ellipsis(task['buildingUnit']),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            _fixedCell(
+                                              4,
+                                              _ellipsis(task['schedule']),
+                                            ),
+                                          ),
+
+                                          // Chips get a fixed box too (and aligned left)
+                                          DataCell(
+                                            _fixedCell(
+                                              5,
+                                              _buildStatusChip(task['status']),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            _fixedCell(
+                                              6,
+                                              _buildPriorityChip(
+                                                task['priority'],
+                                              ),
+                                            ),
+                                          ),
+
+                                          // Action menu cell (narrow, centered)
+                                          DataCell(
+                                            _fixedCell(
+                                              7,
+                                              Builder(
+                                                builder: (context) {
+                                                  return IconButton(
+                                                    onPressed: () {
+                                                      final rbx =
+                                                          context.findRenderObject()
+                                                              as RenderBox;
+                                                      final position = rbx
+                                                          .localToGlobal(
+                                                            Offset.zero,
+                                                          );
+                                                      _showActionMenu(
+                                                        context,
+                                                        task,
+                                                        position,
+                                                      );
+                                                    },
+                                                    icon: Icon(
+                                                      Icons.more_vert,
+                                                      color: Colors.grey[400],
+                                                      size: 20,
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                              align: Alignment.center,
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }).toList(),
+                              ),
                             ),
-                          )
-                        : Column(
+                          ),
+                        ),
+                        // Pagination Section
+                        Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: Colors.grey[400],
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(20.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Expanded(
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: SingleChildScrollView(
-                                    child: DataTable(
-                                      columnSpacing: 16,
-                                      headingRowHeight: 56,
-                                      dataRowHeight: 64,
-                                      headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
-                                      headingTextStyle: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.grey[600],
-                                        letterSpacing: 0.5,
+                              Text(
+                                _filteredTasks.isEmpty
+                                    ? "No entries"
+                                    : "Showing ${_currentPage * _itemsPerPage + 1} to ${((_currentPage + 1) * _itemsPerPage).clamp(0, _filteredTasks.length)} of ${_filteredTasks.length} ${_filteredTasks.length == 1 ? 'entry' : 'entries'}",
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 14,
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  // Previous button
+                                  IconButton(
+                                    onPressed:
+                                        _currentPage > 0
+                                            ? () {
+                                              setState(() {
+                                                _currentPage--;
+                                              });
+                                            }
+                                            : null,
+                                    icon: const Icon(Icons.chevron_left),
+                                    color: Colors.blue,
+                                    disabledColor: Colors.grey[300],
+                                  ),
+                                  // Page numbers
+                                  ...List.generate(
+                                    _totalPages,
+                                    (index) => Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
                                       ),
-                                      dataTextStyle: const TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.black87,
-                                      ),
-                                      columns: [
-                                        DataColumn(label: _fixedCell(0, const Text("SERVICE ID"))),
-                                        DataColumn(label: _fixedCell(1, const Text("CONCERN ID"))),
-                                        DataColumn(label: _fixedCell(2, const Text("TITLE"))),
-                                        DataColumn(
-                                          label: _fixedCell(3, const Text("BUILDING & UNIT")),
-                                        ),
-                                        DataColumn(
-                                          label: _fixedCell(
-                                            4,
-                                            InkWell(
-                                              onTap: _toggleSortOrder,
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  const Text("SCHEDULE DATE"),
-                                                  const SizedBox(width: 4),
-                                                  Icon(
-                                                    _sortAscending 
-                                                      ? Icons.arrow_upward 
-                                                      : Icons.arrow_downward,
-                                                    size: 16,
-                                                    color: Colors.grey[600],
-                                                  ),
-                                                ],
-                                              ),
+                                      child: InkWell(
+                                        onTap: () {
+                                          setState(() {
+                                            _currentPage = index;
+                                          });
+                                        },
+                                        child: Container(
+                                          width: 32,
+                                          height: 32,
+                                          decoration: BoxDecoration(
+                                            color:
+                                                _currentPage == index
+                                                    ? Colors.blue
+                                                    : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              4,
                                             ),
-                                          ),
-                                        ),
-                                        DataColumn(label: _fixedCell(5, const Text("STATUS"))),
-                                        DataColumn(label: _fixedCell(6, const Text("PRIORITY"))),
-                                        DataColumn(label: _fixedCell(7, const Text(""))),
-                                      ],
-                                      rows: _paginatedTasks.map((task) {
-                        return DataRow(
-                          cells: [
-                            DataCell(
-                              _fixedCell(
-                                0,
-                                _ellipsis(
-                                  task['serviceId'],
-                                  style: TextStyle(
-                                    color: Colors.grey[700],
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              _fixedCell(
-                                1,
-                                _ellipsis(
-                                  task['concernId'],
-                                  style: TextStyle(
-                                    color: Colors.grey[700],
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            DataCell(_fixedCell(2, _ellipsis(task['title']))),
-                            DataCell(
-                              _fixedCell(3, _ellipsis(task['buildingUnit'])),
-                            ),
-                            DataCell(
-                              _fixedCell(4, _ellipsis(task['schedule'])),
-                            ),
-
-                            // Chips get a fixed box too (and aligned left)
-                            DataCell(
-                              _fixedCell(5, _buildStatusChip(task['status'])),
-                            ),
-                            DataCell(
-                              _fixedCell(
-                                6,
-                                _buildPriorityChip(task['priority']),
-                              ),
-                            ),
-
-                            // Action menu cell (narrow, centered)
-                            DataCell(
-                              _fixedCell(
-                                7,
-                                Builder(
-                                  builder: (context) {
-                                    return IconButton(
-                                      onPressed: () {
-                                        final rbx =
-                                            context.findRenderObject()
-                                                as RenderBox;
-                                        final position = rbx.localToGlobal(
-                                          Offset.zero,
-                                        );
-                                        _showActionMenu(
-                                          context,
-                                          task,
-                                          position,
-                                        );
-                                      },
-                                      icon: Icon(
-                                        Icons.more_vert,
-                                        color: Colors.grey[400],
-                                        size: 20,
-                                      ),
-                                    );
-                                  },
-                                ),
-                                align: Alignment.center,
-                              ),
-                            ),
-                          ],
-                        );
-                      }).toList(),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              // Pagination Section
-                              Divider(height: 1, thickness: 1, color: Colors.grey[400]),
-                              Padding(
-                                padding: const EdgeInsets.all(20.0),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      _filteredTasks.isEmpty
-                                          ? "No entries"
-                                          : "Showing ${_currentPage * _itemsPerPage + 1} to ${((_currentPage + 1) * _itemsPerPage).clamp(0, _filteredTasks.length)} of ${_filteredTasks.length} ${_filteredTasks.length == 1 ? 'entry' : 'entries'}",
-                                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                                    ),
-                                    Row(
-                                      children: [
-                                        // Previous button
-                                        IconButton(
-                                          onPressed: _currentPage > 0
-                                              ? () {
-                                                  setState(() {
-                                                    _currentPage--;
-                                                  });
-                                                }
-                                              : null,
-                                          icon: const Icon(Icons.chevron_left),
-                                          color: Colors.blue,
-                                          disabledColor: Colors.grey[300],
-                                        ),
-                                        // Page numbers
-                                        ...List.generate(
-                                          _totalPages,
-                                          (index) => Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                                            child: InkWell(
-                                              onTap: () {
-                                                setState(() {
-                                                  _currentPage = index;
-                                                });
-                                              },
-                                              child: Container(
-                                                width: 32,
-                                                height: 32,
-                                                decoration: BoxDecoration(
-                                                  color: _currentPage == index
+                                            border: Border.all(
+                                              color:
+                                                  _currentPage == index
                                                       ? Colors.blue
-                                                      : Colors.transparent,
-                                                  borderRadius: BorderRadius.circular(4),
-                                                  border: Border.all(
-                                                    color: _currentPage == index
-                                                        ? Colors.blue
-                                                        : Colors.grey[300]!,
-                                                  ),
-                                                ),
-                                                alignment: Alignment.center,
-                                                child: Text(
-                                                  '${index + 1}',
-                                                  style: TextStyle(
-                                                    color: _currentPage == index
-                                                        ? Colors.white
-                                                        : Colors.black87,
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                              ),
+                                                      : Colors.grey[300]!,
+                                            ),
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: Text(
+                                            '${index + 1}',
+                                            style: TextStyle(
+                                              color:
+                                                  _currentPage == index
+                                                      ? Colors.white
+                                                      : Colors.black87,
+                                              fontSize: 14,
                                             ),
                                           ),
                                         ),
-                                        // Next button
-                                        IconButton(
-                                          onPressed: _currentPage < _totalPages - 1
-                                              ? () {
-                                                  setState(() {
-                                                    _currentPage++;
-                                                  });
-                                                }
-                                              : null,
-                                          icon: const Icon(Icons.chevron_right),
-                                          color: Colors.blue,
-                                          disabledColor: Colors.grey[300],
-                                        ),
-                                      ],
+                                      ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                  // Next button
+                                  IconButton(
+                                    onPressed:
+                                        _currentPage < _totalPages - 1
+                                            ? () {
+                                              setState(() {
+                                                _currentPage++;
+                                              });
+                                            }
+                                            : null,
+                                    icon: const Icon(Icons.chevron_right),
+                                    color: Colors.blue,
+                                    disabledColor: Colors.grey[300],
+                                  ),
+                                ],
                               ),
                             ],
                           ),
+                        ),
+                      ],
+                    ),
           ),
         ],
       ),

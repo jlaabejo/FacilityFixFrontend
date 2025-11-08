@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../services/api_services.dart';
 import '../../services/api_service.dart' as admin_api;
 import '../../services/round_robin_assignment_service.dart';
+import 'package:intl/intl.dart';
 
 class AssignScheduleWorkDialog extends StatefulWidget {
   final Map<String, dynamic> task;
@@ -62,8 +63,50 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
   void initState() {
     super.initState();
     notesController.addListener(_revalidate);
+    _initializeScheduleDate();
     _loadStaffMembers();
     WidgetsBinding.instance.addPostFrameCallback((_) => _revalidate());
+  }
+
+  void _initializeScheduleDate() {
+    try {
+      final raw = widget.task['rawData']?['schedule_availability'] ?? widget.task['schedule'] ?? widget.task['dateRequested'] ?? widget.task['rawData']?['scheduled_date'];
+      final sa = raw?.toString() ?? '';
+      if (sa.isEmpty) return;
+
+      DateTime? parsed;
+      if (sa.contains(' - ')) {
+        final parts = sa.split(' - ');
+        final left = parts[0].trim();
+        try {
+          parsed = DateTime.parse(left);
+        } catch (_) {
+          try {
+            parsed = DateFormat('MMM d, yyyy h:mm a').parse(left);
+          } catch (_) {}
+        }
+      } else if (sa.contains('T')) {
+        try {
+          parsed = DateTime.parse(sa);
+        } catch (_) {}
+      } else {
+        try {
+          parsed = DateFormat('MMM d, yyyy h:mm a').parse(sa);
+        } catch (_) {
+          try {
+            parsed = DateTime.parse(sa);
+          } catch (_) {}
+        }
+      }
+
+      if (parsed != null) {
+        setState(() {
+          selectedDate = parsed;
+        });
+      }
+    } catch (e) {
+      print('[AssignScheduleWorkDialog] Error parsing schedule date: $e');
+    }
   }
 
   Future<void> _loadStaffMembers() async {
@@ -443,7 +486,7 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Work Order Schedule', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black87)),
+        const Text('Job Service Schedule', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black87)),
         const SizedBox(height: 12),
         FormField<DateTime>(
           validator: (_) {

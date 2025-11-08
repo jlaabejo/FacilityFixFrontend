@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../layout/facilityfix_layout.dart';
+import '../widgets/delete_popup.dart';
 import '../services/api_service.dart';
 import 'pop_up/inventory_requestdetails_popup.dart';
 import '../../services/api_services.dart' as api_services;
@@ -653,61 +654,53 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
   void _deleteRequest(Map<String, dynamic> item) {
     // Use _doc_id as the primary ID from Firestore
     final requestId = item['_doc_id'] ?? item['id'];
-    
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Delete Request'),
-          content: Text(
-            'Are you sure you want to delete request $requestId?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () async {
-                Navigator.of(context).pop();
-                try {
-                  if (requestId == null) {
-                    throw Exception('Request ID not found');
-                  }
-                  
-                  await _apiService.denyInventoryRequest(
-                    requestId,
-                    'Request deleted by admin',
-                  );
-                  // Reload the list
-                  _loadInventoryRequests();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Request $requestId deleted'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  print('[v0] Error deleting request: $e');
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error deleting request: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                }
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Delete'),
-            ),
-          ],
+    showDeleteDialog(
+      context,
+      itemName: 'Request ${requestId ?? ''}',
+      description: 'Are you sure you want to delete request ${requestId ?? ''}? This will deny the request and cannot be undone.',
+    ).then((confirmed) async {
+      if (confirmed != true) return;
+
+      try {
+        if (requestId == null) throw Exception('Request ID not found');
+
+        await _apiService.denyInventoryRequest(
+          requestId,
+          'Request deleted by admin',
         );
-      },
-    );
+
+        // Remove locally and update UI immediately
+        if (mounted) {
+          setState(() {
+            _requestItems.removeWhere((r) {
+              final rid = (r['_doc_id'] ?? r['id'])?.toString();
+              return rid == requestId.toString();
+            });
+            _currentPage = 1; // reset to first page when list changes
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Request $requestId deleted'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+
+        // Background reload to ensure consistency
+        _loadInventoryRequests();
+      } catch (e) {
+        print('[v0] Error deleting request: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error deleting request: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    });
   }
 
   String _formatDate(dynamic date) {

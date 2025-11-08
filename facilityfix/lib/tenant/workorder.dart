@@ -392,6 +392,49 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     ];
   }
 
+  // Custom status mapping for CS, JS, WO
+  String _mapStatus(Map<String, dynamic> r) {
+    final type = _norm(r['request_type']);
+    final status = _norm(r['status']);
+    final hasSchedule = (r['schedule_availability'] ?? '').toString().isNotEmpty;
+    final isAssigned = (r['assigned_to_id'] ?? r['assigned_to'] ?? '').toString().isNotEmpty;
+    final isAssessed = (r['assessment'] ?? r['staff_assessment'] ?? '').toString().isNotEmpty;
+    final isApproved = _norm(r['approval_status']) == 'approved';
+    final isRejected = _norm(r['approval_status']) == 'rejected';
+
+    if (type == 'concern slip') {
+      if (status == 'pending') return 'Pending CS';
+      if (isAssigned && !isAssessed) return 'To Inspect';
+      if (isAssessed && !hasSchedule) return 'Inspected';
+      if (hasSchedule) {
+        // If schedule filled, goes to JS or WOP
+        if (_norm(r['resolution_type']) == 'job_service') return 'Pending JS';
+        if (_norm(r['resolution_type']) == 'work_permit' || _norm(r['resolution_type']) == 'work order permit') return 'Pending WOP';
+      }
+      return 'Pending CS';
+    }
+
+    if (type == 'job service') {
+      if (!isAssigned) return 'Pending';
+      if (isAssigned && status == 'assigned') return 'Assigned';
+      if (status == 'in progress') return 'In Progress';
+      if (status == 'on hold') return 'On Hold';
+      if (status == 'completed') return 'Completed';
+      return 'Pending';
+    }
+
+    if (type == 'work order' || type == 'work order permit') {
+      if (status == 'inspected') return 'For Approval';
+      if (isApproved) return 'Accepted';
+      if (isRejected) return 'Rejected';
+      if (status == 'in progress') return 'In Progress';
+      if (status == 'completed') return 'Completed';
+      return 'For Approval';
+    }
+
+    return r['status'] ?? 'Pending';
+  }
+
   Widget buildCard(Map<String, dynamic> r) {
     final createdAt = DateTime.tryParse(r['created_at'] ?? '') ?? DateTime.now();
     final requestType = (r['request_type'] ?? '').toLowerCase();
@@ -400,9 +443,10 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
 
     return RepairCard(
       title: r['title'] ?? 'Untitled Request',
-      id: (r['formatted_id'] ?? r['id'] ?? '').toString().substring(0, ((r['formatted_id'] ?? r['id'] ?? '').toString().length > 11 ? 11 : (r['formatted_id'] ?? r['id'] ?? '').toString().length)), // Display up to 16 chars
+      // Use formatted_id when available so the card ID matches the details view
+      id: (r['formatted_id'] ?? r['id'] ?? '').toString(),
       createdAt: createdAt,
-      statusTag: r['status'] ?? 'pending',
+      statusTag: _mapStatus(r),
       departmentTag: r['category'],
       priorityTag: r['priority'],
       unitId: r['unit_id'] ?? '',

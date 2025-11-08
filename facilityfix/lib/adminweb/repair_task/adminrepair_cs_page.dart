@@ -1,7 +1,9 @@
+import 'package:facilityfix/adminweb/widgets/tags.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import 'pop_up/cs_viewdetails_popup.dart';
+import '../widgets/delete_popup.dart';
 import '../maintenance_task/pop_up/assignstaff_popup.dart';
 import '../popupwidgets/set_resolution_type_popup.dart';
 import '../services/api_service.dart';
@@ -45,7 +47,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   }
   
   // Dropdown values for filtering
-  String _selectedDepartment = 'All Categories';
+  String _selectedCategory = 'All Categories';
   String _selectedStatus = 'All Status';
   String _selectedConcernType = 'Concern Slip';
   String _searchQuery = '';
@@ -125,10 +127,14 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                 'buildingUnit': _getBuildingUnit(slip),
                 'priority': _capitalizePriority(slip['priority'] ?? 'medium'),
                 'department': _getDepartment(slip['category']),
-                'status': _capitalizeStatus(slip['status'] ?? 'pending'),
+                'status': _mapStatus(
+                  slip['status'],
+                  slip['workflow'],
+                  slip['resolution_type'],
+                ),
                 'location': slip['location'] ?? 'N/A',
                 'description': slip['description'] ?? 'No Description',
-                'category': slip['category'] ?? 'general',
+                'category': slip['category'],
                 'reportedBy': slip['reported_by'] ?? 'Unknown',
                 'rawData': slip, // Store raw data for detailed view
               };
@@ -196,29 +202,27 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     }
   }
 
-  String _capitalizeStatus(String status) {
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return 'Pending';
-      case 'assigned':
-        return 'To Inspect';
-      case 'in_progress':
-        return 'In Progress';
-      case 'assessed':
-        return 'Assessed';
-      case 'sent':
-        return 'Sent to Client';
-      case 'approved':
-        return 'Approved';
-      case 'rejected':
-        return 'Rejected';
-      case 'completed':
-        return 'Completed';
-      case 'returned_to_tenant':
-        return 'Returned to Tenant';
-      default:
-        return 'Pending';
+  String _mapStatus(dynamic status, dynamic workflow, dynamic resolutionType) {
+    // Custom mapping logic for Concern Slip (CS)
+  final s = (status ?? '').toString().toLowerCase();
+  final r = (resolutionType ?? '').toString().toLowerCase();
+
+    if (s == 'completed') {
+      if (r == 'job service') return 'Job Service';
+      if (r == 'work order permit') return 'Work Order Permit';
+      return 'Completed';
     }
+    if (s == 'cancelled') return 'Cancelled';
+    if (s == 'rejected') return 'Rejected';
+    if (s == 'returned_to_tenant') return 'Returned to Tenant';
+    if (s == 'pending') return 'Pending';
+    if (s == 'assigned') return 'To Inspect';
+    if (s == 'in_progress') return 'In Progress';
+    if (s == 'assessed') return 'Assessed';
+    if (s == 'sent') return 'Sent to Client';
+    if (s == 'approved') return 'Approved';
+    // fallback
+    return 'Pending';
   }
 
   String _getDepartment(String? category) {
@@ -262,9 +266,9 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
 
             // Category filter
             bool matchesDepartment = true;
-            if (_selectedDepartment != 'All Categories') {
+            if (_selectedCategory != 'All Categories') {
               final taskDept = task['department']?.toString().toLowerCase() ?? '';
-              final selectedDept = _selectedDepartment.toLowerCase();
+              final selectedDept = _selectedCategory.toLowerCase();
               
               if (selectedDept == 'other') {
                 // For "Other", match HVAC and Pest Control categories
@@ -412,42 +416,6 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
             ],
           ),
         ),
-        if (canAssign)
-          PopupMenuItem(
-            value: 'assign',
-            child: Row(
-              children: [
-                Icon(
-                  Icons.person_add_outlined,
-                  color: Colors.blue[600],
-                  size: 18,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Assign Staff',
-                  style: TextStyle(color: Colors.blue[600], fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        if (canSetResolution)
-          PopupMenuItem(
-            value: 'set_resolution',
-            child: Row(
-              children: [
-                Icon(
-                  Icons.task_alt,
-                  color: Colors.purple[600],
-                  size: 18,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Set Resolution Type',
-                  style: TextStyle(color: Colors.purple[600], fontSize: 14),
-                ),
-              ],
-            ),
-          ),
         PopupMenuItem(
           value: 'edit',
           enabled: !actionsDisabled,
@@ -562,40 +530,54 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   }
 
   // Delete task method
-  void _deleteTask(Map<String, dynamic> task) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Delete Task'),
-          content: Text('Are you sure you want to delete task ${task['id']}?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                // Remove task from list
-                setState(() {
-                  _repairTasks.removeWhere((t) => t['id'] == task['id']);
-                  _applyFilters();
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Task ${task['id']} deleted'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
+  void _deleteTask(Map<String, dynamic> task) async {
+    final confirmed = await showDeleteDialog(
+      context,
+      itemName: 'Task',
+      description: 'Are you sure you want to delete this task ${task['id']}? This action cannot be undone. All associated data will be permanently removed from the system.',
     );
+
+    if (confirmed) {
+      try {
+        // Determine backend id (prefer rawData._doc_id or rawData.id if available)
+        final raw = task['rawData'] as Map<String, dynamic>?;
+        final idToDelete = raw?['_doc_id'] ?? raw?['id'] ?? task['id'];
+
+        if (idToDelete == null) {
+          throw Exception('Unable to determine task id to delete');
+        }
+
+        await _apiService.deleteConcernSlip(idToDelete.toString());
+
+        // Remove locally to update UI immediately
+        if (mounted) {
+          setState(() {
+            _repairTasks.removeWhere((t) => t['id'] == task['id']);
+            _filteredTasks.removeWhere((t) => t['id'] == task['id']);
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Task ${task['id']} deleted'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+
+        // Background refresh to ensure consistency with server
+        _loadConcernSlips();
+      } catch (e) {
+        print('[AdminRepairPage] Error deleting concern slip: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to delete task: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   final List<double> _colW = <double>[
@@ -604,7 +586,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     130, // DATE REQUESTED
     100, // BUILDING & UNIT
     70, // PRIORITY
-    100, // DEPARTMENT
+    100, // CLASSIFICTAION
     90, // STATUS
     38, // ACTION
   ];
@@ -726,17 +708,24 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
-          // Search Field
-          Expanded(
-            flex: 2,
+          // Search Field with white background
+          SizedBox(
+            width: 400,
             child: Container(
               height: 40,
               decoration: BoxDecoration(
+                color: Colors.white,
                 border: Border.all(color: Colors.grey[300]!),
                 borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.02),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: TextField(
-                onChanged: _onSearchChanged,
                 decoration: InputDecoration(
                   prefixIcon: Icon(
                     Icons.search,
@@ -768,10 +757,10 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
-                  value: _selectedDepartment,
+                  value: _selectedCategory,
                   onChanged: (String? newValue) {
                     setState(() {
-                      _selectedDepartment = newValue!;
+                      _selectedCategory = newValue!;
                       _applyFilters();
                     });
                   },
@@ -1074,7 +1063,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                               label: _fixedCell(4, const Text("PRIORITY")),
                             ),
                             DataColumn(
-                              label: _fixedCell(5, const Text("DEPARTMENT")),
+                              label: _fixedCell(5, const Text("CATEGORY")),
                             ),
                             DataColumn(
                               label: _fixedCell(6, const Text("STATUS")),
@@ -1123,7 +1112,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                                     DataCell(
                                       _fixedCell(
                                         5,
-                                        _buildDepartmentChip(
+                                        DepartmentTag(
                                           task['department'],
                                         ),
                                       ),
@@ -1300,56 +1289,6 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
         priority,
         style: TextStyle(
           color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  // Department Chip Widget
-  Widget _buildDepartmentChip(String department) {
-    final departmentLower = department.toLowerCase();
-    Color bg = Colors.grey[200]!;
-    Color fg = Colors.grey[800]!;
-
-    switch (departmentLower) {
-      case 'maintenance':
-        bg = const Color(0xFF19B36E);
-        fg = Colors.white;
-        break;
-      case 'carpentry':
-        bg = const Color(0xFFF79009);
-        fg = Colors.white;
-        break;
-      case 'plumbing':
-        bg = const Color(0xFF005CE7);
-        fg = Colors.white;
-        break;
-      case 'electrical':
-        bg = const Color(0xFFF95555);
-        fg = Colors.white;
-        break;
-      case 'masonry':
-        bg = const Color(0xFF666666);
-        fg = Colors.white;
-        break;
-      default:
-        bg = Colors.grey[200]!;
-        fg = Colors.grey[800]!;
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        department,
-        style: TextStyle(
-          color: fg,
           fontSize: 12,
           fontWeight: FontWeight.w500,
         ),

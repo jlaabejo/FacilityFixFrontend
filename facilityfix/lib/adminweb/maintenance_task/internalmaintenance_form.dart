@@ -97,6 +97,11 @@ class _InternalMaintenanceFormPageState
   final _mainApiService = main_api.APIService();
   final _roundRobinService = RoundRobinAssignmentService();
 
+  // Local editing toggle used when the parent did not supply edit mode
+  bool _isLocalEdit = false;
+
+  bool get _isEditing => widget.isEditMode || _isLocalEdit;
+
   // -------------------- NAV --------------------
   String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
@@ -886,6 +891,23 @@ class _InternalMaintenanceFormPageState
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Draft saved successfully!')));
+  }
+
+  void _cancelEdit() {
+    // If we're in a local edit session, revert changes and exit edit mode.
+    if (_isLocalEdit) {
+      setState(() {
+        _autoMode = AutovalidateMode.disabled;
+        _isLocalEdit = false;
+        if (widget.maintenanceData != null) {
+          _populateFormFields(widget.maintenanceData!);
+        }
+      });
+      return;
+    }
+
+    // Otherwise, close the form / dialog
+    Navigator.of(context).pop();
   }
 
   Future<void> _onNext() async {
@@ -2173,40 +2195,50 @@ class _InternalMaintenanceFormPageState
                       ),
 
                       const SizedBox(height: 40),
-                      _buildSectionHeader(
-                        "Add Admin Note",
-                        "Notes for admins and post-task remarks",
-                      ),
-
-
-
-                     const SizedBox(height: 40),
-                     FileAttachmentPicker(label: "Attachments", isRequired: false,
-                     onChanged: (files) {
-
-                        setState(() {
-                          attachments = files;
-                        });
-
-                     }
-                     
-                     ),
-                      
-
+                    _buildSectionHeader(
+                      "Add Admin Note",
+                      "Notes for admins and post-task remarks",
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _remarksController,
+                      maxLines: 5,
+                      decoration: _decoration('Enter Description....'),
+                    ),
                       const SizedBox(height: 24),
-
-                      TextFormField(
-                        controller: _remarksController,
-                        maxLines: 5,
-                        decoration: _decoration('Enter Description....'),
-                      ),
-
-                      const SizedBox(height: 40),
 
                       // ===== Actions =====
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
+                          // Cancel / Close
+                          TextButton(
+                            onPressed: _cancelEdit,
+                            child: Text(
+                              _isEditing ? 'Cancel' : 'Cancel',
+                              style: TextStyle(color: Colors.grey[800]),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+
+                          // // Edit Task (only shown when not already editing)
+                          // if (!_isEditing)
+                          //   OutlinedButton(
+                          //     onPressed: () {
+                          //       setState(() => _isLocalEdit = true);
+                          //     },
+                          //     style: OutlinedButton.styleFrom(
+                          //       side: BorderSide(color: Colors.blue.shade200),
+                          //       padding: const EdgeInsets.symmetric(
+                          //         horizontal: 18,
+                          //         vertical: 14,
+                          //       ),
+                          //     ),
+                          //     child: const Text('Edit Task'),
+                          //   ),
+                          // if (!_isEditing) const SizedBox(width: 8),
+
+                          // Primary action (Submit / Save)
                           ElevatedButton(
                             onPressed: _onNext, // VALIDATE then NAVIGATE
                             style: ElevatedButton.styleFrom(
@@ -2221,9 +2253,7 @@ class _InternalMaintenanceFormPageState
                               ),
                             ),
                             child: Text(
-                              widget.isEditMode
-                                  ? "Save Changes"
-                                  : "Submit Internal Task",
+                              _isEditing ? "Save Changes" : "Submit Internal Task",
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,

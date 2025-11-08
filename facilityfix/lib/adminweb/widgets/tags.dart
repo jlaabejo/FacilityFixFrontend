@@ -228,26 +228,23 @@ class StatusTag extends StatelessWidget {
 
   // Map of normalized status -> colors
 static const Map<String, _StatusStyle> _styles = {
-  // Inventory request statuses (only these three)
-  'pending':         _StatusStyle(fg: Color(0xFF667085), bg: Color(0xFFF2F4F7)), 
+  // Inventory request statuses (only these three) 
   'approved':        _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)), 
   'rejected':        _StatusStyle(fg: Color(0xFFD92D20), bg: Color(0xFFFEF3F2)),
   
   // Work order statuses
-  'new':             _StatusStyle(fg: Color(0xFF1570EF), bg: Color(0xFFEFF4FF)),
-  'assigned':        _StatusStyle(fg: Color(0xFF7A5AF8), bg: Color(0xFFF4F5FF)), 
-  'in progress':     _StatusStyle(fg: Color(0xFF1570EF), bg: Color(0xFFEFF4FF)),
-  'on hold':         _StatusStyle(fg: Color(0xFFF79009), bg: Color(0xFFFFFAEB)), 
-  'scheduled':       _StatusStyle(fg: Color(0xFF7A5AF8), bg: Color(0xFFF4F5FF)), 
-  'completed':       _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)),
-  
-  // Inspection statuses
-  'to be inspect':   _StatusStyle(fg: Color(0xFF667085), bg: Color(0xFFF2F4F7)),
-  'inspected':       _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)),
-  
-  // Other approval statuses
-  'for work order form': _StatusStyle(fg: Color(0xFF667085), bg: Color(0xFFF2F4F7)),
+  'pending':    _StatusStyle(fg: Color(0xFF667085), bg: Color(0xFFF2F4F7)), // Grey (Neutral for Pending CS)
+  'to inspect':    _StatusStyle(fg: Color(0xFFB54708), bg: Color(0xFFFFF4ED)), // Brown/Gold (Action Required)
+  'inspected':     _StatusStyle(fg: Color(0xFF079455), bg: Color(0xFFE6FFF3)), // Teal/Green (Review Done)
+  'assigned':     _StatusStyle(fg: Color(0xFF005CE7), bg: Color(0xFFE6F0FF)), // Darker Blue
+  'in progress':   _StatusStyle(fg: Color(0xFF1570EF), bg: Color(0xFFEFF4FF)), // Blue
+  'on hold':     _StatusStyle(fg: Color(0xFFF79009), bg: Color(0xFFFFFAEB)), // Orange/Yellow
+  'completed':   _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)), // Green
   'for approval':    _StatusStyle(fg: Color(0xFFF79009), bg: Color(0xFFFFFAEB)),
+
+  // Maintenance
+  'scheduled':   _StatusStyle(fg: Color(0xFF7A5AF8), bg: Color(0xFFF4F5FF)), // Purple
+  'accepted':  _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)), 
 };
   // Normalize "In-Progress", "in_progress", "in progress" → "in progress"
   static String _normalize(String s) =>
@@ -334,19 +331,33 @@ class PriorityTag extends StatelessWidget {
   Color _getPriorityColor() {
     switch (priority.toLowerCase()) {
       case 'high':
-        return const Color(0xFFF04438); // red
+        return const Color(0xFFFEE4E2); // soft red background
       case 'medium':
-        return const Color(0xFFF79009); // orange
+        return const Color(0xFFFEF0C7); // soft orange background
       case 'low':
-        return const Color(0xFF12B76A); // green
+        return const Color(0xFFD1FADF); // soft green background
       default:
-        return const Color(0xFF667085); // gray
+        return const Color(0xFFF2F4F7); // soft gray background
+    }
+  }
+
+  Color _getTextColor() {
+    switch (priority.toLowerCase()) {
+      case 'high':
+        return const Color(0xFFB42318); // darker red text
+      case 'medium':
+        return const Color(0xFFB54708); // darker orange text
+      case 'low':
+        return const Color(0xFF027A48); // darker green text
+      default:
+        return const Color(0xFF344054); // darker gray text
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final color = _getPriorityColor();
+    final textColor = _getTextColor();
     
     // Capitalize the first letter for display
     String displayText = priority.isNotEmpty 
@@ -364,7 +375,7 @@ class PriorityTag extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: Colors.white,
+          color: textColor,
           fontSize: fontSize,
           fontWeight: FontWeight.w500,
           fontFamily: 'Inter',
@@ -624,8 +635,7 @@ class RequestTypeTag extends StatelessWidget {
   static const Map<String, _TypeStyle> _styles = {
     'concern slip': _TypeStyle(fg: Color(0xFF2563EB), bg: Color(0xFFE0F2FE)),
     'job service': _TypeStyle(fg: Color(0xFF19B36E), bg: Color(0xFFE8F7F1)),
-    'work order':  _TypeStyle(fg: Color(0xFFF79009), bg: Color(0xFFFFFAEB)),
-    'maintenance': _TypeStyle(fg: Color(0xFF9333EA), bg: Color(0xFFF3E8FF)),
+    'work order': _TypeStyle(fg: Color(0xFFB45309), bg: Color(0xFFFEF3C7)),
   };
 
   static String _normalize(String s) => s
@@ -637,14 +647,10 @@ class RequestTypeTag extends StatelessWidget {
   static _TypeStyle _styleFor(String? s) {
     if (s == null || s.trim().isEmpty) return _defaultStyle;
     final normalized = _normalize(s);
-    // Remove noisy prints; if you still want them in debug only:
-    // if (kDebugMode) debugPrint('Normalized "$s" to "$normalized"');
     return _styles[normalized] ?? _defaultStyle;
   }
 
   static String _toTitleCase(String input) {
-    // Basic Title Case: split by whitespace and capitalize each word.
-    // Keeps words like "of", "and" capitalized as well (simple rule fits our tags).
     return input
         .trim()
         .split(RegExp(r'\s+'))
@@ -674,7 +680,6 @@ class RequestTypeTag extends StatelessWidget {
     final fg = fgColor ?? mapped.fg;
     final bg = bgColor ?? mapped.bg;
 
-    // Render label in your preferred casing (default Title Case → "Concern Slip")
     final label = raw.isEmpty ? 'Unknown' : _displayLabel(raw);
 
     final text = Text(
@@ -700,7 +705,10 @@ class RequestTypeTag extends StatelessWidget {
       child: text,
     );
 
-    return SizedBox(width: 100, child: pill);
+    // Use intrinsic width if width is not specified, otherwise use fixed width
+    return width != null 
+        ? SizedBox(width: width, child: pill)
+        : IntrinsicWidth(child: pill);
   }
 }
 
@@ -708,5 +716,6 @@ class RequestTypeTag extends StatelessWidget {
 class _TypeStyle {
   final Color fg;
   final Color bg;
+
   const _TypeStyle({required this.fg, required this.bg});
 }

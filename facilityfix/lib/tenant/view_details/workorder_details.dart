@@ -1,6 +1,5 @@
 // Tenant-only Work Order / Permit detail view (stable, minimal)
 import 'package:flutter/material.dart';
-
 import 'package:facilityfix/models/work_orders.dart';
 import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/workorder.dart';
@@ -68,7 +67,9 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
 
     // Only allow editing if status is pending
     final status = w.statusTag.toLowerCase();
-    if (status != 'pending') {
+    // treat any status that starts with 'pending' as editable (covers 'pending', 'pending cs', 'pending js', 'pending wop')
+    final isPending = status.startsWith('pending');
+    if (!isPending) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Only pending requests can be edited'),
@@ -113,12 +114,14 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     final w = widget.workOrder ?? _fetchedWorkOrder;
     if (w == null) return;
 
-    // Only allow deleting if status is complete/done
+    // Allow deleting if status is pending or complete/done
     final status = w.statusTag.toLowerCase();
-    if (status != 'complete' && status != 'completed' && status != 'done') {
+    // Allow deleting for any 'pending*' statuses (pending, pending cs/js/wop) or completed variants
+    final deletable = status.startsWith('pending') || status.contains('complete') || status == 'done';
+    if (!deletable) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Only completed requests can be deleted'),
+          content: Text('Only pending (including pending CS/JS/WOP) or completed requests can be deleted'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -252,7 +255,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
 
   WorkOrderDetails _jobServiceToWorkOrderDetails(JobService js) => WorkOrderDetails(
         id: js.id,
-        // formattedId: js.formattedId,
         createdAt: js.createdAt,
         updatedAt: js.updatedAt,
         requestTypeTag: js.requestTypeTag,
@@ -343,7 +345,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     if (id.startsWith('JS-') || idLower.startsWith('js_')) {
       return JobServiceDetails(
         id: w.id,
-        // formattedId: w.formattedId,
         concernSlipId: w.concernSlipId ?? '—',
         createdAt: w.createdAt,
         updatedAt: w.updatedAt,
@@ -421,10 +422,11 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final w = widget.workOrder ?? _fetchedWorkOrder;
-    final status = w?.statusTag.toLowerCase() ?? '';
-    final isPending = status == 'pending';
-    final isComplete = status == 'complete' || status == 'completed' || status == 'done';
+  final w = widget.workOrder ?? _fetchedWorkOrder;
+  final status = w?.statusTag.toLowerCase() ?? '';
+  final isPending = status == 'pending';
+  // deletable when pending or completed/done
+  final isDeletable = status == 'pending' || status == 'complete' || status == 'completed' || status == 'done';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -433,8 +435,8 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         leading: const Padding(padding: EdgeInsets.only(right: 8), child: BackButton()),
         showMore: true,
         showHistory: true,
-        showEdit: isPending,
-        showDelete: isComplete,
+  showEdit: isPending,
+  showDelete: isDeletable,
         onHistoryTap: _showHistorySheet,
         onEditTap: _showEditDialog,
         onDeleteTap: _showDeleteDialog,

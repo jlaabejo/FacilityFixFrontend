@@ -1,9 +1,11 @@
+import 'package:facilityfix/adminweb/widgets/tags.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import 'pop_up/announcement_viewdetails_popup.dart';
 import '../services/api_service.dart';
 import '../../services/auth_storage.dart';
+import '../widgets/delete_popup.dart';
 
 class AdminWebAnnouncementPage extends StatefulWidget {
   const AdminWebAnnouncementPage({super.key});
@@ -235,283 +237,121 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
     }
   }
 
-  void _deleteAnnouncement(Map<String, dynamic> announcement) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+  Future<void> _deleteAnnouncement(Map<String, dynamic> announcement) async {
+    final databaseId = announcement['database_id'];
+    final displayId = announcement['id'];
+
+    print('[DELETE] Starting delete process');
+    print('[DELETE] Database ID: $databaseId');
+    print('[DELETE] Display ID: $displayId');
+
+    if (databaseId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text('Cannot delete: Announcement ID not found'),
+              ),
+            ],
           ),
-          elevation: 8,
-          child: Container(
-            width: 520,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+          backgroundColor: Colors.red[600],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDeleteDialog(
+      context,
+      itemName: displayId ?? 'this announcement',
+      description: 'Are you sure you want to delete announcement ${displayId ?? ""}? This action cannot be undone.',
+    );
+
+    if (!confirmed) {
+      print('[DELETE] Delete cancelled by user');
+      return;
+    }
+
+    try {
+      print('[DELETE] Calling API to delete announcement with ID: $databaseId');
+      
+      await _apiService.deleteAnnouncement(
+        databaseId,
+        notifyDeactivation: false,
+      );
+
+      print('[DELETE] API call successful');
+
+      // Remove from local list using database_id
+      if (mounted) {
+        setState(() {
+          final initialCount = _announcementItems.length;
+          _announcementItems.removeWhere((item) {
+            final itemDatabaseId = item['database_id'];
+            final shouldRemove = itemDatabaseId == databaseId;
+            if (shouldRemove) {
+              print('[DELETE] Removing item with database_id: $itemDatabaseId');
+            }
+            return shouldRemove;
+          });
+          final afterCount = _announcementItems.length;
+          print('[DELETE] Items before: $initialCount, after: $afterCount');
+          
+          // Reset to first page if current page is now out of bounds
+          if (_currentPage > _totalPages && _totalPages > 0) {
+            _currentPage = _totalPages;
+          } else if (_announcementItems.isEmpty) {
+            _currentPage = 1;
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
               children: [
-                // Header with red background
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.red[600],
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(16),
-                      topRight: Radius.circular(16),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.delete_forever,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text(
-                              'Delete Announcement',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              'This action cannot be undone',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.white70,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close, color: Colors.white),
-                        tooltip: 'Close',
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Content
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[50],
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey[200]!),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.announcement, color: Colors.grey[600], size: 18),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'ANNOUNCEMENT DETAILS',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.grey[600],
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            _buildDeleteDetailRow('ID', _formatId(announcement['id']?.toString())),
-                            const SizedBox(height: 8),
-                            _buildDeleteDetailRow('Type', announcement['type'] ?? 'N/A'),
-                            const SizedBox(height: 8),
-                            _buildDeleteDetailRow('Location', announcement['location'] ?? 'N/A'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Footer with Actions
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    border: Border(
-                      top: BorderSide(color: Colors.grey[200]!, width: 1),
-                    ),
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(16),
-                      bottomRight: Radius.circular(16),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.grey[700],
-                          side: BorderSide(color: Colors.grey[300]!),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 14,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton.icon(
-                        onPressed: () async {
-                          Navigator.of(context).pop();
-
-                          try {
-                            await _apiService.deleteAnnouncement(
-                              announcement['database_id'],
-                              notifyDeactivation: false,
-                            );
-
-                            await _fetchAnnouncements(); // Refresh the list
-
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Row(
-                                    children: [
-                                      const Icon(Icons.check_circle, color: Colors.white),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text('${_formatId(announcement['id']?.toString())} deleted successfully'),
-                                      ),
-                                    ],
-                                  ),
-                                  backgroundColor: Colors.green[600],
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                              );
-                            }
-                          } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Row(
-                                    children: [
-                                      const Icon(Icons.error, color: Colors.white),
-                                      const SizedBox(width: 12),
-                                      Expanded(child: Text('Failed to delete: $e')),
-                                    ],
-                                  ),
-                                  backgroundColor: Colors.red[600],
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                              );
-                            }
-                          }
-                        },
-                        icon: const Icon(Icons.delete_forever, size: 18),
-                        label: const Text(
-                          'Delete Permanently',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red[600],
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 14,
-                          ),
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('${displayId ?? "Announcement"} deleted successfully')),
               ],
             ),
+            backgroundColor: Colors.green[600],
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            duration: const Duration(seconds: 2),
           ),
         );
-      },
-    );
-  }
 
-  // Helper for delete detail rows
-  Widget _buildDeleteDetailRow(String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 90,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
+        // Optional: Refresh from server to ensure sync
+        // Comment this out if you don't want to refresh after delete
+        // await Future.delayed(const Duration(milliseconds: 500));
+        // await _fetchAnnouncements();
+      }
+    } catch (e) {
+      print('[DELETE] Error occurred: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Failed to delete: $e')),
+              ],
             ),
+            backgroundColor: Colors.red[600],
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            duration: const Duration(seconds: 4),
           ),
-        ),
-        const Text(': ', style: TextStyle(fontSize: 12)),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.black87,
-              fontWeight: FontWeight.w500,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
+        );
+      }
+    }
   }
 
   String _formatId(String? id) {
@@ -790,7 +630,7 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                       announcement['formatted_id'] ??
                       announcement['id'] ??
                       'N/A',
-                  'database_id': announcement['id'],
+                  'database_id': announcement['id'], // This is critical for delete
                   'Title': announcement['title'] ?? 'Untitled',
                   'type': announcement['type'] ?? 'General',
                   'location':
@@ -1068,9 +908,33 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              // Filter button
-                              PopupMenuButton<String>(
+                                const SizedBox(width: 12),
+
+                                // Refresh Button
+                                Container(
+                                  height: 40,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey[300]!),
+                                    borderRadius: BorderRadius.circular(8),
+                                    color: Colors.white,
+                                  ),
+                                  child: InkWell(
+                                    onTap: _fetchAnnouncements,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.refresh_rounded, size: 20, color: Colors.blue[600]),
+                                        const SizedBox(width: 8),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(width: 12),
+
+                                // Filter button
+                                PopupMenuButton<String>(
                                 initialValue: _selectedFilter,
                                 onSelected: _onFilterChanged,
                                 itemBuilder:
@@ -1111,7 +975,7 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                                       ),
                                     ],
                                   ),
-                                ),
+                                  ),
                               ),
                             ],
                           ),
@@ -1317,7 +1181,7 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                                   DataCell(
                                     _fixedCell(
                                       2,
-                                      _buildTypeChip(announcement['type']),
+                                      AnnouncementType(announcement['type']),
                                     ),
                                   ),
                                   DataCell(
@@ -1417,50 +1281,6 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
                 ),
               ),
           ],
-        ),
-      ),
-    );
-  }
-
-  // Type chip widget - styled for announcement types
-  Widget _buildTypeChip(String type) {
-    Color bgColor;
-    Color textColor;
-
-    switch (type) {
-      case 'Utility Interruption':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'Maintenance':
-        bgColor = const Color(0xFFE3F2FD);
-        textColor = const Color(0xFF1976D2);
-        break;
-      case 'Emergency':
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFE65100);
-        break;
-      case 'Announcement':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      default:
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        type,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
         ),
       ),
     );

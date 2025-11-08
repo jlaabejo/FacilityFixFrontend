@@ -5,18 +5,6 @@ import '../../../services/api_services.dart';
 import '../../../utils/ui_format.dart';
 import 'package:intl/intl.dart';
 
-// Temporary extension to provide the missing APIService method so the file compiles.
-// Replace or remove this once assignStaffToJobService is implemented inside services/api_services.dart.
-extension APIServiceAssignExtension on APIService {
-  Future<dynamic> assignStaffToJobService(dynamic jobServiceId, String staffId) async {
-    // Currently not implemented here — implement the actual network call in services/api_services.dart.
-    // This placeholder throws to make it obvious at runtime that the real implementation is still needed.
-    throw UnimplementedError(
-      'APIService.assignStaffToJobService is not implemented. '
-      'Please add the implementation in services/api_services.dart.'
-    );
-  }
-}
 
 class JobServiceConcernSlipDialog extends StatefulWidget {
   final Map<String, dynamic> task;
@@ -216,6 +204,32 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
   
   String _getStaffId(Map<String, dynamic> staff) {
     return staff['user_id'] ?? staff['id'] ?? '';
+  }
+
+  String _extractStaffName() {
+    try {
+      final s = widget.task['staffName'];
+      if (s != null && s.toString().trim().isNotEmpty) return s.toString();
+
+      final raw = widget.task['rawData'];
+      if (raw is Map) {
+        final profile = raw['staff_profile'];
+        if (profile is Map) {
+          final first = profile['first_name'] ?? profile['firstName'] ?? '';
+          final last = profile['last_name'] ?? profile['lastName'] ?? '';
+          final full = '${first.toString()} ${last.toString()}'.trim();
+          if (full.isNotEmpty) return full;
+        }
+
+        final staffNameField = raw['staff_name'] ?? raw['staff'] ?? raw['assignee'];
+        if (staffNameField != null && staffNameField.toString().trim().isNotEmpty) {
+          return staffNameField.toString();
+        }
+      }
+    } catch (e) {
+      print('[JobServiceDialog] _extractStaffName error: $e');
+    }
+    return 'Staff Member';
   }
 
   Widget _buildSimpleAvatar(String name, {double size = 32}) {
@@ -539,7 +553,7 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
 
   // Assessment Section (matching WOP dialog style)
   Widget _buildAssessmentSection() {
-    final staffName = widget.task['staffName'] ?? widget.task['rawData']?['staff_profile']['first_name'] + ' ' + (widget.task['rawData']?['staff_profile']['last_name'] ?? '') ?? 'Staff Member';
+    final staffName = _extractStaffName();
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -584,32 +598,6 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
                 ],
               ),
             ),
-            // const SizedBox(width: 24),
-            // Expanded(
-            //   child: Column( 
-            //     crossAxisAlignment: CrossAxisAlignment.start,
-            //     children: [
-            //       Text(
-            //         'RECOMMENDATION',
-            //         style: TextStyle(
-            //           fontSize: 14,
-            //           fontWeight: FontWeight.w600,
-            //           color: Colors.grey[600],
-            //           letterSpacing: 0.5,
-            //         ),
-            //       ),
-            //       const SizedBox(height: 8),
-            //       Text(
-            //         widget.task['recommendation'] ?? 'No recommendation available',
-            //         style: TextStyle(
-            //           fontSize: 16,
-            //           fontWeight: FontWeight.w500,
-            //           color: widget.task['recommendation'] != null ? Colors.black87 : Colors.grey[400],
-            //         ),
-            //       ),
-            //     ],
-            //   ),
-            // ),
           ],
         ),
         const SizedBox(height: 24),
@@ -1185,31 +1173,47 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
   }
 
   Future<void> _handleSaveAndAssign() async {
-    if (!_formValid || selectedStaffId == null) return;
+    if (!_formValid || selectedStaffId == null || selectedStaffId!.toString().trim().isEmpty) {
+      // Ensure a staff member is selected before proceeding
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please select a staff member to assign'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
     setState(() => _isAssigning = true);
     
     try {
-      final jobServiceId = widget.task['serviceId'] ?? widget.task['id'];
-      if (jobServiceId == null) throw Exception('Job Service ID not found');
-      
-      print('[JobServiceDialog] Assigning staff $selectedStaffId to job service $jobServiceId');
-      
+      // Resolve job service id (support both 'serviceId' and 'id') and ensure it's a string
+      final jobServiceIdRaw = widget.task['serviceId'] ?? widget.task['id'];
+      final jobServiceId = jobServiceIdRaw?.toString();
+      if (jobServiceId == null || jobServiceId.isEmpty) throw Exception('Job Service ID not found');
+
+      final staffId = selectedStaffId!.toString();
+      print('[JobServiceDialog] Assigning staff $staffId to job service $jobServiceId');
+
       final result = await _apiService.assignStaffToJobService(
         jobServiceId,
-        selectedStaffId!,
+        staffId,
       );
-      
+
       print('[JobServiceDialog] Assignment successful: $result');
-      
+
       if (mounted) {
-        Navigator.of(context).pop();
+        // Show confirmation before closing the dialog so the SnackBar is visible in the app scaffold
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Staff assigned successfully to ${widget.task['serviceId']}'),
+            content: Text('Staff assigned successfully to $jobServiceId'),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 3),
           ),
         );
+        Navigator.of(context).pop();
         widget.onAssignmentComplete?.call();
       }
     } catch (e) {

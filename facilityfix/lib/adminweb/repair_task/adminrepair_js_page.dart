@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
-import '../../widgets/modals.dart';
+import '../widgets/delete_popup.dart';
 import 'pop_up/js_viewdetails_popup.dart';
+import '../maintenance_task/pop_up/assignstaff_popup.dart';
 
 class RepairJobServicePage extends StatefulWidget {
   const RepairJobServicePage({super.key});
@@ -80,15 +81,11 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     });
   }
   
-  // Staff data for assignment
-  List<Map<String, dynamic>> _staffMembers = [];
-  bool _isLoadingStaff = false;
-  
   // Error handling
   String? _errorMessage;
   
   // Dropdown values for filtering
-  String _selectedDepartment = 'All Departments';
+  String _selectedCategory = 'All Categories';
   String _selectedStatus = 'All Status';
   String _selectedConcernType = 'Job Service';
   // Helper function to convert routeKey to actual route path
@@ -207,23 +204,24 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   void _applyFilters() {
     setState(() {
       _filteredTasks = _repairTasks.where((task) {
-        // Department filter
-        if (_selectedDepartment != 'All Departments') {
-          final taskDept = task['department']?.toString().toLowerCase() ?? '';
-          final selectedDept = _selectedDepartment.toLowerCase();
-          
-          if (selectedDept == 'others') {
-            // For "Others", match pest control, hvac, security, fire safety, general, etc.
-            if (!['carpentry', 'electrical', 'masonry', 'plumbing'].contains(taskDept)) {
-              // This is an "other" department
-            } else {
+        // Category filter
+        if (_selectedCategory != 'All Categories') {
+          final taskCategory = (task['category']?.toString().toLowerCase() ?? '').trim();
+          final selectedCategory = _selectedCategory.trim().toLowerCase();
+
+          if (selectedCategory == 'others') {
+            // For "Other", match anything NOT in the main categories
+            if (['carpentry', 'electrical', 'masonry', 'plumbing'].contains(taskCategory)) {
               return false;
             }
-          } else if (!taskDept.contains(selectedDept)) {
-            return false;
+          } else {
+            // Match exact category (case-insensitive)
+            if (taskCategory != selectedCategory) {
+              return false;
+            }
           }
         }
-        
+
         // Status filter
         if (_selectedStatus != 'All Status') {
           final taskStatus = task['status']?.toString() ?? '';
@@ -231,10 +229,10 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
             return false;
           }
         }
-        
+
         return true;
       }).toList();
-      
+
       // Reset to first page when filters change
       _currentPage = 0;
     });
@@ -258,7 +256,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       'buildingUnit': jobService['location'] ?? jobService['unit_id'] ?? 'N/A',
       'schedule': _formatDate(jobService['scheduled_date'] ?? jobService['created_at']),
       'priority': _capitalizePriority(jobService['priority']),
-      'status': _capitalizeStatus(jobService['status']),
+      'status': _mapStatus(jobService['status'], jobService['workflow']),
 
       // Additional task data
       'title': jobService['title'] ?? 'Job Service Request',
@@ -282,32 +280,22 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     }
   }
 
-  String _capitalizeStatus(String? status) {
-    if (status == null) return 'Pending';
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return 'Pending';
-      case 'assigned':
-        return 'To Inspect';
-      case 'in_progress':
-        return 'In Progress';
-      case 'assessed':
-        return 'Assessed';
-      case 'sent':
-        return 'Sent to Client';
-      case 'approved':
-        return 'Approved';
-      case 'rejected':
-        return 'Rejected';
-      case 'completed':
-        return 'Completed';
-      case 'returned_to_tenant':
-        return 'Returned to Tenant';
-      case 'cancelled':
-        return 'Cancelled';
-      default:
-        return 'Pending';
-    }
+  String _mapStatus(dynamic status, dynamic workflow) {
+    // Custom mapping logic for Job Service (JS)
+  final s = (status ?? '').toString().toLowerCase();
+
+    if (s == 'completed') return 'Completed';
+    if (s == 'cancelled') return 'Cancelled';
+    if (s == 'rejected') return 'Rejected';
+    if (s == 'returned_to_tenant') return 'Returned to Tenant';
+    if (s == 'pending') return 'Pending';
+    if (s == 'assigned') return 'To Inspect';
+    if (s == 'in_progress') return 'In Progress';
+    if (s == 'assessed') return 'Assessed';
+    if (s == 'sent') return 'Sent to Client';
+    if (s == 'approved') return 'Approved';
+    // fallback
+    return 'Pending';
   }
 
   String _capitalizePriority(String? priority) {
@@ -329,7 +317,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   }
 
   String _mapCategoryToDepartment(String? category) {
-    if (category == null) return 'General';
+    if (category == null) return 'N/A';
     switch (category.toLowerCase()) {
       case 'electrical':
         return 'Electrical';
@@ -339,12 +327,10 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
         return 'HVAC';
       case 'carpentry':
         return 'Carpentry';
-      case 'maintenance':
-        return 'Maintenance';
       case 'masonry':
         return 'Masonry';
       default:
-        return 'General';
+        return 'Other';
     }
   }
 
@@ -357,11 +343,20 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     final RenderBox overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox;
 
-    // Check if task is pending to show assign option
-    final taskStatus = task['status']?.toString().toLowerCase() ?? '';
-    final isPending = taskStatus == 'pending';
-
     List<PopupMenuEntry<String>> menuItems = [
+      PopupMenuItem(
+        value: 'assign',
+        child: Row(
+          children: [
+            Icon(Icons.person_add_alt_1_outlined, color: Colors.orange[700], size: 18),
+            const SizedBox(width: 12),
+            Text(
+              'Assign',
+              style: TextStyle(color: Colors.orange[700], fontSize: 14),
+            ),
+          ],
+        ),
+      ),
       PopupMenuItem(
         value: 'view',
         child: Row(
@@ -379,25 +374,6 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
           ],
         ),
       ),
-      // Only show assign action for pending tasks
-      if (isPending)
-        PopupMenuItem(
-          value: 'assign',
-          child: Row(
-            children: [
-              Icon(
-                Icons.person_add_alt,
-                color: Colors.orange[600],
-                size: 18,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Assign',
-                style: TextStyle(color: Colors.orange[600], fontSize: 14),
-              ),
-            ],
-          ),
-        ),
       PopupMenuItem(
         value: 'edit',
         child: Row(
@@ -445,11 +421,19 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   // Handle action selection
   void _handleActionSelection(String action, Map<String, dynamic> task) {
     switch (action) {
+      case 'assign':
+        // Open the Assign dialog and pass the processed task (which includes rawData)
+        AssignScheduleWorkDialog.show(
+          context,
+          task,
+          onAssignmentComplete: () {
+            _loadJobServices();
+          },
+          isMaintenanceTask: false,
+        );
+        break;
       case 'view':
         _viewTask(task);
-        break;
-      case 'assign':
-        _assignTask(task);
         break;
       case 'edit':
         _editTask(task);
@@ -462,13 +446,18 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
 
   // View task method
   void _viewTask(Map<String, dynamic> task) {
-    // Show the new Job Service dialog
-    JobServiceConcernSlipDialog.show(
-      context,
-      task,
-      onAssignmentComplete: () {
-        // Reload the job services after assignment
-        _loadJobServices();
+    // Show the Job Service + Concern Slip dialog with stepper (dual-state view)
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return JobServiceConcernSlipDialog(
+          task: task,
+          onAssignmentComplete: () {
+            // Reload the job services after assignment
+            _loadJobServices();
+          },
+        );
       },
     );
   }
@@ -484,161 +473,29 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     );
   }
 
-  // Assign task method
-  void _assignTask(Map<String, dynamic> task) async {
-    await _loadStaffMembers();
-    
-    if (!mounted) return;
-
-    // Prepare staff names for the modal
-    final staffNames = _staffMembers.map((staff) {
-      final firstName = staff['first_name'] ?? '';
-      final lastName = staff['last_name'] ?? '';
-      final department = staff['department'] ?? '';
-      
-      String displayName = '$firstName $lastName';
-      if (department.isNotEmpty) {
-        displayName += ' ($department)';
-      }
-      return displayName;
-    }).toList();
-
-    // Show assign staff modal
-    final result = await showModalBottomSheet<AssignResult>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => AssignStaffBottomSheet(
-        staff: staffNames,
-        busyByStaff: {}, // You can implement availability checking here
-      ),
-    );
-
-    if (result != null && mounted) {
-      // Find the selected staff member's user ID
-      final selectedStaffIndex = staffNames.indexOf(result.staffName);
-      if (selectedStaffIndex >= 0 && selectedStaffIndex < _staffMembers.length) {
-        final staffUserId = _staffMembers[selectedStaffIndex]['user_id'] ?? _staffMembers[selectedStaffIndex]['id'];
-        
-        if (staffUserId != null) {
-          await _assignStaffToJobService(task, staffUserId, result.note);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Error: Could not find staff member ID'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  // Load staff members from API
-  Future<void> _loadStaffMembers() async {
-    if (_isLoadingStaff) return;
-    
-    setState(() => _isLoadingStaff = true);
-    
-    try {
-      final apiService = ApiService();
-      final staffData = await apiService.getStaffMembers();
-      
-      if (mounted) {
-        setState(() {
-          _staffMembers = List<Map<String, dynamic>>.from(staffData);
-          _isLoadingStaff = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading staff members: $e');
-      if (mounted) {
-        setState(() => _isLoadingStaff = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load staff members: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  // Assign staff to job service
-  Future<void> _assignStaffToJobService(
-    Map<String, dynamic> task,
-    String staffUserId,
-    String? note,
-  ) async {
-    try {
-      final apiService = ApiService();
-      
-      // Use the serviceId (which should be the actual job service ID)
-      final jobServiceId = task['serviceId'] ?? task['id'];
-      
-      await apiService.assignStaffToJobService(jobServiceId, staffUserId);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Staff assigned successfully to ${task['serviceId']}'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        
-        // Reload the job services to reflect the changes
-        await _loadJobServices();
-      }
-    } catch (e) {
-      debugPrint('Error assigning staff to job service: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to assign staff: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   // Delete task method
-  void _deleteTask(Map<String, dynamic> task) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Delete Task'),
-          content: Text('Are you sure you want to delete task ${task['id']}?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () async {
-                Navigator.of(context).pop();
-                // TODO: Implement actual deletion via API
-                // For now, just remove from local list and reload
-                setState(() {
-                  _repairTasks.removeWhere((t) => t['id'] == task['id']);
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Task ${task['id']} deleted'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                // Reload data to reflect changes
-                await _loadJobServices();
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
+  void _deleteTask(Map<String, dynamic> task) async {
+    final confirmed = await showDeleteDialog(
+      context,
+      itemName: 'Task',
+      description: 'Are you sure you want to delete this task ${task['id']}? This action cannot be undone. All associated data will be permanently removed from the system.',
     );
+
+    if (confirmed) {
+      // TODO: Implement actual deletion via API
+      // For now, just remove from local list and reload
+      setState(() {
+        _repairTasks.removeWhere((t) => t['id'] == task['id']);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Task ${task['id']} deleted'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      // Reload data to reflect changes
+      await _loadJobServices();
+    }
   }
 
   final List<double> _colW = <double>[
@@ -815,14 +672,22 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
-          // Search Field
-          Expanded(
-            flex: 2,
+          // Search Field with white background
+          SizedBox(
+            width: 400,
             child: Container(
               height: 40,
               decoration: BoxDecoration(
+                color: Colors.white,
                 border: Border.all(color: Colors.grey[300]!),
                 borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.02),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: TextField(
                 decoration: InputDecoration(
@@ -844,7 +709,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
           ),
           const SizedBox(width: 16),
 
-          // Department Dropdown
+          // Category Dropdown
           Expanded(
             child: Container(
               height: 40,
@@ -856,26 +721,26 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
-                  value: _selectedDepartment,
+                  value: _selectedCategory,
                   onChanged: (String? newValue) {
                     setState(() {
-                      _selectedDepartment = newValue!;
+                      _selectedCategory = newValue!;
                       _applyFilters();
                     });
                   },
                   items:
                       <String>[
-                        'All Departments',
+                        'All Categories',
                         'Carpentry',
                         'Electrical',
                         'Masonry',
                         'Plumbing',
-                        'Other',
+                        'Others',
                       ].map<DropdownMenuItem<String>>((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
                           child: Text(
-                            value == 'All Departments' ? value : 'Dept: $value',
+                            value == 'All Categories' ? value : 'Category: $value',
                             style: const TextStyle(fontSize: 14),
                           ),
                         );

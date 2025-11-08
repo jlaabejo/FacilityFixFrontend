@@ -576,41 +576,89 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
   }
 
   void _deleteMaintenance(Map<String, dynamic> maintenance) async {
+    // Extract the actual ID from the maintenance object
+    final maintenanceId = maintenance['id'] ?? 
+                         maintenance['_doc_id'] ?? 
+                         maintenance['task_id'];
+    
+    if (maintenanceId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot delete: Invalid maintenance ID'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('Delete Maintenance'),
           content: Text(
-            'Are you sure you want to delete maintenance ${maintenance['id']}?',
+            'Are you sure you want to delete maintenance task ${_formatMaintenanceId(maintenanceId)}?',
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () async {
-                Navigator.of(context).pop();
-                try {
-                  await _apiService.deleteMaintenanceTask(maintenance['id']);
-                  await _fetchMaintenanceTasks(); // Refresh the list
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Maintenance ${maintenance['id']} deleted',
+                Navigator.of(dialogContext).pop();
+                
+                // Show loading indicator
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Row(
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
                         ),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
+                        SizedBox(width: 16),
+                        Text('Deleting maintenance task...'),
+                      ],
+                    ),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+                
+                try {
+                  final response = await _apiService.deleteMaintenanceTask(maintenanceId.toString());
+                  
+                  // Check if deletion was successful
+                  if (response['success'] == true || response['message']?.toString().toLowerCase().contains('deleted') == true) {
+                    await _fetchMaintenanceTasks(); // Refresh the list
+                    
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).clearSnackBars();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Maintenance task ${_formatMaintenanceId(maintenanceId)} deleted successfully',
+                          ),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  } else {
+                    throw Exception(response['error'] ?? response['message'] ?? 'Failed to delete maintenance task');
                   }
                 } catch (e) {
+                  print('[v0] Error deleting maintenance: $e');
                   if (mounted) {
+                    ScaffoldMessenger.of(context).clearSnackBars();
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Failed to delete: $e'),
+                        content: Text('Failed to delete: ${e.toString()}'),
                         backgroundColor: Colors.red,
+                        duration: const Duration(seconds: 4),
                       ),
                     );
                   }

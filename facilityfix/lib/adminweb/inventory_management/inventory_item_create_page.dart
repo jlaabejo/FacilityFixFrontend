@@ -41,7 +41,6 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
   // Form controllers
   final TextEditingController _itemNameController = TextEditingController();
   final TextEditingController _itemCodeController = TextEditingController();
-  final TextEditingController _brandNameController = TextEditingController();
   final TextEditingController _currentStockController = TextEditingController();
   final TextEditingController _reorderLevelController = TextEditingController();
   final TextEditingController _supplierController = TextEditingController();
@@ -139,7 +138,6 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
   void dispose() {
     _itemNameController.dispose();
     _itemCodeController.dispose();
-    _brandNameController.dispose();
     _currentStockController.dispose();
     _reorderLevelController.dispose();
     _supplierController.dispose();
@@ -219,13 +217,11 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
         'item_code': _itemCodeController.text.trim(),
         'classification': _selectedClassification,
         'department': _selectedDepartment,
-        'brand_name': _brandNameController.text.trim(),
         'current_stock': int.parse(_currentStockController.text.trim()),
         'reorder_level': int.parse(_reorderLevelController.text.trim()),
         'unit': _selectedUnit,
         'is_critical': _isCritical,
         'supplier': _supplierController.text.trim(),
-        'description': _descriptionController.text.trim(),
         'recommended_on': _selectedRecommendedLocations,
       };
 
@@ -410,7 +406,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Item Code & Brand Name (Row)
+                    // Item Code (Row)
                     Row(
                       children: [
                         Expanded(
@@ -454,29 +450,8 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                           ),
                         ),
                         const SizedBox(width: 16),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _brandNameController,
-                            decoration: InputDecoration(
-                              labelText: 'Brand Name',
-                              hintText: 'Enter brand name',
-                              labelStyle: TextStyle(color: Colors.grey[700]),
-                              hintStyle: TextStyle(color: Colors.grey[400]),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[400]!),
-                              ),
-                            ),
-                          ),
-                        ),
+                        
+                        const Spacer(),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -661,27 +636,55 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                     const Divider(),
                     const SizedBox(height: 24),
                     const Text(
-                      'Additional Information',
+                      'Supplier Information',
                       style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF2D3748),
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2D3748),
                       ),
                     ),
                     const SizedBox(height: 16),
 
-                    // Supplier
+                    // Supplier Name
                     TextFormField(
                       controller: _supplierController,
-                      decoration: _getInputDecoration('Supplier', hint: 'Enter supplier name'),
+                      decoration: _getInputDecoration('Supplier Name *', hint: 'Enter supplier name'),
+                      validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Supplier name is required';
+                      }
+                      return null;
+                      },
                     ),
                     const SizedBox(height: 16),
 
-                    // Description
+                    // Supplier Contact Number
                     TextFormField(
-                      controller: _descriptionController,
-                      decoration: _getInputDecoration('Description', hint: 'Enter item description'),
-                      maxLines: 3,
+                      decoration: _getInputDecoration('Contact Number', hint: 'e.g. +1234567890'),
+                      keyboardType: TextInputType.phone,
+                      validator: (value) {
+                      if (value == null || value.trim().isEmpty) return null; // optional
+                      final pattern = RegExp(r'^\+?[0-9\s\-]{6,20}$');
+                      if (!pattern.hasMatch(value.trim())) {
+                        return 'Enter a valid phone number';
+                      }
+                      return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Supplier Email
+                    TextFormField(
+                      decoration: _getInputDecoration('Email', hint: 'supplier@example.com'),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (value) {
+                      if (value == null || value.trim().isEmpty) return null; // optional
+                      final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+                      if (!emailRegex.hasMatch(value.trim())) {
+                        return 'Enter a valid email address';
+                      }
+                      return null;
+                      },
                     ),
                     const SizedBox(height: 16),
 

@@ -112,6 +112,74 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
     return null;
   }
 
+  bool _isDeletableStatus(dynamic status) {
+    if (status == null) return false;
+    final s = status.toString().toLowerCase().trim();
+    return s == 'pending' || s == 'complete' || s == 'completed' || s == 'done';
+  }
+
+  void _showDeleteDialog() {
+    final status = (widget.task['status'] ?? '').toString().toLowerCase();
+    if (!_isDeletableStatus(status)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Only pending or completed requests can be deleted'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Request'),
+        content: const Text('Are you sure you want to delete this request? This action cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _deleteMaintenanceTask();
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteMaintenanceTask() async {
+    try {
+      final apiService = APIService(roleOverride: AppRole.staff);
+      final taskId = widget.task['id']?.toString() ?? '';
+      if (taskId.isEmpty) throw Exception('No task ID available');
+      await apiService.deleteWorkOrder(taskId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Request deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete request: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   String _formatTimestamp(dynamic timestamp) {
     if (timestamp == null) return '';
     
@@ -594,7 +662,9 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
       appBar: CustomAppBar(
         leading: const BackButton(),
         title: 'Maintenance Details',
-        actions: null,
+        showMore: true,
+        showDelete: _isDeletableStatus(widget.task['status']),
+        onDeleteTap: _showDeleteDialog,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
