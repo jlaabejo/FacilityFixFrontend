@@ -297,6 +297,26 @@ class _StaffConcernSlipDetailPageState
     return s == 'pending' || s == 'complete' || s == 'completed' || s == 'done';
   }
 
+  // Map various backend status strings to canonical, human-friendly labels
+  // used in the UI. This only affects display; internal logic should still
+  // operate on the raw status values.
+  String _displayStatus(dynamic raw) {
+    if (raw == null) return 'pending';
+    final s = raw.toString().toLowerCase().trim();
+
+    if (s.contains('pending')) return 'pending';
+    if (s == 'sent to client' || s == 'sent_to_client' || s == 'sent to tenant' || s == 'sent') return 'inspected';
+    if (s.contains('inspected') || s.contains('sent')) return 'inspected';
+    if (s.contains('to inspect') || s.contains('to be inspect') || s.contains('to_be_inspect') || s.contains('to_inspect')) return 'to inspect';
+    // Map assigned -> to inspect per request
+    if (s == 'assigned') return 'to inspect';
+    if (s.contains('in progress') || s.contains('in_progress')) return 'in progress';
+    if (s.contains('on hold') || s.contains('on_hold')) return 'on hold';
+
+    // Fallback: return the normalized token (lowercase)
+    return s.isEmpty ? 'pending' : s;
+  }
+
   void _showDeleteDialog() {
     if (_concernSlipData == null) return;
 
@@ -431,7 +451,9 @@ class _StaffConcernSlipDetailPageState
                                 _concernSlipData!['request_type'] ??
                                     'Concern Slip',
                             priority: _concernSlipData!['priority'],
-                            statusTag: _concernSlipData!['status'] ?? 'pending',
+                            // Display a normalized, human-friendly status label while
+                            // preserving the raw status value for internal logic.
+                            statusTag: _displayStatus(_concernSlipData!['status'] ?? 'pending'),
                             resolutionType:
                                 _concernSlipData!['resolution_type'],
                             requestedBy: _concernSlipData!['reported_by_name'] ?? _concernSlipData!['reported_by'] ?? '',

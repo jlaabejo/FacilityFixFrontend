@@ -125,8 +125,8 @@ class _AssessmentFormState extends State<AssessmentForm> {
       builder: (_) => CustomPopup(
         title: 'Success',
         message:
-            'Your assessment has been submitted successfully and is now recorded under Work Orders.',
-        primaryText: 'Go to Work Orders',
+            'Your assessment has been submitted successfully and is now recorded under Repair Tasks.',
+        primaryText: 'Go to Repair Tasks',
         onPrimaryPressed: () {
           Navigator.of(context).pop();
           Navigator.pushReplacement(

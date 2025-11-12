@@ -320,7 +320,7 @@ class _InventoryRequestDetailsContentState
           ),
         ),
         const SizedBox(width: 16),
-        StatusTag(status: status),
+        StatusTag(status),
       ],
     );
   }

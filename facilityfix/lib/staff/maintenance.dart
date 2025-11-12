@@ -31,6 +31,7 @@ class _MaintenancePageState extends State<MaintenancePage> {
   List<Map<String, dynamic>> _allMaintenanceTasks = [];
   bool _isLoading = true;
   String _currentStaffId = '';
+  int _unreadNotifCount = 0;
 
   // ===== Refresh =============================================================
   Future<void> _refresh() async {
@@ -191,6 +192,17 @@ class _MaintenancePageState extends State<MaintenancePage> {
     super.initState();
     _searchController.addListener(() => setState(() {}));
     _loadAllMaintenanceTasks();
+    _loadUnreadNotifCount();
+  }
+
+  Future<void> _loadUnreadNotifCount() async {
+    try {
+      final api = APIService(roleOverride: AppRole.staff);
+      final count = await api.getUnreadNotificationCount();
+      if (mounted) setState(() => _unreadNotifCount = count);
+    } catch (e) {
+      print('[MaintenancePage] Failed to load unread notification count: $e');
+    }
   }
 
   // ===== Bottom nav ==========================================================
@@ -370,17 +382,14 @@ class _MaintenancePageState extends State<MaintenancePage> {
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
         title: 'Maintenance Tasks',
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const NotificationPage()),
-              );
-            },
-          ),
-        ],
+        notificationCount: _unreadNotifCount,
+        onNotificationTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const NotificationPage()),
+          );
+          _loadUnreadNotifCount();
+        },
       ),
       body: SafeArea(
         child: RefreshIndicator(

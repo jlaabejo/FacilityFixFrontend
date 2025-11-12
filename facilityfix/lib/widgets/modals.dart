@@ -175,34 +175,45 @@ class CustomPopup extends StatelessWidget {
 
 /// ============================ Restock Bottom Sheet ============================
 
-class RestockResult {
+class RequestResult {
   final String quantity;
   final String unit; // always provided by details
+  final DateTime? dateNeeded;
+  final String? notes;
+  final String stock; // automated stock snapshot
 
-  const RestockResult({
+  const RequestResult({
     required this.quantity,
     required this.unit,
+    this.dateNeeded,
+    this.notes,
+    required this.stock,
   });
 }
 
-class RestockBottomSheet extends StatefulWidget {
+class RequestItem extends StatefulWidget {
   final String itemName;
   final String itemId;
   final String unit; // ⬅️ auto from details
+  final String stock; // ⬅️ automated stock value (e.g. "24 pcs" or "24")
 
-  const RestockBottomSheet({
+  const RequestItem({
     super.key,
     required this.itemName,
     required this.itemId,
     required this.unit,
+    required this.stock,
   });
 
   @override
-  State<RestockBottomSheet> createState() => _RestockBottomSheetState();
+  State<RequestItem> createState() => _RequestItemState();
 }
 
-class _RestockBottomSheetState extends State<RestockBottomSheet> {
+class _RequestItemState extends State<RequestItem> {
   final TextEditingController _qtyCtrl = TextEditingController();
+  final TextEditingController _notesCtrl = TextEditingController();
+
+  DateTime? _dateNeeded;
 
   bool get _isValid {
     final q = _qtyCtrl.text.trim();
@@ -220,10 +231,45 @@ class _RestockBottomSheetState extends State<RestockBottomSheet> {
   void dispose() {
     _qtyCtrl.removeListener(_refresh);
     _qtyCtrl.dispose();
+    _notesCtrl.dispose();
     super.dispose();
   }
 
   void _refresh() => setState(() {});
+
+  Future<void> _pickDateTime() async {
+    final now = DateTime.now();
+    final base = _dateNeeded ?? now;
+
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: base,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 3),
+      builder: (ctx, child) => _ThemedPicker(child: child),
+    );
+    if (pickedDate == null) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(base),
+      builder: (ctx, child) => _ThemedPicker(child: child),
+    );
+
+    setState(() {
+      _dateNeeded = DateTime(
+        pickedDate.year,
+        pickedDate.month,
+        pickedDate.day,
+        pickedTime?.hour ?? base.hour,
+        pickedTime?.minute ?? base.minute,
+      );
+    });
+  }
+
+  void _clearDateTime() {
+    setState(() => _dateNeeded = null);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -252,13 +298,13 @@ class _RestockBottomSheetState extends State<RestockBottomSheet> {
                 ),
                 const SizedBox(height: 12),
 
-                // Header with item identity
+                // Automated Title + id
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Column(
                     children: [
                       Text(
-                        widget.itemName,
+                        'Request — ${widget.itemName}', // automated title
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           fontSize: 16,
@@ -289,7 +335,26 @@ class _RestockBottomSheetState extends State<RestockBottomSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Quantity (only) + Auto Unit pill (read-only)
+                        // Date Needed (moved to top)
+                        const Text(
+                          'Date needed',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFF6B7280),
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        _ResumePickerRow(
+                          valueText: _dateNeeded == null ? 'Not set' : formatDateTime(_dateNeeded!),
+                          onPick: _pickDateTime,
+                          onClear: _dateNeeded == null ? null : _clearDateTime,
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // Quantity + Unit pill
                         const Text(
                           'Quantity',
                           style: TextStyle(
@@ -305,7 +370,8 @@ class _RestockBottomSheetState extends State<RestockBottomSheet> {
                             Expanded(
                               child: TextField(
                                 controller: _qtyCtrl,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(decimal: true),
                                 decoration: InputDecoration(
                                   hintText: 'e.g., 50',
                                   isDense: true,
@@ -318,7 +384,6 @@ class _RestockBottomSheetState extends State<RestockBottomSheet> {
                                   enabledBorder: const OutlineInputBorder(
                                     borderSide: BorderSide(color: Color(0xFFD1D5DB)), // default gray
                                   ),
-                                  // ✅ highlight blue when focused
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                     borderSide: const BorderSide(
@@ -348,6 +413,59 @@ class _RestockBottomSheetState extends State<RestockBottomSheet> {
                             ),
                           ],
                         ),
+
+                        const SizedBox(height: 16),
+
+                        // Stock (automated, read-only)
+                        const Text(
+                          'Stock',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFF6B7280),
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFCFCFD),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.inventory_2_outlined, size: 18, color: Color(0xFF475467)),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  widget.stock,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                    color: Color(0xFF111827),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // Additional notes
+                        const Text(
+                          'Additional notes (optional)',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFF6B7280),
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        _NoteField(controller: _notesCtrl),
                       ],
                     ),
                   ),
@@ -394,16 +512,19 @@ class _RestockBottomSheetState extends State<RestockBottomSheet> {
                             child: IgnorePointer(
                               ignoring: !_isValid, // block taps when "disabled"
                               child: custom_buttons.FilledButton(
-                                label: 'Restock',
+                                label: 'Request',
                                 backgroundColor: const Color(0xFF005CE7),
                                 textColor: Colors.white,
                                 withOuterBorder: false,
                                 onPressed: () {
                                   Navigator.pop(
                                     context,
-                                    RestockResult(
+                                    RequestResult(
                                       quantity: _qtyCtrl.text.trim(),
                                       unit: widget.unit, // auto unit
+                                      dateNeeded: _dateNeeded,
+                                      notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+                                      stock: widget.stock,
                                     ),
                                   );
                                 },
@@ -423,6 +544,7 @@ class _RestockBottomSheetState extends State<RestockBottomSheet> {
     );
   }
 }
+
 
 // BOTTOM SHEET: PUT REQUEST ON HOLD (refined UI)
 class HoldBottomSheet extends StatefulWidget {

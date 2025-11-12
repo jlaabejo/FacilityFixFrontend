@@ -3,7 +3,7 @@ import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/notification.dart';
 import 'package:facilityfix/tenant/profile.dart';
 import 'package:facilityfix/tenant/view_details/annnouncement_details.dart';
-import 'package:facilityfix/tenant/workorder.dart';
+import 'package:facilityfix/tenant/repair_management.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
@@ -75,6 +75,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
   late final APIService _apiService;
   bool _isLoading = true;
   String? _errorMessage;
+  int _unreadNotifCount = 0;
 
 
   void _onTabTapped(int index) {
@@ -142,6 +143,17 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
     _apiService = APIService();
     _searchController.addListener(() => _onSearchChanged(_searchController.text));
     _fetchAnnouncements();
+    _loadUnreadNotifCount();
+  }
+
+  Future<void> _loadUnreadNotifCount() async {
+    try {
+      final api = APIService();
+      final count = await api.getUnreadNotificationCount();
+      if (mounted) setState(() => _unreadNotifCount = count);
+    } catch (e) {
+      print('[Announcements] Failed to load unread notification count: $e');
+    }
   }
 
   Future<void> _fetchAnnouncements() async {
@@ -271,17 +283,14 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
         title: 'Announcement',
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const NotificationPage()),
-              );
-            },
-          ),
-        ],
+        notificationCount: _unreadNotifCount,
+        onNotificationTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const NotificationPage()),
+          );
+          _loadUnreadNotifCount();
+        },
       ),
       body: SafeArea(
         child: RefreshIndicator(

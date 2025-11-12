@@ -2,7 +2,7 @@ import 'package:facilityfix/tenant/announcement.dart';
 import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/profile.dart';
 import 'package:facilityfix/tenant/view_details/workorder_details.dart';
-import 'package:facilityfix/tenant/workorder.dart';
+import 'package:facilityfix/tenant/repair_management.dart';
 import 'package:facilityfix/widgets/view_details.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';

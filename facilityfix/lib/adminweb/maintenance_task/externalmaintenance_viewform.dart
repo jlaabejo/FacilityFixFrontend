@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
+import 'package:facilityfix/adminweb/widgets/tags.dart';
 import '../../utils/ui_format.dart';
+import '../../services/api_services.dart' as main_api;
 import 'externalmaintenance_form.dart';
 
 class ExternalViewTaskPage extends StatefulWidget {
@@ -96,11 +98,18 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
 
   // Contractor
   final _contractorNameCtrl = TextEditingController();
+  final _contractorDeptCtrl = TextEditingController();
   final _contractPhoneCtrl = TextEditingController();
   final _contractEmailCtrl = TextEditingController();
 
+  // loading indicator specifically for fetching staff/contractor details
+  bool _isLoadingStaff = false;
+
   // Snapshot for Cancel
   late Map<String, String> _original;
+
+  // Checklist items for the task (used when opening full edit form)
+  List<Map<String, dynamic>> _checklistItems = [];
 
   final ApiService _apiService = ApiService();
   bool _isLoading = false;
@@ -138,6 +147,9 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
           // Update controllers with fetched data using comprehensive mapping
           _populateFormWithTaskData(taskData);
           
+          // Ensure assigned contractor/staff details are loaded (if assigned_to is an id)
+          Future.microtask(() => _ensureAssignedStaffLoaded());
+
           // Take snapshot for cancel functionality
           _original = _takeSnapshot();
           _isLoading = false;
@@ -226,6 +238,11 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     _contractEmailCtrl.text = 
         taskData['email']?.toString() ??
         taskData['contractEmail']?.toString() ?? '';
+  // Contractor department / assigned department
+  _contractorDeptCtrl.text =
+    taskData['contractor_department']?.toString() ??
+    taskData['assigned_department']?.toString() ??
+    taskData['department']?.toString() ?? '';
 
     // Assessment Notes & Recommendations
     _assessmentNotesCtrl.text =
@@ -235,6 +252,38 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     _recommendationsCtrl.text =
         taskData['recommendation']?.toString() ??
         taskData['recommendations']?.toString() ?? '';
+  }
+
+  // Ensure we have assigned contractor/staff details when needed (fallback fetch)
+  Future<void> _ensureAssignedStaffLoaded() async {
+    final assignedId = _currentTaskData['assigned_to']?.toString() ?? _currentTaskData['assignedTo']?.toString();
+    if (assignedId == null || assignedId.isEmpty) return;
+    // If we already have a contractor name and department populated, skip
+    if (_contractorNameCtrl.text.isNotEmpty && _contractorDeptCtrl.text.isNotEmpty) return;
+
+    setState(() => _isLoadingStaff = true);
+    try {
+      Map<String, dynamic>? staff;
+      // Prefer the main API's getUserById which reliably finds user/profile data
+      try {
+        staff = await main_api.APIService().getUserById(assignedId);
+      } catch (_) {
+        staff = null;
+      }
+
+      if (staff != null && staff.isNotEmpty) {
+        final s = staff;
+        setState(() {
+          final first = (s['first_name'] ?? s['firstName'] ?? '').toString();
+          final last = (s['last_name'] ?? s['lastName'] ?? '').toString();
+          final name = ('$first $last').trim().isNotEmpty ? ('$first $last').trim() : (s['name'] ?? s['username'] ?? '').toString();
+          if (name.isNotEmpty) _contractorNameCtrl.text = name;
+          _contractorDeptCtrl.text = (s['staff_department'] ?? s['department'] ?? s['dept'] ?? '').toString();
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isLoadingStaff = false);
+    }
   }
   
   String? _error;
@@ -286,6 +335,7 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     _loggedDateCtrl.dispose();
 
     _contractorNameCtrl.dispose();
+  _contractorDeptCtrl.dispose();
     _contractPhoneCtrl.dispose();
     _contractEmailCtrl.dispose();
 
@@ -317,35 +367,67 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     'recommendations': _recommendationsCtrl.text,
   };
 
-  void _enterEditMode() => setState(() => _isEditMode = true);
+  void _enterEditMode() {
+    setState(() => _isEditMode = true);
+    // Ensure assigned contractor/staff details are loaded when switching to edit
+    Future.microtask(() => _ensureAssignedStaffLoaded());
+  }
 
   void _cancelEdit() {
-    final s = _original;
-    _maintenanceTypeCtrl.text = s['maintenance_type']!;
-    _serviceCategoryCtrl.text = s['service_category']!;
-    _createdByCtrl.text = s['created_by']!;
-    _dateCreatedCtrl.text = s['date_created']!;
+    // revert to snapshot - guard in case snapshot isn't initialized
+    try {
+      final s = _original;
+      _maintenanceTypeCtrl.text = s['maintenance_type']!;
+      _serviceCategoryCtrl.text = s['service_category']!;
+      _createdByCtrl.text = s['created_by']!;
+      _dateCreatedCtrl.text = s['date_created']!;
 
-    _recurrenceCtrl.text = s['recurrence_type']!;
-    _startDateCtrl.text = s['start_date']!;
-    _nextDueCtrl.text = s['next_due_date']!;
-    _serviceWindowCtrl.text = s['service_window']!;
+      _recurrenceCtrl.text = s['recurrence_type']!;
+      _startDateCtrl.text = s['start_date']!;
+      _nextDueCtrl.text = s['next_due_date']!;
+      _serviceWindowCtrl.text = s['service_window']!;
 
-    _locationCtrl.text = s['location']!;
-    _descriptionCtrl.text = s['task_description']!;
+      _locationCtrl.text = s['location']!;
+      _descriptionCtrl.text = s['task_description']!;
 
-    _serviceDateActualCtrl.text = s['service_date_actual']!;
-    _assessmentReceived = s['assessment_received']!;
-    _loggedByCtrl.text = s['logged_by']!;
-    _loggedDateCtrl.text = s['logged_date']!;
+      _serviceDateActualCtrl.text = s['service_date_actual']!;
+      _assessmentReceived = s['assessment_received']!;
+      _loggedByCtrl.text = s['logged_by']!;
+      _loggedDateCtrl.text = s['logged_date']!;
 
-    _contractorNameCtrl.text = s['contractor_name']!;
-    _contractPhoneCtrl.text = s['contact_number']!;
-    _contractEmailCtrl.text = s['email']!;
+      _contractorNameCtrl.text = s['contractor_name']!;
+      _contractPhoneCtrl.text = s['contact_number']!;
+      _contractEmailCtrl.text = s['email']!;
 
-    _assessmentNotesCtrl.text = s['assessment_notes']!;
-    _recommendationsCtrl.text = s['recommendations']!;
+      _assessmentNotesCtrl.text = s['assessment_notes']!;
+      _recommendationsCtrl.text = s['recommendations']!;
+    } catch (e) {
+      print('[ExternalView] _cancelEdit: snapshot unavailable, clearing edits: $e');
+      _maintenanceTypeCtrl.text = '';
+      _serviceCategoryCtrl.text = '';
+      _createdByCtrl.text = '';
+      _dateCreatedCtrl.text = '';
 
+      _recurrenceCtrl.text = '';
+      _startDateCtrl.text = '';
+      _nextDueCtrl.text = '';
+      _serviceWindowCtrl.text = '';
+
+      _locationCtrl.text = '';
+      _descriptionCtrl.text = '';
+
+      _serviceDateActualCtrl.text = '';
+      _assessmentReceived = 'No';
+      _loggedByCtrl.text = '';
+      _loggedDateCtrl.text = '';
+
+      _contractorNameCtrl.text = '';
+      _contractPhoneCtrl.text = '';
+      _contractEmailCtrl.text = '';
+
+      _assessmentNotesCtrl.text = '';
+      _recommendationsCtrl.text = '';
+    }
     setState(() => _isEditMode = false);
   }
 
@@ -667,57 +749,32 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Request ID: ${_currentTaskData['id'] ?? _currentTaskData['request_id'] ?? widget.taskId}',
+              'Date Created: ${_dateCreatedCtrl.text.isNotEmpty ? _dateCreatedCtrl.text : (_currentTaskData['created_at'] ?? _currentTaskData['date_created'] ?? _currentTaskData['dateCreated'] ?? '')}',
               style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              "Assigned To: $assignedTo",
-              style: const TextStyle(fontSize: 14, color: Colors.grey),
             ),
           ],
         ),
-        Row(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            if (_currentTaskData['priority'] == 'High' ||
-                _currentTaskData['priority'] == 'Critical')
-              _buildStatusBadge(
-                "High Priority",
-                const Color(0xFFFFEBEE),
-                const Color(0xFFD32F2F),
-              ),
-            const SizedBox(width: 12),
-            if (_currentTaskData['status'] != null)
-              _buildStatusBadge(
-                _currentTaskData['status'].toString(),
-                Colors.grey[200]!,
-                Colors.grey[700]!,
-              ),
+            // Use shared tag widgets for status/type/priority
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // StatusTag (uses internal style mapping)
+                StatusTag((_currentTaskData?['status'] ?? '').toString()),
+                const SizedBox(width: 8),
+                // Maintenance type tag
+                MaintenanceTypeTag((_currentTaskData?['maintenance_type'] ?? _currentTaskData?['task_type'] ?? 'External').toString()),
+                const SizedBox(width: 8),
+                // Priority tag (optional)
+                if ((_currentTaskData?['priority'] ?? '').toString().trim().isNotEmpty)
+                  PriorityTag((_currentTaskData?['priority'] ?? '').toString()),
+              ],
+            ),
           ],
         ),
       ],
-    );
-  }
-
-  Widget _buildStatusBadge(
-    String text,
-    Color backgroundColor,
-    Color textColor,
-  ) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
     );
   }
 
@@ -729,13 +786,6 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
       title: "Basic Information",
       child: Column(
         children: [
-          // Keep maintenance type view-only (external)
-          _viewOnlyRow("Maintenance Type", _maintenanceTypeCtrl.text),
-          _editableInfoRow(
-            "Service Category",
-            _serviceCategoryCtrl,
-            validator: _req,
-          ),
           _editableInfoRow("Created By", _createdByCtrl, validator: _req),
           _editableInfoRow(
             "Date Created",
@@ -1206,70 +1256,168 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
   Widget _buildBottomActionBar() {
     if (!_isEditMode) {
       return Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          SizedBox(
-            width: 200,
-            height: 48,
-            child: ElevatedButton(
-              onPressed: () {
-                // Open the external maintenance form in edit mode and pass the current task data
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => ExternalMaintenanceFormPage(
-                      maintenanceData: _currentTaskData,
-                      isEditMode: true,
-                    ),
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1976D2),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                elevation: 0,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.edit_outlined, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    "Edit Task",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        SizedBox(
+        width: 320,
+        height: 48,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+          // Outlined Back button with clearer affordance
+          OutlinedButton.icon(
+            onPressed: () {
+            try {
+              if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+              } else {
+              context.go('/work/maintenance');
+              }
+            } catch (e) {
+              // fallback: try a simple pop
+              try {
+              Navigator.of(context).pop();
+              } catch (_) {}
+            }
+            },
+            icon: const Icon(Icons.arrow_back, size: 18),
+            label: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              'Back',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            ),
+            style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: Color(0xFF1976D2)),
+            foregroundColor: const Color(0xFF1976D2),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
             ),
           ),
-        ],
+          const SizedBox(width: 12),
+          // Edit task button - kept prominent
+            SizedBox(
+            width: 180,
+            child: ElevatedButton(
+              onPressed: () async {
+              // Open the external maintenance form in edit mode and pass the current task data
+              try {
+                await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => ExternalMaintenanceFormPage(
+                  maintenanceData: _currentTaskData,
+                  isEditMode: true,
+                  ),
+                ),
+                );
+              } catch (e, st) {
+                print('[ExternalView] Failed to open edit form: $e\n$st');
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to open edit form: $e')));
+              }
+              },
+              style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1976D2),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              ),
+              child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.edit_outlined, size: 18),
+                SizedBox(width: 3),
+                Text(
+                "Edit Task",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+              ],
+              ),
+            ),
+            ),
+          ],
+        ),
+        ),
+      ],
       );
     }
 
-    // Edit mode: Cancel + Save
+    // Edit mode: Cancel+Edit (open full form) + Save
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         OutlinedButton(
-          onPressed: _cancelEdit,
+          onPressed: () async {
+            try {
+              // Cancel inline edits safely
+              try {
+                _cancelEdit();
+              } catch (e) {
+                setState(() => _isEditMode = false);
+              }
+
+              // Prepare edit payload
+              final Map<String, dynamic> editData = Map<String, dynamic>.from(_currentTaskData ?? {});
+              if ((editData['remarks'] == null || editData['remarks'].toString().isEmpty) && _assessmentNotesCtrl.text.trim().isNotEmpty) {
+                editData['remarks'] = _assessmentNotesCtrl.text.trim();
+              }
+
+              if (editData['checklist'] == null) {
+                if (_checklistItems.isNotEmpty) {
+                  editData['checklist'] = _checklistItems.map((e) => {
+                        'task': e['task'] ?? e['text'] ?? '',
+                        'completed': e['completed'] ?? false,
+                      }).toList();
+                } else if (editData['checklist_completed'] != null) {
+                  editData['checklist'] = editData['checklist_completed'];
+                }
+              }
+
+              // Ensure dates
+              if ((editData['scheduled_date'] == null || editData['scheduled_date'].toString().isEmpty) && _startDateCtrl.text.isNotEmpty) {
+                editData['scheduled_date'] = _startDateCtrl.text;
+              }
+              if ((editData['next_due_date'] == null || editData['next_due_date'].toString().isEmpty) && _nextDueCtrl.text.isNotEmpty) {
+                editData['next_due_date'] = _nextDueCtrl.text;
+              }
+
+              // Navigate to full edit form
+              try {
+                await Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) => ExternalMaintenanceFormPage(
+                    maintenanceData: editData,
+                    isEditMode: true,
+                  ),
+                ));
+              } catch (e, st) {
+                print('[ExternalView] Failed to open edit form: $e\n$st');
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to open edit form: $e')));
+              }
+            } catch (e) {
+              print('[ExternalView] Cancel+Edit failed: $e');
+              if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Action failed: $e')));
+            }
+          },
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           ),
-          child: const Text('Cancel'),
+          child: const Text('Cancel and Edit Task'),
         ),
         const SizedBox(width: 8),
-        ElevatedButton.icon(
+        ElevatedButton(
           onPressed: _saveEdit,
-          icon: const Icon(Icons.save_outlined, size: 18),
-          label: const Text('Save'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF2E7D32),
+            backgroundColor: const Color(0xFF1976D2),
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             elevation: 0,
           ),
+          child: const Text('Save Changes'),
         ),
       ],
     );

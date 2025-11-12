@@ -35,6 +35,7 @@ class _HomeState extends State<HomePage> {
   int _activeRequestsCount = 0;
   int _doneRequestsCount = 0;
   List<Map<String, dynamic>> _latestAnnouncements = [];
+  int _unreadNotifCount = 0;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -81,6 +82,17 @@ class _HomeState extends State<HomePage> {
     _loadAllRequests();
     _loadLatestAnnouncements();
     _loadInventoryRequests();
+    _loadUnreadNotifCount();
+  }
+
+  Future<void> _loadUnreadNotifCount() async {
+    try {
+      final api = APIService(roleOverride: AppRole.staff);
+      final count = await api.getUnreadNotificationCount();
+      if (mounted) setState(() => _unreadNotifCount = count);
+    } catch (e) {
+      print('[Staff Home] Failed to load unread notification count: $e');
+    }
   }
 
   Future<void> _loadAllRequests() async {
@@ -883,7 +895,7 @@ class _HomeState extends State<HomePage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        title: 'Home',
+        title: 'Repair Tasks',
         leading: IconButton(
           icon: CircleAvatar(
             backgroundColor: const Color(0xFF005CE7),
@@ -904,17 +916,14 @@ class _HomeState extends State<HomePage> {
             );
           },
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const NotificationPage()),
-              );
-            },
-          ),
-        ],
+        notificationCount: _unreadNotifCount,
+        onNotificationTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const NotificationPage()),
+          );
+          _loadUnreadNotifCount();
+        },
       ),
       body:
           _isLoading

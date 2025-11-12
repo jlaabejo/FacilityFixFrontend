@@ -268,11 +268,11 @@ class APIService {
   String _deptToApiEnum(String v) {
     final s = v.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
     switch (s) {
-      case 'maintenance':
       case 'carpentry':
       case 'plumbing':
       case 'electrical':
       case 'masonry':
+      case 'house_keeping':
         return s;
       default:
         return s.isEmpty ? 'other' : s;
@@ -457,6 +457,29 @@ class APIService {
       return null;
     }
   }
+
+  /// Compatibility wrapper: return a staff/user record by id.
+  /// Tries getUserById first, then searches staff list as a fallback.
+  Future<Map<String, dynamic>?> getStaffById(String id) async {
+    try {
+      final u = await getUserById(id);
+      if (u != null && u.isNotEmpty) return u;
+
+      // Fallback to staff list
+      try {
+        final list = await getStaffMembers();
+        final found = list.firstWhere((s) => (s['user_id'] ?? s['id'] ?? s['uid'] ?? '').toString() == id, orElse: () => {});
+        if (found.isNotEmpty) return Map<String, dynamic>.from(found);
+      } catch (_) {}
+      return null;
+    } catch (e) {
+      print('[API] getStaffById failed for $id: $e');
+      return null;
+    }
+  }
+
+  /// Alias for older code expecting getStaffMemberById
+  Future<Map<String, dynamic>?> getStaffMemberById(String id) async => getStaffById(id);
 
   // ===== ID Generation =====
 
@@ -882,6 +905,9 @@ class APIService {
         'location': location,
         'valid_from': validFrom,
         'valid_to': validTo,
+        // Provide explicit work schedule fields for backend compatibility
+        'work_schedule_from': validFrom,
+        'work_schedule_to': validTo,
         'contractors': contractors,
         if (unitId != null) 'unit_id': unitId,
         if (concernSlipId != null) 'concern_slip_id': concernSlipId,  // Include concern_slip_id in body
@@ -1018,6 +1044,8 @@ class APIService {
     String? priority,
     String? unitId,
     String? scheduleAvailability,
+    String? status,
+    String? resolutionType,
     List<String>? attachments,
   }) async {
     try {
@@ -1032,6 +1060,8 @@ class APIService {
       if (priority != null) body['priority'] = _mapPriorityToBackend(priority);
       if (unitId != null) body['unit_id'] = unitId;
       if (scheduleAvailability != null) body['schedule_availability'] = scheduleAvailability;
+  if (status != null) body['status'] = status;
+  if (resolutionType != null) body['resolution_type'] = resolutionType;
       if (attachments != null) body['attachments'] = attachments;
 
       final response = await http.patch(
@@ -1097,10 +1127,9 @@ class APIService {
     required String workOrderId,
     String? contractorName,
     String? contractorNumber,
-    String? contractorCompany,
+    String? contractorEmail,
     String? workScheduleFrom,
     String? workScheduleTo,
-    List<String>? entryEquipments,
     List<String>? attachments,
   }) async {
     try {
@@ -1110,10 +1139,9 @@ class APIService {
       final body = <String, dynamic>{};
       if (contractorName != null) body['contractor_name'] = contractorName;
       if (contractorNumber != null) body['contractor_number'] = contractorNumber;
-      if (contractorCompany != null) body['contractor_company'] = contractorCompany;
+      if (contractorEmail != null) body['contractor_email'] = contractorEmail;
       if (workScheduleFrom != null) body['work_schedule_from'] = workScheduleFrom;
       if (workScheduleTo != null) body['work_schedule_to'] = workScheduleTo;
-      if (entryEquipments != null) body['entry_equipments'] = entryEquipments;
       if (attachments != null) body['attachments'] = attachments;
 
       final response = await http.patch(
@@ -1415,7 +1443,7 @@ class APIService {
     }
   }
 
-  // ===== Maintenance (added) =====
+  // ===== Maintenance =====
 
   Future<List<Map<String, dynamic>>> getAllMaintenance() async {
     try {
@@ -2773,6 +2801,37 @@ class APIService {
       }
     } catch (e) {
       print('[API] Error assigning staff to job service: $e');
+      rethrow;
+    }
+  }
+
+  /// Update schedule for a job service. Sends start and optional end in ISO format.
+  Future<Map<String, dynamic>> updateJobServiceSchedule(
+    String jobServiceId,
+    DateTime? start,
+    DateTime? end,
+  ) async {
+    try {
+      await _refreshRoleLabelFromToken();
+
+      final bodyMap = <String, dynamic>{};
+      if (start != null) bodyMap['schedule_start'] = start.toIso8601String();
+      if (end != null) bodyMap['schedule_end'] = end.toIso8601String();
+
+      if (bodyMap.isEmpty) return <String, dynamic>{};
+
+      final body = jsonEncode(bodyMap);
+      final response = await patch('/job-services/$jobServiceId', body: body);
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final msg = 'Update job service schedule failed: ${response.statusCode} ${response.body}';
+        print('[API] $msg');
+        throw Exception(msg);
+      }
+    } catch (e) {
+      print('[API] Error updating job service schedule: $e');
       rethrow;
     }
   }

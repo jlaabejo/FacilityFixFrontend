@@ -2,12 +2,13 @@
 import 'package:flutter/material.dart';
 import 'package:facilityfix/models/work_orders.dart';
 import 'package:facilityfix/tenant/home.dart';
-import 'package:facilityfix/tenant/workorder.dart';
+import 'package:facilityfix/tenant/repair_management.dart';
 import 'package:facilityfix/tenant/announcement.dart';
 import 'package:facilityfix/tenant/profile.dart';
 import 'package:facilityfix/tenant/view_details/concern_slip_details.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/view_details.dart';
+import 'dart:convert';
 import 'package:facilityfix/services/api_services.dart';
 
 /// Tenant-only details page.
@@ -49,6 +50,48 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
   void initState() {
     super.initState();
     if (widget.workOrder == null) _fetchWorkOrderData();
+  }
+
+  Future<void> _markAsCompleted(String permitId, String? completionNotes) async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final body = jsonEncode({
+        if (completionNotes != null && completionNotes.isNotEmpty) 'completion_notes': completionNotes,
+      });
+
+      final response = await _apiService.patch('/work-order-permits/$permitId/complete', body: body);
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Work order marked as completed'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+        // refresh details
+        await _fetchWorkOrderData();
+      } else {
+        final text = response.body;
+        throw Exception('Failed to complete: ${response.statusCode} ${text}');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error completing work order: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   void _showHistorySheet() {
@@ -276,7 +319,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         assessment: js.assessment,
         attachments: js.attachments,
         staffAttachments: js.staffAttachments,
-        materialsUsed: js.materialsUsed,
       );
 
   WorkOrderDetails _workOrderPermitToWorkOrderDetails(WorkOrderPermit wop) => WorkOrderDetails(
@@ -296,10 +338,9 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         assignedPhotoUrl: wop.assignedPhotoUrl,
         contractorName: wop.contractorName,
         contractorNumber: wop.contractorNumber,
-        contractorCompany: wop.contractorCompany,
+        contractorEmail: wop.contractorEmail,
         workScheduleFrom: wop.workScheduleFrom,
         workScheduleTo: wop.workScheduleTo,
-        entryEquipments: wop.entryEquipments,
         approvedBy: wop.approvedBy,
         approvalDate: wop.approvalDate,
         denialReason: wop.denialReason,
@@ -385,10 +426,9 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       title: w.title, // Add title field
       contractorName: w.contractorName ?? '—',
       contractorNumber: w.contractorNumber ?? '—',
-      contractorCompany: w.contractorCompany,
+      contractorEmail: w.contractorEmail ?? '—',
       workScheduleFrom: w.workScheduleFrom ?? w.createdAt,
       workScheduleTo: w.workScheduleTo ?? w.createdAt,
-      entryEquipments: w.entryEquipments,
       approvedBy: w.approvedBy,
       approvalDate: w.approvalDate,
       denialReason: w.denialReason,
@@ -396,6 +436,9 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       onViewConcernSlip: (w.concernSlipId != null && w.concernSlipId != '—')
           ? () => _navigateToConcernSlip(w.concernSlipId!)
           : null,
+      onComplete: (permitId, completionNotes) async {
+        await _markAsCompleted(permitId, completionNotes);
+      },
     );
   }
 
@@ -470,7 +513,7 @@ class _EditWorkOrderPageState extends State<EditWorkOrderPage> {
   late TextEditingController _permitIdController;
   late TextEditingController _contractorNameController;
   late TextEditingController _contractorNumberController;
-  late TextEditingController _contractorCompanyController;
+  late TextEditingController _contractorEmailController;
   late TextEditingController _workScheduleFromController;
   late TextEditingController _workScheduleToController;
   late TextEditingController _entryEquipmentsController;
@@ -495,8 +538,8 @@ class _EditWorkOrderPageState extends State<EditWorkOrderPage> {
     _contractorNumberController = TextEditingController(
       text: widget.workOrderData.contractorNumber ?? '',
     );
-    _contractorCompanyController = TextEditingController(
-      text: widget.workOrderData.contractorCompany ?? '',
+    _contractorEmailController = TextEditingController(
+      text: widget.workOrderData.contractorEmail ?? '',
     );
     _workScheduleFromController = TextEditingController(
       text: widget.workOrderData.workScheduleFrom != null
@@ -508,9 +551,6 @@ class _EditWorkOrderPageState extends State<EditWorkOrderPage> {
           ? _formatDateTime(widget.workOrderData.workScheduleTo!)
           : '',
     );
-    _entryEquipmentsController = TextEditingController(
-      text: widget.workOrderData.entryEquipments ?? '',
-    );
   }
 
   @override
@@ -519,7 +559,7 @@ class _EditWorkOrderPageState extends State<EditWorkOrderPage> {
     _permitIdController.dispose();
     _contractorNameController.dispose();
     _contractorNumberController.dispose();
-    _contractorCompanyController.dispose();
+    _contractorEmailController.dispose();
     _workScheduleFromController.dispose();
     _workScheduleToController.dispose();
     _entryEquipmentsController.dispose();
@@ -645,10 +685,10 @@ class _EditWorkOrderPageState extends State<EditWorkOrderPage> {
           workOrderId: widget.workOrderId,
           contractorName: _contractorNameController.text.trim(),
           contractorNumber: _contractorNumberController.text.trim(),
-          contractorCompany: _contractorCompanyController.text.trim(),
+          contractorEmail: _contractorEmailController.text.trim(),
           workScheduleFrom: _workScheduleFromController.text.trim(),
           workScheduleTo: _workScheduleToController.text.trim(),
-          entryEquipments: equipments,
+          attachments: equipments,
         );
       }
 
@@ -801,7 +841,7 @@ class _EditWorkOrderPageState extends State<EditWorkOrderPage> {
                   ),
                   const SizedBox(height: 8),
                   TextFormField(
-                    controller: _contractorCompanyController,
+                    controller: _contractorEmailController,
                     decoration: InputDecoration(
                       hintText: 'Enter contractor company',
                       border: OutlineInputBorder(

@@ -1,7 +1,7 @@
 import 'package:facilityfix/tenant/announcement.dart';
 import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/profile.dart';
-import 'package:facilityfix/tenant/workorder.dart';
+import 'package:facilityfix/tenant/repair_management.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/models/notification_models.dart';
 import 'package:facilityfix/services/api_services.dart';
@@ -352,11 +352,6 @@ class _NotificationPageState extends State<NotificationPage> {
               ),
           ],
         ),
-      ),
-      bottomNavigationBar: NavBar(
-        items: _navItems,
-        currentIndex: _selectedIndex,
-        onTap: _onTabTapped,
       ),
     );
   }

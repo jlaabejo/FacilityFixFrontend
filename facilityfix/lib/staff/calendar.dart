@@ -49,12 +49,24 @@ class _CalendarPageState extends State<CalendarPage> {
   String? _currentUserId;
   String? _currentStaffId;
   String? _currentUserName;
+  int _unreadNotifCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadCurrentUser();
     _loadCalendarData();
+    _loadUnreadNotifCount();
+  }
+
+  Future<void> _loadUnreadNotifCount() async {
+    try {
+      final api = APIService(roleOverride: AppRole.staff);
+      final count = await api.getUnreadNotificationCount();
+      if (mounted) setState(() => _unreadNotifCount = count);
+    } catch (e) {
+      print('[Calendar] Failed to load unread notification count: $e');
+    }
   }
 
   Future<void> _loadCurrentUser() async {
@@ -396,17 +408,14 @@ class _CalendarPageState extends State<CalendarPage> {
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
         title: 'Calendar',
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const NotificationPage()),
-              );
-            },
-          ),
-        ],
+        notificationCount: _unreadNotifCount,
+        onNotificationTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const NotificationPage()),
+          );
+          _loadUnreadNotifCount();
+        },
       ),
       body: SafeArea(
         child: _isLoading

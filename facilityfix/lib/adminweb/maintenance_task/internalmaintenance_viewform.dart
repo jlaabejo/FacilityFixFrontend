@@ -4,6 +4,8 @@ import '../layout/facilityfix_layout.dart';
 import '../../services/api_services.dart'; 
 import '../../utils/ui_format.dart';
 import 'internalmaintenance_form.dart';
+import 'externalmaintenance_form.dart';
+import '../widgets/tags.dart';
 
 
 class InternalTaskViewPage extends StatefulWidget {
@@ -11,13 +13,12 @@ class InternalTaskViewPage extends StatefulWidget {
   final String taskId;
   final Map<String, dynamic>? initialTask;
   final bool startInEditMode;
-
   const InternalTaskViewPage({
-    super.key,
+    Key? key,
     required this.taskId,
     this.initialTask,
     this.startInEditMode = false,
-  });
+  }) : super(key: key);
 
   @override
   State<InternalTaskViewPage> createState() => _InternalTaskViewPageState();
@@ -29,24 +30,6 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
   bool _isLoading = true;
   String? _error;
   Map<String, dynamic>? _taskData;
-
-  // ------------------------ Navigation helpers ------------------------
-  String? _getRoutePath(String routeKey) {
-    final Map<String, String> pathMap = {
-      'dashboard': '/dashboard',
-      'user_users': '/user/users',
-      'user_roles': '/user/roles',
-      'work_maintenance': '/work/maintenance',
-      'work_repair': '/work/repair',
-      'calendar': '/calendar',
-      'inventory_items': '/inventory/items',
-      'inventory_request': '/inventory/request',
-      'analytics': '/analytics',
-      'announcement': '/announcement',
-      'settings': '/settings',
-    };
-    return pathMap[routeKey];
-  }
 
   void _handleLogout(BuildContext context) {
     showDialog(
@@ -183,20 +166,14 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
         case 'plumbing':
           department = 'plumbing';
           break;
-        case 'hvac':
-          department = 'hvac';
-          break;
         case 'carpentry':
           department = 'carpentry';
           break;
-        case 'maintenance':
-          department = 'maintenance';
+        case 'masonry':
+          department = 'masonry';
           break;
-        case 'security':
-          department = 'security';
-          break;
-        case 'fire_safety':
-          department = 'fire_safety';
+        case 'house keeping':
+          department = 'house keeping';
           break;
         default:
           department = null;
@@ -316,7 +293,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
       'assigned_staff_department',
       'staff_department'
     ]);
-  setText(_adminNotifyCtrl, ['admin_notification', 'adminNotify', 'remarks']);
+  setText(_adminNotifyCtrl, ['admin_notification', 'adminNotify', 'remarks', 'additional_notes', 'additional_note', 'additional_comments', 'notes']);
     setText(_staffNotifyCtrl, ['staff_notification', 'staffNotify']);
 
     // Set selected staff ID if available
@@ -448,21 +425,40 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
   void _enterEditMode() => setState(() => _isEditMode = true);
 
   void _cancelEdit() {
-    // Revert to snapshot
-    _titleCtrl.text = _original['title']!;
-    _departmentCtrl.text = _original['department']!;
-    _createdByCtrl.text = _original['createdBy']!;
-    _estimatedDurationCtrl.text = _original['estimatedDuration']!;
-    _locationCtrl.text = _original['location']!;
-    _descriptionCtrl.text = _original['description']!;
-    _recurrenceCtrl.text = _original['recurrence']!;
-    _startDateCtrl.text = _original['startDate']!;
-    _nextDueCtrl.text = _original['nextDueDate']!;
-    _assigneeNameCtrl.text = _original['assigneeName']!;
-    _assigneeDeptCtrl.text = _original['assigneeDept']!;
-    _adminNotifyCtrl.text = _original['adminNotify']!;
-    _staffNotifyCtrl.text = _original['staffNotify']!;
-    _selectedStaffId = _original['selectedStaffId']!.isNotEmpty ? _original['selectedStaffId'] : null;
+    // Revert to snapshot - guard in case snapshot isn't initialized
+    try {
+      _titleCtrl.text = _original['title']!;
+      _departmentCtrl.text = _original['department']!;
+      _createdByCtrl.text = _original['createdBy']!;
+      _estimatedDurationCtrl.text = _original['estimatedDuration']!;
+      _locationCtrl.text = _original['location']!;
+      _descriptionCtrl.text = _original['description']!;
+      _recurrenceCtrl.text = _original['recurrence']!;
+      _startDateCtrl.text = _original['startDate']!;
+      _nextDueCtrl.text = _original['nextDueDate']!;
+      _assigneeNameCtrl.text = _original['assigneeName']!;
+      _assigneeDeptCtrl.text = _original['assigneeDept']!;
+      _adminNotifyCtrl.text = _original['adminNotify']!;
+      _staffNotifyCtrl.text = _original['staffNotify']!;
+      _selectedStaffId = _original['selectedStaffId']!.isNotEmpty ? _original['selectedStaffId'] : null;
+    } catch (e) {
+      // If snapshot is missing or keys are absent, clear editing state instead of throwing
+      print('[InternalView] _cancelEdit: snapshot unavailable, clearing edits: $e');
+      _titleCtrl.text = '';
+      _departmentCtrl.text = '';
+      _createdByCtrl.text = '';
+      _estimatedDurationCtrl.text = '';
+      _locationCtrl.text = '';
+      _descriptionCtrl.text = '';
+      _recurrenceCtrl.text = '';
+      _startDateCtrl.text = '';
+      _nextDueCtrl.text = '';
+      _assigneeNameCtrl.text = '';
+      _assigneeDeptCtrl.text = '';
+      _adminNotifyCtrl.text = '';
+      _staffNotifyCtrl.text = '';
+      _selectedStaffId = null;
+    }
     setState(() => _isEditMode = false);
   }
 
@@ -608,6 +604,21 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
   }
 
   // ------------------------ UI ------------------------
+  String? _getRoutePath(String routeKey) {
+    switch (routeKey) {
+      case 'dashboard':
+        return '/dashboard';
+      case 'work_maintenance':
+      case 'maintenance':
+        return '/work/maintenance';
+      case 'home':
+      case '/':
+        return '/';
+      default:
+        return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return FacilityFixLayout(
@@ -623,30 +634,8 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Error: $_error',
-                        style: const TextStyle(color: Colors.red),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            _isLoading = true;
-                            _error = null;
-                          });
-                          _initializeData();
-                        },
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                )
-              : SingleChildScrollView(
+              ? Center(child: Text(_error!))
+              : Padding(
                   padding: const EdgeInsets.all(24.0),
                   child: Form(
                     key: _formKey,
@@ -731,24 +720,28 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                                   color: Colors.grey[500],
                                 ),
                               ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'Assigned To: ${_assigneeNameCtrl.text.isNotEmpty ? _assigneeNameCtrl.text : (_selectedStaffName ?? 'Unassigned')}',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
                             ],
                           ),
                         ),
                         const SizedBox(width: 16),
-                        // Right: chips (toolbar moved to bottom-right)
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            _buildTaskTags(),
-                            const SizedBox(height: 8),
+                            // Use shared tag widgets for status/type/priority
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // StatusTag (uses internal style mapping)
+                                StatusTag((_taskData?['status'] ?? '').toString()),
+                                const SizedBox(width: 8),
+                                // Maintenance type tag
+                                MaintenanceTypeTag((_taskData?['maintenance_type'] ?? _taskData?['task_type'] ?? 'Internal').toString()),
+                                const SizedBox(width: 8),
+                                // Priority tag (optional)
+                                if ((_taskData?['priority'] ?? '').toString().trim().isNotEmpty)
+                                  PriorityTag((_taskData?['priority'] ?? '').toString()),
+                              ],
+                            ),
                           ],
                         ),
                       ],
@@ -786,18 +779,15 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                               _buildScheduleCard(),
                               const SizedBox(height: 24),
                               _buildAssignmentCard(),
-                              const SizedBox(height: 8),
-                              // Place the main Edit/Save action under the Assign Staff card (right column)
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: _buildBottomActionBar(),
-                              ),
-                              const SizedBox(height: 24),
-                    
+                              const SizedBox(height: 16),
                             ],
                           ),
                         ),
                       ],
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: _buildBottomActionBar(),
                     ),
                   ],
                 ),
@@ -861,34 +851,6 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     );
   }
 
-  // ------------------------ Header Chips ------------------------
-  Widget _buildTaskTags() {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children:
-          _tags.map((t) {
-            final isPrimary = t.toLowerCase().contains('high');
-            final bg = isPrimary ? const Color(0xFFE8F5E8) : Colors.grey[100]!;
-            final fg = isPrimary ? const Color(0xFF2E7D2E) : Colors.grey[700]!;
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Text(
-                t,
-                style: TextStyle(
-                  color: fg,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            );
-          }).toList(),
-    );
-  }
 
   // ------------------------ Notification Banner (top of container) ------------------------
   Widget _buildNotificationBanner() {
@@ -948,25 +910,127 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
   // Bottom actions: Edit (view mode) OR Cancel/Save (edit mode)
   Widget _buildBottomActionBar() {
     if (!_isEditMode) {
-      // VIEW MODE: single Edit button
       return Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          ElevatedButton.icon(
-            onPressed: () {
-              // Prepare an editable payload for the edit form. Attempt to include checklist and parts
-              final Map<String, dynamic> editData = Map<String, dynamic>.from(_taskData ?? {});
+          SizedBox(
+            width: 320,
+            height: 48,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Outlined Back button with clearer affordance
+                OutlinedButton.icon(
+                  onPressed: () {
+                    try {
+                      if (Navigator.of(context).canPop()) {
+                        Navigator.of(context).pop();
+                      } else {
+                        context.go('/work/maintenance');
+                      }
+                    } catch (e) {
+                      // fallback: try a simple pop
+                      try {
+                        Navigator.of(context).pop();
+                      } catch (_) {}
+                    }
+                  },
+                  icon: const Icon(Icons.arrow_back, size: 18),
+                  label: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      'Back',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF1976D2)),
+                    foregroundColor: const Color(0xFF1976D2),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Edit task button - kept prominent
+                SizedBox(
+                  width: 180,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      // Open the external maintenance form in edit mode and pass the current task data
+                      try {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => ExternalMaintenanceFormPage(
+                              maintenanceData: _taskData ?? {},
+                              isEditMode: true,
+                            ),
+                          ),
+                        );
+                      } catch (e, st) {
+                        print('[InternalView] Failed to open edit form: $e\n$st');
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to open edit form: $e')));
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1976D2),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.edit_outlined, size: 18),
+                        SizedBox(width: 3),
+                        Text(
+                          "Edit Task",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
 
-              // Ensure remarks/admin notes are present
+    // EDIT MODE: revert to the inline Cancel/Save used previously
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        // Cancel inline edits and open full edit form
+        OutlinedButton(
+          onPressed: () async {
+            try {
+              // First cancel inline edits (safe-guarded)
+              try {
+                _cancelEdit();
+              } catch (e) {
+                // If snapshot wasn't available, still proceed to open full form
+                setState(() => _isEditMode = false);
+              }
+
+              // Prepare payload for full edit form
+              final Map<String, dynamic> editData = Map<String, dynamic>.from(_taskData ?? {});
               if ((editData['remarks'] == null || editData['remarks'].toString().isEmpty) && _adminNotifyCtrl.text.trim().isNotEmpty) {
                 editData['remarks'] = _adminNotifyCtrl.text.trim();
               }
-
-              // Normalize checklist: prefer existing server checklist, else synthesize from local checklist items
+              // Also populate alternative/additional note fields if backend expects them
+              if ((editData['additional_notes'] == null || editData['additional_notes'].toString().isEmpty) && _adminNotifyCtrl.text.trim().isNotEmpty) {
+                editData['additional_notes'] = _adminNotifyCtrl.text.trim();
+              }
               if (editData['checklist'] == null) {
                 if (_checklistItems.isNotEmpty) {
                   editData['checklist'] = _checklistItems.map((e) => {
-                        'task': e['text'] ?? '',
+                        'task': e['task'] ?? e['text'] ?? '',
                         'completed': e['completed'] ?? false,
                       }).toList();
                 } else if (editData['checklist_completed'] != null) {
@@ -974,7 +1038,6 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                 }
               }
 
-              // Normalize parts/parts_used from linked inventory requests if not present
               if (editData['parts_used'] == null && _linkedInventoryRequests.isNotEmpty) {
                 editData['parts_used'] = _linkedInventoryRequests.map((r) => {
                       'inventory_id': r['inventory_id'],
@@ -985,7 +1048,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                     }).toList();
               }
 
-              // Ensure date fields are available for the form
+              // Ensure date fields are present
               if ((editData['scheduled_date'] == null || editData['scheduled_date'].toString().isEmpty) && _startDateCtrl.text.isNotEmpty) {
                 editData['scheduled_date'] = _startDateCtrl.text;
                 editData['start_date'] = _startDateCtrl.text;
@@ -995,41 +1058,28 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                 editData['nextDueDate'] = _nextDueCtrl.text;
               }
 
-              // Open the full edit form and pass the prepared payload so it can populate fields
-              Navigator.of(context).push(
-                MaterialPageRoute(
+              // Navigate to the full edit form
+              try {
+                await Navigator.of(context).push(MaterialPageRoute(
                   builder: (context) => InternalMaintenanceFormPage(
                     maintenanceData: editData,
                     isEditMode: true,
                   ),
-                ),
-              );
-            },
-            icon: const Icon(Icons.edit, size: 20),
-            label: const Text("Edit Task"),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1976D2),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(30),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    // EDIT MODE: Cancel + Save (right aligned)
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        OutlinedButton(
-          onPressed: _cancelEdit,
+                ));
+              } catch (e, st) {
+                // Surface navigation errors instead of crashing
+                print('[InternalView] Failed to open edit form: $e\n$st');
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to open edit form: $e')));
+              }
+            } catch (e) {
+              print('[InternalView] Cancel+Edit action failed: $e');
+              if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Action failed: $e')));
+            }
+          },
           style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
           ),
-          child: const Text('Cancel'),
+          child: const Text('Cancel and Edit Task'),
         ),
         const SizedBox(width: 8),
         ElevatedButton.icon(
@@ -1183,6 +1233,51 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
   }
 
   Widget _buildAssignmentCard() {
+    // Ensure we have assigned staff details when needed (fallback fetch)
+    Future<void> _ensureAssignedStaffLoaded() async {
+      if (_selectedStaffId == null || _selectedStaffId!.isEmpty) return;
+      final exists = _staffList.any(
+        (s) => (s['user_id'] ?? s['id'] ?? '').toString() == _selectedStaffId,
+      );
+      if (exists) return;
+
+      // Temporarily show loading indicator for staff load
+      setState(() => _isLoadingStaff = true);
+      try {
+        Map<String, dynamic>? staff;
+        // Try several common API method names (safe no-op if method missing at runtime)
+        try {
+          staff = await _apiService.getStaffMemberById(_selectedStaffId!);
+        } catch (_) {}
+        try {
+          staff ??= await _apiService.getStaffById(_selectedStaffId!);
+        } catch (_) {}
+        try {
+          staff ??= await _apiService.getUserById(_selectedStaffId!);
+        } catch (_) {}
+
+        if (staff != null && staff.isNotEmpty) {
+          // Insert at top so it's selectable in dropdown
+          setState(() {
+            _staffList.insert(0, staff!);
+            final first = (staff['first_name'] ?? '').toString();
+            final last = (staff['last_name'] ?? '').toString();
+            _selectedStaffName = ('$first $last').trim().isNotEmpty ? ('$first $last').trim() : (staff['name'] ?? staff['username'] ?? 'Staff Member').toString();
+            _assigneeNameCtrl.text = _selectedStaffName!;
+            _assigneeDeptCtrl.text = (staff['staff_department'] ?? staff['department'] ?? '').toString();
+          });
+        }
+      } finally {
+        if (mounted) setState(() => _isLoadingStaff = false);
+      }
+    }
+
+    // Kick off load if we have a selected staff id but no matching item in list
+    if (!_isLoadingStaff && _selectedStaffId != null && _selectedStaffId!.isNotEmpty) {
+      // use microtask so this doesn't run synchronously during build
+      Future.microtask(() => _ensureAssignedStaffLoaded());
+    }
+
     return _card(
       icon: Icons.person,
       iconBg: Colors.grey[200]!,
@@ -1231,72 +1326,113 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                   ),
                   prefixIcon: const Icon(Icons.person),
                 ),
-                items: _staffList.map<DropdownMenuItem<String>>((staff) {
-                  final staffId = staff['user_id'] ?? staff['id'] ?? '';
-                  final firstName = staff['first_name'] ?? '';
-                  final lastName = staff['last_name'] ?? '';
-                  final department = staff['staff_department'] ?? staff['department'] ?? 'General';
-
-                  String name = '$firstName $lastName'.trim();
-                  if (name.isEmpty) name = 'Staff Member';
-
-                  return DropdownMenuItem<String>(
-                    value: staffId.toString(),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          name,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                items: [
+                  // Ensure the currently selected staff (if present) appears as an option
+                  if (_selectedStaffId != null &&
+                      _selectedStaffId!.isNotEmpty &&
+                      !_staffList.any((s) => (s['user_id'] ?? s['id'] ?? '').toString() == _selectedStaffId))
+                    DropdownMenuItem<String>(
+                      value: _selectedStaffId,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _selectedStaffName ?? 'Assigned (ID: ${_selectedStaffId})',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                        ),
-                        Text(
-                          department,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
+                          Text(
+                            _assigneeDeptCtrl.text.isNotEmpty ? _assigneeDeptCtrl.text : 'Department unknown',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  );
-                }).toList(),
+                  // Normal staff list items
+                  ..._staffList.map<DropdownMenuItem<String>>((staff) {
+                    final staffId = (staff['user_id'] ?? staff['id'] ?? '').toString();
+                    final firstName = staff['first_name'] ?? '';
+                    final lastName = staff['last_name'] ?? '';
+                    final department = staff['staff_department'] ?? staff['department'] ?? 'General';
+
+                    String name = '$firstName $lastName'.trim();
+                    if (name.isEmpty) name = (staff['name'] ?? 'Staff Member').toString();
+
+                    return DropdownMenuItem<String>(
+                      value: staffId,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            department,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ],
                 onChanged: (value) {
                   setState(() {
                     _selectedStaffId = value;
                     if (value != null) {
                       final staff = _staffList.firstWhere(
-                        (s) => (s['user_id'] ?? s['id']) == value,
+                        (s) => (s['user_id'] ?? s['id'] ?? '').toString() == value,
                         orElse: () => {},
                       );
-                      final firstName = staff['first_name'] ?? '';
-                      final lastName = staff['last_name'] ?? '';
-                      _selectedStaffName = '$firstName $lastName'.trim();
-                      _assigneeNameCtrl.text = _selectedStaffName!;
-                      _assigneeDeptCtrl.text = staff['staff_department'] ?? staff['department'] ?? '';
+                      final firstName = staff.isNotEmpty ? (staff['first_name'] ?? '') : '';
+                      final lastName = staff.isNotEmpty ? (staff['last_name'] ?? '') : '';
+                      _selectedStaffName = (firstName.isNotEmpty || lastName.isNotEmpty)
+                          ? '$firstName $lastName'.trim()
+                          : (staff.isNotEmpty ? (staff['name'] ?? staff['username'] ?? 'Staff Member').toString() : _selectedStaffName);
+                      if (_selectedStaffName != null) _assigneeNameCtrl.text = _selectedStaffName!;
+                      _assigneeDeptCtrl.text = staff.isNotEmpty ? (staff['staff_department'] ?? staff['department'] ?? '') : _assigneeDeptCtrl.text;
+
+                      // If the selected staff isn't in the loaded list, try to fetch details
+                      if (staff.isEmpty) {
+                        Future.microtask(() => _ensureAssignedStaffLoaded());
+                      }
                     }
                   });
                 },
                 validator: (value) => value == null || value.isEmpty ? 'Please select a staff member' : null,
               ),
-            ] else ...[
+          ] else ...[
             // In view mode: show read-only assignment info (compact, no left padding)
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-              _readOnlyRow(
-                'Assignee Name',
-                _assigneeNameCtrl.text,
-                compact: true,
-              ),
-              _readOnlyRow(
-                'Department',
-                _assigneeDeptCtrl.text,
-                compact: true,
-              ),
+                _readOnlyRow(
+                  'Assignee Name',
+                  _assigneeNameCtrl.text.isNotEmpty
+                      ? _assigneeNameCtrl.text
+                      : (_selectedStaffName ?? 'Unassigned'),
+                  compact: true,
+                ),
+                _readOnlyRow(
+                  'Department',
+                  _assigneeDeptCtrl.text.isNotEmpty
+                      ? _assigneeDeptCtrl.text
+                      : 'N/A',
+                  compact: true,
+                ),
               ],
             ),
           ],

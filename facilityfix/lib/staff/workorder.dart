@@ -37,6 +37,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   // ─────────────── Dynamic data from API ───────────────
   List<Map<String, dynamic>> _allRequests = [];
   bool _isLoading = true;
+  int _unreadNotifCount = 0;
 
   // ─────────────── Current user info ───────────────
   String? _currentUserId;
@@ -103,6 +104,17 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     _searchController.addListener(() => setState(() {}));
     _loadCurrentUser();
     _loadAllRequests();
+    _loadUnreadNotifCount();
+  }
+
+  Future<void> _loadUnreadNotifCount() async {
+    try {
+      final api = APIService(roleOverride: AppRole.staff);
+      final count = await api.getUnreadNotificationCount();
+      if (mounted) setState(() => _unreadNotifCount = count);
+    } catch (e) {
+      print('[Staff WorkOrder] Failed to load unread notification count: $e');
+    }
   }
 
   Future<void> _loadCurrentUser() async {
@@ -253,6 +265,23 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   String shortDate(DateTime d) => '${_months[d.month - 1]} ${d.day}';
   String _norm(String? s) => (s ?? '').toLowerCase().trim();
 
+  // Map backend status values to canonical display labels for cards/list.
+  String _displayStatus(dynamic raw) {
+    if (raw == null) return 'pending';
+    final s = raw.toString().toLowerCase().trim();
+
+    if (s.contains('pending')) return 'pending';
+    if (s == 'sent to client' || s == 'sent_to_client' || s == 'sent to tenant' || s == 'sent') return 'inspected';
+    if (s.contains('inspected') || s.contains('sent')) return 'inspected';
+    if (s.contains('to inspect') || s.contains('to be inspect') || s.contains('to_be_inspect') || s.contains('to_inspect')) return 'to inspect';
+    // Map assigned -> to inspect per request
+    if (s == 'assigned') return 'to inspect';
+    if (s.contains('in progress') || s.contains('in_progress')) return 'in progress';
+    if (s.contains('on hold') || s.contains('on_hold')) return 'on hold';
+
+    return s.isEmpty ? 'pending' : s;
+  }
+
   bool _tabMatchesByRequestType(Map<String, dynamic> w) {
     final type = _norm(w['request_type']);
     switch (_norm(_selectedTabLabel)) {
@@ -372,7 +401,8 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       title: r['title'] ?? 'Untitled Request',
       id: r['id'] ?? '',
       createdAt: createdAt,
-      statusTag: r['status'] ?? 'pending',
+      // display a normalized, human-friendly status for the card
+      statusTag: _displayStatus(r['status'] ?? 'pending'),
       departmentTag: r['category'],
       priorityTag: r['priority'],
       unitId: r['unit_id'] ?? '',
@@ -442,17 +472,14 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
         title: 'Repair Tasks',
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const NotificationPage()),
-              );
-            },
-          ),
-        ],
+        notificationCount: _unreadNotifCount,
+        onNotificationTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const NotificationPage()),
+          );
+          _loadUnreadNotifCount();
+        },
       ),
       body: SafeArea(
         child: RefreshIndicator(

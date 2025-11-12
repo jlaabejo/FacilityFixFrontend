@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import 'pop_up/webusers_viewdetails_popup.dart';
+import '../widgets/delete_popup.dart';
 import '../services/api_service.dart';
 import '../widgets/tags.dart';
 
@@ -16,7 +17,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
   // ---- Controllers and State Variables ----
   final TextEditingController _searchController = TextEditingController();
   String _selectedRoleFilter = 'All Roles';
-  String _selectedStatusFilter = 'All Status';
+  String _selectedDepartmentFilter = 'All Departments';
   List<bool> _selectedRows = [];
   bool _selectAll = false;
 
@@ -51,12 +52,12 @@ class _AdminUserPageState extends State<AdminUserPage> {
           _selectedRoleFilter == 'All Roles' ||
           user['role'] == _selectedRoleFilter;
 
-      // Status filter
-      bool matchesStatus =
-          _selectedStatusFilter == 'All Status' ||
-          user['status'] == _selectedStatusFilter;
+    // Department filter
+    bool matchesDepartment =
+      _selectedDepartmentFilter == 'All Departments' ||
+      (user['department'] ?? '').toString().toLowerCase() == _selectedDepartmentFilter.toLowerCase();
 
-      return matchesSearch && matchesRole && matchesStatus;
+    return matchesSearch && matchesRole && matchesDepartment;
     }).toList();
   }
 
@@ -344,88 +345,6 @@ class _AdminUserPageState extends State<AdminUserPage> {
     );
   }
 
-  // ---- Role Styles ----
-  final Map<String, Map<String, Color>> roleStyles = {
-    'Admin': {
-      'bg': Color(0xFFDDEAFE), // light blue
-      'text': Color(0xFF1D4ED8), // dark blue
-    },
-    'Staff': {
-      'bg': Color(0xFFE5E7EB), // light gray
-      'text': Color(0xFF374151), // dark gray
-    },
-    'Tenant': {
-      'bg': Color(0xFFFEF9C3), // light yellow
-      'text': Color(0xFFB45309), // orange
-    },
-  };
-
-  // ---- Status Styles ----
-  final Map<String, Map<String, Color>> statusStyles = {
-    'Online': {
-      'bg': Color(0xFFD1FAE5), // light green
-      'text': Color(0xFF047857), // dark green
-    },
-    'Offline': {
-      'bg': Color(0xFFFEE2E2), // light red
-      'text': Color(0xFFB91C1C), // dark red
-    },
-    'Pending': {
-      'bg': Color(0xFFFFEDD5), // light orange
-      'text': Color(0xFF9A3412), // dark orange
-    },
-    'Rejected': {
-      'bg': Color(0xFFE5E7EB), // light gray
-      'text': Color(0xFF374151), // dark gray
-    },
-  };
-
-  // ---- Role Badge Widget ----
-  Widget _buildRoleBadge(String role) {
-    final style =
-        roleStyles[role] ??
-        {'bg': Colors.grey.shade200, 'text': Colors.grey.shade700};
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: style['bg'],
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        role,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: style['text'],
-        ),
-      ),
-    );
-  }
-
-  // ---- Status Badge Widget ----
-  Widget _buildStatusBadge(String status) {
-    final style =
-        statusStyles[status] ??
-        {'bg': Colors.grey.shade200, 'text': Colors.grey.shade700};
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: style['bg'],
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: style['text'],
-        ),
-      ),
-    );
-  }
-
   // ---- User Actions Menu ----
   void _showActionMenu(
     BuildContext context,
@@ -697,72 +616,12 @@ class _AdminUserPageState extends State<AdminUserPage> {
   }
 
   Future<void> _deleteUser(Map<String, dynamic> user) async {
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Confirm Delete'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Are you sure you want to delete the following user?',
-                style: TextStyle(color: Colors.grey[700]),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user['name'] ?? 'Unknown User',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      user['email'] ?? 'No email',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Role: ${user['role'] ?? 'Unknown'}',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'This action cannot be undone.',
-                style: TextStyle(
-                  color: Colors.red[700],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Delete User'),
-            ),
-          ],
-        );
-      },
+    // Use shared delete dialog for consistent admin UI
+    final bool confirmed = await showDeleteDialog(
+      context,
+      itemName: user['name']?.toString() ?? 'User',
+      description:
+          'This action cannot be undone. All associated data for this user will be permanently removed from the system.',
     );
 
     // If user didn't confirm, exit early
@@ -930,57 +789,12 @@ class _AdminUserPageState extends State<AdminUserPage> {
       return;
     }
 
-    // Show confirmation dialog
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Users'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Are you sure you want to delete ${selectedUsers.length} user(s)?'),
-            const SizedBox(height: 12),
-            Text(
-              'Users to be deleted:',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[700],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              constraints: const BoxConstraints(maxHeight: 200),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: selectedUsers.map((user) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Text(
-                      '• ${user['name']} (${user['email']})',
-                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                    ),
-                  )).toList(),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    // Use shared delete dialog for bulk delete confirmation
+    final confirmed = await showDeleteDialog(
+      context,
+      itemName: '${selectedUsers.length} user(s)',
+      description:
+          'This will permanently delete the selected users. This action cannot be undone.',
     );
 
     if (confirmed != true) return;
@@ -1249,12 +1063,12 @@ class _AdminUserPageState extends State<AdminUserPage> {
                 ),
                 const SizedBox(width: 16),
 
-                // Status Filter
+                // Department Filter
                 _buildFilterDropdown(
-                  'Status',
-                  _selectedStatusFilter,
-                  ['All Status', 'Online', 'Offline', 'Pending'],
-                  (value) => setState(() => _selectedStatusFilter = value),
+                  'Department',
+                  _selectedDepartmentFilter,
+                  ['All Departments', 'Plumbing', 'Electrical', 'Masonry', 'Carpentry', 'House Keeping'],
+                  (value) => setState(() => _selectedDepartmentFilter = value),
                 ),
                 const SizedBox(width: 16),
 
@@ -1531,7 +1345,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
                                               DataCell(
                                                 _fixedCell(
                                                   3,
-                                                  _buildRoleBadge(user['role']),
+                                                  RoleTag(role: user['role']),
                                                 ),
                                               ),
                                               // Department

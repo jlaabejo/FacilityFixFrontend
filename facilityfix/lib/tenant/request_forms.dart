@@ -4,7 +4,7 @@ import 'package:facilityfix/services/auth_storage.dart';
 import 'package:facilityfix/tenant/announcement.dart';
 import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/profile.dart';
-import 'package:facilityfix/tenant/workorder.dart';
+import 'package:facilityfix/tenant/repair_management.dart';
 import 'package:facilityfix/widgets/buttons.dart' as fx;
 import 'package:facilityfix/widgets/forms.dart';
 import 'package:facilityfix/widgets/modals.dart'; // CustomPopup
@@ -12,6 +12,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:intl/intl.dart';
+import 'package:facilityfix/utils/ui_format.dart';
 
 class RequestForm extends StatefulWidget {
   /// Allowed: "Concern Slip", "Job Service", "Work Order"
@@ -135,7 +136,7 @@ class _RequestFormState extends State<RequestForm> {
             const SizedBox(height: 16),
             _buildInfoItem(
               'Concern Slip',
-              'The initial report or request for repair or maintenance raised by a tenant or staff.',
+              'The initial report or request for repair raised by a tenant.',
             ),
             const SizedBox(height: 12),
             _buildInfoItem(
@@ -206,42 +207,62 @@ class _RequestFormState extends State<RequestForm> {
     'Others',
   ];
 
-  // Date/Time picking for availability range
+  // Date/Time picking for availability range (Mon-Sat, 9am-5pm, only future dates)
   Future<void> _pickAvailabilityRange(TextEditingController controller) async {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
 
-    // Pick the date first
+    // Only allow picking dates after today (not today), and only Mon-Sat
     final DateTime? pickedDate = await showDatePicker(
       context: context,
-      initialDate: now,
-      firstDate: DateTime(2020),
+      initialDate: today.add(const Duration(days: 1)),
+      firstDate: today.add(const Duration(days: 1)),
       lastDate: DateTime(2100),
+      selectableDayPredicate: (date) {
+        // Only allow Monday (1) to Saturday (6)
+        return date.weekday >= 1 && date.weekday <= 6 && date.isAfter(today);
+      },
     );
     if (pickedDate == null) return;
 
-    // Pick start time
-    final TimeOfDay? startTime = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(now),
-      helpText: 'Select start time',
-    );
-    if (startTime == null) return;
+    // Helper to clamp time to 9:00-17:00
+    TimeOfDay _clampToRange(TimeOfDay t) {
+      int hour = t.hour;
+      int minute = t.minute;
+      if (hour < 9) return const TimeOfDay(hour: 9, minute: 0);
+      if (hour > 17 || (hour == 17 && minute > 0)) return const TimeOfDay(hour: 17, minute: 0);
+      return TimeOfDay(hour: hour, minute: minute);
+    }
 
-    // Pick end time
-    final TimeOfDay? endTime = await showTimePicker(
+    // Pick start time (9:00-17:00 only)
+    final TimeOfDay? startTimeRaw = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay(
-        hour: (startTime.hour + 2) % 24, // Default to 2 hours later
-        minute: startTime.minute,
-      ),
-      helpText: 'Select end time',
+      initialTime: const TimeOfDay(hour: 9, minute: 0),
+      helpText: 'Select start time (9:00 AM - 5:00 PM)',
     );
-    if (endTime == null) return;
+    if (startTimeRaw == null) return;
+    final startTime = _clampToRange(startTimeRaw);
+    if (startTime.hour < 9 || startTime.hour > 17) {
+      _showSnack('Start time must be between 9:00 AM and 5:00 PM');
+      return;
+    }
+
+    // Pick end time (must be after start, 9:00-17:00 only)
+    final TimeOfDay? endTimeRaw = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: (startTime.hour + 2 > 17) ? 17 : startTime.hour + 2, minute: startTime.minute),
+      helpText: 'Select end time (9:00 AM - 5:00 PM)',
+    );
+    if (endTimeRaw == null) return;
+    final endTime = _clampToRange(endTimeRaw);
+    if (endTime.hour < 9 || endTime.hour > 17) {
+      _showSnack('End time must be between 9:00 AM and 5:00 PM');
+      return;
+    }
 
     // Validate that end time is after start time
     final startMinutes = startTime.hour * 60 + startTime.minute;
     final endMinutes = endTime.hour * 60 + endTime.minute;
-    
     if (endMinutes <= startMinutes) {
       _showSnack('End time must be after start time');
       return;
@@ -295,12 +316,17 @@ class _RequestFormState extends State<RequestForm> {
   // Date picking only (for Work Order Valid From/To)
   Future<void> _pickDateOnly(TextEditingController controller) async {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
 
+    // Only allow selecting Monday (1) to Saturday (6) and no past dates
     final DateTime? pickedDate = await showDatePicker(
       context: context,
-      initialDate: now,
-      firstDate: DateTime(2020),
+      initialDate: today.isAfter(DateTime(2020)) ? today : DateTime(2020),
+      firstDate: today,
       lastDate: DateTime(2100),
+      selectableDayPredicate: (date) {
+        return date.weekday >= DateTime.monday && date.weekday <= DateTime.saturday;
+      },
     );
     if (pickedDate == null) return;
 
@@ -333,8 +359,7 @@ class _RequestFormState extends State<RequestForm> {
   final TextEditingController validToController = TextEditingController();
   final TextEditingController contractorNameController = TextEditingController();
   final TextEditingController contractorNumberController = TextEditingController();
-  final TextEditingController contractorCompanyController = TextEditingController();
-  final TextEditingController entryEquipmentsController = TextEditingController();
+  final TextEditingController contractorEmailController = TextEditingController();
   final TextEditingController othersRequestTypeController = TextEditingController();
 
   // Local state
@@ -434,7 +459,7 @@ class _RequestFormState extends State<RequestForm> {
           permitIdController.text = data['formatted_id'] ?? data['id'] ?? '';
           contractorNameController.text = data['contractor_name'] ?? '';
           contractorNumberController.text = data['contractor_number'] ?? '';
-          contractorCompanyController.text = data['contractor_company'] ?? '';
+          contractorEmailController.text = data['contractor_email'] ?? '';
           
           if (data['work_schedule_from'] != null) {
             try {
@@ -451,15 +476,6 @@ class _RequestFormState extends State<RequestForm> {
               validToController.text = DateFormat('MMM d, yyyy h:mm a').format(to);
             } catch (e) {
               validToController.text = data['work_schedule_to'];
-            }
-          }
-          
-          // Handle entry equipments
-          if (data['entry_equipments'] != null) {
-            if (data['entry_equipments'] is List) {
-              entryEquipmentsController.text = (data['entry_equipments'] as List).join(', ');
-            } else if (data['entry_equipments'] is String) {
-              entryEquipmentsController.text = data['entry_equipments'];
             }
           }
         }
@@ -505,10 +521,8 @@ class _RequestFormState extends State<RequestForm> {
         formattedId = '$prefix-$year-${dayOfYear.toString().padLeft(5, '0')}';
       }
 
-      // Set date requested
-      dateRequestedController.text = DateFormat(
-        'MMM d, yyyy h:mm a',
-      ).format(now);
+      // Set date requested (formatted as fullDate)
+      dateRequestedController.text = UiDateUtils.fullDate(now);
       reqIdController.text = formattedId;
 
       // Load user profile data
@@ -545,9 +559,7 @@ class _RequestFormState extends State<RequestForm> {
               ? 'JS'
               : 'WP';
       reqIdController.text = '$prefix-${now.year}-00001';
-      dateRequestedController.text = DateFormat(
-        'MMM d, yyyy h:mm a',
-      ).format(now);
+      dateRequestedController.text = UiDateUtils.fullDate(now);
       nameController.text = 'John Doe';
       unitController.text = 'Tower A - Unit 10B';
     } finally {
@@ -571,8 +583,7 @@ class _RequestFormState extends State<RequestForm> {
     validToController.dispose();
     contractorNameController.dispose();
     contractorNumberController.dispose();
-    contractorCompanyController.dispose();
-    entryEquipmentsController.dispose();
+    contractorEmailController.dispose();
     othersRequestTypeController.dispose();
     super.dispose();
   }
@@ -745,18 +756,17 @@ class _RequestFormState extends State<RequestForm> {
         if (_requestTypeValue.trim().isEmpty) {
           return 'Request type is required.';
         }
-        // If "Others" is selected, check if the text field is filled
-        if (_requestTypeValue.toLowerCase() == 'others' &&
-            othersRequestTypeController.text.trim().isEmpty) {
+        if (_requestTypeValue.toLowerCase() == 'others' && othersRequestTypeController.text.trim().isEmpty) {
           return 'Please specify the request type.';
         }
         return null;
       case 'from':
         if (validFromController.text.trim().isEmpty)
           return 'Start date is required.';
-        return _parseDT(validFromController.text.trim()) == null
-            ? 'Invalid date.'
-            : null;
+        final dt = _parseDT(validFromController.text.trim());
+        if (dt == null) return 'Invalid date.';
+        if (dt.weekday < 1 || dt.weekday > 6) return 'Date must be Monday to Saturday.';
+        return null;
       case 'to':
         if (validToController.text.trim().isEmpty) return 'End date is required.';
         final from = _parseDT(validFromController.text.trim());
@@ -764,14 +774,51 @@ class _RequestFormState extends State<RequestForm> {
         if (to == null) return 'Invalid date.';
         if (from != null && !to.isAfter(from))
           return 'End date must be later than start date.';
+        if (to.weekday < 1 || to.weekday > 6) return 'Date must be Monday to Saturday.';
         return null;
       case 'contractors':
-        return !_hasContractors
-            ? 'Please add at least one contractor/personnel.'
-            : null;
+        if (!_hasContractors) return 'Please add at least one contractor/personnel.';
+        if (_contractors.length > 3) return 'Maximum of 3 contractors allowed.';
+        return null;
       default:
         return null;
     }
+  }
+
+  // Phone number validation
+  String? validatePhoneNumber(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Please enter your contact number.';
+    }
+    final cleaned = value.replaceAll(RegExp(r'[^0-9]'), '');
+    if (!RegExp(r'^[0-9]+$').hasMatch(cleaned)) {
+      return 'Input must be a number. Please check for any letters or special symbols.';
+    }
+    if (!(cleaned.length == 10 || cleaned.length == 11)) {
+      return 'Must contain 10 digits (excluding the initial \'0\' for domestic calls or the +63 country code).';
+    }
+    if (!(RegExp(r'^(09\d{9}|9\d{9})$').hasMatch(cleaned))) {
+      return "Must follow 09XX-XXX-YYYY (11 digits total with '0') or 9XX-XXX-YYYY (10 digits without '0').\nInvalid phone number format. Mobile numbers must be 10 digits";
+    }
+    return null;
+  }
+
+  // Email validation
+  String? validateEmail(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    if (!value.contains('@')) {
+      return "Invalid email format. Missing '@' symbol";
+    }
+    if (value.length > 254) {
+      return 'Email is too long. Must be less than 254 characters.';
+    }
+    if (RegExp(r'[\s,;:/\\\[\]{}()<>]').hasMatch(value)) {
+      return 'Invalid character found in the email address.';
+    }
+    if (!RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$').hasMatch(value)) {
+      return 'Invalid email address format.';
+    }
+    return null;
   }
 
   bool _hasAnyErrorForType(String type) {
@@ -835,21 +882,13 @@ class _RequestFormState extends State<RequestForm> {
         } else if (type == 'Work Order') {
           print('[SUBMIT] Updating work order...');
           
-          // Parse entry equipments from comma-separated string
-          final equipments = entryEquipmentsController.text
-              .split(',')
-              .map((e) => e.trim())
-              .where((e) => e.isNotEmpty)
-              .toList();
-          
           result = await apiService.updateWorkOrder(
             workOrderId: widget.requestId!,
             contractorName: contractorNameController.text.trim(),
             contractorNumber: contractorNumberController.text.trim(),
-            contractorCompany: contractorCompanyController.text.trim(),
+            contractorEmail: contractorEmailController.text.trim(),
             workScheduleFrom: validFromController.text.trim(),
             workScheduleTo: validToController.text.trim(),
-            entryEquipments: equipments,
           );
           
           result['success'] = true;
@@ -876,9 +915,9 @@ class _RequestFormState extends State<RequestForm> {
           description: descriptionController.text.trim(),
           location: unitController.text.trim(),
           category:
-              _aiCategory.isNotEmpty ? _aiCategory.toLowerCase() : 'general',
+              _aiCategory.isNotEmpty ? _aiCategory.toLowerCase() : '',
           priority:
-              _aiPriority.isNotEmpty ? _aiPriority.toLowerCase() : 'medium',
+              _aiPriority.isNotEmpty ? _aiPriority.toLowerCase() : '',
           unitId: unitController.text.trim(),
           scheduleAvailability: availabilityController.text.trim(),
           attachments: _attachments,
@@ -901,6 +940,21 @@ class _RequestFormState extends State<RequestForm> {
           endTime: parsedTimes['end'],
           concernSlipId: widget.concernSlipId,
         );
+        // If this job service is linked to a concern slip, update the
+        // concern slip to record the resolution type and schedule so the
+        // tenant/staff lists show "Pending JS" appropriately.
+        if (result['success'] == true && widget.concernSlipId != null && widget.concernSlipId!.isNotEmpty) {
+          try {
+            await apiService.updateConcernSlip(
+              concernSlipId: widget.concernSlipId!,
+              scheduleAvailability: availabilityText.isNotEmpty ? availabilityText : null,
+              resolutionType: 'job_service',
+              status: 'pending',
+            );
+          } catch (e) {
+            print('[SUBMIT] Warning: failed to update concern slip after creating job service: $e');
+          }
+        }
       } else if (type == 'Work Order') {
         print('[SUBMIT] Submitting work order to Firebase...');
 
@@ -913,6 +967,24 @@ class _RequestFormState extends State<RequestForm> {
           unitId: unitController.text.trim(),
           concernSlipId: widget.concernSlipId,  // Pass the concern slip ID if available
         );
+        // If linked to a concern slip, update the concern slip to reflect
+        // that a work order has been requested (Pending WOP). Use the
+        // validFrom/validTo as schedule availability where available.
+        if (result['success'] == true && widget.concernSlipId != null && widget.concernSlipId!.isNotEmpty) {
+          try {
+            final schedule = (validFromController.text.trim().isNotEmpty || validToController.text.trim().isNotEmpty)
+                ? '${validFromController.text.trim()} - ${validToController.text.trim()}'
+                : null;
+            await apiService.updateConcernSlip(
+              concernSlipId: widget.concernSlipId!,
+              scheduleAvailability: schedule,
+              resolutionType: 'work_permit',
+              status: 'pending',
+            );
+          } catch (e) {
+            print('[SUBMIT] Warning: failed to update concern slip after creating work order: $e');
+          }
+        }
       } else {
         throw Exception('Unknown request type: $type');
       }
@@ -1096,17 +1168,16 @@ class _RequestFormState extends State<RequestForm> {
               ),
               _buildAIInsights(),
               InputField(
-                label: 'Availability',
+                label: 'Schedule Availability',
                 controller: availabilityController,
                 hintText: 'Select date and time range (e.g., 9:00 AM - 11:00 AM)',
                 isRequired: true,
-                readOnly: true,
-                onTap: () => _pickAvailabilityRange(availabilityController), // Always allow picking availability
-                errorText: _errCS('avail'),
+                onTap: () => _pickAvailabilityRange(availabilityController),
                 prefixIcon: const Padding(
                   padding: EdgeInsets.all(8.0),
                   child: Icon(Icons.access_time),
                 ),
+                errorText: _errCS('avail'),
               ),
               const SizedBox(height: 8),
               FileAttachmentPicker(
@@ -1195,17 +1266,16 @@ class _RequestFormState extends State<RequestForm> {
                 maxLines: 4,
               ),
               InputField(
-                label: 'Availability',
+                label: 'Schedule Availability',
                 controller: availabilityController,
                 hintText: 'Select date and time range (e.g., 9:00 AM - 11:00 AM)',
                 isRequired: true,
-                readOnly: true,
                 onTap: () => _pickAvailabilityRange(availabilityController),
-                errorText: _errJS('avail'),
                 prefixIcon: const Padding(
                   padding: EdgeInsets.all(8.0),
                   child: Icon(Icons.access_time),
                 ),
+                errorText: _errJS('avail'),
               ),
               const SizedBox(height: 8),
               FileAttachmentPicker(
@@ -1288,7 +1358,7 @@ class _RequestFormState extends State<RequestForm> {
 
               // Request Type (dropdown w/ required message)
               DropdownField<String>(
-                label: 'Request Type',
+                label: 'Work Order Type',
                 value: _requestTypeValue.isEmpty ? null : _requestTypeValue,
                 items: _requestTypes,
                 onChanged: (v) {
@@ -1302,20 +1372,20 @@ class _RequestFormState extends State<RequestForm> {
                   _formKey.currentState?.validate();
                 },
                 isRequired: _submitted, // only show built-in error after submit
-                requiredMessage: 'Request type is required.',
-                hintText: 'Select request type',
+                requiredMessage: 'Work order type is required.',
+                hintText: 'Select work order type',
                 isDense: true, // Match InputField height
               ),
               // Show "Others" text field when "Others" is selected
               if (_requestTypeValue.toLowerCase() == 'others') ...[
                 const SizedBox(height: 8),
                 InputField(
-                  label: 'Specify Request Type',
+                  label: 'Specify Work Order Type',
                   controller: othersRequestTypeController,
-                  hintText: 'Enter request type details',
+                  hintText: 'Enter work order type details',
                   isRequired: true,
                   errorText: _submitted && othersRequestTypeController.text.trim().isEmpty
-                      ? 'Please specify the request type'
+                      ? 'Please specify the work order type'
                       : null,
                 ),
               ],
@@ -1332,73 +1402,210 @@ class _RequestFormState extends State<RequestForm> {
               const SizedBox(height: 8),
 
               // Valid From / Valid To (two-up row, blue calendar icon) with inline errors
-              Row(
+                Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
+                  const Text(
+                  'Schedule Date',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                  children: [
+                    Expanded(
                     child: GestureDetector(
                       onTap: () => _pickDateOnly(validFromController),
                       child: AbsorbPointer(
-                        child: InputField(
-                          label: 'Valid From',
-                          controller: validFromController,
-                          hintText: 'Select date',
-                          isRequired: true,
-                          suffixIcon: const Icon(
-                            Icons.calendar_today_rounded,
-                            size: 20,
-                            color: Color(0xFF005CE7),
-                          ),
-                          errorText: _errWO('from'),
+                      child: InputField(
+                        label: 'Valid From',
+                        controller: validFromController,
+                        hintText: 'Select date',
+                        isRequired: true,
+                        suffixIcon: const Icon(
+                        Icons.calendar_today_rounded,
+                        size: 20,
+                        color: Color(0xFF005CE7),
                         ),
+                        errorText: _errWO('from'),
+                      ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
                     child: GestureDetector(
                       onTap: () => _pickDateOnly(validToController),
                       child: AbsorbPointer(
-                        child: InputField(
-                          label: 'Valid To',
-                          controller: validToController,
-                          hintText: 'Select date',
-                          isRequired: true,
-                          suffixIcon: const Icon(
-                            Icons.calendar_today_rounded,
-                            size: 20,
-                            color: Color(0xFF005CE7),
-                          ),
-                          errorText: _errWO('to'),
+                      child: InputField(
+                        label: 'Valid To',
+                        controller: validToController,
+                        hintText: 'Select date',
+                        isRequired: true,
+                        suffixIcon: const Icon(
+                        Icons.calendar_today_rounded,
+                        size: 20,
+                        color: Color(0xFF005CE7),
                         ),
+                        errorText: _errWO('to'),
+                      ),
                       ),
                     ),
+                    ),
+                  ],
                   ),
                 ],
-              ),
+                ),
+                InputField(
+                label: 'Notes',
+                controller: descriptionController,
+                hintText: 'Enter additional notes',
+                isRequired: false,
+                maxLines: 4,
+                ),
               const SizedBox(height: 8),
 
-              const Text(
-                'List of Contractors/Personnel',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 10),
-              MultiContractorInputField(
-                isRequired: true,
-                onChanged: (contractorList) {
-                  setState(() {
-                    _hasContractors = contractorList.isNotEmpty;
-                    _contractors = contractorList;
-                  });
-                },
-              ),
-              if (_errWO('contractors') != null)
-                Padding(
+                // Contractors/Personnel section (stacked vertically)
+                const Text(
+                  'List of Contractors/Personnel',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 10),
+                // Name / Company
+                InputField(
+                  label: 'Name/Company',
+                  controller: contractorNameController,
+                  hintText: 'Enter name or company',
+                  isRequired: true,
+                ),
+                const SizedBox(height: 8),
+                // Contact Number
+                InputField(
+                  label: 'Contact Number',
+                  controller: contractorNumberController,
+                  hintText: '09XXXXXXXXX',
+                  isRequired: true,
+                  keyboardType: TextInputType.phone,
+                  errorText: _submitted
+                    ? validatePhoneNumber(contractorNumberController.text)
+                    : null,
+                ),
+                const SizedBox(height: 8),
+                // Email
+                InputField(
+                  label: 'Email',
+                  controller: contractorEmailController,
+                  hintText: 'Optional',
+                  isRequired: false,
+                  keyboardType: TextInputType.emailAddress,
+                  errorText: _submitted
+                    ? validateEmail(contractorEmailController.text)
+                    : null,
+                ),
+                const SizedBox(height: 8),
+                // Add button (aligned to the right)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: SizedBox(
+                  height: 44,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF005CE7),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
+                    ),
+                    onPressed: () {
+                    final name = contractorNameController.text.trim();
+                    final number = contractorNumberController.text.trim();
+                    final email = contractorEmailController.text.trim();
+
+                    final phoneError = validatePhoneNumber(number);
+                    final emailError = validateEmail(email);
+
+                    // Prevent adding more than 3 contractors
+                    if (_contractors.length >= 3) {
+                      setState(() {
+                        _submitted = true;
+                      });
+                      _showSnack('You can only add up to 3 contractors.');
+                      return;
+                    }
+
+                    if (name.isEmpty ||
+                      phoneError != null ||
+                      (email.isNotEmpty && emailError != null)) {
+                      setState(() {
+                      _submitted = true;
+                      });
+                      _showSnack('Please enter valid contractor details.');
+                      return;
+                    }
+
+                    setState(() {
+                      _contractors.add({
+                      'name': name,
+                      'contact_number': number,
+                      'email': email,
+                      });
+                      _hasContractors = _contractors.isNotEmpty;
+                      contractorNameController.clear();
+                      contractorNumberController.clear();
+                      contractorEmailController.clear();
+                    });
+                    },
+                    child: const Icon(Icons.add, size: 20),
+                  ),
+                  ),
+                ),
+                if (_errWO('contractors') != null)
+                  Padding(
                   padding: const EdgeInsets.only(top: 6, left: 4),
                   child: Text(
                     _errWO('contractors')!,
                     style: const TextStyle(color: Colors.red, fontSize: 12),
                   ),
-                ),
+                  ),
+                const SizedBox(height: 12),
+                // List of added contractors
+                Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _contractors.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final c = entry.value;
+                  return Chip(
+                  label: Text(
+                    '${c['name']} - ${c['contact_number']}${c['email'] != null && c['email']!.isNotEmpty ? ' - ' + c['email']! : ''}',
+                    style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    color: Color(0xFF344054),
+                    fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  backgroundColor: const Color(0xFFF2F4F7),
+                  deleteIcon: const Icon(Icons.close, size: 16),
+                  deleteIconColor: const Color(0xFF667085),
+                  shape: const StadiumBorder(
+                    side: BorderSide(color: Color(0xFFE4E7EC)),
+                  ),
+                  onDeleted: () {
+                    setState(() {
+                    _contractors.removeAt(index);
+                    _hasContractors = _contractors.isNotEmpty;
+                    });
+                  },
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  );
+                }).toList(),
+              ),
             ],
           ),
         ];

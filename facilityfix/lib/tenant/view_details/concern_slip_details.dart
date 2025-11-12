@@ -3,8 +3,9 @@ import 'package:facilityfix/tenant/announcement.dart';
 import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/profile.dart';
 import 'package:facilityfix/tenant/request_forms.dart';
-import 'package:facilityfix/tenant/workorder.dart';
+import 'package:facilityfix/tenant/repair_management.dart';
 import 'package:facilityfix/widgets/view_details.dart';
+import 'package:facilityfix/utils/ui_format.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart' as fx;
@@ -57,7 +58,9 @@ class _TenantConcernSlipDetailPageState
         data = await apiService.getConcernSlipById(widget.concernSlipId);
         print('[DEBUG] Successfully fetched as concern slip');
       } catch (e) {
-        print('[DEBUG] Failed to fetch as concern slip, trying as job service: $e');
+        print(
+          '[DEBUG] Failed to fetch as concern slip, trying as job service: $e',
+        );
         try {
           // Then try as job service
           data = await apiService.getJobServiceById(widget.concernSlipId);
@@ -67,7 +70,9 @@ class _TenantConcernSlipDetailPageState
           }
           print('[DEBUG] Successfully fetched as job service');
         } catch (e2) {
-          print('[DEBUG] Failed to fetch as job service, trying as work order: $e2');
+          print(
+            '[DEBUG] Failed to fetch as job service, trying as work order: $e2',
+          );
           try {
             // Finally try as work order
             data = await apiService.getWorkOrderById(widget.concernSlipId);
@@ -105,7 +110,10 @@ class _TenantConcernSlipDetailPageState
   }
 
   /// Fetch and populate user names when we have user IDs
-  Future<void> _enrichWithUserNames(Map<String, dynamic> data, APIService apiService) async {
+  Future<void> _enrichWithUserNames(
+    Map<String, dynamic> data,
+    APIService apiService,
+  ) async {
     try {
       // Fetch reported_by name if we have the ID but not the name
       if (data.containsKey('reported_by') &&
@@ -191,13 +199,14 @@ class _TenantConcernSlipDetailPageState
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => RequestForm(
-          requestType: 'Concern Slip',
-          concernSlipId: widget.concernSlipId,
-          initialData: _concernSlipData,
-          requestId: widget.concernSlipId,
-          isEditing: true,
-        ),
+        builder:
+            (_) => RequestForm(
+              requestType: 'Concern Slip',
+              concernSlipId: widget.concernSlipId,
+              initialData: _concernSlipData,
+              requestId: widget.concernSlipId,
+              isEditing: true,
+            ),
       ),
     ).then((updated) {
       if (updated == true) {
@@ -212,11 +221,16 @@ class _TenantConcernSlipDetailPageState
     // Allow deleting if status is pending or complete/done
     final status = (_concernSlipData!['status'] ?? '').toString().toLowerCase();
     // allow delete for any 'pending*' or completed statuses
-    final deletable = status.startsWith('pending') || status.contains('complete') || status == 'done';
+    final deletable =
+        status.startsWith('pending') ||
+        status.contains('complete') ||
+        status == 'done';
     if (!deletable) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Only pending (including pending CS/JS/WOP) or completed requests can be deleted'),
+          content: Text(
+            'Only pending (including pending CS/JS/WOP) or completed requests can be deleted',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
@@ -280,9 +294,9 @@ class _TenantConcernSlipDetailPageState
 
   @override
   Widget build(BuildContext context) {
-  final status = (_concernSlipData?['status'] ?? '').toString().toLowerCase();
-  final isPending = status.startsWith('pending');
-  final isComplete = status.contains('complete') || status == 'done';
+    final status = _normalizeStatus((_concernSlipData?['status'] ?? '').toString());
+    final isPending = status.startsWith('pending');
+    final isComplete = status.contains('complete') || status == 'done';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -295,8 +309,8 @@ class _TenantConcernSlipDetailPageState
         ),
         showMore: true,
         showHistory: true,
-  showEdit: isPending,
-  showDelete: isPending || isComplete,
+        showEdit: isPending,
+        showDelete: isPending || isComplete,
         onHistoryTap: _showHistorySheet,
         onEditTap: _showEditDialog,
         onDeleteTap: _showDeleteDialog,
@@ -358,7 +372,7 @@ class _TenantConcernSlipDetailPageState
 
     final data = _concernSlipData!;
     final resolutionType = data['resolution_type']?.toString().toLowerCase();
-    
+
     // Debug logging
     print('[DEBUG] Concern Slip Data:');
     print('  Status: ${data['status']}');
@@ -366,20 +380,59 @@ class _TenantConcernSlipDetailPageState
     print('  Resolution Type (lowercase): $resolutionType');
     print('  Resolution Set By: ${data['resolution_set_by']}');
     print('  Resolution Set At: ${data['resolution_set_at']}');
-    print('  Schedule Availability: ${data['schedule_availability']} (Type: ${data['schedule_availability']?.runtimeType})');
-    print('  Should Show Form: ${resolutionType != null && resolutionType.isNotEmpty && resolutionType != 'rejected'}');
+    print(
+      '  Schedule Availability: ${data['schedule_availability']} (Type: ${data['schedule_availability']?.runtimeType})',
+    );
+    print(
+      '  Should Show Form: ${resolutionType != null && resolutionType.isNotEmpty && resolutionType != 'rejected'}',
+    );
 
-    // Convert schedule_availability from list to string if needed
+    // Convert schedule availability from multiple possible fields to a string
     String? scheduleAvailabilityStr;
-    final schedAvail = data['schedule_availability'];
-    if (schedAvail != null) {
-      if (schedAvail is List && schedAvail.isNotEmpty) {
-        scheduleAvailabilityStr = schedAvail.first?.toString();
-      } else if (schedAvail is String) {
-        scheduleAvailabilityStr = schedAvail;
+    final candidates = [
+      data['schedule_availability'],
+      data['rawData']?['schedule_availability'],
+      data['rawData']?['schedule'],
+      data['rawData']?['availability'],
+      data['rawData']?['schedule_availabilities'],
+      data['schedule'],
+      data['availability'],
+      data['requested_at'],
+      data['dateRequested'],
+    ];
+
+    for (final c in candidates) {
+      if (c == null) continue;
+      if (c is List && c.isNotEmpty) {
+        final first = c.first;
+        if (first != null) {
+          scheduleAvailabilityStr = first.toString();
+          break;
+        }
+      } else if (c is String) {
+        if (c.trim().isNotEmpty) {
+          scheduleAvailabilityStr = c.trim();
+          break;
+        }
+      } else {
+        // fallback: try to stringify
+        try {
+          final s = c.toString();
+          if (s.trim().isNotEmpty) {
+            scheduleAvailabilityStr = s.trim();
+            break;
+          }
+        } catch (_) {}
       }
     }
-    print('[DEBUG]   Converted Schedule Availability: $scheduleAvailabilityStr');
+    print(
+      '[DEBUG]   Converted Schedule Availability: $scheduleAvailabilityStr',
+    );
+
+    // Convert the extracted schedule string into a DateTimeRange now so the
+    // details widget receives a typed value and doesn't need to re-parse.
+    final DateTimeRange? scheduleRange =
+        UiDateUtils.parseRange(scheduleAvailabilityStr);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -387,18 +440,23 @@ class _TenantConcernSlipDetailPageState
         ConcernSlipDetails(
           id: data['formatted_id'] ?? data['id'] ?? '',
           title: data['title'] ?? 'Untitled Request',
-          createdAt: DateTime.tryParse(data['created_at'] ?? '') ?? DateTime.now(),
+          createdAt:
+              DateTime.tryParse(data['created_at'] ?? '') ?? DateTime.now(),
           updatedAt:
               data['updated_at'] != null
                   ? DateTime.tryParse(data['updated_at'])
                   : null,
           requestTypeTag: 'Concern Slip',
-          statusTag: data['status'] ?? 'pending',
+          // Normalize certain backend status variants (e.g. 'sent to client')
+          // to show the 'inspected' state in the tenant UI.
+          statusTag: _normalizeStatus(data['status']?.toString() ?? '') ,
           priority: data['priority'] ?? '',
           departmentTag: data['category'],
           requestedBy: data['reported_by_name'] ?? data['reported_by'] ?? '',
           unitId: data['unit_id'] ?? '',
-          scheduleAvailability: scheduleAvailabilityStr,
+          // Pass the parsed DateTimeRange (or null) so the details widget
+          // receives a typed range and displays it directly.
+          scheduleAvailability: scheduleRange,
           description: data['description'] ?? '',
           attachments: (data['attachments'] as List?)?.cast<String>(),
           assignedStaff: data['assigned_to_name'] ?? data['assigned_to'],
@@ -409,13 +467,14 @@ class _TenantConcernSlipDetailPageState
                   : null,
           assessment: data['staff_assessment'],
           staffRecommendation: data['staff_recommendation'],
-          staffAttachments: (data['assessment_attachments'] as List?)?.cast<String>(),
+          staffAttachments:
+              (data['assessment_attachments'] as List?)?.cast<String>(),
         ),
         // Show embedded form if resolution type is set and status allows it
-        if (resolutionType != null && 
-            resolutionType.isNotEmpty && 
+          if (resolutionType != null &&
+            resolutionType.isNotEmpty &&
             resolutionType != 'rejected' &&
-            _shouldShowEmbeddedForm(data['status'], resolutionType))
+            _shouldShowEmbeddedForm(_normalizeStatus(data['status']?.toString()), resolutionType))
           _buildEmbeddedForm(resolutionType, data),
       ],
     );
@@ -428,16 +487,35 @@ class _TenantConcernSlipDetailPageState
     // 3. The concern slip hasn't been completed yet
     final normalizedStatus = (status ?? '').toLowerCase();
     return ['sent', 'evaluated', 'approved'].contains(normalizedStatus) &&
-           ['job_service', 'work_order', 'work_permit'].contains(resolutionType);
+        ['job_service', 'work_order', 'work_permit'].contains(resolutionType);
   }
+
+  // Normalize various backend status variants to canonical values used
+  // throughout the UI. In particular, map 'sent to client' -> 'inspected'
+  // so tenant-facing screens consistently show the inspected state.
+  String _normalizeStatus(String? raw) {
+    if (raw == null) return '';
+    final s = raw.toString().toLowerCase().trim();
+
+    // Map some backend variants to our canonical token values (lowercase)
+    if (s == 'sent to client' || s == 'sent_to_client' || s == 'sent to tenant' || s == 'sent') return 'inspected';
+    if (s.contains('completed') || s == 'done') return 'inspected';
+    if (s.contains('assigned')) return 'to inspect';
+
+    // Fallback: normalize separators and return a lowercase token (e.g. 'in progress')
+    final cleaned = s.replaceAll(RegExp(r'[_\-]+'), ' ').trim();
+    return cleaned;
+  }
+
 
   /// Build an embedded form widget for job service / work order resolution types.
   /// This returns a RequestFormWrapper so the user can open/submit the corresponding form inline.
   Widget _buildEmbeddedForm(String resolutionType, Map<String, dynamic> data) {
     // Normalize resolutionType to a human-friendly request type label
-    final requestType = resolutionType == 'job_service'
-        ? 'Job Service'
-        : (resolutionType == 'work_permit' ? 'Work Order' : 'Work Order');
+    final requestType =
+        resolutionType == 'job_service'
+            ? 'Job Service'
+            : (resolutionType == 'work_permit' ? 'Work Order' : 'Work Order');
 
     return Padding(
       padding: const EdgeInsets.only(top: 24),
@@ -464,7 +542,6 @@ class _TenantConcernSlipDetailPageState
       ),
     );
   }
-
 }
 
 class ConcernSlipHistorySheet extends StatelessWidget {
@@ -645,7 +722,9 @@ class EmbeddedRequestFormPage extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: const Color(0xFFF0F9FF),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.3)),
+                  border: Border.all(
+                    color: const Color(0xFF3B82F6).withOpacity(0.3),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -694,10 +773,7 @@ class EmbeddedRequestFormPage extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 'Fill in the details below to proceed with your request',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
               ),
               const SizedBox(height: 24),
               // Show the appropriate form based on request type
@@ -735,10 +811,11 @@ class RequestFormWrapper extends StatelessWidget {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => RequestForm(
-              requestType: requestType,
-              concernSlipId: concernSlipId,
-            ),
+            builder:
+                (context) => RequestForm(
+                  requestType: requestType,
+                  concernSlipId: concernSlipId,
+                ),
           ),
         ).then((value) {
           // Return true to indicate submission success
@@ -751,17 +828,12 @@ class RequestFormWrapper extends StatelessWidget {
         backgroundColor: const Color(0xFF3B82F6),
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         minimumSize: const Size(double.infinity, 48),
       ),
       child: Text(
         'Open $requestType Form',
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ),
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
       ),
     );
   }

@@ -1,9 +1,11 @@
+import 'package:facilityfix/adminweb/widgets/tags.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
 import '../widgets/delete_popup.dart';
 import 'pop_up/js_viewdetails_popup.dart';
+import 'pop_up/edit_popup.dart';
 import '../maintenance_task/pop_up/assignstaff_popup.dart';
 
 class RepairJobServicePage extends StatefulWidget {
@@ -345,19 +347,6 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
 
     List<PopupMenuEntry<String>> menuItems = [
       PopupMenuItem(
-        value: 'assign',
-        child: Row(
-          children: [
-            Icon(Icons.person_add_alt_1_outlined, color: Colors.orange[700], size: 18),
-            const SizedBox(width: 12),
-            Text(
-              'Assign',
-              style: TextStyle(color: Colors.orange[700], fontSize: 14),
-            ),
-          ],
-        ),
-      ),
-      PopupMenuItem(
         value: 'view',
         child: Row(
           children: [
@@ -464,13 +453,24 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
 
   // Edit task method
   void _editTask(Map<String, dynamic> task) {
-    // Implement edit functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Edit task: ${task['id']}'),
-        backgroundColor: Colors.blue,
-      ),
-    );
+    // Open the EditDialog for job services and refresh on success
+    final raw = task['rawData'] ?? task;
+    EditDialog.show(
+      context,
+      type: EditDialogType.jobService,
+      task: raw as Map<String, dynamic>,
+      onSave: () {},
+    ).then((result) {
+      if (result == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Changes saved for: ${task['serviceId'] ?? task['id']}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadJobServices();
+      }
+    });
   }
 
   // Delete task method
@@ -482,29 +482,57 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     );
 
     if (confirmed) {
-      // TODO: Implement actual deletion via API
-      // For now, just remove from local list and reload
-      setState(() {
-        _repairTasks.removeWhere((t) => t['id'] == task['id']);
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Task ${task['id']} deleted'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      // Reload data to reflect changes
-      await _loadJobServices();
+      try {
+        // Determine backend id (prefer rawData._doc_id or rawData.id if available)
+        final raw = task['rawData'] as Map<String, dynamic>?;
+        final idToDelete = raw?['_doc_id'] ?? raw?['id'] ?? task['id'];
+
+        if (idToDelete == null) {
+          throw Exception('Unable to determine task id to delete');
+        }
+
+        final apiService = ApiService();
+        await apiService.deleteJobService(idToDelete.toString());
+
+        // Remove locally to update UI immediately
+        if (mounted) {
+          setState(() {
+            _repairTasks.removeWhere((t) => t['id'] == task['id']);
+            _filteredTasks.removeWhere((t) => t['id'] == task['id']);
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Task ${task['id']} deleted'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+
+        // Background refresh to ensure consistency with server
+        _loadJobServices();
+      } catch (e) {
+        print('[AdminRepairJobServicePage] Error deleting job service: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to delete task: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 
   final List<double> _colW = <double>[
-    140, // SERVICE ID
-    140, // CONCERN ID
-    140, // BUILDING & UNIT
-    130, // SCHEDULE
-    110, // STATUS
-    100, // PRIORITY
+    110, // JOB SERVICE ID
+    150, // TITLE
+    130, // DATE REQUESTED
+    100, // BUILDING & UNIT
+    70, // PRIORITY
+    80, // DEPARTMENT  
+    70, // STATUS
     38, // ACTION
   ];
 
@@ -888,7 +916,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                           context.go('/work/repair');
                         } else if (newValue == 'Job Service') {
                           context.go('/adminweb/pages/adminrepair_js_page');
-                        } else if (newValue == 'Work Order Permit') {
+                        } else if (newValue == 'Work Order') {
                           context.go('/adminweb/pages/adminrepair_wop_page');
                         }
                       },
@@ -896,7 +924,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                           <String>[
                             'Job Service',
                             'Concern Slip',
-                            'Work Order Permit',
+                            'Work Order',
                           ].map<DropdownMenuItem<String>>((String value) {
                             return DropdownMenuItem<String>(
                               value: value,
@@ -993,98 +1021,104 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                         ),
                       ),
                     ),
-                    DataColumn(label: _fixedCell(3, const Text("PRIORITY"))),
-                    DataColumn(label: _fixedCell(4, const Text("DEPARTMENT"))),
-                    DataColumn(label: _fixedCell(5, const Text("STATUS"))),
-                    DataColumn(label: _fixedCell(6, const Text(""))),
+                    DataColumn(label: _fixedCell(3, const Text("BUILDING / UNIT"))),
+                    DataColumn(label: _fixedCell(4, const Text("PRIORITY"))),
+                    DataColumn(label: _fixedCell(5, const Text("DEPARTMENT"))),
+                    DataColumn(label: _fixedCell(6, const Text("STATUS"))),
+                    DataColumn(label: _fixedCell(7, const Text(""))),
                   ],
-                  rows:
-                      _paginatedTasks.map((task) {
-                        return DataRow(
-                          cells: [
-                            DataCell(
-                              _fixedCell(
-                                0,
-                                _ellipsis(
-                                  task['serviceId'],
-                                  style: TextStyle(
-                                    color: Colors.grey[700],
-                                    fontSize: 13,
-                                  ),
-                                ),
+                  rows: _paginatedTasks.map((task) {
+                    return DataRow(
+                      cells: [
+                        // SERVICE ID
+                        DataCell(
+                          _fixedCell(
+                            0,
+                            _ellipsis(
+                              task['serviceId'] ?? 'N/A',
+                              style: TextStyle(
+                                color: Colors.grey[700],
+                                fontSize: 13,
                               ),
                             ),
-                            // TASK TITLE
-                            DataCell(
-                              _fixedCell(
-                                1,
-                                _ellipsis(
-                                  task['title'] ?? 'Job Service Request',
-                                  style: TextStyle(
-                                    color: Colors.grey[700],
-                                    fontSize: 13,
-                                  ),
-                                ),
+                          ),
+                        ),
+
+                        // TASK TITLE
+                        DataCell(
+                          _fixedCell(
+                            1,
+                            _ellipsis(
+                              task['title'] ?? 'Job Service Request',
+                              style: TextStyle(
+                                color: Colors.grey[700],
+                                fontSize: 13,
                               ),
                             ),
+                          ),
+                        ),
 
-                            // DATE REQUESTED
-                            DataCell(
-                              _fixedCell(2, _ellipsis(task['dateRequested'] ?? 'N/A')),
-                            ),
+                        // DATE REQUESTED
+                        DataCell(
+                          _fixedCell(2, _ellipsis(task['dateRequested'] ?? 'N/A')),
+                        ),
 
-                            // PRIORITY
-                            DataCell(
-                              _fixedCell(
-                                3,
-                                _buildPriorityChip(task['priority']),
-                              ),
-                            ),
+                        // BUILDING / UNIT
+                        DataCell(
+                          _fixedCell(
+                            3,
+                            _ellipsis(task['buildingUnit'] ?? 'N/A'),
+                          ),
+                        ),
 
-                            // DEPARTMENT
-                            DataCell(
-                              _fixedCell(4, _ellipsis(task['department'] ?? 'N/A')),
-                            ),
+                        // PRIORITY
+                        DataCell(
+                          _fixedCell(
+                            4,
+                            _buildPriorityChip(task['priority'] ?? 'Medium'),
+                          ),
+                        ),
 
-                            // STATUS
-                            DataCell(
-                              _fixedCell(5, _buildStatusChip(task['status'])),
-                            ),
+                        // DEPARTMENT
+                        DataCell(
+                          _fixedCell(5, DepartmentTag(task['department'] ?? 'N/A')),
+                        ),
 
-                            // Action menu cell (narrow, centered)
-                            DataCell(
-                              _fixedCell(
-                                6,
-                                Builder(
-                                  builder: (context) {
-                                    return IconButton(
-                                      onPressed: () {
-                                        final rbx =
-                                            context.findRenderObject()
-                                                as RenderBox;
-                                        final position = rbx.localToGlobal(
-                                          Offset.zero,
-                                        );
-                                        _showActionMenu(
-                                          context,
-                                          task,
-                                          position,
-                                        );
-                                      },
-                                      icon: Icon(
-                                        Icons.more_vert,
-                                        color: Colors.grey[400],
-                                        size: 20,
-                                      ),
+                        // STATUS
+                        DataCell(
+                          _fixedCell(6, _buildStatusChip(task['status'] ?? 'Pending')),
+                        ),
+
+                        // Action menu cell (narrow, centered)
+                        DataCell(
+                          _fixedCell(
+                            7,
+                            Builder(
+                              builder: (context) {
+                                return IconButton(
+                                  onPressed: () {
+                                    final rbx = context.findRenderObject() as RenderBox;
+                                    final position = rbx.localToGlobal(Offset.zero);
+                                    _showActionMenu(
+                                      context,
+                                      task,
+                                      position,
                                     );
                                   },
-                                ),
-                                align: Alignment.center,
-                              ),
+                                  icon: Icon(
+                                    Icons.more_vert,
+                                    color: Colors.grey[400],
+                                    size: 20,
+                                  ),
+                                );
+                              },
                             ),
-                          ],
-                        );
-                      }).toList(),
+                            align: Alignment.center,
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
                 ),
                           ),
                         ),

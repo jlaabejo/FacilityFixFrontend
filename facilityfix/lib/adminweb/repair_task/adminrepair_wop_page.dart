@@ -1,8 +1,11 @@
+import 'package:facilityfix/adminweb/widgets/tags.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../widgets/delete_popup.dart';
-import 'pop_up/wop_viewdetails_popup.dart';
+import '../widgets/pop_up_dialog.dart';
+import 'pop_up/wo_viewdetails_popup.dart';
+import 'pop_up/edit_popup.dart';
 import '../services/api_service.dart';
 
 class RepairWorkOrderPermitPage extends StatefulWidget {
@@ -50,7 +53,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   // Dropdown values for filtering
   String _selectedDepartment = 'All Departments';
   String _selectedStatus = 'All Status';
-  String _selectedConcernType = 'Work Order Permit';
+  String _selectedConcernType = 'Work Order';
 
   // Sort by date
   void _sortByDate() {
@@ -236,12 +239,19 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
             taskData['accountType'] =
                 concernSlip['category'] ?? taskData['department'];
 
+            // If concern slip has a priority field, prefer that as the displayed priority
+            final csPriority = concernSlip['priority'] ?? concernSlip['rawData']?['priority'] ?? concernSlip['priority_level'];
+            if (csPriority != null && csPriority.toString().trim().isNotEmpty) {
+              taskData['priority'] = csPriority.toString();
+              taskData['csPriority'] = csPriority; // keep raw for reference
+            }
+
             print(
-              '[Work Order Permits] Fetched concern slip $concernSlipId: assessment=${concernSlip['staff_assessment']}, recommendation=${concernSlip['staff_recommendation']}',
+              '[Work Order] Fetched concern slip $concernSlipId: assessment=${concernSlip['staff_assessment']}, recommendation=${concernSlip['staff_recommendation']}',
             );
           } catch (e) {
             print(
-              '[Work Order Permits] Error fetching concern slip $concernSlipId: $e',
+              '[Work Order] Error fetching concern slip $concernSlipId: $e',
             );
             // Set default values if concern slip fetch fails
             taskData['assessment'] = 'Unable to load assessment';
@@ -263,11 +273,11 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       });
     } catch (e) {
       setState(() {
-        _errorMessage = 'Error fetching work order permits: $e';
+        _errorMessage = 'Error fetching work order: $e';
         _filteredTasks = [];
         _isLoading = false;
       });
-      print('[Work Order Permits] Error: $e');
+      print('[Work Order] Error: $e');
     }
   }
 
@@ -349,20 +359,20 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   String _mapStatusToPriority(String? status) {
     switch (status?.toLowerCase()) {
       case 'pending':
-        return 'Pending Review';
-      case 'approved':
-        return 'High';
-      case 'denied':
-        return 'Low';
+        return 'Pending';
+      case 'accepted':
+        return 'Accepted';
+      case 'rejected':
+        return 'Rejected';
       case 'completed':
-        return 'Low';
+        return 'Completed';
       default:
-        return 'Medium';
+        return 'Pending';
     }
   }
 
   String _mapStatus(dynamic status, dynamic workflow) {
-    // Custom mapping logic for Work Order Permit (WOP)
+    // Custom mapping logic for Work Order
   final s = (status ?? '').toString().toLowerCase();
 
     if (s == 'completed') return 'Completed';
@@ -462,7 +472,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
         // Show deny option only for pending permits
         if (isPending)
           PopupMenuItem(
-            value: 'deny',
+            value: 'reject',
             child: Row(
               children: [
                 Icon(
@@ -472,27 +482,25 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  'Deny',
+                  'Rejected',
                   style: TextStyle(color: Colors.orange[700], fontSize: 14),
                 ),
               ],
             ),
           ),
-        // Show complete option for approved permits
-        if (isApproved)
-          PopupMenuItem(
-            value: 'complete',
-            child: Row(
-              children: [
-                Icon(Icons.done_all, color: Colors.blue[600], size: 18),
-                const SizedBox(width: 12),
-                Text(
-                  'Mark Complete',
-                  style: TextStyle(color: Colors.blue[600], fontSize: 14),
-                ),
-              ],
-            ),
+        PopupMenuItem(
+          value: 'edit',
+          child: Row(
+            children: [
+              Icon(Icons.edit_outlined, color: Colors.blue[600], size: 18),
+              const SizedBox(width: 12),
+              Text(
+                'Edit',
+                style: TextStyle(color: Colors.blue[600], fontSize: 14),
+              ),
+            ],
           ),
+        ),
         PopupMenuItem(
           value: 'delete',
           child: Row(
@@ -522,14 +530,31 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       case 'view':
         _viewTask(task);
         break;
+      case 'edit':
+        // Open Edit dialog for WOP and refresh on success
+        final raw = task['rawData'] ?? task;
+        EditDialog.show(
+          context,
+          type: EditDialogType.workOrderPermit,
+          task: raw as Map<String, dynamic>,
+          onSave: () {},
+        ).then((result) {
+          if (result == true && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Changes saved for: ${task['permitId'] ?? task['id']}'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            _fetchWorkOrderPermits();
+          }
+        });
+        break;
       case 'approve':
         _approvePermit(task);
         break;
-      case 'deny':
-        _denyPermit(task);
-        break;
-      case 'complete':
-        _completePermit(task);
+      case 'reject':
+        _rejectPermit(task);
         break;
       case 'delete':
         _deleteTask(task);
@@ -544,169 +569,32 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
 
   // Approve permit method
   Future<void> _approvePermit(Map<String, dynamic> task) async {
-    final permitId = task['permitId'];
-
-    // Show confirmation dialog
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Approve Work Order Permit'),
-          content: Text(
-            'Are you sure you want to approve permit ${task['serviceId']}?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(foregroundColor: Colors.green),
-              child: const Text('Approve'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed == true) {
-      try {
-        setState(() => _isLoading = true);
-
-        // Call API to approve permit
-        await _apiService.approveWorkOrderPermit(permitId);
-
-        // Refresh the list
-        await _fetchWorkOrderPermits();
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Permit ${task['serviceId']} approved successfully',
-              ),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } catch (e) {
-        setState(() => _isLoading = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error approving permit: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
+    // Delegate to centralized approval handler to avoid duplicate logic.
+    await _handleApprovalForTask(context, task);
   }
 
-  // Deny permit method
-  Future<void> _denyPermit(Map<String, dynamic> task) async {
-    final permitId = task['permitId'];
-    final reasonController = TextEditingController();
+  // Copied/adapted from WorkOrderConcernSlipDialog: show a modal to collect rejection notes
+  Future<void> _showRejectConfirmationForTask(BuildContext context, Map<String, dynamic> task) async {
+    final TextEditingController _reasonController = TextEditingController();
 
-    // Show dialog to get denial reason
     final confirmed = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Deny Work Order Permit'),
+          title: const Text('Return Work Order to Tenant'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Are you sure you want to deny permit ${task['serviceId']}?',
-              ),
-              const SizedBox(height: 16),
+              const Text('Please provide notes for returning this work order to the tenant.'),
+              const SizedBox(height: 12),
               TextField(
-                controller: reasonController,
-                decoration: const InputDecoration(
-                  labelText: 'Reason for denial',
-                  border: OutlineInputBorder(),
-                  hintText: 'Enter reason...',
-                ),
-                maxLines: 3,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Deny'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed == true && reasonController.text.isNotEmpty) {
-      try {
-        setState(() => _isLoading = true);
-
-        // Call API to deny permit
-        await _apiService.denyWorkOrderPermit(permitId, reasonController.text);
-
-        // Refresh the list
-        await _fetchWorkOrderPermits();
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Permit ${task['serviceId']} denied'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      } catch (e) {
-        setState(() => _isLoading = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error denying permit: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  // Complete permit method
-  Future<void> _completePermit(Map<String, dynamic> task) async {
-    final permitId = task['permitId'];
-    final notesController = TextEditingController();
-
-    // Show dialog to get completion notes
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Complete Work Order Permit'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Mark permit ${task['serviceId']} as completed?'),
-              const SizedBox(height: 16),
-              TextField(
-                controller: notesController,
+                controller: _reasonController,
                 maxLines: 4,
-                decoration: InputDecoration(
-                  labelText: 'Completion Notes (Optional)',
-                  hintText: 'Enter any notes about the completion...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                minLines: 3,
+                decoration: const InputDecoration(
+                  hintText: 'Enter notes (required)',
+                  border: OutlineInputBorder(),
                 ),
               ),
             ],
@@ -716,50 +604,126 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
               onPressed: () => Navigator.of(context).pop(false),
               child: const Text('Cancel'),
             ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(foregroundColor: Colors.blue),
-              child: const Text('Complete'),
+            ElevatedButton(
+              onPressed: () {
+                if (_reasonController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please enter notes explaining the return to tenant.'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                  return;
+                }
+                Navigator.of(context).pop(true);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red[600],
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Return'),
             ),
           ],
         );
       },
     );
 
-    if (confirmed == true) {
-      try {
-        setState(() => _isLoading = true);
+    if (confirmed != true) return;
 
-        // Call API to complete permit with notes
-        await _apiService.completeWorkOrderPermit(
-          permitId,
-          completionNotes:
-              notesController.text.isNotEmpty ? notesController.text : null,
+    setState(() => _isLoading = true);
+
+    try {
+      final reason = _reasonController.text.trim();
+      final permitId = task['permitId'] ?? task['id'] ?? task['serviceId'] ?? task['workOrderId'];
+      if (permitId == null) throw Exception('Could not determine permit id');
+
+      final resp = await _apiService.rejectWorkOrderPermit(permitId.toString(), reason);
+
+      // Refresh list and show feedback
+      await _fetchWorkOrderPermits();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Work order permit returned to tenant'),
+            backgroundColor: Colors.orange[600],
+            behavior: SnackBarBehavior.floating,
+          ),
         );
-
-        // Refresh the list
-        await _fetchWorkOrderPermits();
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Permit ${task['serviceId']} marked as completed'),
-              backgroundColor: Colors.blue,
-            ),
-          );
-        }
-      } catch (e) {
-        setState(() => _isLoading = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error completing permit: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error returning work order: $e'),
+            backgroundColor: Colors.red[600],
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  // Copied/adapted from WorkOrderConcernSlipDialog: approval flow using reusable dialog
+  Future<void> _handleApprovalForTask(BuildContext context, Map<String, dynamic> task) async {
+    final permitId = task['permitId'] ?? task['id'] ?? task['serviceId'] ?? task['workOrderId'];
+    if (permitId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not determine permit id'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    final confirmed = await showAppDialog<bool>(
+      context,
+      config: DialogConfig.confirmation(
+        title: 'Approve Work Order Permit',
+        description: 'Are you sure you want to approve this work order permit? This will allow the contractor to proceed.',
+        primaryButtonLabel: 'Approve',
+        primaryAction: () {},
+        secondaryButtonLabel: 'Cancel',
+        secondaryAction: () {},
+      ),
+      barrierDismissible: false,
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      await _apiService.approveWorkOrderPermit(permitId.toString());
+      await _fetchWorkOrderPermits();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Work order permit approved successfully!'),
+            backgroundColor: Color(0xFF38A169),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error approving work order: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // Reject permit method
+  Future<void> _rejectPermit(Map<String, dynamic> task) async {
+    // Delegate to centralized rejection handler which collects notes and persists the change.
+    await _showRejectConfirmationForTask(context, task);
   }
 
   // Delete task method
@@ -786,14 +750,14 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   }
 
   final List<double> _colW = <double>[
-    140, // SERVICE ID
-    140, // CONCERN ID
+    110, // WORK ORDER ID
     150, // TITLE
-    150, // BUILDING & UNIT
-    120, // SCHEDULE
-    100, // STATUS
-    140, // PRIORITY
-    48, // ACTION
+    130, // DATE REQUESTED
+    100, // BUILDING & UNIT
+    70, // PRIORITY
+    80, // DEPARTMENT  
+    70, // STATUS
+    38, // ACTION
   ];
 
   Widget _fixedCell(
@@ -841,7 +805,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
             _buildFilterSection(),
             const SizedBox(height: 32),
 
-            // Table Section - Repair Tasks (Work Order Permit)
+            // Table Section - Repair Tasks (Work Order)
             _buildTableSection(),
           ],
         ),
@@ -899,7 +863,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
-              child: const Text('Work Order Permit'),
+              child: const Text('Work Order'),
             ),
           ],
         ),
@@ -1105,7 +1069,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  "Work Order Permits",
+                  "Work Order",
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
@@ -1134,7 +1098,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                               context.go('/work/repair');
                             } else if (newValue == 'Job Service') {
                               context.go('/adminweb/pages/adminrepair_js_page');
-                            } else if (newValue == 'Work Order Permit') {
+                            } else if (newValue == 'Work Order') {
                               context.go(
                                 '/adminweb/pages/adminrepair_wop_page',
                               );
@@ -1144,7 +1108,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                               <String>[
                                 'Concern Slip',
                                 'Job Service',
-                                'Work Order Permit',
+                                'Work Order',
                               ].map<DropdownMenuItem<String>>((String value) {
                                 return DropdownMenuItem<String>(
                                   value: value,
@@ -1196,7 +1160,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                     : _filteredTasks.isEmpty
                     ? const Center(
                       child: Text(
-                        'No work order permits found',
+                        'No work order found',
                         style: TextStyle(color: Colors.grey),
                       ),
                     )
@@ -1207,7 +1171,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                             scrollDirection: Axis.horizontal,
                             child: SingleChildScrollView(
                               child: DataTable(
-                                columnSpacing: 16,
+                                columnSpacing: 50,
                                 headingRowHeight: 56,
                                 dataRowHeight: 64,
                                 headingRowColor: WidgetStateProperty.all(
@@ -1225,40 +1189,23 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                 ),
                                 columns: [
                                   DataColumn(
-                                    label: _fixedCell(
-                                      0,
-                                      const Text("SERVICE ID"),
-                                    ),
+                                    label: _fixedCell(0, const Text("WORK ORDER ID")),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(1, const Text("TITLE")),
                                   ),
                                   DataColumn(
                                     label: _fixedCell(
-                                      1,
-                                      const Text("CONCERN ID"),
-                                    ),
-                                  ),
-                                  DataColumn(
-                                    label: _fixedCell(2, const Text("TITLE")),
-                                  ),
-                                  DataColumn(
-                                    label: _fixedCell(
-                                      3,
-                                      const Text("BUILDING & UNIT"),
-                                    ),
-                                  ),
-                                  DataColumn(
-                                    label: _fixedCell(
-                                      4,
+                                      2,
                                       InkWell(
                                         onTap: _toggleSortOrder,
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            const Text("SCHEDULE DATE"),
+                                            const Text("DATE REQUESTED"),
                                             const SizedBox(width: 4),
                                             Icon(
-                                              _sortAscending
-                                                  ? Icons.arrow_upward
-                                                  : Icons.arrow_downward,
+                                              _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
                                               size: 16,
                                               color: Colors.grey[600],
                                             ),
@@ -1268,116 +1215,65 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                     ),
                                   ),
                                   DataColumn(
-                                    label: _fixedCell(5, const Text("STATUS")),
+                                    label: _fixedCell(3, const Text("BUILDING / UNIT")),
                                   ),
                                   DataColumn(
-                                    label: _fixedCell(
-                                      6,
-                                      const Text("PRIORITY"),
-                                    ),
+                                    label: _fixedCell(4, const Text("PRIORITY")),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(5, const Text("DEPARTMENT")),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(6, const Text("STATUS")),
                                   ),
                                   DataColumn(
                                     label: _fixedCell(7, const Text("")),
                                   ),
                                 ],
-                                rows:
-                                    _paginatedTasks.map((task) {
-                                      return DataRow(
-                                        cells: [
-                                          DataCell(
-                                            _fixedCell(
-                                              0,
-                                              _ellipsis(
-                                                task['serviceId'],
-                                                style: TextStyle(
-                                                  color: Colors.grey[700],
-                                                  fontSize: 13,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          DataCell(
-                                            _fixedCell(
-                                              1,
-                                              _ellipsis(
-                                                task['concernId'],
-                                                style: TextStyle(
-                                                  color: Colors.grey[700],
-                                                  fontSize: 13,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          DataCell(
-                                            _fixedCell(
-                                              2,
-                                              _ellipsis(task['title']),
-                                            ),
-                                          ),
-                                          DataCell(
-                                            _fixedCell(
-                                              3,
-                                              _ellipsis(task['buildingUnit']),
-                                            ),
-                                          ),
-                                          DataCell(
-                                            _fixedCell(
-                                              4,
-                                              _ellipsis(task['schedule']),
-                                            ),
-                                          ),
+                                rows: _paginatedTasks.map((task) {
+                                  return DataRow(
+                                    cells: [
+                                      // WORK ORDER ID
+                                      DataCell(_fixedCell(0, _ellipsis(task['serviceId'] ?? 'N/A'))),
 
-                                          // Chips get a fixed box too (and aligned left)
-                                          DataCell(
-                                            _fixedCell(
-                                              5,
-                                              _buildStatusChip(task['status']),
-                                            ),
-                                          ),
-                                          DataCell(
-                                            _fixedCell(
-                                              6,
-                                              _buildPriorityChip(
-                                                task['priority'],
-                                              ),
-                                            ),
-                                          ),
+                                      // TITLE
+                                      DataCell(_fixedCell(1, _ellipsis(task['title'] ?? 'Untitled'))),
 
-                                          // Action menu cell (narrow, centered)
-                                          DataCell(
-                                            _fixedCell(
-                                              7,
-                                              Builder(
-                                                builder: (context) {
-                                                  return IconButton(
-                                                    onPressed: () {
-                                                      final rbx =
-                                                          context.findRenderObject()
-                                                              as RenderBox;
-                                                      final position = rbx
-                                                          .localToGlobal(
-                                                            Offset.zero,
-                                                          );
-                                                      _showActionMenu(
-                                                        context,
-                                                        task,
-                                                        position,
-                                                      );
-                                                    },
-                                                    icon: Icon(
-                                                      Icons.more_vert,
-                                                      color: Colors.grey[400],
-                                                      size: 20,
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                              align: Alignment.center,
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    }).toList(),
+                                      // DATE REQUESTED
+                                      DataCell(_fixedCell(2, _ellipsis(task['dateRequested'] ?? 'N/A'))),
+
+                                      // BUILDING / UNIT
+                                      DataCell(_fixedCell(3, _ellipsis(task['buildingUnit'] ?? 'N/A'))),
+
+                                      // PRIORITY (chip)
+                                      DataCell(_fixedCell(4, PriorityTag(task['priority'] ?? ''))),
+
+                                      // DEPARTMENT (chip)
+                                      DataCell(_fixedCell(5, DepartmentTag(task['department'] ?? 'N/A'))),
+
+                                      // STATUS (chip)
+                                      DataCell(_fixedCell(6, StatusTag(task['status'] ?? 'Pending'))),
+
+                                      // ACTION (menu)
+                                      DataCell(
+                                        _fixedCell(
+                                          7,
+                                          Builder(builder: (cellContext) {
+                                            return IconButton(
+                                              onPressed: () {
+                                                final RenderBox box = cellContext.findRenderObject() as RenderBox;
+                                                final offset = box.localToGlobal(Offset.zero);
+                                                _showActionMenu(cellContext, task, offset);
+                                              },
+                                              icon: const Icon(Icons.more_vert, size: 20),
+                                            );
+                                          }),
+                                          align: Alignment.center,
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }).toList(),
                               ),
                             ),
                           ),
@@ -1487,114 +1383,6 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                     ),
           ),
         ],
-      ),
-    );
-  }
-
-  // Priority Chip Widget
-  Widget _buildPriorityChip(String priority) {
-    Color bgColor;
-    Color textColor;
-    switch (priority) {
-      case 'High':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'Medium':
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFFF8F00);
-        break;
-      case 'Low':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      case 'Pending Review':
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.black;
-        break;
-      default:
-        bgColor = Colors.grey[400]!;
-        textColor = Colors.grey[700]!;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        priority,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  // Status Chip Widget
-  Widget _buildStatusChip(String status) {
-    Color bgColor;
-    Color textColor;
-    switch (status) {
-      case 'In Progress':
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFFF8F00);
-        break;
-      case 'Pending':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'Completed':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      case 'Denied':
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-        break;
-      case 'To Inspect':
-        bgColor = const Color(0xFFE3F2FD);
-        textColor = const Color(0xFF1976D2);
-        break;
-      case 'Assessed':
-        bgColor = const Color(0xFFF3E5F5);
-        textColor = const Color(0xFF7B1FA2);
-        break;
-      case 'Sent to Client':
-        bgColor = const Color(0xFFE0F2F1);
-        textColor = const Color(0xFF00695C);
-        break;
-      case 'Approved':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      case 'Rejected':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'Returned to Tenant':
-        bgColor = const Color(0xFFFFF8E1);
-        textColor = const Color(0xFFFF8F00);
-        break;
-      default:
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
       ),
     );
   }

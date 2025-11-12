@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import 'pop_up/cs_viewdetails_popup.dart';
+import 'pop_up/edit_popup.dart';
 import '../widgets/delete_popup.dart';
-import '../maintenance_task/pop_up/assignstaff_popup.dart';
 import '../popupwidgets/set_resolution_type_popup.dart';
 import '../services/api_service.dart';
 
@@ -95,8 +95,6 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   // Helper method to get priority weight for sorting
   int _getPriorityWeight(String priority) {
     switch (priority.toLowerCase()) {
-      case 'critical':
-        return 4;
       case 'high':
         return 3;
       case 'medium':
@@ -203,49 +201,48 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   }
 
   String _mapStatus(dynamic status, dynamic workflow, dynamic resolutionType) {
-    // Custom mapping logic for Concern Slip (CS)
-  final s = (status ?? '').toString().toLowerCase();
-  final r = (resolutionType ?? '').toString().toLowerCase();
+    // Normalize input and reduce statuses to the project's canonical token set.
+    // Allowed token outputs (lowercase): 'pending', 'in progress', 'to inspect', 'inspected'.
+    final s = (status ?? '').toString().toLowerCase();
 
-    if (s == 'completed') {
-      if (r == 'job service') return 'Job Service';
-      if (r == 'work order permit') return 'Work Order Permit';
-      return 'Completed';
+    // Pending
+    if (s.contains('pending')) return 'pending';
+
+    // To Inspect (assigned / to inspect variants)
+    if (s.contains('assigned') || s.contains('to inspect') || s.contains('to_inspect')) {
+      return 'to inspect';
     }
-    if (s == 'cancelled') return 'Cancelled';
-    if (s == 'rejected') return 'Rejected';
-    if (s == 'returned_to_tenant') return 'Returned to Tenant';
-    if (s == 'pending') return 'Pending';
-    if (s == 'assigned') return 'To Inspect';
-    if (s == 'in_progress') return 'In Progress';
-    if (s == 'assessed') return 'Assessed';
-    if (s == 'sent') return 'Sent to Client';
-    if (s == 'approved') return 'Approved';
-    // fallback
-    return 'Pending';
+
+    // In Progress
+    if (s.contains('in_progress') || s.contains('in progress')) return 'in progress';
+
+    // Inspected / Assessed / Completed and similar => 'inspected'
+    if (s.contains('inspected') || s.contains('assessed') || s.contains('completed') || s.contains('assess')) {
+      return 'inspected';
+    }
+
+    // Fallback: treat unknowns as pending token
+    return 'pending';
   }
 
+  // single _mapStatus defined above; duplicate removed
+  
   String _getDepartment(String? category) {
     switch (category?.toLowerCase()) {
       case 'electrical':
         return 'Electrical';
       case 'plumbing':
         return 'Plumbing';
+      case 'masonry':
+        return 'Masonry';
       case 'hvac':
         return 'HVAC';
       case 'carpentry':
         return 'Carpentry';
-      case 'maintenance':
-        return 'Maintenance';
-      case 'security':
-        return 'Security';
-      case 'fire_safety':
-        return 'Fire Safety';
       case 'pest control':
         return 'Pest Control';
-
       default:
-        return 'General';
+        return '';
     }
   }
 
@@ -278,29 +275,42 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
               }
             }
 
-            // Status filter - handle both display values and variations
+            // Status filter - normalize both the selected label and the task status
             bool matchesStatus = _selectedStatus == 'All Status';
             if (!matchesStatus) {
-              final taskStatus = task['status']?.toString() ?? '';
+                String taskStatus = (task['status']?.toString() ?? '').toLowerCase();
+                // If staff has already assessed/filled assessment fields, treat as inspected
+                final raw = task['rawData'] ?? {};
+                final bool hasAssessment = (raw?['assessed_by'] != null) || (raw?['assessed_at'] != null) || (raw?['staff_assessment'] != null) || (raw?['staff_recommendation'] != null) || (raw?['assessment'] != null);
+                if (hasAssessment) taskStatus = 'inspected';
               final selectedStatus = _selectedStatus;
-              
-              // Direct match
-              if (taskStatus == selectedStatus) {
+              final normalizedSelected = selectedStatus.toLowerCase();
+
+              // Direct normalized match
+              if (taskStatus == normalizedSelected) {
                 matchesStatus = true;
               } else {
-                // Handle status variations
-                final statusMap = {
-                  'Assigned': ['Assigned', 'To Inspect'],
-                  'To Inspect': ['Assigned', 'To Inspect'],
-                  'In Progress': ['In Progress'],
-                  'Assessed': ['Assessed'],
-                  'Completed': ['Completed'],
-                  'Cancelled': ['Cancelled'],
-                  'Pending': ['Pending'],
+                // Map common display labels to canonical task status tokens
+                final Map<String, List<String>> canonicalMap = {
+                  'pending': ['pending'],
+                  'in progress': ['in progress', 'in_progress'],
+                  'to inspect': ['to inspect', 'to_inspect', 'assigned'],
+                  'inspected': ['inspected', 'completed', 'assessed', 'sent', 'sent to client', 'done'],
+                  // allow filtering by resolution types shown as Status dropdown options
+                  'job service': ['job service', 'pending js', 'pending js'],
+                  'work order': ['work order', 'pending wop', 'pending wop'],
                 };
-                
-                final validStatuses = statusMap[selectedStatus] ?? [selectedStatus];
+
+                final validStatuses = canonicalMap[normalizedSelected] ?? [normalizedSelected];
                 matchesStatus = validStatuses.contains(taskStatus);
+
+                // As a fallback, check resolution_type for Job Service / Work Order selections
+                if (!matchesStatus && (normalizedSelected == 'job service' || normalizedSelected == 'work order')) {
+                  final resolution = (task['rawData']?['resolution_type'] ?? '').toString().toLowerCase();
+                  if (resolution.isNotEmpty) {
+                    matchesStatus = resolution.contains(normalizedSelected.replaceAll(' ', '_')) || resolution.contains(normalizedSelected);
+                  }
+                }
               }
             }
 
@@ -370,13 +380,15 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   // Check if resolution type can be set (status is assessed)
   bool _canSetResolutionType(Map<String, dynamic> task) {
     final status = task['status']?.toString().toLowerCase();
-    return status == 'assessed';
+    // With normalized statuses, allow setting resolution when task is inspected/assessed
+    return status == 'assessed' || status == 'inspected';
   }
 
   // Check if action buttons should be disabled
   bool _areActionButtonsDisabled(Map<String, dynamic> task) {
     final status = task['status']?.toString().toLowerCase();
-    return status == 'assigned' && task['rawData']?['assessed_by'] == null;
+    // Mapped 'assigned' -> 'to inspect'
+    return (status == 'assigned' || status == 'to inspect' || status == 'to_inspect') && task['rawData']?['assessed_by'] == null;
   }
 
   // Action dropdown menu methods
@@ -388,9 +400,72 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     final RenderBox overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox;
 
-    final canAssign = _canAssignStaff(task);
-    final canSetResolution = _canSetResolutionType(task);
     final actionsDisabled = _areActionButtonsDisabled(task);
+
+    final List<PopupMenuEntry<String>> menuItems = [];
+
+    // Always available actions
+    menuItems.addAll([
+      PopupMenuItem(
+        value: 'view',
+        child: Row(
+          children: [
+            Icon(
+              Icons.visibility_outlined,
+              color: Colors.green[600],
+              size: 18,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'View',
+              style: TextStyle(color: Colors.green[600], fontSize: 14),
+            ),
+          ],
+        ),
+      ),
+      PopupMenuItem(
+        value: 'edit',
+        enabled: !actionsDisabled,
+        child: Row(
+          children: [
+            Icon(
+              Icons.edit_outlined,
+              color: actionsDisabled ? Colors.grey[400] : Colors.blue[600],
+              size: 18,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Edit',
+              style: TextStyle(
+                color: actionsDisabled ? Colors.grey[400] : Colors.blue[600],
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+      PopupMenuItem(
+        value: 'delete',
+        enabled: !actionsDisabled,
+        child: Row(
+          children: [
+            Icon(
+              Icons.delete_outline,
+              color: actionsDisabled ? Colors.grey[400] : Colors.red[600],
+              size: 18,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Delete',
+              style: TextStyle(
+                color: actionsDisabled ? Colors.grey[400] : Colors.red[600],
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ]);
 
     showMenu(
       context: context,
@@ -398,67 +473,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
         Rect.fromLTWH(position.dx, position.dy, 0, 0),
         Offset.zero & overlay.size,
       ),
-      items: [
-        PopupMenuItem(
-          value: 'view',
-          child: Row(
-            children: [
-              Icon(
-                Icons.visibility_outlined,
-                color: Colors.green[600],
-                size: 18,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'View',
-                style: TextStyle(color: Colors.green[600], fontSize: 14),
-              ),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: 'edit',
-          enabled: !actionsDisabled,
-          child: Row(
-            children: [
-              Icon(
-                Icons.edit_outlined,
-                color: actionsDisabled ? Colors.grey[400] : Colors.blue[600],
-                size: 18,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Edit',
-                style: TextStyle(
-                  color: actionsDisabled ? Colors.grey[400] : Colors.blue[600],
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: 'delete',
-          enabled: !actionsDisabled,
-          child: Row(
-            children: [
-              Icon(
-                Icons.delete_outline,
-                color: actionsDisabled ? Colors.grey[400] : Colors.red[600],
-                size: 18,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Delete',
-                style: TextStyle(
-                  color: actionsDisabled ? Colors.grey[400] : Colors.red[600],
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+      items: menuItems,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       elevation: 8,
     ).then((value) {
@@ -473,9 +488,6 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     switch (action) {
       case 'view':
         _viewTask(task);
-        break;
-      case 'assign':
-        _assignStaff(task);
         break;
       case 'set_resolution':
         _setResolutionType(task);
@@ -494,18 +506,6 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     ConcernSlipDetailDialog.show(context, task);
   }
 
-  // Assign staff method
-  void _assignStaff(Map<String, dynamic> task) {
-    AssignScheduleWorkDialog.show(
-      context,
-      task,
-      onAssignmentComplete: () {
-        // Refresh the concern slips list after assignment
-        _loadConcernSlips();
-      },
-    );
-  }
-
   // Set resolution type method
   void _setResolutionType(Map<String, dynamic> task) {
     SetResolutionTypeDialog.show(
@@ -520,13 +520,24 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
 
   // Edit task method
   void _editTask(Map<String, dynamic> task) {
-    // Implement edit functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Edit task: ${task['id']}'),
-        backgroundColor: Colors.blue,
-      ),
-    );
+    // Open the EditDialog for concern slips and refresh on success
+    final raw = task['rawData'] ?? task;
+    EditDialog.show(
+      context,
+      type: EditDialogType.concernSlip,
+      task: raw as Map<String, dynamic>,
+      onSave: () {},
+    ).then((result) {
+      if (result == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Changes saved for: ${task['id']}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadConcernSlips();
+      }
+    });
   }
 
   // Delete task method
@@ -740,6 +751,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                     vertical: 6.5,
                   ),
                 ),
+                onChanged: _onSearchChanged,
               ),
             ),
           ),
@@ -806,14 +818,14 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                       _applyFilters();
                     });
                   },
-                  items:
-                      <String>[
-                        'All Status',
-                        'Pending',
-                        'To Inspect',
-                        'Sent to Client',
-                        'Completed',
-                      ].map<DropdownMenuItem<String>>((String value) {
+                                  items:
+                                    <String>[
+                                      'All Status',
+                                      'Pending',
+                                      'In Progress',
+                                      'To Inspect',
+                                      'Inspected',
+                                    ].map<DropdownMenuItem<String>>((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
                           child: Text(
@@ -912,7 +924,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                           context.go('/work/repair');
                         } else if (newValue == 'Job Service') {
                           context.go('/adminweb/pages/adminrepair_js_page');
-                        } else if (newValue == 'Work Order Permit') {
+                        } else if (newValue == 'Work Order') {
                           context.go('/adminweb/pages/adminrepair_wop_page');
                         }
                       },
@@ -920,7 +932,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                           <String>[
                             'Concern Slip',
                             'Job Service',
-                            'Work Order Permit',
+                            'Work Order',
                           ].map<DropdownMenuItem<String>>((String value) {
                             return DropdownMenuItem<String>(
                               value: value,
@@ -1106,7 +1118,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                                     DataCell(
                                       _fixedCell(
                                         4,
-                                        _buildPriorityChip(task['priority']),
+                                        PriorityTag(task['priority']),
                                       ),
                                     ),
                                     DataCell(
@@ -1120,7 +1132,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                                     DataCell(
                                       _fixedCell(
                                         6,
-                                        _buildStatusChip(task['status']),
+                                        StatusTag(task['status']),
                                       ),
                                     ),
 
@@ -1250,114 +1262,6 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                       ),
           ),
         ],
-      ),
-    );
-  }
-
-  // Priority Chip Widget
-  Widget _buildPriorityChip(String priority) {
-    Color bgColor;
-    Color textColor;
-    switch (priority) {
-      case 'High':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'Medium':
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFFF8F00);
-        break;
-      case 'Low':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      case 'Critical':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      default:
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        priority,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-
-  // Status Chip Widget
-  Widget _buildStatusChip(String status) {
-    Color bgColor;
-    Color textColor;
-    switch (status) {
-      case 'In Progress':
-        bgColor = const Color(0xFFFFF3E0);
-        textColor = const Color(0xFFFF8F00);
-        break;
-      case 'Pending':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'Completed':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      case 'Cancelled':
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-        break;
-      case 'To Inspect':
-        bgColor = const Color(0xFFE3F2FD);
-        textColor = const Color(0xFF1976D2);
-        break;
-      case 'Assessed':
-        bgColor = const Color(0xFFF3E5F5);
-        textColor = const Color(0xFF7B1FA2);
-        break;
-      case 'Sent to Client':
-        bgColor = const Color(0xFFE0F2F1);
-        textColor = const Color(0xFF00695C);
-        break;
-      case 'Approved':
-        bgColor = const Color(0xFFE8F5E8);
-        textColor = const Color(0xFF2E7D32);
-        break;
-      case 'Rejected':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'Returned to Tenant':
-        bgColor = const Color(0xFFFFF8E1);
-        textColor = const Color(0xFFFF8F00);
-        break;
-      default:
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
       ),
     );
   }

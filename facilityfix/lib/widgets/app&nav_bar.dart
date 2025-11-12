@@ -11,6 +11,8 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onHistoryTap;
   final VoidCallback? onEditTap;
   final VoidCallback? onDeleteTap;
+  final int? notificationCount;
+  final VoidCallback? onNotificationTap;
 
   const CustomAppBar({
     super.key,
@@ -24,6 +26,8 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.onHistoryTap,
     this.onEditTap,
     this.onDeleteTap,
+    this.notificationCount,
+    this.onNotificationTap,
   });
 
   void _showBottomSheet(BuildContext context) {
@@ -131,17 +135,59 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       // Actions 
       actions: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24), 
+          padding: const EdgeInsets.only(right: 24),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (actions != null && actions!.isNotEmpty) ...actions!,
-              if (showMore)
-                IconButton(
-                  icon: const Icon(Icons.more_vert, color: Color(0xFF005CE8)),
-                  onPressed: () => _showBottomSheet(context),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (notificationCount != null && onNotificationTap != null)
+            Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.notifications, color: Color(0xFF2563EB)),
+              iconSize: 28,
+              splashRadius: 24,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: onNotificationTap,
+            ),
+            if (notificationCount! > 0)
+              Positioned(
+            top: 6,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              constraints: const BoxConstraints(
+                minWidth: 16,
+                minHeight: 16,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                notificationCount! > 99 ? '99+' : '$notificationCount',
+                style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              height: 1.1,
                 ),
-            ],
+                textAlign: TextAlign.center,
+              ),
+            ),
+              ),
+          ],
+            ),
+          if (actions != null && actions!.isNotEmpty) ...actions!,
+          if (showMore)
+            IconButton(
+          icon: const Icon(Icons.more_vert, color: Color(0xFF005CE8)),
+          onPressed: () => _showBottomSheet(context),
+            ),
+        ],
           ),
         ),
       ],

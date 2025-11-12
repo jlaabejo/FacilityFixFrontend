@@ -1,8 +1,11 @@
 import 'package:facilityfix/utils/ui_format.dart';
+import 'package:intl/intl.dart';
 import 'package:facilityfix/widgets/buttons.dart' as fx;
 import 'package:facilityfix/widgets/modals.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/tag.dart'; // StatusTag, PriorityTag, requestTypeTagTag, DepartmentTag
+
+// Schedule formatting is centralized in UiDateUtils.formatScheduleRange
 
 // CONCERN SLIP DETAILS
 class ConcernSlipDetails extends StatelessWidget {
@@ -11,7 +14,7 @@ class ConcernSlipDetails extends StatelessWidget {
   final DateTime createdAt;
   final DateTime? updatedAt;
   final String?
-  departmentTag; // electrical, plumbing, hvac, carpentry, masonry, maintenance
+  departmentTag; // electrical, plumbing, hvac, carpentry, masonry,
   final String requestTypeTag; // Concern Slip
   final String? priority; // High | Medium | Low
   final String
@@ -21,7 +24,7 @@ class ConcernSlipDetails extends StatelessWidget {
   //  Tenant / Requester
   final String requestedBy;
   final String unitId;
-  final String? scheduleAvailability; // e.g. "Aug 12, 1:30 PM"
+  final DateTimeRange? scheduleAvailability; // e.g. a DateTimeRange describing availability window
 
   // Request Details
   final String title;
@@ -37,7 +40,7 @@ class ConcernSlipDetails extends StatelessWidget {
   final String? staffRecommendation; // staff recommendation text
   final List<String>? staffAttachments; // staff-side attachments (list)
 
-  const ConcernSlipDetails({
+  ConcernSlipDetails({
     super.key,
     //  Basic Information
     required this.id,
@@ -50,9 +53,9 @@ class ConcernSlipDetails extends StatelessWidget {
     this.resolutionType,
 
     //  Tenant / Requester
-    required this.requestedBy,
-    required this.unitId,
-    this.scheduleAvailability,
+  required this.requestedBy,
+  required this.unitId,
+  Object? scheduleAvailability,
 
     // Request Details
     required this.title,
@@ -67,7 +70,66 @@ class ConcernSlipDetails extends StatelessWidget {
     this.assessment,
     this.staffRecommendation,
     this.staffAttachments,
-  });
+  }) : scheduleAvailability = _coerceScheduleAvailability(scheduleAvailability);
+
+  // Accept either a DateTimeRange or a String (backwards compatibility).
+  // If the input is a String, attempt to parse it into a DateTimeRange using
+  // common separators or by parsing a single DateTime and creating a 1-hour window.
+  static DateTimeRange? _coerceScheduleAvailability(Object? raw) {
+    if (raw == null) return null;
+    if (raw is DateTimeRange) return raw;
+    if (raw is String) {
+      final s = raw.trim();
+      if (s.isEmpty) return null;
+
+      // Try common separators for ranges
+        for (final sep in ['—', ' - ', ' to ', '|']) {
+          if (s.contains(sep)) {
+            final parts = s.split(sep);
+            if (parts.length >= 2) {
+              final leftRaw = parts[0].trim();
+              final rightRaw = parts[1].trim();
+
+              DateTime? a;
+              DateTime? b;
+
+              // Parse left (prefer full parse)
+              try {
+                a = DateTime.tryParse(leftRaw) ?? UiDateUtils.parse(leftRaw);
+              } catch (_) {
+                a = null;
+              }
+
+              // Parse right: handle time-only (e.g. "11:00 AM") relative to left
+              try {
+                // time-only pattern like "11:00 AM" or "9:00 PM" (allow with/without minutes)
+                // NOTE: previous pattern accidentally included an escaped dollar which prevented matches.
+                final timeOnly = RegExp(r'^\s*\d{1,2}(:\d{2})?\s*(AM|PM|am|pm)\s*\$?');
+                if (timeOnly.hasMatch(rightRaw) && a != null) {
+                  // Use locale-aware jm() parser which accepts both "9 AM" and "9:00 AM"
+                  final t = DateFormat.jm().parse(rightRaw);
+                  b = DateTime(a.year, a.month, a.day, t.hour, t.minute);
+                } else {
+                  b = DateTime.tryParse(rightRaw) ?? UiDateUtils.parse(rightRaw);
+                }
+              } catch (_) {
+                b = null;
+              }
+
+              if (a != null && b != null) {
+                return UiDateUtils.normalizeRange(a, b);
+              }
+              // If we couldn't parse properly, skip to fallback below
+            }
+          }
+        }
+
+        // Fallback: try to parse a single DateTime and create a 1-hour window
+  final dt = DateTime.tryParse(s) ?? UiDateUtils.parse(s);
+  return UiDateUtils.normalizeRange(dt, dt.add(const Duration(hours: 1)));
+    }
+    return null;
+  }
 
   // Map resolution -> what we show as "Request Type"
   // For concern slip, always show "Concern Slip" regardless of resolution
@@ -78,10 +140,29 @@ class ConcernSlipDetails extends StatelessWidget {
 
   // Local helpers for formatting via UiDateUtils
   String _fmtDate(DateTime d) => UiDateUtils.fullDate(d);
-  String? _fmtScheduleAvail(String? raw) {
-    if (raw == null || raw.trim().isEmpty) return null;
-    final dt = DateTime.tryParse(raw) ?? UiDateUtils.parse(raw);
-    return UiDateUtils.humanDateTime(dt);
+  String? _fmtScheduleAvail(DateTimeRange? range) {
+    if (range == null) return null;
+    // Use UiDateUtils.dateTimeRange for compact "Aug 23 | 8 PM - 10 PM" style
+    // If the range is a single instant (start == end), dateTimeRange will render a single time.
+    return UiDateUtils.dateTimeRange(range.start, range.end);
+  }
+
+  // Backwards-compatible helper: accept raw string and format using UiDateUtils
+  static String? _fmtScheduleAvailFromRaw(String? raw) {
+    if (raw == null) return null;
+    // If it's already a DateTimeRange serialized by our parse step, handle it
+    if (raw is String) {
+      final parsedRange = UiDateUtils.parseRange(raw);
+      if (parsedRange != null) return UiDateUtils.dateTimeRange(parsedRange.start, parsedRange.end);
+      // Try parsing as single datetime
+      try {
+        final dt = DateTime.tryParse(raw) ?? UiDateUtils.parse(raw);
+        return UiDateUtils.dateTimeRange(dt, dt.add(const Duration(hours: 1)));
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
   }
 
   @override
@@ -91,8 +172,17 @@ class ConcernSlipDetails extends StatelessWidget {
     final String detailsBody = description.trim();
     final bool showDetailsCard = detailsBody.isNotEmpty;
 
+    bool _isRealName(String? n) {
+      if (n == null) return false;
+      final t = n.trim();
+      if (t.isEmpty) return false;
+      final low = t.toLowerCase();
+      if (t == '—' || low == 'staff member' || low == 'staff') return false;
+      return true;
+    }
+
     final bool hasStaffBits =
-        (assignedStaff?.trim().isNotEmpty ?? false) ||
+        (_isRealName(assignedStaff)) ||
         (staffDepartment?.trim().isNotEmpty ?? false) ||
         (assessedAt != null) ||
         (assessment?.trim().isNotEmpty ?? false) ||
@@ -210,7 +300,7 @@ class ConcernSlipDetails extends StatelessWidget {
             SizedBox(height: 4 * s),
             KeyValueRow.text(label: 'Unit ID', valueText: unitId),
           ],
-          if ((scheduleAvailability?.trim().isNotEmpty ?? false)) ...[
+          if (scheduleAvailability != null) ...[
             SizedBox(height: 4 * s),
             KeyValueRow.text(
               label: 'Schedule Availability',
@@ -246,11 +336,8 @@ class ConcernSlipDetails extends StatelessWidget {
                     spacing: 8 * s,
                     runSpacing: 8 * s,
                     children:
-                        attachments!
-                            .map((u) => Image.network(u))
-                            .toList(),
-                  ),  
-                  
+                        attachments!.map((u) => Image.network(u)).toList(),
+                  ),
                 ],
               ],
             ),
@@ -284,7 +371,7 @@ class ConcernSlipDetails extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if ((assignedStaff?.trim().isNotEmpty ?? false)) ...[
+                          if (_isRealName(assignedStaff)) ...[
                             _AvatarNameBlock(
                               name: assignedStaff!.trim(),
                               departmentTag:
@@ -361,7 +448,7 @@ class JobServiceDetails extends StatelessWidget {
   final DateTime createdAt;
   final DateTime? updatedAt;
   final String requestTypeTag; // e.g. "Job Service"
-  final String? resolutionType; // job_service, work_permit, rejected
+  final String? resolutionType; // job_service, work_permit,
   final String? priority; // High | Medium | Low
   final String? departmentTag;
   final String
@@ -370,10 +457,11 @@ class JobServiceDetails extends StatelessWidget {
   //  Tenant / Requester
   final String requestedBy;
   final String? requestedByName; // Full name of requester
-  final String? requestedByEmail; // Email of requester
-  final String unitId;
-  final String? scheduleAvailability; // e.g. "Aug 12, 1:30 PM"
+  final String unitId; // or location
+  final Object? scheduleAvailability; // e.g. DateTimeRange or "Aug 12, 1:30 PM"
   final String? additionalNotes;
+  // Title of the job/service task (displayed prominently)
+  final String? title;
 
   // Staff
   final String? assignedStaff; // staff user_id / display name
@@ -410,10 +498,10 @@ class JobServiceDetails extends StatelessWidget {
     // Tenant / Requester
     required this.requestedBy,
     this.requestedByName,
-    this.requestedByEmail,
     required this.unitId,
-    this.scheduleAvailability,
+  this.scheduleAvailability,
     this.additionalNotes,
+  this.title,
 
     // Staff
     this.assignedStaff,
@@ -452,9 +540,9 @@ class JobServiceDetails extends StatelessWidget {
 
   // Force the status chip to show "Rejected" when resolutionType == rejected.
   String get _displayStatus =>
-      (resolutionType?.trim().toLowerCase() == 'rejected')
-          ? 'Rejected'
-          : statusTag;
+    (resolutionType?.trim().toLowerCase() == 'rejected')
+      ? 'rejected'
+      : statusTag;
 
   @override
   Widget build(BuildContext context) {
@@ -472,16 +560,39 @@ class JobServiceDetails extends StatelessWidget {
         (assessment?.trim().isNotEmpty ?? false) ||
         ((staffAttachments ?? const []).isNotEmpty);
 
-    final displayType = _effectiverequestTypeTag();
-    final headerTitle = displayType.isNotEmpty ? displayType : 'Job Service';
+  final displayType = _effectiverequestTypeTag();
+  final headerTitle = (title != null && title!.trim().isNotEmpty) ? title!.trim() : (displayType.isNotEmpty ? displayType : 'Job Service');
 
     // Format helpers using UiDateUtils
     String _fmtDate(DateTime d) => UiDateUtils.fullDate(d);
     String _fmtDateTime(DateTime d) => UiDateUtils.humanDateTime(d);
-    String? _fmtSchedAvail(String? raw) {
-      if (raw == null || raw.trim().isEmpty) return null;
-      final dt = DateTime.tryParse(raw) ?? UiDateUtils.parse(raw);
-      return UiDateUtils.humanDateTime(dt);
+    String? _fmtSchedAvail(Object? raw) {
+      if (raw == null) return null;
+
+      if (raw is DateTimeRange) {
+        return UiDateUtils.dateTimeRange(raw.start, raw.end);
+      }
+
+      if (raw is DateTime) {
+        return UiDateUtils.dateTimeRange(raw, raw.add(const Duration(hours: 1)));
+      }
+
+      if (raw is String) {
+        final s = raw.trim();
+        if (s.isEmpty) return null;
+
+        final pr = UiDateUtils.parseRange(s);
+        if (pr != null) return UiDateUtils.dateTimeRange(pr.start, pr.end);
+
+        try {
+          final dt = DateTime.tryParse(s) ?? UiDateUtils.parse(s);
+          return UiDateUtils.dateTimeRange(dt, dt.add(const Duration(hours: 1)));
+        } catch (_) {
+          return null;
+        }
+      }
+
+      return null;
     }
 
     return Container(
@@ -639,7 +750,11 @@ class JobServiceDetails extends StatelessWidget {
             SizedBox(height: 4 * s),
             KeyValueRow.text(label: 'Unit ID', valueText: unitId),
           ],
-          if ((scheduleAvailability?.trim().isNotEmpty ?? false)) ...[
+          if (scheduleAvailability != null &&
+              ((scheduleAvailability is String &&
+                  (scheduleAvailability as String).trim().isNotEmpty) ||
+               scheduleAvailability is DateTimeRange ||
+               scheduleAvailability is DateTime)) ...[
             SizedBox(height: 4 * s),
             KeyValueRow.text(
               label: 'Schedule Availability',
@@ -654,7 +769,6 @@ class JobServiceDetails extends StatelessWidget {
 
           // ===== Additional Notes Section =====
           if ((additionalNotes?.trim().isNotEmpty ?? false) ||
-              (scheduleAvailability?.trim().isNotEmpty ?? false) ||
               (assessment?.trim().isNotEmpty ?? false)) ...[
             _Section(
               title: 'Additional Notes',
@@ -668,16 +782,6 @@ class JobServiceDetails extends StatelessWidget {
                       content: additionalNotes!.trim(),
                       padding: EdgeInsets.all(14 * s),
                       hideIfEmpty: false,
-                    ),
-                    SizedBox(height: 8 * s),
-                  ],
-
-                  // Optional Schedule Availability
-                  if ((scheduleAvailability?.trim().isNotEmpty ?? false)) ...[
-                    KeyValueRow.text(
-                      label: 'Schedule Availability',
-                      valueText: _fmtSchedAvail(scheduleAvailability!.trim())!,
-                      labelWidth: 160 * s,
                     ),
                     SizedBox(height: 8 * s),
                   ],
@@ -838,12 +942,11 @@ class WorkOrderPermitDetails extends StatelessWidget {
   // Permit Specific Details
   final String contractorName; // required
   final String contractorNumber; // required
-  final String? contractorCompany;
+  final String? contractorEmail;
 
   // Work Specifics Details
   final DateTime workScheduleFrom; // required (date + time)
   final DateTime workScheduleTo; // required (date + time)
-  final String? entryEquipments; // tools/equipment needed at entry
 
   // Approval Tracking
   final String? approvedBy; // admin user_id/display
@@ -882,12 +985,11 @@ class WorkOrderPermitDetails extends StatelessWidget {
     // Permit Specific Details
     required this.contractorName,
     required this.contractorNumber,
-    this.contractorCompany,
+    this.contractorEmail,
 
     // Work Specifics Details
     required this.workScheduleFrom,
     required this.workScheduleTo,
-    this.entryEquipments,
 
     // Approval Tracking
     this.approvedBy,
@@ -958,11 +1060,12 @@ class WorkOrderPermitDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = uiScale(context); // 0.85..1.0 on phones
     final displayType = _effectiverequestTypeTag();
-    
+
     // Use title if available, otherwise fall back to displayType
-    final headerTitle = (title?.trim().isNotEmpty ?? false) 
-        ? title!.trim() 
-        : (displayType.isNotEmpty ? displayType : 'Work Order Permit');
+    final headerTitle =
+        (title?.trim().isNotEmpty ?? false)
+            ? title!.trim()
+            : (displayType.isNotEmpty ? displayType : 'Work Order Permit');
 
     final hasApprovalBits =
         (approvedBy?.trim().isNotEmpty ?? false) ||
@@ -1135,17 +1238,17 @@ class WorkOrderPermitDetails extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 KeyValueRow.text(
-                  label: 'Contractor',
+                  label: 'Name/Company',
                   valueText: contractorName,
                 ),
                 SizedBox(height: 6 * s),
-                KeyValueRow.text(label: 'Contact', valueText: contractorNumber),
-                if ((contractorCompany ?? '').isNotEmpty) ...[
+                KeyValueRow.text(
+                  label: 'Contact Number',
+                  valueText: contractorNumber,
+                ),
+                if ((contractorEmail ?? '').isNotEmpty) ...[
                   SizedBox(height: 6 * s),
-                  KeyValueRow.text(
-                    label: 'Company',
-                    valueText: contractorCompany!,
-                  ),
+                  KeyValueRow.text(label: 'Email', valueText: contractorEmail!),
                 ],
               ],
             ),
@@ -1171,30 +1274,6 @@ class WorkOrderPermitDetails extends StatelessWidget {
                   label: 'To',
                   valueText: _formatWorkSchedule(workScheduleTo),
                 ),
-                SizedBox(height: 6 * s),
-                KeyValueRow.text(
-                  label: 'Duration',
-                  valueText: _formatWindowDuration(
-                    workScheduleFrom,
-                    workScheduleTo,
-                  ),
-                ),
-                if ((entryEquipments?.trim().isNotEmpty ?? false)) ...[
-                  SizedBox(height: 10 * s),
-                  _SectionCard(
-                    title: 'Entry Equipment',
-                    content: entryEquipments!.trim(),
-                    padding: EdgeInsets.all(14 * s),
-                    hideIfEmpty: false,
-                  ),
-                  if ((adminNotes?.trim().isNotEmpty ?? false))
-                    _SectionCard(
-                      title: 'Admin Notes',
-                      content: adminNotes!.trim(),
-                      padding: EdgeInsets.all(14 * s),
-                      hideIfEmpty: false,
-                    ),
-                ],
               ],
             ),
           ),
@@ -1225,7 +1304,7 @@ class WorkOrderPermitDetails extends StatelessWidget {
                     ),
                     SizedBox(height: 12 * s),
                   ],
-                  
+
                   // Show approved by with avatar/initials
                   if ((approvedBy?.trim().isNotEmpty ?? false)) ...[
                     _AvatarNameBlock(
@@ -1234,20 +1313,11 @@ class WorkOrderPermitDetails extends StatelessWidget {
                     ),
                     SizedBox(height: 10 * s),
                   ],
-                  
+
                   if ((denialReason?.trim().isNotEmpty ?? false)) ...[
                     _SectionCard(
                       title: 'Denial Reason',
                       content: denialReason!.trim(),
-                      padding: EdgeInsets.all(14 * s),
-                      hideIfEmpty: false,
-                    ),
-                    SizedBox(height: 8 * s),
-                  ],
-                  if ((completionNotes?.trim().isNotEmpty ?? false)) ...[
-                    _SectionCard(
-                      title: 'Completion Notes',
-                      content: completionNotes!.trim(),
                       padding: EdgeInsets.all(14 * s),
                       hideIfEmpty: false,
                     ),
@@ -1265,9 +1335,23 @@ class WorkOrderPermitDetails extends StatelessWidget {
               ),
             ),
           ],
-
           // ===== Complete Button (only show if approved/in-progress and onComplete callback exists) =====
-          if (_canBeCompleted() && onComplete != null && id != null) ...[],
+          if (_canBeCompleted() && onComplete != null && id != null) ...[
+            SizedBox(height: 16 * s),
+            Row(
+              children: [
+                Expanded(
+                  child: fx.OutlinedPillButton(
+                    label: 'Mark as Completed',
+                    onPressed: () => _showCompleteDialog(context),
+                    icon: Icons.check_circle_outline,
+                    foregroundColor: const Color(0xFF0B5FFF),
+                    borderColor: const Color(0xFFD0D5DD),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -1429,7 +1513,7 @@ class MaintenanceDetails extends StatefulWidget {
   final Function(Map<String, dynamic>)? onInventoryItemTap;
   final String? currentStaffId;
   final String? taskCategory;
-  
+
   // Action callbacks
   final VoidCallback? onHold;
   final VoidCallback? onCreateAssessment;
@@ -1849,54 +1933,95 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                           request['stock_quantity'] ??
                           0;
                       final status = request['status'] ?? 'pending';
-                        final unit = request['unit'] ?? '';
+                      final unit = request['unit'] ?? '';
 
-                        // Show RestockBottomSheet when Request is tapped.
-                        // Provide a Received handler (placeholder) and a Request handler
-                        // that opens the bottom sheet. The returned `actionButtons`
-                        // widget can be used in the item row (replace the small status
-                        // chip container with `actionButtons`).
-                        final void Function()? _onReceivedPressed = () {
+                      // Show RestockBottomSheet when Request is tapped.
+                      // Provide a Received handler (placeholder) and a Request handler
+                      // that opens the bottom sheet. The returned `actionButtons`
+                      // widget can be used in the item row (replace the small status
+                      // chip container with `actionButtons`).
+                      final void Function()? _onReceivedPressed = () {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                          content: Text('Marked "$itemName" as received'),
+                            content: Text('Marked "$itemName" as received'),
                           ),
                         );
-                        };
+                      };
 
-                        final void Function()? _onRequestPressed = () {
+                      final void Function()? _onRequestPressed = () {
                         showModalBottomSheet(
                           context: context,
                           isScrollControlled: true,
-                          builder: (_) => RestockBottomSheet(
-                          // pass relevant data — change params as needed
-                          itemName: '', itemId: '', unit: '',
-                          ),
+                          builder:
+                              (_) => RequestItem(
+                                // pass relevant data — change params as needed
+                                itemName: '',
+                                itemId: '',
+                                unit: '', 
+                                stock: '',
+                              ),
                         );
-                        };
+                      };
 
-                        final Widget actionButtons = Row(
-                        mainAxisSize: MainAxisSize.min,
+                        final bool _isReceivedLocal = (request['status']?.toString().toLowerCase() == 'fulfilled' ||
+                          request['status']?.toString().toLowerCase() == 'received');
+
+                        final Widget actionButtons = Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          ElevatedButton(
-                          onPressed: _onReceivedPressed,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF059669),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                            minimumSize: const Size(0, 0),
-                          ),
-                          child: const Text('Received'),
-                          ),
-                          const SizedBox(width: 8),
-                          OutlinedButton(
-                          onPressed: _onRequestPressed,
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFF005CE7)),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          ),
-                          child: const Text('Request'),
+                          const SizedBox(height: 8),
+                          Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Receive button: outlined green when not received, filled green when received
+                            _isReceivedLocal
+                              ? ElevatedButton(
+                                onPressed: null,
+                                style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF059669),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                minimumSize: const Size(0, 0),
+                                ),
+                                child: const Text('Received'),
+                              )
+                              : OutlinedButton(
+                                onPressed: () {
+                                // update local model so UI reflects change immediately
+                                setState(() {
+                                  request['status'] = 'received';
+                                });
+                                if (_onReceivedPressed != null) _onReceivedPressed();
+                                },
+                                style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Color(0xFF059669)),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                ),
+                                child: const Text(
+                                'Receive',
+                                style: TextStyle(color: Color(0xFF059669)),
+                                ),
+                              ),
+                            const SizedBox(width: 8),
+                            // Request button: full blue
+                            ElevatedButton(
+                            onPressed: _onRequestPressed,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF005CE7),
+                              padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                              ),
+                              minimumSize: const Size(0, 0),
+                            ),
+                            child: const Text('Request'),
+                            ),
+                          ],
                           ),
                         ],
                         );
@@ -1911,39 +2036,47 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                         padding: const EdgeInsets.all(16),
                         child: Row(
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    itemName,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: Color(0xFF1F2937),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Text(
-                                        'RESERVE $quantity',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF1F2937),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Text(
-                                        'STOCK $quantity',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Color(0xFF6B7280),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                          Expanded(
+                            child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                              itemName,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF1F2937),
+                              ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                              children: [
+                                Text(
+                                'RESERVE $quantity',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1F2937),
+                                ),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                'STOCK $quantity',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF6B7280),
+                                ),
+                                ),
+                              ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                              'Quantity: $quantity${unit.toString().trim().isNotEmpty ? ' $unit' : ''}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF6B7280),
+                              ),
+                              ),
                                   if (category.isNotEmpty) ...[
                                     const SizedBox(height: 4),
                                     Container(
@@ -3369,7 +3502,11 @@ class _AvatarNameBlock extends StatelessWidget {
 String _initials(String name) {
   final parts = name.trim().split(RegExp(r'\s+'));
   if (parts.isEmpty) return '';
-  if (parts.length == 1) return parts.first[0].toUpperCase();
+  if (parts.length == 1) {
+    final p = parts.first;
+    if (p.length >= 2) return (p[0] + p[1]).toUpperCase();
+    return p[0].toUpperCase();
+  }
   return (parts.first[0] + parts.last[0]).toUpperCase();
 }
 

@@ -46,9 +46,12 @@ class _ExternalMaintenanceFormPageState
   final TextEditingController _assessmentController = TextEditingController();
   final TextEditingController _recommendationController =
       TextEditingController();
-  final TextEditingController _otherLocationController = TextEditingController();
-  final TextEditingController _otherServiceCategoryController = TextEditingController();
-  final TextEditingController _estimatedDurationController = TextEditingController();
+  final TextEditingController _otherLocationController =
+      TextEditingController();
+  final TextEditingController _otherServiceCategoryController =
+      TextEditingController();
+  final TextEditingController _estimatedDurationController =
+      TextEditingController();
   final TextEditingController _startDateController = TextEditingController();
   final TextEditingController _nextDueDateController = TextEditingController();
 
@@ -71,6 +74,8 @@ class _ExternalMaintenanceFormPageState
   bool _isOtherServiceCategory = false;
   // Inventory selections (basic local state for UI)
   List<Map<String, dynamic>> _selectedInventoryItems = [];
+  // Estimated time for service (used by estimated duration field)
+  TimeOfDay? _estimatedTime;
 
   static const List<String> _monthNames = [
     'Jan',
@@ -147,21 +152,23 @@ class _ExternalMaintenanceFormPageState
   int _daysInMonth(int year, int month) {
     final nextMonth = month == 12 ? 1 : month + 1;
     final nextMonthYear = month == 12 ? year + 1 : year;
-    return DateTime(nextMonthYear, nextMonth, 1)
-        .subtract(const Duration(days: 1))
-        .day;
+    return DateTime(
+      nextMonthYear,
+      nextMonth,
+      1,
+    ).subtract(const Duration(days: 1)).day;
   }
 
   // Auto-generate notifications based on task duration
   void _updateNotifications() {
     if (_startDate == null) return;
-    
+
     final now = DateTime.now();
     final daysUntilStart = _startDate!.difference(now).inDays;
-    
+
     // Auto-generate notification schedule based on time until task
     List<String> notifications = [];
-    
+
     if (daysUntilStart >= 30) {
       notifications.add('1 month before');
     }
@@ -177,7 +184,7 @@ class _ExternalMaintenanceFormPageState
     if (daysUntilStart >= 1) {
       notifications.add('1 day before');
     }
-    
+
     setState(() {
       if (notifications.isNotEmpty) {
         _selectedAdminNotifications = notifications.join(', ');
@@ -193,20 +200,26 @@ class _ExternalMaintenanceFormPageState
   }
 
   String? _recurrenceSummaryText() {
-    if (_selectedRecurrence == null || _startDate == null || _nextDueDate == null) {
+    if (_selectedRecurrence == null ||
+        _startDate == null ||
+        _nextDueDate == null) {
       return null;
     }
 
     final start = _formatFriendlyDate(_startDate!);
     final next = _formatFriendlyDate(_nextDueDate!);
-    final windowStart = _serviceWindowStart != null
-        ? _formatFriendlyDate(_serviceWindowStart!)
-        : null;
-    final windowEnd = _serviceWindowEnd != null
-        ? _formatFriendlyDate(_serviceWindowEnd!)
-        : null;
+    final windowStart =
+        _serviceWindowStart != null
+            ? _formatFriendlyDate(_serviceWindowStart!)
+            : null;
+    final windowEnd =
+        _serviceWindowEnd != null
+            ? _formatFriendlyDate(_serviceWindowEnd!)
+            : null;
 
-    final buffer = StringBuffer('Repeats $_selectedRecurrence starting $start. Next occurrence $next');
+    final buffer = StringBuffer(
+      'Repeats $_selectedRecurrence starting $start. Next occurrence $next',
+    );
     if (windowStart != null && windowEnd != null) {
       buffer.write(' - Service window $windowStart to $windowEnd');
     }
@@ -239,7 +252,7 @@ class _ExternalMaintenanceFormPageState
     setState(() {
       _startDate = normalized;
       _startDateController.text = _formatDateYYYYMMDD(normalized);
-      
+
       if (_selectedRecurrence != null) {
         final nextDue = _calculateNextDueDate(normalized, _selectedRecurrence!);
         _nextDueDate = nextDue;
@@ -264,6 +277,31 @@ class _ExternalMaintenanceFormPageState
       lastDate: DateTime(2035),
     );
     if (picked != null) onPick(picked);
+  }
+
+  Future<void> _pickEstimatedTime() async {
+    final initial = _estimatedTime ?? const TimeOfDay(hour: 9, minute: 0);
+    final picked = await showTimePicker(context: context, initialTime: initial);
+    if (picked == null) return;
+
+    // Accept only times between 09:00 and 19:00 inclusive
+    if (picked.hour < 9 || picked.hour > 19) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please pick a time between 09:00 and 19:00'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _estimatedTime = picked;
+      // Format using MaterialLocalizations for consistency
+      final formatted = MaterialLocalizations.of(
+        context,
+      ).formatTimeOfDay(picked);
+      _estimatedDurationController.text = formatted;
+    });
   }
 
   Widget _buildRecurrenceSummary() {
@@ -353,7 +391,7 @@ class _ExternalMaintenanceFormPageState
     _initAutoFields();
     // load inventory items in background
     _loadInventoryItems();
-    
+
     // If in edit mode, populate fields with existing data
     if (widget.isEditMode && widget.maintenanceData != null) {
       _populateFormFields(widget.maintenanceData!);
@@ -364,24 +402,29 @@ class _ExternalMaintenanceFormPageState
     setState(() {
       // Basic fields
       _taskTitleController.text = data['task_title'] ?? data['taskTitle'] ?? '';
-      _taskCodeController.text = data['task_code'] ?? data['id']?.toString() ?? '';
-      _descriptionController.text = data['task_description'] ?? data['description'] ?? '';
+      _taskCodeController.text =
+          data['task_code'] ?? data['id']?.toString() ?? '';
+      _descriptionController.text =
+          data['task_description'] ?? data['description'] ?? '';
       _estimatedDurationController.text = data['estimated_duration'] ?? '';
-      
+
       // Contractor information
-      _contractorNameController.text = data['contractor_name'] ?? data['contractorName'] ?? '';
-      _contactPersonController.text = data['contact_person'] ?? data['contactPerson'] ?? '';
-      _contactNumberController.text = data['contact_number'] ?? data['contactNumber'] ?? '';
+      _contractorNameController.text =
+          data['contractor_name'] ?? data['contractorName'] ?? '';
+      _contactPersonController.text =
+          data['contact_person'] ?? data['contactPerson'] ?? '';
+      _contactNumberController.text =
+          data['contact_number'] ?? data['contactNumber'] ?? '';
       _emailController.text = data['email'] ?? '';
-      
+
       // Assessment fields
       _assessmentController.text = data['assessment'] ?? '';
       _recommendationController.text = data['recommendation'] ?? '';
-      
+
       // Dropdowns - validate values are in options list
       final priority = data['priority']?.toString();
       _selectedPriority = _priorityOptions.contains(priority) ? priority : null;
-      
+
       final location = data['location'] ?? data['area'];
       if (location != null && _locationOptions.contains(location.toString())) {
         _selectedLocation = location.toString();
@@ -391,37 +434,56 @@ class _ExternalMaintenanceFormPageState
         _isOtherLocation = true;
         _otherLocationController.text = location.toString();
       }
-      
+
       final serviceCategory = data['service_category'] ?? data['category'];
-      if (serviceCategory != null && _serviceCategoryOptions.contains(serviceCategory.toString())) {
+      if (serviceCategory != null &&
+          _serviceCategoryOptions.contains(serviceCategory.toString())) {
         _selectedServiceCategory = serviceCategory.toString();
-      } else if (serviceCategory != null && serviceCategory.toString().isNotEmpty) {
+      } else if (serviceCategory != null &&
+          serviceCategory.toString().isNotEmpty) {
         // If service category is not in the list, set it as "Other" and populate the text field
         _selectedServiceCategory = 'Other';
         _isOtherServiceCategory = true;
         _otherServiceCategoryController.text = serviceCategory.toString();
       }
-      
+
       // Recurrence - capitalize first letter to match dropdown options
       final recurrence = data['recurrence_type'] ?? data['recurrence'];
       if (recurrence != null) {
-        final recurrenceCapitalized = recurrence.toString().split('_').map((word) {
-          if (word.isEmpty) return word;
-          return word[0].toUpperCase() + word.substring(1).toLowerCase();
-        }).join(' ');
+        final recurrenceCapitalized = recurrence
+            .toString()
+            .split('_')
+            .map((word) {
+              if (word.isEmpty) return word;
+              return word[0].toUpperCase() + word.substring(1).toLowerCase();
+            })
+            .join(' ');
         // Valid recurrence options: Daily, Weekly, Monthly, Quarterly, Annually
-        final validRecurrences = ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually'];
-        _selectedRecurrence = validRecurrences.contains(recurrenceCapitalized) ? recurrenceCapitalized : null;
+        final validRecurrences = [
+          'Daily',
+          'Weekly',
+          'Monthly',
+          'Quarterly',
+          'Annually',
+        ];
+        _selectedRecurrence =
+            validRecurrences.contains(recurrenceCapitalized)
+                ? recurrenceCapitalized
+                : null;
       }
-      
+
       final assessmentReceived = data['assessment_received'];
-      _selectedAssessmentReceived = _assessmentOptions.contains(assessmentReceived) ? assessmentReceived : 'No';
-      
+      _selectedAssessmentReceived =
+          _assessmentOptions.contains(assessmentReceived)
+              ? assessmentReceived
+              : 'No';
+
       final loggedBy = data['logged_by'];
-      _selectedLoggedBy = _loggedByOptions.contains(loggedBy) ? loggedBy : 'Auto-filled';
-      
+      _selectedLoggedBy =
+          _loggedByOptions.contains(loggedBy) ? loggedBy : 'Auto-filled';
+
       _selectedAdminNotifications = data['admin_notification'];
-      
+
       // Dates
       if (data['created_at'] != null) {
         try {
@@ -430,7 +492,7 @@ class _ExternalMaintenanceFormPageState
           print('Error parsing created_at: $e');
         }
       }
-      
+
       if (data['start_date'] != null) {
         try {
           _startDate = DateTime.parse(data['start_date']);
@@ -439,7 +501,7 @@ class _ExternalMaintenanceFormPageState
           print('Error parsing start_date: $e');
         }
       }
-      
+
       if (data['next_due_date'] != null) {
         try {
           _nextDueDate = DateTime.parse(data['next_due_date']);
@@ -448,7 +510,7 @@ class _ExternalMaintenanceFormPageState
           print('Error parsing next_due_date: $e');
         }
       }
-      
+
       if (data['logged_date'] != null) {
         try {
           _loggedDate = DateTime.parse(data['logged_date']);
@@ -456,7 +518,7 @@ class _ExternalMaintenanceFormPageState
           print('Error parsing logged_date: $e');
         }
       }
-      
+
       if (data['service_window_start'] != null) {
         try {
           _serviceWindowStart = DateTime.parse(data['service_window_start']);
@@ -464,7 +526,7 @@ class _ExternalMaintenanceFormPageState
           print('Error parsing service_window_start: $e');
         }
       }
-      
+
       if (data['service_window_end'] != null) {
         try {
           _serviceWindowEnd = DateTime.parse(data['service_window_end']);
@@ -472,20 +534,27 @@ class _ExternalMaintenanceFormPageState
           print('Error parsing service_window_end: $e');
         }
       }
-      
-      // Inventory items
+
+      // Inventory items - preserve inventory identifiers so edits keep stable ids
       if (data['parts_used'] != null && data['parts_used'] is List) {
         _selectedInventoryItems.clear();
         for (var item in data['parts_used']) {
           _selectedInventoryItems.add({
+            'inventory_id':
+                item['inventory_id'] ?? item['id'] ?? item['_doc_id'],
             'item_name': item['item_name'] ?? item['name'] ?? '',
             'item_code': item['item_code'] ?? item['code'] ?? '',
             'quantity': item['quantity'] ?? 1,
-            'available_stock': item['available_stock'] ?? item['stock'] ?? 0,
+            'available_stock':
+                item['available_stock'] ??
+                item['stock'] ??
+                item['current_stock'] ??
+                0,
+            'reserve': item['reserve'] ?? item['reserved'] ?? true,
           });
         }
       }
-      
+
       // Created by
       _createdByController.text = data['created_by'] ?? 'Admin User';
     });
@@ -494,23 +563,48 @@ class _ExternalMaintenanceFormPageState
   // Simple inventory helpers so the UI can function here.
   // These are lightweight stubs. Replace with full selection dialog/API as needed.
   void _addInventoryItem() async {
-    // Open the inventory selection dialog using available items
+    if (_availableInventoryItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No inventory items available')),
+      );
+      return;
+    }
+
+    // Filter items based on selected location (if provided)
+    List<Map<String, dynamic>> filteredItems = _availableInventoryItems;
+    if (_selectedLocation != null && _selectedLocation!.isNotEmpty) {
+      filteredItems =
+          _availableInventoryItems.where((item) {
+            final recommendedOn = item['recommended_on'];
+            if (recommendedOn == null) return true;
+            if (recommendedOn is List) {
+              return recommendedOn.contains(_selectedLocation);
+            }
+            return true;
+          }).toList();
+    }
+
+    // Open the inventory selection dialog using filtered items
     await showDialog(
       context: context,
-      builder: (context) => _InventorySelectionDialog(
-        availableItems: _availableInventoryItems,
-        selectedLocation: _selectedLocation,
-        onItemSelected: (item, quantity) {
-          setState(() {
-            _selectedInventoryItems.add({
-              'item_name': item['item_name'] ?? item['name'] ?? 'Unknown',
-              'item_code': item['item_code'] ?? item['code'] ?? 'N/A',
-              'available_stock': item['current_stock'] ?? item['available_stock'] ?? 0,
-              'quantity': quantity,
-            });
-          });
-        },
-      ),
+      builder:
+          (context) => _InventorySelectionDialog(
+            availableItems: filteredItems,
+            selectedLocation: _selectedLocation,
+            onItemSelected: (item, quantity) {
+              setState(() {
+                _selectedInventoryItems.add({
+                  'inventory_id': item['id'] ?? item['_doc_id'],
+                  'item_name': item['item_name'] ?? item['name'] ?? 'Unknown',
+                  'item_code': item['item_code'] ?? item['code'] ?? 'N/A',
+                  'available_stock':
+                      item['current_stock'] ?? item['available_stock'] ?? 0,
+                  'quantity': quantity,
+                  'reserve': true,
+                });
+              });
+            },
+          ),
     );
   }
 
@@ -526,7 +620,9 @@ class _ExternalMaintenanceFormPageState
       final response = await _mainApiService.getInventoryItems();
       if (response['success'] == true && response['data'] != null) {
         setState(() {
-          _availableInventoryItems = List<Map<String, dynamic>>.from(response['data']);
+          _availableInventoryItems = List<Map<String, dynamic>>.from(
+            response['data'],
+          );
         });
       }
     } catch (e) {
@@ -586,6 +682,22 @@ class _ExternalMaintenanceFormPageState
     if (v == null || v.trim().isEmpty) return 'Required';
     final digits = v.replaceAll(RegExp(r'\D'), '');
     return digits.length >= 7 ? null : 'Enter a valid phone';
+  }
+
+  String? _durationValidator(String? v) {
+    // Estimated duration is optional; accept common duration formats like:
+    // "3 hrs 30 mins", "2 hrs", "45 mins" or time formats like "9:00 AM".
+    if (v == null || v.trim().isEmpty) return null;
+
+    final s = v.trim();
+    final durationRe = RegExp(r'^\s*\d+\s*(hrs?|hours?)\s*(\d+\s*mins?)?\s*$', caseSensitive: false);
+    final minutesRe = RegExp(r'^\s*\d+\s*mins?\s*$', caseSensitive: false);
+    final timeRe = RegExp(r'^\s*\d{1,2}:\d{2}\s*(AM|PM|am|pm)?\s*$');
+
+    if (durationRe.hasMatch(s) || minutesRe.hasMatch(s) || timeRe.hasMatch(s)) {
+      return null;
+    }
+    return 'Enter a valid duration (e.g. 3 hrs 30 mins) or time';
   }
 
   // ---------- UI ----------
@@ -756,11 +868,17 @@ class _ExternalMaintenanceFormPageState
                             ),
                           ),
                           const SizedBox(width: 24),
-                          const Expanded(child: SizedBox()), // keep right column space
+                          const Expanded(
+                            child: SizedBox(),
+                          ), // keep right column space
                         ],
                       ),
                       const SizedBox(height: 24),
-                      const Divider(color: Color(0xFFE2E8F0), height: 1, thickness: 1),
+                      const Divider(
+                        color: Color(0xFFE2E8F0),
+                        height: 1,
+                        thickness: 1,
+                      ),
                       const SizedBox(height: 32),
 
                       // Task Scope & Description
@@ -812,7 +930,7 @@ class _ExternalMaintenanceFormPageState
                           ),
                         ],
                       ),
-                      
+
                       // Show custom location input if "Other" is selected
                       if (_isOtherLocation) ...[
                         const SizedBox(height: 16),
@@ -831,7 +949,7 @@ class _ExternalMaintenanceFormPageState
                           ],
                         ),
                       ],
-                      
+
                       // Show custom service category input if "Other" is selected
                       if (_isOtherServiceCategory) ...[
                         const SizedBox(height: 16),
@@ -859,7 +977,11 @@ class _ExternalMaintenanceFormPageState
                         validator: _req,
                       ),
                       const SizedBox(height: 24),
-                      const Divider(color: Color(0xFFE2E8F0), height: 1, thickness: 1),
+                      const Divider(
+                        color: Color(0xFFE2E8F0),
+                        height: 1,
+                        thickness: 1,
+                      ),
                       const SizedBox(height: 32),
 
                       // Contractor Info
@@ -909,107 +1031,10 @@ class _ExternalMaintenanceFormPageState
                         ],
                       ),
                       const SizedBox(height: 24),
-                      const Divider(color: Color(0xFFE2E8F0), height: 1, thickness: 1),
-                      const SizedBox(height: 24),
-
-                      // Inventory / Parts used
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey[200]!),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'Inventory / Parts',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                TextButton.icon(
-                                  onPressed: _addInventoryItem,
-                                  icon: const Icon(Icons.add, size: 18),
-                                  label: const Text('Add Item'),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            if (_selectedInventoryItems.isEmpty)
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[50],
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.grey[200]!),
-                                ),
-                                child: Text(
-                                  'No inventory items selected for this task.',
-                                  style: TextStyle(color: Colors.grey[600]),
-                                ),
-                              )
-                            else
-                              Column(
-                                children: _selectedInventoryItems
-                                    .asMap()
-                                    .entries
-                                    .map((entry) {
-                                  final idx = entry.key;
-                                  final item = entry.value;
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: Colors.grey[200]!),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                item['item_name'] ?? 'Unknown Item',
-                                                style: const TextStyle(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 6),
-                                              Text(
-                                                'Code: ${item['item_code'] ?? 'N/A'}',
-                                                style: TextStyle(color: Colors.grey[600]),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.end,
-                                          children: [
-                                            Text('Qty: ${item['quantity'] ?? 1}'),
-                                            const SizedBox(height: 8),
-                                            TextButton(
-                                              onPressed: () => _removeInventoryItem(idx),
-                                              child: const Text('Remove'),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                          ],
-                        ),
+                      const Divider(
+                        color: Color(0xFFE2E8F0),
+                        height: 1,
+                        thickness: 1,
                       ),
                       const SizedBox(height: 32),
 
@@ -1044,14 +1069,51 @@ class _ExternalMaintenanceFormPageState
 
                           // Estimated Duration
                           Expanded(
-                            child: _buildTextField(
-                              label: 'Estimated Duration',
-                              controller: _estimatedDurationController,
-                              placeholder: 'e.g., 3 hrs / 45 mins',
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) return 'Required';
-                                return null;
-                              },
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Estimated Duration'),
+                                _fieldBox(
+                                  child: TextFormField(
+                                    controller: _estimatedDurationController,
+                                    validator: _durationValidator,
+                                    decoration: _decoration(
+                                      'e.g., 3 hrs / 45 mins',
+                                    ).copyWith(
+                                      suffixIcon: IconButton(
+                                        icon: const Icon(Icons.access_time),
+                                        tooltip: 'Pick hours & minutes',
+                                        onPressed: () async {
+                                          final picked = await showTimePicker(
+                                            context: context,
+                                            // Use a neutral initial time for duration selection
+                                            initialTime: TimeOfDay(
+                                              hour: 0,
+                                              minute: 30,
+                                            ),
+                                          );
+                                          if (picked != null) {
+                                            final h = picked.hour;
+                                            final m = picked.minute;
+                                            String formatted;
+                                            if (h > 0 && m > 0) {
+                                              formatted = '$h hrs $m mins';
+                                            } else if (h > 0) {
+                                              formatted = '$h hrs';
+                                            } else {
+                                              formatted = '$m mins';
+                                            }
+                                            setState(() {
+                                              _estimatedDurationController
+                                                  .text = formatted;
+                                            });
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -1070,25 +1132,32 @@ class _ExternalMaintenanceFormPageState
                                 Container(
                                   height: _kFieldHeight,
                                   decoration: BoxDecoration(
-                                    border: Border.all(color: Colors.grey[300]!),
+                                    border: Border.all(
+                                      color: Colors.grey[300]!,
+                                    ),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: TextFormField(
                                     controller: _startDateController,
                                     validator: _req,
                                     readOnly: true,
-                                    onTap: () => _pickDate(
-                                      initial: _startDate ?? DateTime.now(),
-                                      onPick: _handleStartDateChange,
-                                    ),
+                                    onTap:
+                                        () => _pickDate(
+                                          initial: _startDate ?? DateTime.now(),
+                                          onPick: _handleStartDateChange,
+                                        ),
                                     decoration: InputDecoration(
                                       hintText: 'YYYY-MM-DD',
-                                      hintStyle: TextStyle(color: Colors.grey[240], fontSize: 14),
-                                      border: InputBorder.none,
-                                      contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 12,
+                                      hintStyle: TextStyle(
+                                        color: Colors.grey[240],
+                                        fontSize: 14,
                                       ),
+                                      border: InputBorder.none,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 12,
+                                          ),
                                       suffixIcon: const Icon(
                                         Icons.calendar_today,
                                         size: 18,
@@ -1110,7 +1179,9 @@ class _ExternalMaintenanceFormPageState
                                 Container(
                                   height: _kFieldHeight,
                                   decoration: BoxDecoration(
-                                    border: Border.all(color: Colors.grey[300]!),
+                                    border: Border.all(
+                                      color: Colors.grey[300]!,
+                                    ),
                                     borderRadius: BorderRadius.circular(8),
                                     color: Colors.grey[50],
                                   ),
@@ -1120,12 +1191,16 @@ class _ExternalMaintenanceFormPageState
                                     readOnly: true,
                                     decoration: InputDecoration(
                                       hintText: 'YYYY-MM-DD',
-                                      hintStyle: TextStyle(color: Colors.grey[240], fontSize: 14),
-                                      border: InputBorder.none,
-                                      contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 12,
+                                      hintStyle: TextStyle(
+                                        color: Colors.grey[240],
+                                        fontSize: 14,
                                       ),
+                                      border: InputBorder.none,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 12,
+                                          ),
                                       suffixIcon: const Icon(
                                         Icons.calendar_today,
                                         size: 18,
@@ -1287,7 +1362,7 @@ class _ExternalMaintenanceFormPageState
                                                 ),
                                               ),
 
-                                              // Quantity controls
+                                              // Quantity controls (fixed increments/decrements and display)
                                               Container(
                                                 decoration: BoxDecoration(
                                                   border: Border.all(
@@ -1317,9 +1392,17 @@ class _ExternalMaintenanceFormPageState
                                                           ),
                                                       onPressed: () {
                                                         setState(() {
+                                                          final currentQtyRaw =
+                                                              item['quantity'];
                                                           final currentQty =
-                                                              item['quantity']
-                                                                  as int;
+                                                              (currentQtyRaw
+                                                                      is int)
+                                                                  ? currentQtyRaw
+                                                                  : int.tryParse(
+                                                                        currentQtyRaw?.toString() ??
+                                                                            '',
+                                                                      ) ??
+                                                                      1;
                                                           if (currentQty > 1) {
                                                             _selectedInventoryItems[index]['quantity'] =
                                                                 currentQty - 1;
@@ -1329,65 +1412,22 @@ class _ExternalMaintenanceFormPageState
                                                       color: Colors.grey[700],
                                                     ),
 
-                                                    // Quantity display - Editable
+                                                    // Quantity display (non-editable text to ensure updates reflect immediately)
                                                     SizedBox(
                                                       width: 50,
-                                                      child: TextFormField(
-                                                        initialValue:
-                                                            '${item['quantity']}',
-                                                        textAlign:
-                                                            TextAlign.center,
-                                                        keyboardType:
-                                                            TextInputType
-                                                                .number,
-                                                        decoration:
-                                                            const InputDecoration(
-                                                              border:
-                                                                  InputBorder
-                                                                      .none,
-                                                              contentPadding:
-                                                                  EdgeInsets
-                                                                      .zero,
-                                                            ),
-                                                        style: const TextStyle(
-                                                          fontSize: 14,
-                                                          fontWeight:
-                                                              FontWeight.w600,
+                                                      child: Center(
+                                                        child: Text(
+                                                          '${(item['quantity'] is int) ? item['quantity'] : (int.tryParse(item['quantity']?.toString() ?? '') ?? 1)}',
+                                                          textAlign:
+                                                              TextAlign.center,
+                                                          style:
+                                                              const TextStyle(
+                                                                fontSize: 14,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
                                                         ),
-                                                        onChanged: (value) {
-                                                          final newQty =
-                                                              int.tryParse(
-                                                                value,
-                                                              );
-                                                          if (newQty != null &&
-                                                              newQty > 0) {
-                                                            final availableStock =
-                                                                item['available_stock']
-                                                                    as int;
-                                                            if (newQty <=
-                                                                availableStock) {
-                                                              setState(() {
-                                                                _selectedInventoryItems[index]['quantity'] =
-                                                                    newQty;
-                                                              });
-                                                            } else {
-                                                              ScaffoldMessenger.of(
-                                                                context,
-                                                              ).showSnackBar(
-                                                                const SnackBar(
-                                                                  content: Text(
-                                                                    'Cannot exceed available stock',
-                                                                  ),
-                                                                  duration:
-                                                                      Duration(
-                                                                        seconds:
-                                                                            2,
-                                                                      ),
-                                                                ),
-                                                              );
-                                                            }
-                                                          }
-                                                        },
                                                       ),
                                                     ),
 
@@ -1408,12 +1448,29 @@ class _ExternalMaintenanceFormPageState
                                                           ),
                                                       onPressed: () {
                                                         setState(() {
+                                                          final currentQtyRaw =
+                                                              item['quantity'];
+                                                          final availableRaw =
+                                                              item['available_stock'];
                                                           final currentQty =
-                                                              item['quantity']
-                                                                  as int;
+                                                              (currentQtyRaw
+                                                                      is int)
+                                                                  ? currentQtyRaw
+                                                                  : int.tryParse(
+                                                                        currentQtyRaw?.toString() ??
+                                                                            '',
+                                                                      ) ??
+                                                                      1;
                                                           final availableStock =
-                                                              item['available_stock']
-                                                                  as int;
+                                                              (availableRaw
+                                                                      is int)
+                                                                  ? availableRaw
+                                                                  : int.tryParse(
+                                                                        availableRaw?.toString() ??
+                                                                            '',
+                                                                      ) ??
+                                                                      0;
+
                                                           if (currentQty <
                                                               availableStock) {
                                                             _selectedInventoryItems[index]['quantity'] =
@@ -1472,7 +1529,11 @@ class _ExternalMaintenanceFormPageState
                         ],
                       ),
                       const SizedBox(height: 24),
-                      const Divider(color: Color(0xFFE2E8F0), height: 1, thickness: 1),
+                      const Divider(
+                        color: Color(0xFFE2E8F0),
+                        height: 1,
+                        thickness: 1,
+                      ),
                       const SizedBox(height: 32),
 
                       // Post-Service Assessment Logging
@@ -1709,86 +1770,102 @@ class _ExternalMaintenanceFormPageState
     }
 
     // Get actual location (use Other input if selected)
-    final actualLocation = _isOtherLocation 
-        ? _otherLocationController.text.trim()
-        : (_selectedLocation ?? '');
-    
+    final actualLocation =
+        _isOtherLocation
+            ? _otherLocationController.text.trim()
+            : (_selectedLocation ?? '');
+
     // Get actual service category (use Other input if selected)
-    final actualServiceCategory = _isOtherServiceCategory 
-        ? _otherServiceCategoryController.text.trim()
-        : (_selectedServiceCategory ?? '');
+    final actualServiceCategory =
+        _isOtherServiceCategory
+            ? _otherServiceCategoryController.text.trim()
+            : (_selectedServiceCategory ?? '');
 
     String formatDate(DateTime date) {
       return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     }
 
-  final scheduledDateIso = _startDate!.toUtc().toIso8601String();
+    final scheduledDateIso = _startDate!.toUtc().toIso8601String();
 
-  final taskData = {
-    'task_code': _taskCodeController.text.trim(),
-    'task_title': _taskTitleController.text.trim(),
-    'task_description': _descriptionController.text.trim(),
-    'maintenance_type': 'external',
-    'service_category': actualServiceCategory,
-    'created_by': _createdByController.text.trim(),
-    'priority': _selectedPriority ?? 'medium',
-    'status': 'New', // Auto-set to "New" for external maintenance
-    'location': actualLocation,
-    
-    // Contractor Information
-    'contractor_name': _contractorNameController.text.trim(),
-    'contact_person': _contactPersonController.text.trim(),
-    'contact_number': _contactNumberController.text.trim(),
-    'email': _emailController.text.trim(),
-    
-    // Scheduling Information
-    'recurrence_type': _selectedRecurrence?.toLowerCase() ?? 'none',
-    'start_date': formatDate(_startDate!),
-    'scheduled_date': scheduledDateIso,
-    'next_due_date': _nextDueDate != null ? formatDate(_nextDueDate!) : null,
-    'estimated_duration': _estimatedDurationController.text.trim(),
-    
-    // Assessment and Tracking
-    'assessment_received': _selectedAssessmentReceived,
-    'logged_by': _selectedLoggedBy,
-    'logged_date': _loggedDate != null ? formatDate(_loggedDate!) : null,
-    'assessment': _assessmentController.text.trim(),
-    'recommendation': _recommendationController.text.trim(),
-    
-    // Admin Notifications (Auto-generated from start date)
-    'admin_notification': _selectedAdminNotifications,
-    
-    // System Fields
-    'building_id': 'default_building',
-    'task_type': 'external',
-    'category': actualServiceCategory,
-    'assigned_to': _contractorNameController.text.trim(),
-    
-    // Required Arrays
-    'checklist_completed': <Map<String, dynamic>>[],
-    'parts_used': _selectedInventoryItems.map((it) => {
-      'inventory_id': it['inventory_id'] ?? it['id'],
-      'item_name': it['item_name'],
-      'item_code': it['item_code'],
-      'quantity': it['quantity'] ?? 1,
-    }).toList(),
-    'tools_used': <String>[],
-    'photos': <String>[],
-  };
+    final taskData = {
+      'task_code': _taskCodeController.text.trim(),
+      'task_title': _taskTitleController.text.trim(),
+      'task_description': _descriptionController.text.trim(),
+      'maintenance_type': 'external',
+      'service_category': actualServiceCategory,
+      'created_by': _createdByController.text.trim(),
+      'priority': _selectedPriority ?? 'medium',
+      'status': 'New', // Auto-set to "New" for external maintenance
+      'location': actualLocation,
+
+      // Contractor Information
+      'contractor_name': _contractorNameController.text.trim(),
+      'contact_person': _contactPersonController.text.trim(),
+      'contact_number': _contactNumberController.text.trim(),
+      'email': _emailController.text.trim(),
+
+      // Scheduling Information
+      'recurrence_type': _selectedRecurrence?.toLowerCase() ?? 'none',
+      'start_date': formatDate(_startDate!),
+      'scheduled_date': scheduledDateIso,
+      'next_due_date': _nextDueDate != null ? formatDate(_nextDueDate!) : null,
+      'estimated_duration': _estimatedDurationController.text.trim(),
+
+      // Assessment and Tracking
+      'assessment_received': _selectedAssessmentReceived,
+      'logged_by': _selectedLoggedBy,
+      'logged_date': _loggedDate != null ? formatDate(_loggedDate!) : null,
+      'assessment': _assessmentController.text.trim(),
+      'recommendation': _recommendationController.text.trim(),
+
+      // Admin Notifications (Auto-generated from start date)
+      'admin_notification': _selectedAdminNotifications,
+
+      // System Fields
+      'building_id': 'default_building',
+      'task_type': 'external',
+      'category': actualServiceCategory,
+      'assigned_to': _contractorNameController.text.trim(),
+
+      // Required Arrays
+      'checklist_completed': <Map<String, dynamic>>[],
+      'parts_used':
+          _selectedInventoryItems
+              .map(
+                (it) => {
+                  'inventory_id':
+                      it['inventory_id'] ?? it['id'] ?? it['_doc_id'],
+                  'item_name': it['item_name'],
+                  'item_code': it['item_code'],
+                  'quantity': it['quantity'] ?? 1,
+                  'reserve': it['reserve'] ?? true,
+                },
+              )
+              .toList(),
+      'tools_used': <String>[],
+      'photos': <String>[],
+    };
 
     try {
       if (widget.isEditMode && widget.maintenanceData != null) {
         // UPDATE existing task
-        final taskId = widget.maintenanceData!['id']?.toString() ?? _taskCodeController.text;
+        final taskId =
+            widget.maintenanceData!['id']?.toString() ??
+            _taskCodeController.text;
         print('[v0] Updating external maintenance task: $taskId');
-        
-        final result = await _apiService.updateMaintenanceTask(taskId, taskData);
+
+        final result = await _apiService.updateMaintenanceTask(
+          taskId,
+          taskData,
+        );
         print('[v0] External maintenance task updated successfully');
         print('[v0] Backend response: $result');
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Maintenance task updated successfully!')),
+            const SnackBar(
+              content: Text('Maintenance task updated successfully!'),
+            ),
           );
           context.go('/work/maintenance');
         }
@@ -1804,10 +1881,7 @@ class _ExternalMaintenanceFormPageState
         print('[v0] External maintenance task created: $createdId');
 
         if (mounted) {
-          context.push(
-            '/work/maintenance',
-            extra: taskData,
-          );
+          context.push('/work/maintenance', extra: taskData);
         }
       }
     } catch (e) {
@@ -1854,10 +1928,7 @@ class _ExternalMaintenanceFormPageState
           padding: const EdgeInsets.only(left: 16),
           child: Text(
             subtitle,
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.grey[600],
-            ),
+            style: TextStyle(fontSize: 13, color: Colors.grey[600]),
           ),
         ),
       ],
@@ -1904,12 +1975,26 @@ class _ExternalMaintenanceFormPageState
     ),
   );
 
+  // Helper box used to wrap inline field widgets so _fieldBox calls compile.
+  Widget _fieldBox({required Widget child, double? height}) => Container(
+    height: height ?? _kFieldHeight,
+    decoration: BoxDecoration(
+      border: Border.all(color: Colors.grey[300]!),
+      borderRadius: BorderRadius.circular(8),
+      color: Colors.white,
+    ),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    child: child,
+  );
+
   Widget _buildTextField({
     required String label,
     required TextEditingController controller,
     required String placeholder,
     String? Function(String?)? validator,
     bool enabled = true,
+    bool readOnly = false,
+    VoidCallback? onTap,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1920,6 +2005,8 @@ class _ExternalMaintenanceFormPageState
           child: TextFormField(
             controller: controller,
             enabled: enabled,
+            readOnly: readOnly,
+            onTap: onTap,
             validator: validator,
             decoration: _decoration(placeholder).copyWith(
               filled: !enabled,
@@ -2090,7 +2177,6 @@ class _ExternalMaintenanceFormPageState
     _nextDueDateController.dispose();
     super.dispose();
   }
-
 }
 
 // Inventory Selection Dialog (copied from internalmaintenance_form)

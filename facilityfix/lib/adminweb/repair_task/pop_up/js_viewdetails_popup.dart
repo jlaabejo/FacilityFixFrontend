@@ -44,18 +44,22 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
   bool _formValid = false;
   bool _isLoading = false;
   bool _isAssigning = false;
-  int _currentStep = 0; // 0 = CS Details, 1 = JS Details, 2 = Assign & Schedule
+  int _currentStep = 1; // 0 = CS Details, 1 = JS Details, 2 = Assign & Schedule
   
   String? selectedStaffId;
   String? selectedStaffName;
   DateTime? selectedDate;
+  DateTime? selectedEndDate;
   final TextEditingController notesController = TextEditingController();
   
   List<Map<String, dynamic>> _staffList = [];
+  Map<String, dynamic>? _taskData;
+
+  Map<String, dynamic> get task => _taskData ?? widget.task;
   
   // Helper to check status
   bool get _isPendingStatus {
-    final status = widget.task['status']?.toString().toLowerCase() ?? '';
+    final status = task['status']?.toString().toLowerCase() ?? '';
     return status == 'pending';
   }
   
@@ -64,54 +68,191 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
     super.initState();
     notesController.addListener(_revalidate);
     _initializeScheduleDate();
+    // Fetch canonical job-service details (if available) and refresh UI
+    _loadJobServiceDetails();
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _revalidate();
     });
   }
-  
-  void _initializeScheduleDate() {
-    final raw = widget.task['rawData']?['schedule_availability'] ?? widget.task['schedule'] ?? widget.task['dateRequested'] ?? widget.task['availability'];
-    final sa = raw?.toString() ?? '';
-    if (sa.isNotEmpty) {
+
+  /// Fetch the full job-service record by id and merge into the existing
+  /// task map so the dialog uses the canonical server-side fields (same as
+  /// TenantJobServiceDetailPage behavior).
+  Future<void> _loadJobServiceDetails() async {
+    try {
+  final jobServiceIdRaw = task['serviceId'] ?? task['id'];
+      final jobServiceId = jobServiceIdRaw?.toString();
+      if (jobServiceId == null || jobServiceId.isEmpty) return;
+
+      setState(() => _isLoading = true);
+
+      // Use API to fetch full payload
+      final data = await _apiService.getJobServiceById(jobServiceId);
+      // store fetched payload in local copy so we don't mutate the incoming prop
+      _taskData = Map<String, dynamic>.from(data);
+
+      // Debug: log a few top-level fields to aid tracing
       try {
-        // Tenant often sends ranges like: "Oct 12, 2025 9:00 AM - 11:00 AM"
-        if (sa.contains(' - ')) {
-          final parts = sa.split(' - ');
-          final left = parts[0].trim();
+        print('[JobServiceDialog] Fetched job service id: $jobServiceId');
+        print('[JobServiceDialog] top-level keys: ${_taskData?.keys.toList()}');
+        print('[JobServiceDialog] rawData present: ${_taskData?['rawData'] != null}');
+      } catch (_) {}
+
+      // If rawData not present, try to fetch the originating concern slip and attach
+      dynamic csId = _taskData?['concern_slip_id'] ?? _taskData?['concernSlipId'] ?? _taskData?['concern_slip'] ?? _taskData?['cs_id'];
+      final rawData = _taskData?['rawData'];
+      if ((rawData == null || rawData.toString().isEmpty) && csId != null) {
+        try {
+          final cs = await _apiService.getConcernSlipById(csId.toString());
+          _taskData?['rawData'] = cs;
+        } catch (e) {
+          print('[JobServiceDialog] Failed to fetch concern slip $csId: $e');
+        }
+      }
+
+      // Re-run schedule parsing and refresh staff based on possibly-updated department
+      _initializeScheduleDate();
+      // Populate assigned staff display for the concern slip details view
+      try {
+        selectedStaffName = _extractStaffName();
+      } catch (_) {}
+      await _loadStaffMembers();
+      if (mounted) setState(() {});
+    } catch (e) {
+      print('[JobServiceDialog] Error loading job service details: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+  
+    String _formatBuildingUnit(String buildingUnit) {
+    // Convert "Bldg A - Unit 302" to "A - 1010" format
+    if (buildingUnit.contains('Unit')) {
+      final parts = buildingUnit.split(' - Unit ');
+      if (parts.length == 2) {
+        final building = parts[0].replaceAll('Bldg ', '');
+        return '$building - 1010';
+      }
+    }
+    return buildingUnit;
+  }
+
+  void _initializeScheduleDate() {
+    // Auto-populate inspection schedule from several possible schedule fields
+    final candidates = [
+      task['rawData']?['schedule_availability'],
+      task['rawData']?['schedule'],
+      task['rawData']?['availability'],
+      task['rawData']?['schedule_availabilities'],
+      task['schedule'],
+      task['availability'],
+      task['dateRequested'],
+      task['requested_at'],
+    ];
+
+    // Debug: list candidate values
+    try {
+      print('[JobServiceDialog] schedule candidates: ${candidates.map((c) => c?.toString() ?? '<null>').toList()}');
+    } catch (_) {}
+
+    String? sa;
+    for (final c in candidates) {
+      if (c != null) {
+        final s = c.toString().trim();
+        if (s.isNotEmpty) {
+          sa = s;
+          break;
+        }
+      }
+    }
+
+    if (sa == null || sa.isEmpty) return;
+
+    // Try centralized parser first to capture both start and end times.
+    try {
+      final parsed = UiDateUtils.parseRange(sa);
+      if (parsed != null) {
+        selectedDate = parsed.start;
+        selectedEndDate = parsed.end;
+        try {
+          print('[JobServiceDialog] parseRange -> start: $selectedDate, end: $selectedEndDate');
+        } catch (_) {}
+        return;
+      }
+    } catch (_) {}
+
+    // Fallback parsing (similar to ConcernSlipDetailDialog)
+    try {
+      // Range like "start - end"
+      if (sa.contains(' - ')) {
+        final parts = sa.split(' - ');
+        final left = parts[0].trim();
+        final right = parts.length > 1 ? parts[1].trim() : '';
+
+        // Parse start
+        try {
+          selectedDate = DateTime.parse(left);
+        } catch (_) {
           try {
-            // Try full datetime
-            selectedDate = DateTime.parse(left);
+            selectedDate = DateFormat('MMM d, yyyy h:mm a').parse(left);
           } catch (_) {
             try {
-              selectedDate = DateFormat('MMM d, yyyy h:mm a').parse(left);
-            } catch (e) {
-              try {
-                final dateOnly = DateFormat('MMM d, yyyy').parse(left);
-                selectedDate = DateTime(dateOnly.year, dateOnly.month, dateOnly.day, 9, 0);
-              } catch (e2) {
-                // ignore
-              }
-            }
-          }
-        } else if (sa.contains('T')) {
-          selectedDate = DateTime.parse(sa);
-        } else if (RegExp(r'^\d{4}-\d{2}-\d{2}\$').hasMatch(sa)) {
-          final parts = sa.split('-');
-          selectedDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]), 9, 0);
-        } else {
-          try {
-            selectedDate = DateTime.parse(sa);
-          } catch (_) {
-            // last resort: try UiDateUtils.parse
-            try {
-              selectedDate = UiDateUtils.parse(sa);
+              final dateOnly = DateFormat('MMM d, yyyy').parse(left);
+              selectedDate = DateTime(dateOnly.year, dateOnly.month, dateOnly.day, 9, 0);
             } catch (_) {}
           }
         }
-      } catch (e) {
-        print('[JobServiceDialog] Error parsing schedule date: $e');
+
+        // Parse end (may be time-only)
+        if (right.isNotEmpty) {
+          try {
+            final t = DateFormat('h:mm a').parse(right);
+            if (selectedDate != null) selectedEndDate = DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day, t.hour, t.minute);
+          } catch (_) {
+            try {
+              selectedEndDate = DateTime.parse(right);
+            } catch (_) {
+              try {
+                selectedEndDate = DateFormat('MMM d, yyyy h:mm a').parse(right);
+              } catch (_) {}
+            }
+          }
+        }
+
+        // Make sure end is after start. If inverted, set to start + 1 hour for UX.
+        if (selectedDate != null && selectedEndDate != null && selectedEndDate!.isBefore(selectedDate!)) {
+          selectedEndDate = selectedDate!.add(const Duration(hours: 1));
+        }
+
+        try {
+          print('[JobServiceDialog] parsed schedule -> start: $selectedDate, end: $selectedEndDate');
+        } catch (_) {}
+      } else if (sa.contains('T')) {
+        selectedDate = DateTime.parse(sa);
+      } else if (RegExp(r'^\d{4}-\d{2}-\d{2}\$').hasMatch(sa)) {
+        final parts = sa.split('-');
+        selectedDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]), 9, 0);
+      } else {
+        try {
+          selectedDate = DateTime.parse(sa);
+        } catch (_) {
+          try {
+            selectedDate = DateFormat('MMM d, yyyy h:mm a').parse(sa);
+          } catch (_) {
+            try {
+              final d = DateFormat('MMM d, yyyy').parse(sa);
+              selectedDate = DateTime(d.year, d.month, d.day, 9, 0);
+            } catch (_) {
+              try {
+                selectedDate = UiDateUtils.parse(sa);
+              } catch (_) {}
+            }
+          }
+        }
       }
+    } catch (e) {
+      print('[JobServiceDialog] Error parsing schedule date: $e');
     }
   }
   
@@ -121,7 +262,7 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
     });
     
     try {
-      String? taskCategory = widget.task['department']?.toString().toLowerCase();
+  String? taskCategory = task['department']?.toString().toLowerCase();
       String? department;
       
       switch (taskCategory) {
@@ -137,8 +278,8 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
         case 'masonry':
           department = 'masonry';
           break;
-        case 'hvac':
-          department = 'electrical';
+        case 'house keeping':
+          department = 'house_keeping';
           break;
         default:
           department = null;
@@ -208,10 +349,10 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
 
   String _extractStaffName() {
     try {
-      final s = widget.task['staffName'];
+      final s = task['staffName'];
       if (s != null && s.toString().trim().isNotEmpty) return s.toString();
 
-      final raw = widget.task['rawData'];
+      final raw = task['rawData'];
       if (raw is Map) {
         final profile = raw['staff_profile'];
         if (profile is Map) {
@@ -344,6 +485,62 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
     return dateString;
   }
 
+  /// Prefer returning a UiDateUtils.dateTimeRange when the raw schedule can be
+  /// parsed into a DateTime (or a start/end pair). Falls back to
+  /// [_formatScheduleDate] for more generic formatting.
+  String _formatScheduleToDateTimeRange(String? raw) {
+    if (raw == null || raw.toString().trim().isEmpty) return 'N/A';
+    final s = raw.toString().trim();
+
+    try {
+      // Range like "start - end"
+      if (s.contains(' - ')) {
+        final parts = s.split(' - ');
+        final left = parts[0].trim();
+        final right = parts.length > 1 ? parts[1].trim() : '';
+
+        DateTime? start;
+        DateTime? end;
+
+        // Try ISO first then UiDateUtils.parse
+        try {
+          start = DateTime.parse(left);
+        } catch (_) {
+          try {
+            start = UiDateUtils.parse(left);
+          } catch (_) {}
+        }
+
+        try {
+          end = DateTime.parse(right);
+        } catch (_) {
+          try {
+            end = UiDateUtils.parse(right);
+          } catch (_) {}
+        }
+
+        if (start != null && end != null) return UiDateUtils.dateTimeRange(start, end);
+        if (start != null) return UiDateUtils.dateTimeRange(start);
+      }
+
+      // Single datetime
+      try {
+        final d = DateTime.parse(s);
+        return UiDateUtils.dateTimeRange(d);
+      } catch (_) {}
+
+      try {
+        final d = UiDateUtils.parse(s);
+        return UiDateUtils.dateTimeRange(d);
+      } catch (_) {}
+    } catch (e) {
+      print('[JobServiceDialog] _formatScheduleToDateTimeRange error: $e');
+    }
+
+    // Fallback to existing flexible formatter
+    return _formatScheduleDate(raw);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -434,10 +631,10 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
 
   // Step 0: Concern Slip Details
   Widget _buildConcernSlipDetails() {
+    // Title, IDs, and meta info
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Title with CS ID and Status/Priority (matching CS dialog style)
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -446,7 +643,7 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    widget.task['title'] ?? 'No Title',
+                    task['title'] ?? 'No Title',
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
@@ -455,7 +652,7 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    widget.task['concernId'] ?? widget.task['id'] ?? 'N/A',
+                    task['id'] ?? 'N/A',
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.grey[600],
@@ -464,147 +661,213 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Date Requested: ${widget.task['dateRequested'] ?? 'N/A'}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[500],
-                      fontWeight: FontWeight.w400,
-                    ),
+                  // Format date as: "Aug 23, 2025"
+                  'Date Requested: ${(() {
+                    final ds = task['dateRequested'] ?? task['rawData']?['schedule_availability'];
+                    if (ds == null) return 'N/A';
+                    try {
+                    DateTime date;
+                    final s = ds.toString();
+                    if (s.contains('T')) {
+                      date = DateTime.parse(s);
+                    } else {
+                      final parts = s.split('-');
+                      if (parts.length == 3) {
+                      date = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+                      } else {
+                      return s;
+                      }
+                    }
+                    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+                    } catch (_) {
+                    return ds.toString();
+                    }
+                  })()}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                    fontWeight: FontWeight.w400,
+                  ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 16),
-            PriorityTag(priority: widget.task['priority'] ?? 'Low'),
-            const SizedBox(width: 8),
-            StatusTag(status: widget.task['status'] ?? 'Pending'),
           ],
         ),
         const SizedBox(height: 24),
         Divider(color: Colors.grey[200], thickness: 1, height: 1),
         const SizedBox(height: 24),
-        
         // Requester Details
         _buildSectionTitle('Requester Details'),
         const SizedBox(height: 16),
-        
         Row(
           children: [
             Expanded(
-              child: _buildDetailItem(
+                child: _buildDetailItem(
                 'REQUESTED BY',
-                widget.task['created_by'] ?? 'N/A',
+                task['rawData']?['reported_by'] ?? 'N/A',
               ),
             ),
             const SizedBox(width: 24),
             Expanded(
               child: _buildDetailItem(
                 'DEPARTMENT',
-                widget.task['department'] ?? 'N/A',
+                task['department'] ?? 'N/A',
               ),
             ),
           ],
         ),
         const SizedBox(height: 24),
-        
         Row(
           children: [
             Expanded(
               child: _buildDetailItem(
                 'BLDG & UNIT NO.',
-                widget.task['buildingUnit'] ?? 'N/A',
+                _formatBuildingUnit(task['buildingUnit'] ?? 'N/A'),
               ),
             ),
             const SizedBox(width: 24),
             Expanded(
-              child: _buildDetailItem(
-                'SCHEDULE AVAILABILITY',
-                widget.task['dateRequested'] ?? 'N/A',
+              child: InkWell(
+                onTap: () async {
+                  // Open date time picker and update selectedDate
+                  await _selectDateTime(context);
+                  if (selectedDate != null) {
+                    // Update task map so subsequent renders use the new value
+                    try {
+                      task['dateRequested'] = selectedDate!.toIso8601String();
+                    } catch (_) {}
+                    setState(() {});
+                  }
+                },
+                child: _buildDetailItem(
+                  'SCHEDULE AVAILABILITY',
+                  selectedDate != null
+                      ? UiDateUtils.dateTimeRange(selectedDate!, selectedEndDate)
+                      : _formatScheduleDate(task['dateRequested'] ?? task['rawData']?['schedule_availability']),
+                ),
               ),
             ),
           ],
         ),
         const SizedBox(height: 24),
-        
         Divider(color: Colors.grey[200], thickness: 1, height: 1),
         const SizedBox(height: 24),
-        
         // Work Description
         _buildSectionTitle('Work Description'),
         const SizedBox(height: 16),
         Text(
-          widget.task['description'] ?? 'No description available.',
+          task['description'] ?? 'No description available.',
           style: TextStyle(
             fontSize: 15,
             height: 1.6,
             color: Colors.grey[700],
           ),
         ),
-        const SizedBox(height: 24),
-        
-        Divider(color: Colors.grey[200], thickness: 1, height: 1),
-        const SizedBox(height: 24),
-        
-        // Assessment & Resolution Details
-        _buildAssessmentSection(),
       ],
     );
   }
 
-  // Assessment Section (matching WOP dialog style)
+  // Assessment Section
   Widget _buildAssessmentSection() {
-    final staffName = _extractStaffName();
-    
+    // Use assessment and recommendation from rawData
+  final assessment = task['rawData']?['staff_assessment'];
+  final recommendation = task['rawData']?['staff_recommendation'];
+  final resolutionType = task['rawData']?['resolution_type'];
+
+    if (assessment == null && recommendation == null && resolutionType == null) {
+      return const SizedBox.shrink();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionTitle('Assessment and Resolution Details'),
         const SizedBox(height: 16),
-        
-        // Resolution Type with Staff Info
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'RESOLUTION TYPE',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[600],
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  // Resolution Type Tag
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      widget.task['resolutionType'] ?? 'Job Service',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey[800],
-                      ),
-                    ),
-                  ),
-                ],
+        // Use the shared assigned staff display
+        _buildAutoAssignedStaffDisplay(),
+        const SizedBox(height: 24),
+        if (resolutionType != null) ...[
+          Text(
+            'RESOLUTION TYPE',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[600],
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          RequestTypeTag(
+            resolutionType.toString().replaceAll('_', ' '),
+          ),
+          const SizedBox(height: 24),
+        ],
+        if (assessment != null) ...[
+          Text(
+            'ASSESSMENT',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[600],
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue[200]!),
+            ),
+            child: Text(
+              assessment,
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.6,
+                color: Colors.grey[800],
               ),
             ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        
-        // Assessment with Staff Avatar
+          ),
+        ],
+      ],
+    );
+  }
+
+  // Shared assigned staff display for both details and assignment form
+  Widget _buildAutoAssignedStaffDisplay() {
+    // Use assigned staff or fallback to selectedStaffName
+    String staffName = selectedStaffName ?? '';
+    if (staffName.isEmpty) {
+      final data = task;
+      dynamic assignedStaff = data['rawData']?['assigned_staff'] ??
+          data['rawData']?['assigned_to'] ??
+          data['assigned_staff'] ??
+          data['assigned_to'] ??
+          data['assigned_staff_name'];
+
+      if (assignedStaff != null) {
+        if (assignedStaff is String) {
+          staffName = assignedStaff;
+        } else if (assignedStaff is Map<String, dynamic>) {
+          staffName = assignedStaff['name'] ??
+              assignedStaff['full_name'] ??
+              ((assignedStaff['first_name'] ?? '') + ' ' + (assignedStaff['last_name'] ?? '')).trim();
+        } else {
+          staffName = assignedStaff.toString();
+        }
+      }
+    }
+    if (staffName.isEmpty) staffName = 'Staff Member';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         Text(
-          'ASSESSMENT',
+          'ASSIGNED STAFF',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
@@ -612,45 +875,52 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
             letterSpacing: 0.5,
           ),
         ),
-        const SizedBox(height: 12),
-        
-        // Staff Info Row
-        Row(
-          children: [
-            _buildSimpleAvatar(staffName, size: 32),
-            const SizedBox(width: 12),
-            Text(
-              staffName,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.black87,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        
-        // Assessment Text
+        const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.blue[50],
+            color: Colors.grey[50],
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.blue[100]!),
+            border: Border.all(color: Colors.grey[300]!),
           ),
-          child: Text(
-            widget.task['assessment'] ?? widget.task['rawData']?['staff_assessment'] ?? 'No assessment available.',
-            style: TextStyle(
-              fontSize: 15,
-              height: 1.6,
-              color: Colors.grey[800],
-            ),
+          child: Row(
+            children: [
+              _buildSimpleAvatar(staffName),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      staffName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      task['department'] ?? 'No Department',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.check_circle,
+                color: Colors.green[600],
+                size: 20,
+              ),
+            ],
           ),
         ),
       ],
     );
   }
+
 
   // Step 1: Job Service Details
   Widget _buildJobServiceDetails() {
@@ -675,16 +945,71 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    widget.task['serviceId'] ?? widget.task['id'] ?? 'N/A',
+                    task['serviceId'] ?? task['id'] ?? 'N/A',
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.grey[600],
                       fontWeight: FontWeight.w400,
                     ),
                   ),
+                  const SizedBox(height: 8),   
+                  Text(
+                  // Format date as: "Aug 23, 2025"
+                  'Date Requested: ${(() {
+                    final ds = task['dateRequested'] ?? task['rawData']?['schedule_availability'];
+                    if (ds == null) return 'N/A';
+                    try {
+                    DateTime date;
+                    final s = ds.toString();
+                    if (s.contains('T')) {
+                      date = DateTime.parse(s);
+                    } else {
+                      final parts = s.split('-');
+                      if (parts.length == 3) {
+                      date = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+                      } else {
+                      return s;
+                      }
+                    }
+                    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+                    } catch (_) {
+                    return ds.toString();
+                    }
+                  })()}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                    fontWeight: FontWeight.w400,
+                  ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Small action to view the originating concern slip
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _currentStep = 0; // show concern slip details
+                        });
+                      },
+                      icon: const Icon(Icons.visibility, size: 16),
+                      label: const Text('View Concern Slip'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.blue[700],
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 24),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
+            const SizedBox(width: 16),
+            PriorityTag(task['priority'] ?? ''),
+            const SizedBox(width: 8),
+            StatusTag(task['status'] ?? ''),
           ],
         ),
         const SizedBox(height: 24),
@@ -700,14 +1025,14 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
             Expanded(
               child: _buildDetailItem(
                 'REQUESTED BY',
-                widget.task['requestedBy'] ?? 'N/A',
+                task['requestedBy'] ?? 'N/A',
               ),
             ),
             const SizedBox(width: 24),
             Expanded(
               child: _buildDetailItem(
-                'PREFERRED SCHEDULE',
-                _formatScheduleDate(widget.task['schedule']),
+                'SCHEDULE DATE',
+                    _formatScheduleToDateTimeRange(task['schedule']),
               ),
             ),
           ],
@@ -719,7 +1044,7 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
             Expanded(
               child: _buildDetailItem(
                 'BLDG & UNIT NO.',
-                widget.task['buildingUnit'] ?? 'N/A',
+                task['buildingUnit'] ?? 'N/A',
               ),
             ),
             const SizedBox(width: 24),
@@ -743,7 +1068,7 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
             border: Border.all(color: Colors.blue[200]!),
           ),
           child: Text(
-            widget.task['additionalNotes'] ?? 'Please notify me 30 minutes before arrival.',
+            task['additionalNotes'] ?? '',
             style: TextStyle(
               fontSize: 14,
               height: 1.5,
@@ -756,11 +1081,12 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
   }
 
   // Step 2: Assignment Form
-  Widget _buildAssignmentForm() {
+
+    Widget _buildAssignmentFormView() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Assign & Schedule Work Card (matching CS dialog style)
+        // Assign & Schedule Work Card
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -793,41 +1119,36 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.grey[200]!),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'JS: ${widget.task['serviceId'] ?? 'N/A'}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                widget.task['title'] ?? 'Job Service Request',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.black87,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'JS: ${task['serviceId'] ?? 'N/A'}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey[600],
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        PriorityTag(priority: widget.task['priority'] ?? 'Low'),
-                      ],
+                          const SizedBox(height: 4),
+                          Text(
+                            task['title'] ?? 'Job Service Request',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 8),
+                    PriorityTag(task['priority'] ?? 'Low'),
                   ],
                 ),
               ),
@@ -835,123 +1156,27 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
           ),
         ),
         const SizedBox(height: 32),
-        
-        // Auto-assigned Staff and Schedule
+
+        // Assign Staff and Inspection Schedule in one row
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: _buildAutoAssignedStaffDisplay(),
-            ),
+            Expanded(child: _buildAutoAssignedStaffDisplay()),
             const SizedBox(width: 24),
-            Expanded(
-              child: _buildDatePicker(),
-            ),
+            Expanded(child: _buildDatePicker()),
           ],
         ),
-        const SizedBox(height: 24),
-        
-        // Admin Notes
-        _buildNotesSection(),
       ],
     );
   }
 
-  Widget _buildAutoAssignedStaffDisplay() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Auto-assigned Staff',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey[300]!),
-          ),
-          child: _isLoading
-              ? Row(
-                  children: [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Theme.of(context).primaryColor,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text('Assigning staff...'),
-                  ],
-                )
-              : selectedStaffId == null
-                  ? Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.orange[700], size: 20),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _staffList.isEmpty 
-                                ? 'No staff available for this department'
-                                : 'No staff assigned yet',
-                            style: TextStyle(color: Colors.grey[700]),
-                          ),
-                        ),
-                      ],
-                    )
-                  : Row(
-                      children: [
-                        _buildSimpleAvatar(selectedStaffName ?? ''),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                selectedStaffName ?? 'Unknown Staff',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                widget.task['department'] ?? 'No Department',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Icon(
-                          Icons.check_circle,
-                          color: Colors.green[600],
-                          size: 20,
-                        ),
-                      ],
-                    ),
-        ),
-      ],
-    );
-  }
 
   Widget _buildDatePicker() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Inspection Schedule',
+          'Work Schedule',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w500,
@@ -964,61 +1189,76 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
             if (selectedDate == null) return 'Please pick a date';
             final today = DateTime.now();
             final floor = DateTime(today.year, today.month, today.day);
-            if (selectedDate!.isBefore(floor)) return 'Date can\'t be in the past';
+            if (selectedDate!.isBefore(floor))
+              return 'Date can\'t be in the past';
             return null;
           },
-          builder: (state) => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              InkWell(
-                onTap: () => _selectDateTime(context).then((_) => _revalidate()),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: state.hasError ? Colors.red : Colors.grey[300]!,
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.calendar_today,
-                        size: 18,
-                        color: state.hasError ? Colors.red : Colors.grey[600],
+          builder:
+              (state) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  InkWell(
+                    onTap:
+                        () =>
+                            _selectDateTime(context).then((_) => _revalidate()),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          selectedDate != null
-                              ? '${selectedDate!.month}/${selectedDate!.day}/${selectedDate!.year} ${selectedDate!.hour}:${selectedDate!.minute.toString().padLeft(2, '0')}'
-                              : 'DD/MM/YYYY HH:MM',
-                          style: TextStyle(
-                            color: selectedDate != null
-                                ? Colors.black87
-                                : (state.hasError ? Colors.red : Colors.grey[500]),
-                            fontSize: 14,
-                          ),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color:
+                              state.hasError ? Colors.red : Colors.grey[300]!,
                         ),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                    ],
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today,
+                            size: 18,
+                            color:
+                                state.hasError ? Colors.red : Colors.grey[600],
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              selectedDate != null
+                                  ? UiDateUtils.dateTimeRange(selectedDate!, selectedEndDate)
+                                  : 'DD/MM/YYYY HH:MM',
+                              style: TextStyle(
+                                color:
+                                    selectedDate != null
+                                        ? Colors.black87
+                                        : (state.hasError
+                                            ? Colors.red
+                                            : Colors.grey[500]),
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                  if (state.hasError) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      state.errorText!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ],
+                ],
               ),
-              if (state.hasError) ...[
-                const SizedBox(height: 6),
-                Text(
-                  state.errorText!,
-                  style: const TextStyle(color: Colors.red, fontSize: 12),
-                ),
-              ],
-            ],
-          ),
         ),
       ],
     );
   }
+
+  // Backwards-compatible wrapper (some code references _buildAssignmentForm)
+  Widget _buildAssignmentForm() => _buildAssignmentFormView();
 
   Future<void> _selectDateTime(BuildContext context) async {
     // First select date
@@ -1053,38 +1293,8 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
     }
   }
 
-  Widget _buildNotesSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Admin Notes (Optional)',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextFormField(
-          controller: notesController,
-          maxLines: 6,
-          decoration: InputDecoration(
-            hintText: 'Enter Notes....',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          inputFormatters: [LengthLimitingTextInputFormatter(500)],
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) return null;
-            if (v.trim().length < 5) return 'Add a bit more detail or leave blank';
-            return null;
-          },
-        ),
-      ],
-    );
-  }
-
   Widget _buildFooter(BuildContext context) {
+    final hasBack = _currentStep != 1; // show back on concern slip (0) and assignment (2), but NOT on job service (1)
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
       decoration: BoxDecoration(
@@ -1093,15 +1303,23 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
         ),
       ),
       child: Row(
-        mainAxisAlignment: _currentStep > 0 ? MainAxisAlignment.spaceBetween : MainAxisAlignment.end,
+        mainAxisAlignment: hasBack ? MainAxisAlignment.spaceBetween : MainAxisAlignment.end,
         children: [
-          if (_currentStep > 0)
+          if (hasBack)
             OutlinedButton(
-              onPressed: _isAssigning ? null : () {
-                setState(() {
-                  _currentStep--;
-                });
-              },
+              onPressed: _isAssigning
+                  ? null
+                  : () {
+                      if (_currentStep == 0) {
+                        // On concern slip details, Back should close the dialog
+                        Navigator.of(context).pop();
+                      } else {
+                        // On assignment step (2), go back to previous step
+                        setState(() {
+                          _currentStep--;
+                        });
+                      }
+                    },
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.grey[700],
                 side: BorderSide(color: Colors.grey[300]!),
@@ -1110,23 +1328,9 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
               ),
               child: const Text('Back'),
             ),
-          if (_currentStep == 0 && _isPendingStatus)
-            ElevatedButton.icon(
-              onPressed: () {
-                setState(() {
-                  _currentStep = 1;
-                });
-              },
-              icon: const Icon(Icons.arrow_forward, size: 16),
-              label: const Text('Next'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue[600],
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                elevation: 0,
-              ),
-            ),
+
+          // Removed the "Next" button on concern slip details (step 0)
+
           if (_currentStep == 1)
             ElevatedButton.icon(
               onPressed: () async {
@@ -1146,6 +1350,7 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
                 elevation: 0,
               ),
             ),
+
           if (_currentStep == 2)
             ElevatedButton(
               onPressed: (_formValid && !_isAssigning) ? _handleSaveAndAssign : null,
@@ -1189,10 +1394,29 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
     setState(() => _isAssigning = true);
     
     try {
-      // Resolve job service id (support both 'serviceId' and 'id') and ensure it's a string
-      final jobServiceIdRaw = widget.task['serviceId'] ?? widget.task['id'];
+  // Resolve job service id (support both 'serviceId' and 'id') and ensure it's a string
+  final jobServiceIdRaw = task['serviceId'] ?? task['id'];
       final jobServiceId = jobServiceIdRaw?.toString();
       if (jobServiceId == null || jobServiceId.isEmpty) throw Exception('Job Service ID not found');
+
+      // Persist any selected schedule to the job service before assignment
+      try {
+        if (selectedDate != null) {
+          DateTime start = selectedDate!;
+          DateTime? end = selectedEndDate;
+          // If end exists but is before start, prompt the admin to correct it instead of auto-fixing.
+          if (end != null && end.isBefore(start)) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Selected end time is before start time. Please correct the schedule.')),
+            );
+          } else {
+            await _apiService.updateJobServiceSchedule(jobServiceId, start, end);
+          }
+        }
+      } catch (e) {
+        print('[JobServiceDialog] Failed to update schedule: $e');
+        // Non-fatal: continue to assignment even if schedule update fails
+      }
 
       final staffId = selectedStaffId!.toString();
       print('[JobServiceDialog] Assigning staff $staffId to job service $jobServiceId');
@@ -1201,6 +1425,25 @@ class _JobServiceConcernSlipDialogState extends State<JobServiceConcernSlipDialo
         jobServiceId,
         staffId,
       );
+      // Also assign the same staff to the originating Concern Slip (if any).
+      try {
+        dynamic csId = _taskData?['concern_slip_id'] ?? _taskData?['concernSlipId'] ?? _taskData?['cs_id'] ?? _taskData?['csId'] ?? _taskData?['rawData']?['id'] ?? _taskData?['rawData']?['concern_slip_id'];
+        final csIdStr = csId?.toString();
+        if (csIdStr != null && csIdStr.isNotEmpty) {
+          try {
+            await _apiService.assignStaffToConcernSlip(csIdStr, staffId);
+            // Update local rawData to reflect assigned staff
+            _taskData ??= Map<String, dynamic>.from(widget.task);
+            _taskData?['rawData'] ??= {};
+            _taskData?['rawData']?['assigned_staff'] = staffId;
+            _taskData?['rawData']?['assigned_staff_name'] = selectedStaffName ?? '';
+          } catch (e) {
+            print('[JobServiceDialog] Warning: failed to assign staff to concern slip $csIdStr: $e');
+          }
+        }
+      } catch (e) {
+        print('[JobServiceDialog] _syncAssignToConcernSlip error: $e');
+      }
 
       print('[JobServiceDialog] Assignment successful: $result');
 

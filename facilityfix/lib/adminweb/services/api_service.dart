@@ -808,9 +808,9 @@ class ApiService {
       final body = json.encode({
         if (conditions != null) 'conditions': conditions,
       });
-      
+
       final response = await http.patch(
-        Uri.parse('$baseUrl/work-order-permits/$permitId/approve'),
+        Uri.parse('$baseUrl/work-order-permits/$permitId/approved'),
         headers: headers,
         body: body,
       );
@@ -828,19 +828,27 @@ class ApiService {
     }
   }
 
-  /// Deny a work order permit (Admin only)
-  Future<Map<String, dynamic>> denyWorkOrderPermit(
+  /// Reject a work order permit (Admin only).
+  /// If [returnToTenant] is true the permit will be returned to the tenant for editing.
+  Future<Map<String, dynamic>> rejectWorkOrderPermit(
     String permitId,
-    String reason,
-  ) async {
+    String reason, {
+    bool returnToTenant = false,
+  }) async {
     try {
       final headers = await _getAuthHeaders();
       final body = json.encode({
         'reason': reason,
+        if (returnToTenant) 'return_to_tenant': true,
       });
-      
+
+      // Use different endpoint when returning to tenant to make intent explicit.
+      final endpoint = returnToTenant
+          ? '$baseUrl/work-order-permits/$permitId/returned'
+          : '$baseUrl/work-order-permits/$permitId/rejected';
+
       final response = await http.patch(
-        Uri.parse('$baseUrl/work-order-permits/$permitId/deny'),
+        Uri.parse(endpoint),
         headers: headers,
         body: body,
       );
@@ -849,16 +857,16 @@ class ApiService {
         return json.decode(response.body);
       } else {
         throw Exception(
-          'Failed to deny work order permit: ${response.statusCode}',
+          'Failed to reject work order permit: ${response.statusCode} ${response.body}',
         );
       }
     } catch (e) {
-      print('[v0] Error denying work order permit: $e');
+      print('[v0] Error rejecting work order permit: $e');
       rethrow;
     }
   }
 
-  /// Mark a work order permit as completed
+  /// Mark a work order permit as completed (Tenant only)
   Future<Map<String, dynamic>> completeWorkOrderPermit(
     String permitId, {
     String? completionNotes,
@@ -868,7 +876,7 @@ class ApiService {
       final body = json.encode({
         if (completionNotes != null) 'completion_notes': completionNotes,
       });
-      
+
       final response = await http.patch(
         Uri.parse('$baseUrl/work-order-permits/$permitId/complete'),
         headers: headers,
@@ -887,6 +895,7 @@ class ApiService {
       rethrow;
     }
   }
+
 
   // ============================================
   // MAINTENANCE CALENDAR ENDPOINTS

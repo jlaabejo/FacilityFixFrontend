@@ -1,3 +1,4 @@
+import 'package:facilityfix/adminweb/widgets/tags.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
@@ -6,6 +7,7 @@ import 'pop_up/maintenance_firesafety_popup.dart';
 import 'pop_up/maintenance_earthquake_popup.dart';
 import 'pop_up/maintenance_typhoonflood_popup.dart';
 import '../services/api_service.dart';
+import 'package:facilityfix/adminweb/widgets/pop_up_dialog.dart';
 import 'internalmaintenance_form.dart';
 import 'externalmaintenance_form.dart';
 
@@ -591,86 +593,74 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
       return;
     }
     
-    showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('Delete Maintenance'),
-          content: Text(
-            'Are you sure you want to delete maintenance task ${_formatMaintenanceId(maintenanceId)}?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () async {
-                Navigator.of(dialogContext).pop();
-                
-                // Show loading indicator
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Row(
-                      children: [
-                        SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        ),
-                        SizedBox(width: 16),
-                        Text('Deleting maintenance task...'),
-                      ],
-                    ),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-                
-                try {
-                  final response = await _apiService.deleteMaintenanceTask(maintenanceId.toString());
-                  
-                  // Check if deletion was successful
-                  if (response['success'] == true || response['message']?.toString().toLowerCase().contains('deleted') == true) {
-                    await _fetchMaintenanceTasks(); // Refresh the list
-                    
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).clearSnackBars();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Maintenance task ${_formatMaintenanceId(maintenanceId)} deleted successfully',
-                          ),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }
-                  } else {
-                    throw Exception(response['error'] ?? response['message'] ?? 'Failed to delete maintenance task');
-                  }
-                } catch (e) {
-                  print('[v0] Error deleting maintenance: $e');
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).clearSnackBars();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Failed to delete: ${e.toString()}'),
-                        backgroundColor: Colors.red,
-                        duration: const Duration(seconds: 4),
-                      ),
-                    );
-                  }
-                }
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
+    // Use the reusable app dialog to confirm destructive action
+    final confirmed = await showAppDialog<bool>(
+      context,
+      config: DialogConfig.destructive(
+        title: 'Delete Maintenance',
+        description: 'Are you sure you want to delete maintenance task ${_formatMaintenanceId(maintenanceId)}? This action cannot be undone.',
+        primaryButtonLabel: 'Delete',
+        primaryAction: () {}, // actual deletion happens after confirmation
+        secondaryButtonLabel: 'Cancel',
+        secondaryAction: () {},
+      ),
+      barrierDismissible: false,
     );
+
+    if (confirmed == true) {
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              SizedBox(width: 16),
+              Text('Deleting maintenance task...'),
+            ],
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      try {
+        final response = await _apiService.deleteMaintenanceTask(maintenanceId.toString());
+
+        if (response['success'] == true || response['message']?.toString().toLowerCase().contains('deleted') == true) {
+          await _fetchMaintenanceTasks(); // Refresh the list
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).clearSnackBars();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Maintenance task ${_formatMaintenanceId(maintenanceId)} deleted successfully'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          throw Exception(response['error'] ?? response['message'] ?? 'Failed to delete maintenance task');
+        }
+      } catch (e) {
+        print('[v0] Error deleting maintenance: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to delete: ${e.toString()}'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -877,7 +867,28 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                               ),
                             ),
                             const SizedBox(width: 12),
-                            
+                            // Refresh Button (copied from announcements page style)
+                            Container(
+                              height: 40,
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey[300]!),
+                                borderRadius: BorderRadius.circular(8),
+                                color: Colors.white,
+                              ),
+                              child: InkWell(
+                                onTap: _fetchMaintenanceTasks,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.refresh_rounded, size: 20, color: Colors.blue[600]),
+                                    const SizedBox(width: 8),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+
                             // Filter button with dropdown
                             PopupMenuButton<String>(
                               initialValue: _selectedStatusFilter,
@@ -1051,16 +1062,32 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                           final title = _getTaskField(maintenance, ['task_title', 'taskTitle', 'title'], 'N/A');
                           final location = _getTaskField(maintenance, ['location', 'area'], 'N/A');
                           final typeSlug = _resolveMaintenanceType(maintenance);
-                          final type = typeSlug.contains('internal') ? 'Internal' : 
-                                      typeSlug.contains('external') ? 'External' : 'N/A';
+                          final type = typeSlug.contains('internal') ? 'Internal' :
+                                typeSlug.contains('external') ? 'External' : 'N/A';
                           final rawStatus = _getTaskField(maintenance, ['status', 'statusTag'], 'N/A');
+
+                          // Simple inline tag widget for the TYPE column (replaces MaintenanceTypeTag usage)
+                          final Widget typeTag = Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              type,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                            ),
+                          );
+
                           final status = _toTitleCase(rawStatus);
                           final scheduledDate = maintenance['scheduled_date'] ?? 
                                                maintenance['dateCreated'] ?? 
                                                maintenance['created_at'];
                           final date = _formatDate(scheduledDate);
                           final recurrence = _getTaskField(
-                            maintenance, 
+                            maintenance,
                             ['recurrence', 'recurrence_type', 'recurrenceType'], 
                             'None'
                           );
@@ -1070,7 +1097,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                               DataCell(_fixedCell(0, _ellipsis(id))),
                               DataCell(_fixedCell(1, _ellipsis(title))),
                               DataCell(_fixedCell(2, _ellipsis(location))),
-                              DataCell(_fixedCell(3, _ellipsis(type))),
+                              DataCell(_fixedCell(3, typeTag)),
                               DataCell(
                                 _fixedCell(4, _buildStatusChip(status)),
                               ),

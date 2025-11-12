@@ -75,12 +75,12 @@ class _AdminWebSettingsPageState extends State<AdminWebSettingsPage> {
   bool _enableAuditLog = true;
   String _selectedTheme = 'Light';
   String _selectedLanguage = 'English';
-  String _defaultPriority = 'Medium';
+  String _defaultPriority = '';
 
   // Theme and language options
   final List<String> _themeOptions = ['Light', 'Dark', 'Auto'];
-  final List<String> _languageOptions = ['English', 'Filipino', 'Spanish'];
-  final List<String> _priorityOptions = ['Low', 'Medium', 'High', 'Critical'];
+  final List<String> _languageOptions = ['English', 'Filipino'];
+  final List<String> _priorityOptions = ['Low', 'Medium', 'High'];
 
   @override
   void initState() {
@@ -178,7 +178,7 @@ class _AdminWebSettingsPageState extends State<AdminWebSettingsPage> {
     _enableAuditLog = true;
     _selectedTheme = 'Light';
     _selectedLanguage = 'English';
-    _defaultPriority = 'Medium';
+    _defaultPriority = '';
   }
 
   @override

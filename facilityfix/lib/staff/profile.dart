@@ -4,6 +4,7 @@ import 'package:facilityfix/landingpage/splash_screen.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/workorder.dart';
+import 'package:facilityfix/staff/notification.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -14,6 +15,8 @@ import 'package:facilityfix/widgets/forgotPassword.dart';
 import 'package:facilityfix/services/auth_storage.dart';
 import 'package:facilityfix/services/profile_service.dart';
 import 'package:intl/intl.dart';
+import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/config/env.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -51,6 +54,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Map<String, dynamic>? _profileMap;
   String _staffId = '';
   String _fullName = 'User';
+  int _unreadNotifCount = 0;
 
   ImageProvider? get _profileImageProvider {
     if (_profileImageFile != null) return FileImage(_profileImageFile!);
@@ -68,6 +72,17 @@ class _ProfilePageState extends State<ProfilePage> {
   void initState() {
     super.initState();
     _loadSavedProfile();
+    _loadUnreadNotifCount();
+  }
+
+  Future<void> _loadUnreadNotifCount() async {
+    try {
+      final api = APIService(roleOverride: AppRole.staff);
+      final count = await api.getUnreadNotificationCount();
+      if (mounted) setState(() => _unreadNotifCount = count);
+    } catch (e) {
+      print('[Staff Profile] Failed to load unread notification count: $e');
+    }
   }
 
   Future<void> _loadSavedProfile() async {
@@ -370,13 +385,15 @@ class _ProfilePageState extends State<ProfilePage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        title: 'View Details',
-        leading: const Padding(
-          padding: EdgeInsets.only(right: 8),
-          child: BackButton(),
-        ),
-        showMore: true,
-        showHistory: true,
+        title: 'Profile',
+        notificationCount: _unreadNotifCount,
+        onNotificationTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const NotificationPage()),
+          );
+          _loadUnreadNotifCount();
+        },
       ),
       body: SafeArea(
         child: SingleChildScrollView(

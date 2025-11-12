@@ -232,7 +232,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       assessment: js.assessment,
       attachments: js.attachments,
       staffAttachments: js.staffAttachments,
-      materialsUsed: js.materialsUsed,
     );
   }
 
@@ -459,7 +458,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       // Tenant / Requester
       requestedBy: w.requestedBy ?? '—',
       requestedByName: w.requestedByName,
-      requestedByEmail: w.requestedByEmail,
       unitId: w.unitId ?? '—',
       scheduleAvailability: w.scheduleAvailability,
       additionalNotes: w.additionalNotes,
@@ -515,9 +513,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       assessedAt: w.assessedAt,
       assessment: w.assessment,
       staffAttachments: w.staffAttachments,
-
-      // Tracking
-      materialsUsed: w.materialsUsed,
     );
   }
 

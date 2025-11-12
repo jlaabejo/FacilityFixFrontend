@@ -184,6 +184,8 @@ class DepartmentTag extends StatelessWidget {
       case 'house keeping':
         bg = const Color(0xFFE1BEE7); // Soft lavender/purple
         break;
+        default:
+        bg = const Color(0xFFE0E0E0); // Soft light grey
     }
     
     // Capitalize the first letter of each word for display
@@ -198,192 +200,128 @@ class DepartmentTag extends StatelessWidget {
 }
 
 // Status Tag
-class StatusTag extends StatelessWidget {
-  final String status;
-  final double fontSize;
-  final EdgeInsets padding;
-  final double borderRadius;
-  final FontWeight fontWeight;
+Widget StatusTag(String status) {
+  // Normalize input to be tolerant of canonical lowercase tokens or Title-Cased labels
+  final s = (status ?? '').toString().trim().toLowerCase();
 
-  /// Optional overrides. If provided, these take precedence over the map.
-  final Color? fgColor;
-  final Color? bgColor;
+  Color bgColor;
+  Color textColor;
+  String displayLabel;
 
-  const StatusTag({
-    super.key,
-    required this.status,
-    this.fontSize = 13,
-    this.padding = const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    this.borderRadius = 20,
-    this.fontWeight = FontWeight.w500,
-    this.fgColor,
-    this.bgColor,
-  });
-
-  // Default style (fallback)
-  static const _defaultStyle = _StatusStyle(
-    fg: Color(0xFF667085),
-    bg: Color(0xFFEAECF0),
-  );
-
-  // Map of normalized status -> colors
-static const Map<String, _StatusStyle> _styles = {
-  // Inventory request statuses (only these three) 
-  'approved':        _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)), 
-  'rejected':        _StatusStyle(fg: Color(0xFFD92D20), bg: Color(0xFFFEF3F2)),
-  
-  // Work order statuses
-  'pending':    _StatusStyle(fg: Color(0xFF667085), bg: Color(0xFFF2F4F7)), // Grey (Neutral for Pending CS)
-  'to inspect':    _StatusStyle(fg: Color(0xFFB54708), bg: Color(0xFFFFF4ED)), // Brown/Gold (Action Required)
-  'inspected':     _StatusStyle(fg: Color(0xFF079455), bg: Color(0xFFE6FFF3)), // Teal/Green (Review Done)
-  'assigned':     _StatusStyle(fg: Color(0xFF005CE7), bg: Color(0xFFE6F0FF)), // Darker Blue
-  'in progress':   _StatusStyle(fg: Color(0xFF1570EF), bg: Color(0xFFEFF4FF)), // Blue
-  'on hold':     _StatusStyle(fg: Color(0xFFF79009), bg: Color(0xFFFFFAEB)), // Orange/Yellow
-  'completed':   _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)), // Green
-  'for approval':    _StatusStyle(fg: Color(0xFFF79009), bg: Color(0xFFFFFAEB)),
-
-  // Maintenance
-  'scheduled':   _StatusStyle(fg: Color(0xFF7A5AF8), bg: Color(0xFFF4F5FF)), // Purple
-  'accepted':  _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)), 
-};
-  // Normalize "In-Progress", "in_progress", "in progress" → "in progress"
-  static String _normalize(String s) =>
-      s.trim().toLowerCase().replaceAll(RegExp(r'[_\-]+'), ' ').replaceAll(RegExp(r'\s+'), ' ');
-
-  static _StatusStyle _styleFor(String s) => _styles[_normalize(s)] ?? _defaultStyle;
-
-  /// Public helper to fetch colors elsewhere (e.g. for borders/icons)
-  static StatusStyle colorsFor(String status) {
-    final st = _styleFor(status);
-    return StatusStyle(fg: st.fg, bg: st.bg);
-  }
-
-  /// Convert to Title Case for display
-  static String _toTitleCase(String input) {
-    // First normalize: replace underscores and hyphens with spaces
-    final normalized = input
+  if (s.contains('in progress') || s.contains('in_progress')) {
+    bgColor = const Color(0xFFFFF3E0);
+    textColor = const Color(0xFFFF8F00);
+    displayLabel = 'In Progress';
+  } else if (s.contains('pending')) {
+    bgColor = const Color(0xFFFFEBEE);
+    textColor = const Color(0xFFD32F2F);
+    displayLabel = 'Pending';
+  } else if (s.contains('assigned') || s.contains('to inspect') || s.contains('to_inspect')) {
+    bgColor = const Color(0xFFE3F2FD);
+    textColor = const Color(0xFF1976D2);
+    displayLabel = 'To Inspect';
+  } else if (s.contains('inspected') || s.contains('completed') || s.contains('assessed') || s.contains('sent') || s.contains('done') || s.contains('return to tenant')) {
+    bgColor = const Color(0xFFF3E5F5);
+    textColor = const Color(0xFF7B1FA2);
+    displayLabel = 'Inspected';
+  } else if (s.contains('pending js') || s.contains('pendingjs') || s.contains('job service')) {
+    bgColor = const Color(0xFFFFF8E1);
+    textColor = const Color(0xFFFF8F00);
+    displayLabel = 'Pending JS';
+  } else if (s.contains('pending wop') || s.contains('pendingwop') || s.contains('work order')) {
+    bgColor = const Color(0xFFE0F2F1);
+    textColor = const Color(0xFF00695C);
+    displayLabel = 'Pending WO';
+  } else if (s.contains('approved') || s.contains('accept')) {
+    bgColor = const Color(0xFFE8F5E8);
+    textColor = const Color(0xFF2E7D32);
+    displayLabel = 'Approved';
+  } else if (s.contains('reject')) {
+    bgColor = const Color(0xFFFFEBEE);
+    textColor = const Color(0xFFD32F2F);
+    displayLabel = 'Rejected';
+  } else {
+    bgColor = Colors.grey[100]!;
+    textColor = Colors.grey[700]!;
+    // Title-case the incoming value for display if possible
+    displayLabel = status
         .trim()
-        .replaceAll(RegExp(r'[_\-]+'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ');
-    
-    // Then convert to title case
-    return normalized
-        .split(' ')
-        .map((word) => word.isEmpty ? word : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
+        .split(RegExp(r'\s+'))
+        .map((word) => word.isEmpty ? word : '${word[0].toUpperCase()}${word.substring(1)}')
         .join(' ');
+    if (displayLabel.isEmpty) displayLabel = 'Unknown';
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final mapped = _styleFor(status);
-    final fg = fgColor ?? mapped.fg;
-    final bg = bgColor ?? mapped.bg;
-
-    return Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(borderRadius),
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    decoration: BoxDecoration(
+      color: bgColor,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Text(
+      displayLabel,
+      style: TextStyle(
+        color: textColor,
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
       ),
-      child: Text(
-        _toTitleCase(status),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: fg,
-          fontSize: fontSize,
-          fontWeight: fontWeight,
-          fontFamily: 'Inter',
-          letterSpacing: -0.5,
-        ),
-      ),
-    );
-  }
-}
-
-// Public style to use outside the widget
-class StatusStyle {
-  final Color fg;
-  final Color bg;
-  const StatusStyle({required this.fg, required this.bg});
-}
-
-// Internal holder for the map
-class _StatusStyle {
-  final Color fg; // text color
-  final Color bg; // background color
-  const _StatusStyle({required this.fg, required this.bg});
+    ),
+  );
 }
 
 // Priority Tag
-class PriorityTag extends StatelessWidget {
-  final String priority;
-  final double fontSize;
-  final EdgeInsets padding;
 
-  const PriorityTag({
-    super.key,
-    required this.priority,
-    this.fontSize = 13,
-    this.padding = const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-  });
+  Widget PriorityTag(String priority) {
+  // Normalize input to be case-insensitive and robust
+  final key = priority.toString().trim().toLowerCase();
+    Color bgColor;
+    Color textColor;
+    String displayLabel;
 
-  Color _getPriorityColor() {
-    switch (priority.toLowerCase()) {
+    switch (key) {
       case 'high':
-        return const Color(0xFFFEE4E2); // soft red background
+        bgColor = const Color(0xFFFFEBEE); // light red
+        textColor = const Color(0xFFD32F2F); // red
+        displayLabel = 'High';
+        break;
       case 'medium':
-        return const Color(0xFFFEF0C7); // soft orange background
+        bgColor = const Color(0xFFFFF3E0); // light orange
+        textColor = const Color(0xFFFF8F00); // orange
+        displayLabel = 'Medium';
+        break;
       case 'low':
-        return const Color(0xFFD1FADF); // soft green background
+        bgColor = const Color(0xFFE8F5E8); // light green
+        textColor = const Color(0xFF2E7D32); // green
+        displayLabel = 'Low';
+        break;
       default:
-        return const Color(0xFFF2F4F7); // soft gray background
+        bgColor = Colors.grey[100]!;
+        textColor = Colors.grey[700]!;
+        // If caller passed a custom string, title-case it for display
+        if (key.isEmpty) {
+          displayLabel = 'Unknown';
+        } else {
+          displayLabel = key.split(RegExp(r'\s+')).map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}').join(' ');
+        }
     }
-  }
 
-  Color _getTextColor() {
-    switch (priority.toLowerCase()) {
-      case 'high':
-        return const Color(0xFFB42318); // darker red text
-      case 'medium':
-        return const Color(0xFFB54708); // darker orange text
-      case 'low':
-        return const Color(0xFF027A48); // darker green text
-      default:
-        return const Color(0xFF344054); // darker gray text
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _getPriorityColor();
-    final textColor = _getTextColor();
-    
-    // Capitalize the first letter for display
-    String displayText = priority.isNotEmpty 
-      ? priority[0].toUpperCase() + priority.substring(1).toLowerCase()
-      : priority;
-    
     return Container(
-      padding: padding,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(20),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
-        displayText,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+        displayLabel,
         style: TextStyle(
           color: textColor,
-          fontSize: fontSize,
+          fontSize: 12,
           fontWeight: FontWeight.w500,
-          fontFamily: 'Inter',
         ),
       ),
     );
   }
-}
+
 
 
 // Announcement Type ----------------------------------------------
@@ -468,9 +406,6 @@ class StockStatusTag extends StatelessWidget {
     if (s.contains('out')) {
       return const Color(0xFFFFEBEE); // light red
     }
-    if (s.contains('critical')) {
-      return const Color(0xFFFFEBEE); // light red
-    }
     return const Color(0xFFF5F5F7); // light gray
   }
 
@@ -520,10 +455,10 @@ class StockStatusTag extends StatelessWidget {
 }
 
 // Maintenance Type Status Widget 
-class MaintenanceType extends StatelessWidget {
+class MaintenanceTypeTag extends StatelessWidget {
   final String type;
 
-  const MaintenanceType(this.type, {super.key});
+  const MaintenanceTypeTag(this.type, {super.key});
 
   Color _getBackgroundColor(String type) {
     switch (type.toLowerCase()) {
@@ -719,3 +654,57 @@ class _TypeStyle {
 
   const _TypeStyle({required this.fg, required this.bg});
 }
+
+
+// Role Tag Widget -----------------------------------------
+class RoleTag extends StatelessWidget {
+  final String role;
+  final Map<String, Map<String, Color>>? customStyles;
+
+  const RoleTag({
+    Key? key,
+    required this.role,
+    this.customStyles,
+  }) : super(key: key);
+
+  static final Map<String, Map<String, Color>> _defaultRoleStyles = {
+    'Admin': {
+      'bg': Color(0xFFDDEAFE), // light blue
+      'text': Color(0xFF1D4ED8), // dark blue
+    },
+    'Staff': {
+      'bg': Color(0xFFE5E7EB), // light gray
+      'text': Color(0xFF374151), // dark gray
+    },
+    'Tenant': {
+      'bg': Color(0xFFFEF9C3), // light yellow
+      'text': Color(0xFFB45309), // orange
+    },
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final styles = customStyles ?? _defaultRoleStyles;
+    final style = styles[role] ?? {
+      'bg': Colors.grey.shade200,
+      'text': Colors.grey.shade700,
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: style['bg'],
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        role,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: style['text'],
+        ),
+      ),
+    );
+  }
+}
+

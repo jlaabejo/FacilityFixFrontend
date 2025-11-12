@@ -174,24 +174,38 @@ class StatusTag extends StatelessWidget {
 
   // Map of normalized status -> colors
   static const Map<String, _StatusStyle> _styles = {
-  'Pending':     _StatusStyle(fg: Color(0xFF667085), bg: Color(0xFFF2F4F7)), 
-  'In Progress': _StatusStyle(fg: Color(0xFF1570EF), bg: Color(0xFFEFF4FF)), 
-  'On Hold':     _StatusStyle(fg: Color(0xFFF79009), bg: Color(0xFFFFFAEB)), 
-  'Assigned':    _StatusStyle(fg: Color(0xFF005CE7), bg: Color(0xFFE6F0FF)), 
-  'Assessed':    _StatusStyle(fg: Color(0xFF475467), bg: Color(0xFFE5E7EB)), 
-  'Scheduled':   _StatusStyle(fg: Color(0xFF7A5AF8), bg: Color(0xFFF4F5FF)), 
-  'Completed':   _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)),
 
-  // Inventory
-  'Approved':    _StatusStyle(fg: Color(0xFF12B76A), bg: Color(0xFFEFFAF5)), 
-  'Rejected':    _StatusStyle(fg: Color(0xFFD92D20), bg: Color(0xFFFEF3F2)), 
+  // Repair Task
+  'Pending':      _StatusStyle(fg: Color(0xFF6B7280), bg: Color(0xFFF8FAFC)),
+  'In Progress':  _StatusStyle(fg: Color(0xFF2563EB), bg: Color(0xFFEFF6FF)),
+  'On Hold':      _StatusStyle(fg: Color(0xFF92400E), bg: Color(0xFFFFF7ED)),
+  'To Inspect':   _StatusStyle(fg: Color(0xFF15803D), bg: Color(0xFFF0FFF4)),
+  'Inspected':    _StatusStyle(fg: Color(0xFF7B2B5A), bg: Color(0xFFFCE8F3)),
+  'Pending JS':   _StatusStyle(fg: Color(0xFF7C3AED), bg: Color(0xFFF5EDFF)),
+  'Pending WO':   _StatusStyle(fg: Color(0xFF0F766E), bg: Color(0xFFF2FEFA)),
+
+  // Maintenance
+  'Scheduled':    _StatusStyle(fg: Color(0xFF4F46E5), bg: Color(0xFFEEF2FF)),
+  'Completed':    _StatusStyle(fg: Color(0xFF15803D), bg: Color(0xFFEFFCF6)),
+
+  // Inventory / Approval
+  'Approved':     _StatusStyle(fg: Color(0xFF065F46), bg: Color(0xFFF1FBF5)),
+  'Rejected':     _StatusStyle(fg: Color(0xFFDC2626), bg: Color(0xFFFFF1F2)),
   };
 
   // Normalize "In-Progress", "in_progress", "in progress" → "in progress"
   static String _normalize(String s) =>
       s.trim().toLowerCase().replaceAll(RegExp(r'[_\-]+'), ' ').replaceAll(RegExp(r'\s+'), ' ');
 
-  static _StatusStyle _styleFor(String s) => _styles[_normalize(s)] ?? _defaultStyle;
+  static _StatusStyle _styleFor(String s) {
+    // Normalize the input and compare against normalized keys in the map.
+    final norm = _normalize(s);
+    for (final entry in _styles.entries) {
+      final keyNorm = _normalize(entry.key);
+      if (keyNorm == norm) return entry.value;
+    }
+    return _defaultStyle;
+  }
 
   /// Public helper to fetch colors elsewhere (e.g. for borders/icons)
   static StatusStyle colorsFor(String status) {
@@ -204,9 +218,18 @@ class StatusTag extends StatelessWidget {
     final mapped = _styleFor(status);
     final fg = fgColor ?? mapped.fg;
     final bg = bgColor ?? mapped.bg;
+    // Render a prettified label (Title Case) for consistent display while
+    // keeping the original status string available for logic/style lookups.
+    final displayLabel = status
+        .toString()
+        .replaceAll(RegExp(r'[_\-]+'), ' ')
+        .trim()
+        .split(RegExp(r'\s+'))
+        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
 
     return Container(
-      width: width, 
+      width: width,
       padding: padding,
       alignment: Alignment.center,
       decoration: BoxDecoration(
@@ -214,7 +237,7 @@ class StatusTag extends StatelessWidget {
         borderRadius: BorderRadius.circular(borderRadius),
       ),
       child: Text(
-        status,
+        displayLabel,
         style: TextStyle(
           color: fg,
           fontSize: fontSize,

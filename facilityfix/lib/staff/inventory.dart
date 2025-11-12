@@ -201,6 +201,19 @@ class _InventoryPageState extends State<InventoryPage> {
     super.initState();
     _apiService = APIService(roleOverride: AppRole.staff);
     _loadInitialData();
+    _loadUnreadNotifCount();
+  }
+
+  int _unreadNotifCount = 0;
+
+  Future<void> _loadUnreadNotifCount() async {
+    try {
+      final api = APIService(roleOverride: AppRole.staff);
+      final count = await api.getUnreadNotificationCount();
+      if (mounted) setState(() => _unreadNotifCount = count);
+    } catch (e) {
+      print('[Staff Inventory] Failed to load unread notification count: $e');
+    }
   }
 
   /// Load initial data when the page starts
@@ -456,21 +469,14 @@ class _InventoryPageState extends State<InventoryPage> {
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
         title: 'Inventory Management',
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const NotificationPage()),
-              );
-            },
-          ),
-          // IconButton(
-          //   icon: const Icon(Icons.refresh),
-          //   onPressed: () => _loadInitialData(),
-          // ),
-        ],
+        notificationCount: _unreadNotifCount,
+        onNotificationTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const NotificationPage()),
+          );
+          _loadUnreadNotifCount();
+        },
       ),
       body: SafeArea(
         child: Stack(

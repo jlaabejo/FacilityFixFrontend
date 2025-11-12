@@ -291,7 +291,7 @@ class WorkOrderPermit {
   // Permit Specific Details
   final String contractorName;     // required
   final String contractorNumber;   // required
-  final String? contractorCompany;
+  final String? contractorEmail;
 
   // Work Specifics
   final DateTime workScheduleFrom; // required
@@ -337,7 +337,7 @@ class WorkOrderPermit {
     // Permit specifics
     required this.contractorName,
     required this.contractorNumber,
-    this.contractorCompany,
+    this.contractorEmail,
 
     // Work specifics
     required this.workScheduleFrom,
@@ -411,7 +411,7 @@ class WorkOrderPermit {
     // Extract contractor info from contractors array if present
     String contractorName = json['contractor_name'] ?? '';
     String contractorContact = json['contractor_contact'] ?? json['contractor_number'] ?? '';
-    String? contractorCompany = json['contractor_company'];
+    String? contractorEmail = json['contractor_company'];
 
     // Check if contractors array exists and extract first contractor
     if (json['contractors'] != null && json['contractors'] is List && (json['contractors'] as List).isNotEmpty) {
@@ -419,7 +419,7 @@ class WorkOrderPermit {
       if (firstContractor is Map) {
         contractorName = firstContractor['name']?.toString() ?? contractorName;
         contractorContact = firstContractor['contact']?.toString() ?? contractorContact;
-        contractorCompany = firstContractor['company']?.toString() ?? contractorCompany;
+        contractorEmail = firstContractor['company']?.toString() ?? contractorEmail;
       }
     }
 
@@ -451,7 +451,7 @@ class WorkOrderPermit {
 
       contractorName: contractorName,
       contractorNumber: contractorContact,
-      contractorCompany: contractorCompany,
+      contractorEmail: contractorEmail,
 
       workScheduleFrom: _dt(validFrom) ?? DateTime.now(),
       workScheduleTo: _dt(validTo) ?? DateTime.now(),
@@ -490,7 +490,7 @@ class WorkOrderPermit {
 
     'contractor_name': contractorName,
     'contractor_number': contractorNumber,
-    'contractor_company': contractorCompany,
+    'contractor_company': contractorEmail,
 
     'work_schedule_from': workScheduleFrom.toIso8601String(),
     'work_schedule_to': workScheduleTo.toIso8601String(),
@@ -676,12 +676,11 @@ class WorkOrderDetails {
   // Permit / Contractor Info (for Work Permits)
   final String? contractorName;
   final String? contractorNumber;
-  final String? contractorCompany;
+  final String? contractorEmail;
 
   // Work Schedule
   final DateTime? workScheduleFrom;
   final DateTime? workScheduleTo;
-  final String? entryEquipments;
 
   // Approval & Admin Tracking
   final String? approvedBy;
@@ -699,7 +698,6 @@ class WorkOrderDetails {
   // Attachments
   final List<String>? attachments;       // request attachments (tenant/admin)
   final List<String>? staffAttachments;  // staff-side documentation
-  final List<String>? materialsUsed;     // materials or items used for work
 
   const WorkOrderDetails({
     // Basic Info
@@ -735,12 +733,11 @@ class WorkOrderDetails {
     // Contractor / Permit Info
     this.contractorName,
     this.contractorNumber,
-    this.contractorCompany,
+    this.contractorEmail,
 
     // Work Schedule
     this.workScheduleFrom,
     this.workScheduleTo,
-    this.entryEquipments,
 
     // Approval / Admin
     this.approvedBy,
@@ -758,6 +755,5 @@ class WorkOrderDetails {
     // Attachments
     this.attachments,
     this.staffAttachments,
-    this.materialsUsed,
   });
 }

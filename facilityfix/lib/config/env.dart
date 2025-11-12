@@ -6,9 +6,9 @@ enum AppRole { tenant, staff, admin }
 class AppEnv {
 
   /// When testing on a physical device, set this to your laptop’s LAN IP.
-  static String? lanIp = '72.60.234.106';
+  static String? lanIp = '192.168.1.18';
 
-  static const String _WEB_API = 'http://localhost:8000';
+  static const String _WEB_API = 'http://192.168.1.18:8000';
 
   static const Map<AppRole, String> _webHosts = {
     AppRole.tenant: _WEB_API,
@@ -23,9 +23,9 @@ class AppEnv {
   };
 
   static Map<AppRole, String> _deviceHosts(String ip) => {
-    AppRole.tenant: 'http://72.60.234.106:8000',
-    AppRole.staff:  'http://72.60.234.106:8000',
-    AppRole.admin:  'http://72.60.234.106:8000',
+    AppRole.tenant: 'http://192.168.1.18:8000',
+    AppRole.staff:  'http://192.168.1.18:8000',
+    AppRole.admin:  'http://192.168.1.18:8000',
   };
 
   /// Default per-platform base URL (localhost for web/desktop, emulator loopback, etc.)
@@ -46,6 +46,10 @@ class AppEnv {
 
   /// Prefer LAN IP only when explicitly set (for physical devices)
   static String baseUrlWithLan(AppRole role) {
+    // On web we must use the web host (usually localhost) because browsers
+    // enforce CORS and can't fetch arbitrary LAN IPs reliably. Only prefer
+    // the LAN IP when running on a physical device (mobile/desktop).
+    if (kIsWeb) return baseUrlFor(role);
     if (lanIp == null || lanIp!.isEmpty) return baseUrlFor(role);
     return _deviceHosts(lanIp!)[role]!;
   }

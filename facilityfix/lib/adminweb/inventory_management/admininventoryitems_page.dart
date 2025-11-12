@@ -977,15 +977,14 @@ class _InventoryManagementItemsPageState
                                         builder: (context) {
                                           return IconButton(
                                             onPressed: () {
-                                              final rbx =
-                                                  context.findRenderObject()
-                                                      as RenderBox;
-                                              final position = rbx
-                                                  .localToGlobal(Offset.zero);
+                                              final rbx = context.findRenderObject() as RenderBox;
+                                              final position = rbx.localToGlobal(Offset.zero);
+                                              // Anchor the popup below the icon for better positioning
+                                              final Offset menuPosition = position + Offset(0, rbx.size.height + 6);
                                               _showActionMenu(
                                                 context,
                                                 item,
-                                                position,
+                                                menuPosition,
                                               );
                                             },
                                             icon: Icon(

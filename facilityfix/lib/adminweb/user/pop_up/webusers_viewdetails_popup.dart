@@ -229,7 +229,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     );
   }
 
-  // Header with title, edit toggle, delete, and close button
+  // Header with title, edit toggle and close button
   Widget _buildHeader(BuildContext context) {
     return Container(
       padding: const EdgeInsets.only(left: 32, right: 24, top: 24, bottom: 16),
@@ -245,15 +245,6 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
           ),
           const Spacer(),
           if (!isEditMode)
-            IconButton(
-              onPressed: () => _deleteUser(context),
-              icon: Icon(
-                Icons.delete_outline,
-                color: Colors.red[600],
-                size: 24,
-              ),
-              tooltip: 'Delete User',
-            ),
           const SizedBox(width: 8),
           // Edit toggle button
           IconButton(
@@ -1001,59 +992,6 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error updating profile: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  void _deleteUser(BuildContext context) async {
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Confirm Delete'),
-          content: Text(
-            'Are you sure you want to delete ${widget.user['name']}? This action cannot be undone.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true) return;
-
-    try {
-      final userId = widget.user['id'];
-      print('[UserProfileDialog] Deleting user $userId');
-
-      await _apiService.deleteUser(userId, permanent: false);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Deleted user: ${widget.user['name']}")),
-        );
-
-        // Close dialog and indicate the user was deleted
-        Navigator.of(context).pop({'deleted': true});
-      }
-    } catch (e) {
-      print('[UserProfileDialog] Error deleting user: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Failed to delete user: $e"),
             backgroundColor: Colors.red,
           ),
         );

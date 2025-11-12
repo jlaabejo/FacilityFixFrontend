@@ -1,4 +1,5 @@
 /// Unified date parser + formatter 
+import 'package:flutter/material.dart';
 class UiDateUtils {
   // ────────────────────────────────
   // Month lookup
@@ -87,8 +88,8 @@ class UiDateUtils {
   static String humanDateTime(DateTime d) {
     final h12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
     final mm = d.minute.toString().padLeft(2, '0');
-    final ampm = d.hour >= 12 ? 'PM' : 'AM';
-    return '${_months[d.month - 1]} ${d.day}, ${d.year} · $h12:$mm $ampm';
+    final ampm = d.hour >= 12 ? 'pm' : 'am';
+    return '${_months[d.month - 1]} ${d.day}, ${d.year} | $h12:$mm $ampm';
   }
 
   /// "Aug 23, 2025"
@@ -102,7 +103,7 @@ class UiDateUtils {
   /// "Aug 23, 2025 | 8 PM"
   static String dateWithTime(DateTime d) {
     final h12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
-    final ampm = d.hour >= 12 ? 'PM' : 'AM';
+    final ampm = d.hour >= 12 ? 'pm' : 'am';
     return '${_months[d.month - 1]} ${d.day}, ${d.year} | $h12 $ampm';
   }
 
@@ -112,8 +113,8 @@ class UiDateUtils {
       final h12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
       final mm = d.minute.toString().padLeft(2, '0');
       final time = d.minute == 0 ? '$h12' : '$h12:$mm';
-      final ampm = d.hour >= 12 ? 'PM' : 'AM';
-      return '$time $ampm';
+  final ampm = d.hour >= 12 ? 'pm' : 'am';
+  return '$time $ampm';
     }
 
     final datePart = '${_months[start.month - 1]} ${start.day}';
@@ -126,6 +127,92 @@ class UiDateUtils {
   static String formatSchedule(String raw) {
     final dt = DateTime.tryParse(raw) ?? parse(raw);
     return dateWithTime(dt);
+  }
+
+  /// Parse a human-friendly range like "Nov 21, 2025 9:00 AM - 11:00 AM"
+  /// or a single datetime and return a DateTimeRange. Returns null if parsing fails.
+  static DateTimeRange? parseRange(String? raw) {
+    if (raw == null) return null;
+    final s = raw.trim();
+    if (s.isEmpty) return null;
+
+    // Common separators. Note: we look for space-separated variants first.
+    final separators = [' - ', ' to ', ' | ', '|', '—', '–'];
+    for (final sep in separators) {
+      if (s.contains(sep)) {
+        final parts = s.split(sep);
+        if (parts.length >= 2) {
+          final leftRaw = parts[0].trim();
+          final rightRaw = parts[1].trim();
+
+          DateTime? a;
+          DateTime? b;
+
+          try {
+            a = DateTime.tryParse(leftRaw) ?? parse(leftRaw);
+          } catch (_) {
+            a = null;
+          }
+
+          try {
+            // time-only like "11:00 AM" or "9 AM"
+            final timeOnly = RegExp(r'^\s*\d{1,2}(:\d{2})?\s*(AM|PM|am|pm)\s*\$?');
+            if (timeOnly.hasMatch(rightRaw) && a != null) {
+              // extract hour/min/meridian manually
+              final m = RegExp(r'^(\d{1,2})(?::(\d{2}))?\s*(AM|PM|am|pm)')
+                  .firstMatch(rightRaw);
+              if (m != null) {
+                var hour = int.tryParse(m.group(1) ?? '0') ?? 0;
+                final min = int.tryParse(m.group(2) ?? '0') ?? 0;
+                final mer = (m.group(3) ?? '').toLowerCase();
+                if (mer.contains('pm') && hour < 12) hour += 12;
+                if (mer.contains('am') && hour == 12) hour = 0;
+                b = DateTime(a.year, a.month, a.day, hour, min);
+              }
+            } else {
+              b = DateTime.tryParse(rightRaw) ?? parse(rightRaw);
+            }
+          } catch (_) {
+            b = null;
+          }
+
+          if (a != null && b != null) return normalizeRange(a, b);
+        }
+      }
+    }
+
+    // Fallback: try parsing a single datetime and create a 1-hour window
+    try {
+      final dt = DateTime.tryParse(s) ?? parse(s);
+      return normalizeRange(dt, dt.add(const Duration(hours: 1)));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Aug 10 - 12, 2025
+  static String formatDateRange(DateTime start, DateTime end) {
+    final startMonth = _months[start.month - 1];
+    final endMonth = _months[end.month - 1];
+
+    if (start.year == end.year) {
+      if (start.month == end.month) {
+        // Same month
+        return '$startMonth ${start.day} - ${end.day}, ${start.year}';
+      } else {
+        // Different months
+        return '$startMonth ${start.day} - $endMonth ${end.day}, ${start.year}';
+      }
+    } else {
+      // Different years
+      return '$startMonth ${start.day}, ${start.year} - $endMonth ${end.day}, ${end.year}';
+    }
+  }
+
+  /// Return a DateTimeRange with start <= end by normalizing the two dates.
+  static DateTimeRange normalizeRange(DateTime a, DateTime b) {
+    if (a.isAfter(b)) return DateTimeRange(start: b, end: a);
+    return DateTimeRange(start: a, end: b);
   }
 
   // ────────────────────────────────

@@ -70,10 +70,13 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
   String _selectedFilter = 'All';
   final List<String> _filterOptions = [
     'All',
+    'Schduled Maintenance',
     'Utility Interruption',
+    'Safety Inspection',
     'Power Outage',
     'Pest Control',
-    'Maintenance',
+    'General Announcement',
+    'Others',
   ];
   
   // Pagination

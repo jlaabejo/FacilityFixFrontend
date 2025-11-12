@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:facilityfix/tenant/announcement.dart';
 import 'package:facilityfix/tenant/notification.dart';
 import 'package:facilityfix/tenant/profile.dart';
-import 'package:facilityfix/tenant/workorder.dart';
+import 'package:facilityfix/tenant/repair_management.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/services/auth_storage.dart';
@@ -21,6 +21,7 @@ class HomePage extends StatefulWidget {
 class _HomeState extends State<HomePage> {
   int _selectedIndex = 0;
   bool _isLoading = true;
+  int _unreadNotifCount = 0;
 
   // runtime user fields (defaults)
   String _userName = 'User';
@@ -46,6 +47,17 @@ class _HomeState extends State<HomePage> {
     _loadUserData();
     _loadAllRequests();
     _loadLatestAnnouncements();
+    _loadUnreadNotifCount();
+  }
+
+  Future<void> _loadUnreadNotifCount() async {
+    try {
+      final api = APIService();
+      final count = await api.getUnreadNotificationCount();
+      if (mounted) setState(() => _unreadNotifCount = count);
+    } catch (e) {
+      print('[Home] Failed to load unread notification count: $e');
+    }
   }
 
   Future<void> _loadAllRequests() async {
@@ -748,17 +760,14 @@ class _HomeState extends State<HomePage> {
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
         title: 'Home',
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const NotificationPage()),
-              );
-            },
-          ),
-        ],
+        notificationCount: _unreadNotifCount,
+        onNotificationTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const NotificationPage()),
+          );
+          _loadUnreadNotifCount();
+        },
       ),
       body:
           _isLoading

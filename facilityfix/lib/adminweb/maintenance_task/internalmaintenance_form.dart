@@ -1,6 +1,4 @@
 import 'dart:math' as math;
-
-import 'package:facilityfix/widgets/forms.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
@@ -736,7 +734,16 @@ class _InternalMaintenanceFormPageState
         _estimatedDurationController.text = '';
       }
 
-      _remarksController.text = data['remarks'] ?? '';
+      // Remarks / Additional notes - accept several possible backend keys
+      String? remarksVal;
+      for (final k in ['remarks', 'additional_notes', 'additional_note', 'additional_comments', 'notes', 'admin_notification']) {
+        final v = data[k];
+        if (v != null) {
+          remarksVal = v.toString();
+          break;
+        }
+      }
+      _remarksController.text = remarksVal ?? '';
 
       // Dropdowns - validate values are in options list
       // Priority: Low, Medium, High
@@ -744,8 +751,8 @@ class _InternalMaintenanceFormPageState
       final validPriorities = ['Low', 'Medium', 'High'];
       _selectedPriority = validPriorities.contains(priority) ? priority : null;
 
-      // Status: can be any value from backend, keep as is
-      _selectedStatus = data['status'];
+  // Status: coerce to string if present
+  _selectedStatus = data['status']?.toString();
 
       // Location: validate against location options
       final location = data['location'] ?? data['area'];
@@ -779,7 +786,6 @@ class _InternalMaintenanceFormPageState
             .join(' ');
         // Valid recurrence options: Daily, Weekly, Monthly, Quarterly, Annually
         final validRecurrences = [
-          'Daily',
           'Weekly',
           'Monthly',
           'Quarterly',
@@ -805,39 +811,63 @@ class _InternalMaintenanceFormPageState
               ? department.toString()
               : null;
 
-      // Staff assignment
+      // Staff assignment (coerce id to String, name to String)
       if (data['assigned_to'] != null) {
-        _selectedStaffUserId = data['assigned_to'];
+        try {
+          _selectedStaffUserId = data['assigned_to']?.toString();
+        } catch (_) {
+          _selectedStaffUserId = null;
+        }
         _assignedStaffController.text =
-            data['assigned_staff_name'] ?? 'Staff Name';
+            (data['assigned_staff_name'] ?? 'Staff Name').toString();
       }
 
-      // Dates
-      if (data['created_at'] != null) {
+      // Dates - parse flexibly (accept ISO strings or integer timestamps)
+      DateTime? parseFlexibleDate(dynamic raw) {
+        if (raw == null) return null;
         try {
-          _dateCreated = DateTime.parse(data['created_at']);
-          _dateCreatedController.text = _fmtDate(_dateCreated!);
+          if (raw is DateTime) return raw;
+          if (raw is int) {
+            // Heuristic: if it's in seconds (10 digits), convert to ms
+            if (raw.abs() < 100000000000) {
+              // likely seconds
+              return DateTime.fromMillisecondsSinceEpoch(raw * 1000);
+            }
+            return DateTime.fromMillisecondsSinceEpoch(raw);
+          }
+          if (raw is String) {
+            // Try ISO parse
+            return DateTime.tryParse(raw);
+          }
+          if (raw is double) {
+            final asInt = raw.toInt();
+            if (asInt.abs() < 100000000000) {
+              return DateTime.fromMillisecondsSinceEpoch(asInt * 1000);
+            }
+            return DateTime.fromMillisecondsSinceEpoch(asInt);
+          }
         } catch (e) {
-          print('Error parsing created_at: $e');
+          print('parseFlexibleDate error: $e');
         }
+        return null;
       }
 
-      if (data['start_date'] != null) {
-        try {
-          _startDate = DateTime.parse(data['start_date']);
-          _startDateController.text = _fmtDate(_startDate!);
-        } catch (e) {
-          print('Error parsing start_date: $e');
-        }
+      final createdAt = parseFlexibleDate(data['created_at']);
+      if (createdAt != null) {
+        _dateCreated = createdAt;
+        _dateCreatedController.text = _fmtDate(_dateCreated!);
       }
 
-      if (data['next_due_date'] != null) {
-        try {
-          _nextDueDate = DateTime.parse(data['next_due_date']);
-          _nextDueDateController.text = _fmtDate(_nextDueDate!);
-        } catch (e) {
-          print('Error parsing next_due_date: $e');
-        }
+      final startAt = parseFlexibleDate(data['start_date'] ?? data['scheduled_date']);
+      if (startAt != null) {
+        _startDate = startAt;
+        _startDateController.text = _fmtDate(_startDate!);
+      }
+
+      final nextAt = parseFlexibleDate(data['next_due_date'] ?? data['next_due'] ?? data['next_occurrence']);
+      if (nextAt != null) {
+        _nextDueDate = nextAt;
+        _nextDueDateController.text = _fmtDate(_nextDueDate!);
       }
 
       // Checklist items
@@ -1382,7 +1412,6 @@ class _InternalMaintenanceFormPageState
                                               'Low',
                                               'Medium',
                                               'High',
-                                              'Critical',
                                             ]
                                             .map(
                                               (v) => DropdownMenuItem(
@@ -1540,20 +1569,47 @@ class _InternalMaintenanceFormPageState
                           const SizedBox(width: 24),
 
                           // Estimated Duration
-                          Expanded(
+                            Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _fieldLabel('Estimated Duration'),
-                                _fieldBox(
-                                  child: TextFormField(
-                                    controller: _estimatedDurationController,
-                                    validator: _durationValidator,
-                                    decoration: _decoration(
-                                      'e.g., 3 hrs / 45 mins',
-                                    ),
+                              _fieldLabel('Estimated Duration'),
+                              _fieldBox(
+                                child: TextFormField(
+                                controller: _estimatedDurationController,
+                                validator: _durationValidator,
+                                decoration: _decoration(
+                                  'e.g., 3 hrs / 45 mins',
+                                ).copyWith(
+                                  suffixIcon: IconButton(
+                                  icon: const Icon(Icons.access_time),
+                                  tooltip: 'Pick hours & minutes',
+                                  onPressed: () async {
+                                    final picked = await showTimePicker(
+                                    context: context,
+                                    // Use a neutral initial time for duration selection
+                                    initialTime: TimeOfDay(hour: 0, minute: 30),
+                                    );
+                                    if (picked != null) {
+                                    final h = picked.hour;
+                                    final m = picked.minute;
+                                    String formatted;
+                                    if (h > 0 && m > 0) {
+                                      formatted = '$h hrs $m mins';
+                                    } else if (h > 0) {
+                                      formatted = '$h hrs';
+                                    } else {
+                                      formatted = '$m mins';
+                                    }
+                                    setState(() {
+                                      _estimatedDurationController.text = formatted;
+                                    });
+                                    }
+                                  },
                                   ),
                                 ),
+                                ),
+                              ),
                               ],
                             ),
                           ),
@@ -1995,173 +2051,153 @@ class _InternalMaintenanceFormPageState
                                                 ),
                                               ),
 
-                                              // Quantity controls
-                                              Container(
+                                                // Quantity controls (fixed increment/decrement)
+                                                Container(
                                                 decoration: BoxDecoration(
                                                   border: Border.all(
-                                                    color: Colors.grey[300]!,
+                                                  color: Colors.grey[300]!,
                                                   ),
                                                   borderRadius:
-                                                      BorderRadius.circular(8),
+                                                    BorderRadius.circular(8),
                                                 ),
                                                 child: Row(
                                                   mainAxisSize:
-                                                      MainAxisSize.min,
+                                                    MainAxisSize.min,
                                                   children: [
-                                                    // Decrement button
-                                                    IconButton(
-                                                      icon: const Icon(
-                                                        Icons.remove,
-                                                        size: 16,
-                                                      ),
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                            4,
-                                                          ),
-                                                      constraints:
-                                                          const BoxConstraints(
-                                                            minWidth: 32,
-                                                            minHeight: 32,
-                                                          ),
-                                                      onPressed: () {
-                                                        setState(() {
-                                                          final currentQty =
-                                                              item['quantity']
-                                                                  as int;
-                                                          if (currentQty > 1) {
-                                                            _selectedInventoryItems[index]['quantity'] =
-                                                                currentQty - 1;
-                                                          }
-                                                        });
-                                                      },
-                                                      color: Colors.grey[700],
+                                                  // Decrement button
+                                                  IconButton(
+                                                    icon: const Icon(
+                                                    Icons.remove,
+                                                    size: 16,
                                                     ),
-
-                                                    // Quantity display - Editable
-                                                    SizedBox(
-                                                      width: 50,
-                                                      child: TextFormField(
-                                                        initialValue:
-                                                            '${item['quantity']}',
-                                                        textAlign:
-                                                            TextAlign.center,
-                                                        keyboardType:
-                                                            TextInputType
-                                                                .number,
-                                                        decoration:
-                                                            const InputDecoration(
-                                                              border:
-                                                                  InputBorder
-                                                                      .none,
-                                                              contentPadding:
-                                                                  EdgeInsets
-                                                                      .zero,
-                                                            ),
-                                                        style: const TextStyle(
-                                                          fontSize: 14,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                        ),
-                                                        onChanged: (value) {
-                                                          final newQty =
-                                                              int.tryParse(
-                                                                value,
-                                                              );
-                                                          if (newQty != null &&
-                                                              newQty > 0) {
-                                                            final availableStock =
-                                                                item['available_stock']
-                                                                    as int;
-                                                            if (newQty <=
-                                                                availableStock) {
-                                                              setState(() {
-                                                                _selectedInventoryItems[index]['quantity'] =
-                                                                    newQty;
-                                                              });
-                                                            } else {
-                                                              ScaffoldMessenger.of(
-                                                                context,
-                                                              ).showSnackBar(
-                                                                const SnackBar(
-                                                                  content: Text(
-                                                                    'Cannot exceed available stock',
-                                                                  ),
-                                                                  duration:
-                                                                      Duration(
-                                                                        seconds:
-                                                                            2,
-                                                                      ),
-                                                                ),
-                                                              );
-                                                            }
-                                                          }
-                                                        },
-                                                      ),
+                                                    padding:
+                                                      const EdgeInsets.all(4),
+                                                    constraints:
+                                                      const BoxConstraints(
+                                                    minWidth: 32,
+                                                    minHeight: 32,
                                                     ),
-                                                    // Increment button (robust parsing & clamping)
-                                                    IconButton(
-                                                      icon: const Icon(
-                                                      Icons.add,
-                                                      size: 16,
-                                                      ),
-                                                      padding:
-                                                        const EdgeInsets.all(
-                                                        4,
-                                                        ),
-                                                      constraints:
-                                                        const BoxConstraints(
-                                                        minWidth: 32,
-                                                        minHeight: 32,
-                                                        ),
-                                                      onPressed: () {
-                                                      setState(() {
-                                                        // Safely parse values that may be int or String
-                                                        final currentQty =
-                                                          int.tryParse(
+                                                    onPressed: () {
+                                                    setState(() {
+                                                      final currentQty =
+                                                        int.tryParse(
                                                           item['quantity']
-                                                              ?.toString() ??
-                                                            '0',
+                                                            ?.toString() ??
+                                                          '0',
                                                           ) ??
                                                           0;
-                                                        final availableStock =
-                                                          int.tryParse(
+                                                      final availableStock =
+                                                        int.tryParse(
                                                           item['available_stock']
-                                                              ?.toString() ??
-                                                            '0',
+                                                            ?.toString() ??
+                                                          '0',
                                                           ) ??
                                                           0;
 
-                                                        if (availableStock <=
-                                                          0) {
-                                                        ScaffoldMessenger.of(
-                                                          context,
-                                                        ).showSnackBar(
-                                                          const SnackBar(
-                                                          content: Text(
-                                                            'No stock available',
-                                                          ),
-                                                          duration:
-                                                            Duration(
-                                                              seconds:
-                                                                2,
-                                                            ),
-                                                          ),
-                                                        );
-                                                        return;
-                                                        }
+                                                      if (currentQty > 1) {
+                                                      _selectedInventoryItems[index]
+                                                        ['quantity'] =
+                                                        currentQty - 1;
+                                                      } else {
+                                                      // Optionally notify user they can't go below 1
+                                                      ScaffoldMessenger.of(
+                                                        context,
+                                                      ).showSnackBar(
+                                                        const SnackBar(
+                                                        content: Text(
+                                                          'Quantity cannot be less than 1',
+                                                        ),
+                                                        duration:
+                                                          Duration(
+                                                          seconds: 1,
+                                                        ),
+                                                        ),
+                                                      );
+                                                      }
 
-                                                        // Compute the new quantity and ensure it stays within [1, availableStock]
-                                                        final newQty = (currentQty + 1)
-                                                          .clamp(1, availableStock);
+                                                      // Ensure consistency if available stock dropped to 0
+                                                      if (availableStock <= 0) {
+                                                      _selectedInventoryItems[index]
+                                                        ['quantity'] = 0;
+                                                      }
+                                                    });
+                                                    },
+                                                    color: Colors.grey[700],
+                                                  ),
 
-                                                        _selectedInventoryItems[index]['quantity'] =
-                                                          newQty;
-                                                      });
-                                                      },
-                                                      color: const Color(
-                                                      0xFF2E7D32,
+                                                  // Quantity display (non-editable to ensure consistent updates)
+                                                  SizedBox(
+                                                    width: 50,
+                                                    child: Center(
+                                                    child: Text(
+                                                      '${item['quantity']}',
+                                                      textAlign: TextAlign.center,
+                                                      style: const TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                        FontWeight.w600,
                                                       ),
                                                     ),
+                                                    ),
+                                                  ),
+
+                                                  // Increment button (robust parsing & clamping)
+                                                  IconButton(
+                                                    icon: const Icon(
+                                                    Icons.add,
+                                                    size: 16,
+                                                    ),
+                                                    padding:
+                                                      const EdgeInsets.all(4),
+                                                    constraints:
+                                                      const BoxConstraints(
+                                                    minWidth: 32,
+                                                    minHeight: 32,
+                                                    ),
+                                                    onPressed: () {
+                                                    setState(() {
+                                                      final currentQty =
+                                                        int.tryParse(
+                                                          item['quantity']
+                                                            ?.toString() ??
+                                                          '0',
+                                                          ) ??
+                                                          0;
+                                                      final availableStock =
+                                                        int.tryParse(
+                                                          item['available_stock']
+                                                            ?.toString() ??
+                                                          '0',
+                                                          ) ??
+                                                          0;
+
+                                                      if (availableStock <= 0) {
+                                                      ScaffoldMessenger.of(
+                                                        context,
+                                                      ).showSnackBar(
+                                                        const SnackBar(
+                                                        content:
+                                                          Text('No stock available'),
+                                                        duration:
+                                                          Duration(
+                                                          seconds: 2,
+                                                        ),
+                                                        ),
+                                                      );
+                                                      return;
+                                                      }
+
+                                                      final newQty = (currentQty + 1)
+                                                        .clamp(1, availableStock);
+
+                                                      _selectedInventoryItems[index]
+                                                        ['quantity'] = newQty;
+                                                    });
+                                                    },
+                                                    color: const Color(
+                                                    0xFF2E7D32,
+                                                    ),
+                                                  ),
                                                     ],
                                                   ),
                                                   ),

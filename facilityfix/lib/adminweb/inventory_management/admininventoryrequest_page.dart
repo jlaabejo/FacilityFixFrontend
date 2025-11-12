@@ -729,13 +729,10 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     
     // Map various status values to the three allowed statuses
     switch (normalized) {
-      case 'fulfilled':
-      case 'completed':
       case 'approved':
         return 'approved';
       case 'denied':
-      case 'rejected':
-        return 'rejected';
+        return 'denied';
       case 'reserved':
         return 'reserved';
       case 'pending':
@@ -1390,7 +1387,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                                   ),
                                   DataCell(_fixedCell(4, _ellipsis(date))),
                                   DataCell(
-                                    _fixedCell(5, StatusTag(status: status)),
+                                    _fixedCell(5, StatusTag(status)),
                                   ),
                                   DataCell(
                                     _fixedCell(
@@ -1399,15 +1396,14 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                                         builder: (context) {
                                           return IconButton(
                                             onPressed: () {
-                                              final rbx =
-                                                  context.findRenderObject()
-                                                      as RenderBox;
-                                              final position = rbx
-                                                  .localToGlobal(Offset.zero);
+                                              final rbx = context.findRenderObject() as RenderBox;
+                                              final position = rbx.localToGlobal(Offset.zero);
+                                              // Anchor menu below the icon so it doesn't overlap
+                                              final Offset menuPosition = position + Offset(0, rbx.size.height + 6);
                                               _showActionMenu(
                                                 context,
                                                 item,
-                                                position,
+                                                menuPosition,
                                               );
                                             },
                                             icon: Icon(
