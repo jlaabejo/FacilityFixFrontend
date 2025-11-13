@@ -70,13 +70,19 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
   bool get _isAssignedStatus {
     final status = widget.task['status']?.toString().toLowerCase() ?? '';
     // Treat both explicit 'assigned' and canonical 'to inspect' as assignment state
-    return status == 'assigned' || status == 'to inspect' || status.contains('to_inspect');
+    return status == 'assigned' ||
+        status == 'to inspect' ||
+        status.contains('to_inspect');
   }
 
   bool get _isToInspectStatus {
     final status = widget.task['status']?.toString().toLowerCase() ?? '';
     // Exclude 'inspected' (inspection completed) which is handled separately
-    return (status.contains('to inspect') || status.contains('to_inspect') || status.contains('for inspection') || (status.contains('inspect') && !status.contains('inspected')) || status == 'inspect');
+    return (status.contains('to inspect') ||
+        status.contains('to_inspect') ||
+        status.contains('for inspection') ||
+        (status.contains('inspect') && !status.contains('inspected')) ||
+        status == 'inspect');
   }
 
   bool get _isInspectedStatus {
@@ -88,9 +94,17 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
   String _normalizedStatus() {
     final s = widget.task['status']?.toString().toLowerCase() ?? '';
     if (s.contains('pending')) return 'pending';
-    if (s.contains('assigned') || s.contains('to inspect') || s.contains('to_inspect')) return 'to inspect';
-    if (s.contains('in_progress') || s.contains('in progress')) return 'in progress';
-    if (s.contains('inspected') || s.contains('assessed') || s.contains('completed') || s.contains('assess')) return 'inspected';
+    if (s.contains('assigned') ||
+        s.contains('to inspect') ||
+        s.contains('to_inspect'))
+      return 'to inspect';
+    if (s.contains('in_progress') || s.contains('in progress'))
+      return 'in progress';
+    if (s.contains('inspected') ||
+        s.contains('assessed') ||
+        s.contains('completed') ||
+        s.contains('assess'))
+      return 'inspected';
     return 'pending';
   }
 
@@ -133,7 +147,9 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
 
     // Debug: list all candidate values (stringified)
     try {
-      print('[ConcernSlipDetail] schedule candidates: ${candidates.map((c) => c?.toString() ?? '<null>').toList()}');
+      print(
+        '[ConcernSlipDetail] schedule candidates: ${candidates.map((c) => c?.toString() ?? '<null>').toList()}',
+      );
     } catch (_) {}
 
     String? sa;
@@ -158,7 +174,9 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
 
         // Debug: log parsed start/end datetimes from UiDateUtils
         try {
-          print('[ConcernSlipDetail] parseRange -> start: $selectedDate, end: $selectedEndDate');
+          print(
+            '[ConcernSlipDetail] parseRange -> start: $selectedDate, end: $selectedEndDate',
+          );
         } catch (_) {}
 
         return;
@@ -181,7 +199,13 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
           } catch (_) {
             try {
               final dateOnly = DateFormat('MMM d, yyyy').parse(left);
-              selectedDate = DateTime(dateOnly.year, dateOnly.month, dateOnly.day, 9, 0);
+              selectedDate = DateTime(
+                dateOnly.year,
+                dateOnly.month,
+                dateOnly.day,
+                9,
+                0,
+              );
             } catch (_) {}
           }
         }
@@ -190,7 +214,14 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
         if (right.isNotEmpty) {
           try {
             final t = DateFormat('h:mm a').parse(right);
-            if (selectedDate != null) selectedEndDate = DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day, t.hour, t.minute);
+            if (selectedDate != null)
+              selectedEndDate = DateTime(
+                selectedDate!.year,
+                selectedDate!.month,
+                selectedDate!.day,
+                t.hour,
+                t.minute,
+              );
           } catch (_) {
             try {
               selectedEndDate = DateTime.parse(right);
@@ -202,19 +233,29 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
           }
         }
         // Make sure end is after start. If inverted, set to start + 1 hour for UX.
-        if (selectedDate != null && selectedEndDate != null && selectedEndDate!.isBefore(selectedDate!)) {
+        if (selectedDate != null &&
+            selectedEndDate != null &&
+            selectedEndDate!.isBefore(selectedDate!)) {
           selectedEndDate = selectedDate!.add(const Duration(hours: 1));
         }
 
         // Debug: log parsed start/end datetimes
         try {
-          print('[ConcernSlipDetail] parsed schedule -> start: $selectedDate, end: $selectedEndDate');
+          print(
+            '[ConcernSlipDetail] parsed schedule -> start: $selectedDate, end: $selectedEndDate',
+          );
         } catch (_) {}
       } else if (sa.contains('T')) {
         selectedDate = DateTime.parse(sa);
       } else if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(sa)) {
         final parts = sa.split('-');
-        selectedDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]), 9, 0);
+        selectedDate = DateTime(
+          int.parse(parts[0]),
+          int.parse(parts[1]),
+          int.parse(parts[2]),
+          9,
+          0,
+        );
       } else {
         try {
           selectedDate = DateTime.parse(sa);
@@ -224,7 +265,13 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
           } catch (_) {
             try {
               selectedDate = DateFormat('MMM d, yyyy').parse(sa);
-              selectedDate = DateTime(selectedDate!.year, selectedDate!.month, selectedDate!.day, 9, 0);
+              selectedDate = DateTime(
+                selectedDate!.year,
+                selectedDate!.month,
+                selectedDate!.day,
+                9,
+                0,
+              );
             } catch (_) {
               // last resort: try UiDateUtils.parse if available
               try {
@@ -483,27 +530,45 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
         data['assigned_staff_id'];
 
     // Also look for explicit id fields if name is not present
-    final explicitId = data['rawData']?['assigned_staff_id'] ?? data['assigned_staff_id'] ?? data['rawData']?['assigned_to'] ?? data['assigned_to'];
+    final explicitId =
+        data['rawData']?['assigned_staff_id'] ??
+        data['assigned_staff_id'] ??
+        data['rawData']?['assigned_to'] ??
+        data['assigned_to'];
 
     if (assignedStaff == null && explicitId == null) return;
 
     // If assignedStaff is a map, prefer its name fields
     if (assignedStaff is Map<String, dynamic>) {
-      final id = assignedStaff['user_id'] ?? assignedStaff['id'] ?? assignedStaff['userId'];
-      final name = assignedStaff['name'] ?? assignedStaff['full_name'] ?? ((assignedStaff['first_name'] ?? '') + ' ' + (assignedStaff['last_name'] ?? '')).toString().trim();
+      final id =
+          assignedStaff['user_id'] ??
+          assignedStaff['id'] ??
+          assignedStaff['userId'];
+      final name =
+          assignedStaff['name'] ??
+          assignedStaff['full_name'] ??
+          ((assignedStaff['first_name'] ?? '') +
+                  ' ' +
+                  (assignedStaff['last_name'] ?? ''))
+              .toString()
+              .trim();
       setState(() {
         selectedStaffId = id?.toString();
         selectedStaffName = (name != null && name.isNotEmpty) ? name : null;
       });
       // If we still don't have a name but have an id, try to resolve it
-      if ((selectedStaffName == null || selectedStaffName!.isEmpty) && selectedStaffId != null) {
+      if ((selectedStaffName == null || selectedStaffName!.isEmpty) &&
+          selectedStaffId != null) {
         try {
           final staffList = await _apiService.getStaffMembers();
           final found = staffList.firstWhere(
-            (m) => (m['user_id']?.toString() == selectedStaffId) || (m['id']?.toString() == selectedStaffId),
+            (m) =>
+                (m['user_id']?.toString() == selectedStaffId) ||
+                (m['id']?.toString() == selectedStaffId),
             orElse: () => {},
           );
-          if (found.isNotEmpty) setState(() => selectedStaffName = _getStaffDisplayName(found));
+          if (found.isNotEmpty)
+            setState(() => selectedStaffName = _getStaffDisplayName(found));
         } catch (_) {}
       }
       return;
@@ -548,7 +613,8 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
       try {
         final staffList = await _apiService.getStaffMembers();
         final found = staffList.firstWhere(
-          (m) => (m['user_id']?.toString() == sid) || (m['id']?.toString() == sid),
+          (m) =>
+              (m['user_id']?.toString() == sid) || (m['id']?.toString() == sid),
           orElse: () => {},
         );
         if (found.isNotEmpty) {
@@ -799,8 +865,10 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildConcernSlipDetails(),
-  // Show assessment/assigned-staff section for To Inspect, Inspected, or In Progress statuses
-  if (_statusLabel() == 'inspected' || _statusLabel() == 'to inspect' || _statusLabel() == 'in progress') ...[
+        // Show assessment/assigned-staff section for To Inspect, Inspected, or In Progress statuses
+        if (_statusLabel() == 'inspected' ||
+            _statusLabel() == 'to inspect' ||
+            _statusLabel() == 'in progress') ...[
           const SizedBox(height: 24),
           Divider(color: Colors.grey[200], thickness: 1, height: 1),
           const SizedBox(height: 24),
@@ -891,7 +959,7 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
             Expanded(
               child: _buildDetailItem(
                 'REQUESTED BY',
-                widget.task['rawData']?['reported_by'] ?? 'N/A',
+                widget.task['reported_by'] ?? 'N/A',
               ),
             ),
             const SizedBox(width: 24),
@@ -916,10 +984,10 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
             Expanded(
               child: InkWell(
                 child: _buildDetailItem(
-          _statusLabel() == 'inspected'
-              ? 'DATE INSPECTED'
-              : 'SCHEDULE AVAILABILITY',
-            _statusLabel() == 'inspected'
+                  _statusLabel() == 'inspected'
+                      ? 'DATE INSPECTED'
+                      : 'SCHEDULE AVAILABILITY',
+                  _statusLabel() == 'inspected'
                       ? (() {
                         final dateVal =
                             widget.task['dateCompleted'] ??
@@ -938,9 +1006,30 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
                         }
                       })()
                       : (selectedDate != null
-                          ? UiDateUtils.dateTimeRange(selectedDate!, selectedEndDate)
+                          ? UiDateUtils.dateTimeRange(
+                            selectedDate!,
+                            selectedEndDate,
+                          )
                           : _formatScheduleDate(
-                            widget.task['rawData']?['schedule_availability'] ?? widget.task['dateRequested'],
+                            (() {
+                              final candidates = [
+                                widget
+                                    .task['rawData']?['schedule_availability'],
+                                widget.task['rawData']?['schedule'],
+                                widget.task['rawData']?['availability'],
+                                widget.task['schedule'],
+                                widget.task['availability'],
+                                widget.task['dateRequested'],
+                              ];
+                              return candidates
+                                  .firstWhere(
+                                    (c) =>
+                                        c != null &&
+                                        c.toString().trim().isNotEmpty,
+                                    orElse: () => null,
+                                  )
+                                  ?.toString();
+                            })(),
                           )),
                 ),
               ),
@@ -1074,8 +1163,7 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
       try {
         final found = _staffList.firstWhere(
           (m) =>
-              (m['user_id']?.toString() == id) ||
-              (m['id']?.toString() == id),
+              (m['user_id']?.toString() == id) || (m['id']?.toString() == id),
           orElse: () => <String, dynamic>{},
         );
         if (found.isNotEmpty) return _getStaffDisplayName(found);
@@ -1084,7 +1172,9 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
     }
 
     // If we only have an id selected, try to resolve it from loaded staff
-    if (staffName.isEmpty && selectedStaffId != null && selectedStaffId!.isNotEmpty) {
+    if (staffName.isEmpty &&
+        selectedStaffId != null &&
+        selectedStaffId!.isNotEmpty) {
       final resolved = _resolveFromLoadedList(selectedStaffId!);
       if (resolved.isNotEmpty) staffName = resolved;
     }
@@ -1113,14 +1203,25 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
             staffName = s;
           }
         } else if (assignedStaff is Map<String, dynamic>) {
-          staffName = assignedStaff['name'] ??
+          staffName =
+              assignedStaff['name'] ??
               assignedStaff['full_name'] ??
-              ((assignedStaff['first_name'] ?? '') + ' ' + (assignedStaff['last_name'] ?? '')).toString().trim();
+              ((assignedStaff['first_name'] ?? '') +
+                      ' ' +
+                      (assignedStaff['last_name'] ?? ''))
+                  .toString()
+                  .trim();
 
           // If map contains an id but no human name, try to resolve
           if ((staffName.isEmpty || staffName == 'null') &&
-              (assignedStaff['user_id'] ?? assignedStaff['id'] ?? assignedStaff['_id'] != null)) {
-            final id = (assignedStaff['user_id'] ?? assignedStaff['id'] ?? assignedStaff['_id']).toString();
+              (assignedStaff['user_id'] ??
+                  assignedStaff['id'] ??
+                  assignedStaff['_id'] != null)) {
+            final id =
+                (assignedStaff['user_id'] ??
+                        assignedStaff['id'] ??
+                        assignedStaff['_id'])
+                    .toString();
             final resolved = _resolveFromLoadedList(id);
             if (resolved.isNotEmpty) staffName = resolved;
           }
@@ -1341,10 +1442,10 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                child: Text(
-                selectedDate != null
-                  ? _fmtDateTime(selectedDate!, selectedEndDate)
-                  : 'DD/MM/YYYY HH:MM',
+                            child: Text(
+                              selectedDate != null
+                                  ? _fmtDateTime(selectedDate!, selectedEndDate)
+                                  : 'DD/MM/YYYY HH:MM',
                               style: TextStyle(
                                 color:
                                     selectedDate != null

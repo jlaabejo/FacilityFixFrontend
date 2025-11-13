@@ -31,7 +31,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
 
   // ─────────────── Filters ───────────────
   String _selectedStatus = 'All';
-  String _selectedDepartment = 'All'; // mapped as "classification"
   final TextEditingController _searchController = TextEditingController();
 
   // ─────────────── Dynamic data from API ───────────────
@@ -61,28 +60,51 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
           _allRequests =
               allRequests.map((request) {
                 // Convert API response to WorkOrder-like structure
+                // Determine canonical status; prefer assessment-derived 'inspected'
+                final rawStatus = (request['status'] ?? '').toString().toLowerCase();
+                final hasAssessment = (request['staff_assessment'] != null) ||
+                    (request['staff_recommendation'] != null) ||
+                    (request['assessed_by'] != null) ||
+                    (request['assessed_at'] != null) ||
+                    (request['completed_at'] != null) ||
+                    (request['dateCompleted'] != null) ||
+                    rawStatus.contains('inspected');
+
+                String statusToken;
+                if (hasAssessment) {
+                  statusToken = 'inspected';
+                } else if (rawStatus.contains('assigned') || rawStatus.contains('to inspect') || rawStatus.contains('to_inspect')) {
+                  statusToken = 'to inspect';
+                } else if (rawStatus.contains('in_progress') || rawStatus.contains('in progress')) {
+                  statusToken = 'in progress';
+                } else if (rawStatus.contains('pending')) {
+                  statusToken = 'pending';
+                } else {
+                  statusToken = rawStatus.isNotEmpty ? rawStatus : 'pending';
+                }
+
                 return {
-                  'id': request['formatted_id'] ?? request['id'] ?? '',
-                  'raw_id': request['id'] ?? '', // Store the raw ID for API calls
-                  'title': request['title'] ?? 'Untitled Request',
-                  'created_at':
-                      request['created_at'] ?? DateTime.now().toIso8601String(),
-                  'status': request['status'] ?? 'pending',
-                  'category':
-                      request['category'] ??
-                      request['department_tag'] ??
-                      'general',
-                  'priority': request['priority'] ?? 'medium',
-                  'request_type': request['request_type'] ?? 'Concern Slip',
-                  'unit_id': request['unit_id'] ?? '',
-                  // Prefer explicit assigned staff name fields if available; keep assigned_to id separately
-                  'assigned_staff': request['assigned_staff_name'] ?? request['assigned_staff'] ?? '',
-                  'assigned_to_id': request['assigned_to'] ?? '',
-                  'staff_department':
-                      request['staff_department'] ?? request['category'],
-                  'description': request['description'] ?? '',
-                  'location': request['location'] ?? '',
-                };
+                    'id': request['formatted_id'] ?? request['id'] ?? '',
+                    'raw_id': request['id'] ?? '', // Store the raw ID for API calls
+                    'title': request['title'] ?? 'Untitled Request',
+                    'created_at':
+                        request['created_at'] ?? DateTime.now().toIso8601String(),
+                    'status': statusToken,
+                    'category':
+                        request['category'] ??
+                        request['department_tag'] ??
+                        'general',
+                    'priority': request['priority'] ?? '',
+                    'request_type': request['request_type'] ?? 'Concern Slip',
+                    'unit_id': request['unit_id'] ?? '',
+                    // Prefer explicit assigned staff name fields if available; keep assigned_to id separately
+                    'assigned_staff': request['assigned_staff_name'] ?? request['assigned_staff'] ?? '',
+                    'assigned_to_id': request['assigned_to'] ?? '',
+                    'staff_department':
+                        request['staff_department'] ?? request['category'],
+                    'description': request['description'] ?? '',
+                    'location': request['location'] ?? '',
+                  };
               }).toList();
           _isLoading = false;
         });
@@ -497,18 +519,10 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                           searchController: _searchController,
                           selectedStatus: _selectedStatus,
                           statuses: _statusOptions,
-                          selectedClassification: _selectedDepartment,
-                          classifications: _deptOptions,
                           onStatusChanged: (status) {
                             setState(() {
                               _selectedStatus =
                                   status.trim().isEmpty ? 'All' : status;
-                            });
-                          },
-                          onClassificationChanged: (dept) {
-                            setState(() {
-                              _selectedDepartment =
-                                  dept.trim().isEmpty ? 'All' : dept;
                             });
                           },
                           onSearchChanged: (_) {
@@ -516,46 +530,6 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                           },
                         ),
                         const SizedBox(height: 16),
-
-                        // My Assignments Toggle
-                        // Container(
-                        //   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        //   decoration: BoxDecoration(
-                        //     color: const Color(0xFFF8FAFC),
-                        //     borderRadius: BorderRadius.circular(8),
-                        //     border: Border.all(color: const Color(0xFFE2E8F0)),
-                        //   ),
-                        //   child: Row(
-                        //     children: [
-                        //       const Icon(
-                        //         Icons.person_outline,
-                        //         size: 20,
-                        //         color: Color(0xFF64748B),
-                        //       ),
-                        //       const SizedBox(width: 8),
-                        //       const Text(
-                        //         'Show only my assignments',
-                        //         style: TextStyle(
-                        //           fontSize: 14,
-                        //           fontWeight: FontWeight.w500,
-                        //           color: Color(0xFF475569),
-                        //         ),
-                        //       ),
-                        //       const Spacer(),
-                        //       Switch(
-                        //         value: _showOnlyMyAssignments,
-                        //         onChanged: (value) {
-                        //           setState(() {
-                        //             _showOnlyMyAssignments = value;
-                        //           });
-                        //         },
-                        //         activeColor: const Color(0xFF005CE7),
-                        //         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        //       ),
-                        //     ],
-                        //   ),
-                        // ),
-                        // const SizedBox(height: 16),
                         StatusTabSelector(
                           tabs: _tabs,
                           selectedLabel: _selectedTabLabel,

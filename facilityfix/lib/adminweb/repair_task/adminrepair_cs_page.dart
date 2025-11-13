@@ -1,8 +1,8 @@
+import 'package:facilityfix/adminweb/repair_task/pop_up/cs_viewdetails_popup.dart';
 import 'package:facilityfix/adminweb/widgets/tags.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
-import 'pop_up/cs_viewdetails_popup.dart';
 import 'pop_up/edit_popup.dart';
 import '../widgets/delete_popup.dart';
 import '../popupwidgets/set_resolution_type_popup.dart';
@@ -118,6 +118,26 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       setState(() {
         _repairTasks =
             concernSlips.map((slip) {
+              // Derive canonical status token
+              final mapped = _mapStatus(
+                slip['status'],
+                slip['workflow'],
+                slip['resolution_type'],
+              );
+
+              // If staff already provided assessment/recommendation or completion
+              // information, consider the task 'inspected' even if top-level
+              // status hasn't been updated by the backend yet.
+              final hasAssessment = (slip['staff_assessment'] != null) ||
+                  (slip['staff_recommendation'] != null) ||
+                  (slip['assessed_by'] != null) ||
+                  (slip['assessed_at'] != null) ||
+                  (slip['completed_at'] != null) ||
+                  (slip['dateCompleted'] != null) ||
+                  (slip['status']?.toString().toLowerCase().contains('inspected') == true);
+
+              final statusToken = hasAssessment ? 'inspected' : mapped;
+
               return {
                 'id': slip['formatted_id'] ?? slip['_doc_id'] ?? 'N/A',
                 'title': slip['title'] ?? 'No Title',
@@ -125,11 +145,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                 'buildingUnit': _getBuildingUnit(slip),
                 'priority': _capitalizePriority(slip['priority'] ?? 'medium'),
                 'department': _getDepartment(slip['category']),
-                'status': _mapStatus(
-                  slip['status'],
-                  slip['workflow'],
-                  slip['resolution_type'],
-                ),
+                'status': statusToken,
                 'location': slip['location'] ?? 'N/A',
                 'description': slip['description'] ?? 'No Description',
                 'category': slip['category'],
@@ -521,11 +537,14 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   // Edit task method
   void _editTask(Map<String, dynamic> task) {
     // Open the EditDialog for concern slips and refresh on success
-    final raw = task['rawData'] ?? task;
+    final rawSrc = task['rawData'] ?? task ?? {};
+    final Map<String, dynamic> raw = rawSrc is Map<String, dynamic>
+        ? rawSrc
+        : Map<String, dynamic>.from(rawSrc as Map);
     EditDialog.show(
       context,
       type: EditDialogType.concernSlip,
-      task: raw as Map<String, dynamic>,
+      task: raw,
       onSave: () {},
     ).then((result) {
       if (result == true && mounted) {
@@ -550,9 +569,12 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
 
     if (confirmed) {
       try {
-        // Determine backend id (prefer rawData._doc_id or rawData.id if available)
-        final raw = task['rawData'] as Map<String, dynamic>?;
-        final idToDelete = raw?['_doc_id'] ?? raw?['id'] ?? task['id'];
+    // Determine backend id (prefer rawData._doc_id or rawData.id if available)
+    final rawSrc = task['rawData'] ?? {};
+    final Map<String, dynamic> raw = rawSrc is Map<String, dynamic>
+      ? rawSrc
+      : Map<String, dynamic>.from(rawSrc as Map);
+    final idToDelete = raw['_doc_id'] ?? raw['id'] ?? task['id'];
 
         if (idToDelete == null) {
           throw Exception('Unable to determine task id to delete');

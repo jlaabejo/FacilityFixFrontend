@@ -1227,7 +1227,7 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
       if (dateStr.isNotEmpty) {
         if (dateStr.contains('T')) {
           datePart = DateTime.parse(dateStr);
-        } else if (RegExp(r'^\d{4}-\d{2}-\d{2} ?').hasMatch(dateStr) || RegExp(r'^\d{4}-\d{2}-\d{2}\$').hasMatch(dateStr)) {
+        } else if (RegExp(r'^\d{4}-\d{2}-\d{2}?').hasMatch(dateStr) || RegExp(r'^\d{4}-\d{2}-\d{2}\$').hasMatch(dateStr)) {
           final p = dateStr.split('-');
           if (p.length >= 3) datePart = DateTime(int.parse(p[0]), int.parse(p[1]), int.parse(p[2]));
         } else {

@@ -564,7 +564,7 @@ class JobServiceDetails extends StatelessWidget {
   final headerTitle = (title != null && title!.trim().isNotEmpty) ? title!.trim() : (displayType.isNotEmpty ? displayType : 'Job Service');
 
     // Format helpers using UiDateUtils
-    String _fmtDate(DateTime d) => UiDateUtils.fullDate(d);
+    String _fmtDate(DateTime d) => DateFormat(UiDateUtils.fullDate as String?).format(d);
     String _fmtDateTime(DateTime d) => UiDateUtils.humanDateTime(d);
     String? _fmtSchedAvail(Object? raw) {
       if (raw == null) return null;
@@ -757,7 +757,7 @@ class JobServiceDetails extends StatelessWidget {
                scheduleAvailability is DateTime)) ...[
             SizedBox(height: 4 * s),
             KeyValueRow.text(
-              label: 'Schedule Availability',
+              label: 'Schedule Date',
               valueText: _fmtSchedAvail(scheduleAvailability) ?? '—',
             ),
           ],
@@ -845,23 +845,11 @@ class JobServiceDetails extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (startedAt != null)
-                    KeyValueRow.text(
-                      label: 'Started',
-                      valueText: _fmtDateTime(startedAt!),
-                    ),
-                  if (completedAt != null) ...[
-                    SizedBox(height: 6 * s),
-                    KeyValueRow.text(
-                      label: 'Completed',
-                      valueText: _fmtDateTime(completedAt!),
-                    ),
-                  ],
                   if (completionAt != null) ...[
                     SizedBox(height: 6 * s),
                     KeyValueRow.text(
                       label: 'Completion Date',
-                      valueText: _fmtDateTime(completionAt!),
+                      valueText: _fmtDate(completionAt!),
                     ),
                   ],
                   if ((assessment?.trim().isNotEmpty ?? false)) ...[
@@ -1369,19 +1357,19 @@ class WorkOrderPermitDetails extends StatelessWidget {
     print('  onComplete: ${onComplete != null}');
     print('  id: $id');
 
-    // Can complete if:
-    // 1. Status is approved or in progress
-    // 2. Not already completed
-    // 3. Not rejected
-    final canComplete =
-        (status == 'approved' ||
-            status == 'in progress' ||
-            displayStatus == 'approved' ||
-            displayStatus == 'in progress') &&
-        status != 'completed' &&
-        status != 'rejected' &&
-        displayStatus != 'completed' &&
-        displayStatus != 'rejected';
+  // Can complete if:
+  // 1. Status is approved/accepted or in progress
+  // 2. Not already completed
+  // 3. Not rejected
+  final bool statusIsAcceptLike = status.contains('accept') || displayStatus.contains('accept') || status.contains('approved') || displayStatus.contains('approved');
+  final bool statusIsInProgress = status.contains('in progress') || status.contains('in_progress') || displayStatus.contains('in progress') || displayStatus.contains('in_progress');
+
+  final canComplete =
+    (statusIsAcceptLike || statusIsInProgress) &&
+    !status.contains('completed') &&
+    !status.contains('rejected') &&
+    !displayStatus.contains('completed') &&
+    !displayStatus.contains('rejected');
 
     print('  canComplete: $canComplete');
     return canComplete;
@@ -1513,7 +1501,7 @@ class MaintenanceDetails extends StatefulWidget {
   final Function(Map<String, dynamic>)? onInventoryItemTap;
   final String? currentStaffId;
   final String? taskCategory;
-
+  
   // Action callbacks
   final VoidCallback? onHold;
   final VoidCallback? onCreateAssessment;
@@ -1580,20 +1568,10 @@ class _MaintenanceState extends State<MaintenanceDetails> {
             .toList();
   }
 
-  // 48h rule for DateTime? fields
+  // Format DateTime? as "Aug 23, 2025"
   String _relativeOrFullDT(DateTime? dt) {
     if (dt == null) return '—';
-    final hours = DateTime.now().difference(dt).inHours;
-    return hours < 48 ? UiDateUtils.timeAgo(dt) : UiDateUtils.fullDate(dt);
-  }
-
-  // Human formatting for scheduleDate (String?)
-  String _humanSchedule(String? raw) {
-    if (raw == null) return '—';
-    final s = raw.trim();
-    if (s.isEmpty) return '—';
-    final dt = DateTime.tryParse(s) ?? UiDateUtils.parse(s);
-    return UiDateUtils.humanDateTime(dt);
+    return UiDateUtils.fullDate(dt);
   }
 
   // Shared section card builder (matches your Contact Section style)
@@ -1717,13 +1695,22 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                   const SizedBox(height: 8),
                   KeyValueRow.text(
                     label: 'Schedule',
-                    valueText: _humanSchedule(widget.scheduleDate),
+                    valueText: (() {
+                      final raw = widget.scheduleDate;
+                      if (raw == null || raw.trim().isEmpty) return _relativeOrFullDT(null);
+                      try {
+                        final dt = DateTime.tryParse(raw.trim()) ?? UiDateUtils.parse(raw.trim());
+                        return _relativeOrFullDT(dt);
+                      } catch (_) {
+                        return _relativeOrFullDT(null);
+                      }
+                    })(),
                   ),
                 ],
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 14),
           ffDivider(),
           const SizedBox(height: 8),
           // Description
@@ -1934,97 +1921,6 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                           0;
                       final status = request['status'] ?? 'pending';
                       final unit = request['unit'] ?? '';
-
-                      // Show RestockBottomSheet when Request is tapped.
-                      // Provide a Received handler (placeholder) and a Request handler
-                      // that opens the bottom sheet. The returned `actionButtons`
-                      // widget can be used in the item row (replace the small status
-                      // chip container with `actionButtons`).
-                      final void Function()? _onReceivedPressed = () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Marked "$itemName" as received'),
-                          ),
-                        );
-                      };
-
-                      final void Function()? _onRequestPressed = () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          builder:
-                              (_) => RequestItem(
-                                // pass relevant data — change params as needed
-                                itemName: '',
-                                itemId: '',
-                                unit: '', 
-                                stock: '',
-                              ),
-                        );
-                      };
-
-                        final bool _isReceivedLocal = (request['status']?.toString().toLowerCase() == 'fulfilled' ||
-                          request['status']?.toString().toLowerCase() == 'received');
-
-                        final Widget actionButtons = Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 8),
-                          Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Receive button: outlined green when not received, filled green when received
-                            _isReceivedLocal
-                              ? ElevatedButton(
-                                onPressed: null,
-                                style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF059669),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                minimumSize: const Size(0, 0),
-                                ),
-                                child: const Text('Received'),
-                              )
-                              : OutlinedButton(
-                                onPressed: () {
-                                // update local model so UI reflects change immediately
-                                setState(() {
-                                  request['status'] = 'received';
-                                });
-                                if (_onReceivedPressed != null) _onReceivedPressed();
-                                },
-                                style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: Color(0xFF059669)),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                ),
-                                child: const Text(
-                                'Receive',
-                                style: TextStyle(color: Color(0xFF059669)),
-                                ),
-                              ),
-                            const SizedBox(width: 8),
-                            // Request button: full blue
-                            ElevatedButton(
-                            onPressed: _onRequestPressed,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF005CE7),
-                              padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                              ),
-                              minimumSize: const Size(0, 0),
-                            ),
-                            child: const Text('Request'),
-                            ),
-                          ],
-                          ),
-                        ],
-                        );
                       final category = request['category'] ?? '';
 
                       // Determine if item is received
@@ -2036,47 +1932,39 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                         padding: const EdgeInsets.all(16),
                         child: Row(
                           children: [
-                          Expanded(
-                            child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                              itemName,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF1F2937),
-                              ),
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                              children: [
-                                Text(
-                                'RESERVE $quantity',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF1F2937),
-                                ),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                'STOCK $quantity',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF6B7280),
-                                ),
-                                ),
-                              ],
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                              'Quantity: $quantity${unit.toString().trim().isNotEmpty ? ' $unit' : ''}',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: Color(0xFF6B7280),
-                              ),
-                              ),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    itemName,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF1F2937),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'RESERVE $quantity',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF1F2937),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      // Text(
+                                      //   'STOCK $quantity',
+                                      //   style: const TextStyle(
+                                      //     fontSize: 12,
+                                      //     color: Color(0xFF6B7280),
+                                      //   ),
+                                      // ),
+                                    ],
+                                  ),
                                   if (category.isNotEmpty) ...[
                                     const SizedBox(height: 4),
                                     Container(
@@ -2101,42 +1989,42 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color:
-                                        isReceived
-                                            ? const Color(0xFFECFDF5)
-                                            : Colors.white,
-                                    border: Border.all(
-                                      color:
-                                          isReceived
-                                              ? const Color(0xFF059669)
-                                              : const Color(0xFF005CE7),
-                                    ),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    isReceived ? 'Received' : 'Request',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color:
-                                          isReceived
-                                              ? const Color(0xFF059669)
-                                              : const Color(0xFF005CE7),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                            // const SizedBox(width: 12),
+                            // Column(
+                            //   crossAxisAlignment: CrossAxisAlignment.end,
+                            //   children: [
+                            //     Container(
+                            //       padding: const EdgeInsets.symmetric(
+                            //         horizontal: 12,
+                            //         vertical: 6,
+                            //       ),
+                            //       decoration: BoxDecoration(
+                            //         color:
+                            //             isReceived
+                            //                 ? const Color(0xFFECFDF5)
+                            //                 : Colors.white,
+                            //         border: Border.all(
+                            //           color:
+                            //               isReceived
+                            //                   ? const Color(0xFF059669)
+                            //                   : const Color(0xFF005CE7),
+                            //         ),
+                            //         borderRadius: BorderRadius.circular(6),
+                            //       ),
+                            //       child: Text(
+                            //         isReceived ? 'Received' : 'Request',
+                            //         style: TextStyle(
+                            //           fontSize: 12,
+                            //           fontWeight: FontWeight.w600,
+                            //           color:
+                            //               isReceived
+                            //                   ? const Color(0xFF059669)
+                            //                   : const Color(0xFF005CE7),
+                            //         ),
+                            //       ),
+                            //     ),
+                            //   ],
+                            // ),
                           ],
                         ),
                       );
@@ -2208,84 +2096,46 @@ class _MaintenanceState extends State<MaintenanceDetails> {
               ),
             ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           ffDivider(),
           const SizedBox(height: 8),
 
-          // Staff Details
-          if ((widget.assignedStaff ?? '').trim().isNotEmpty ||
-              (widget.assessment ?? '').trim().isNotEmpty ||
-              widget.assessedAt != null ||
-              (widget.staffAttachments ?? const <String>[]).isNotEmpty)
-            _Section(
-              title: "Staff Details",
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Avatar, Name, Department
-                  if ((widget.assignedStaff?.trim().isNotEmpty ?? false))
-                    _AvatarNameBlock(
-                      name: widget.assignedStaff!.trim(),
-                      departmentTag:
-                          (widget.staffDepartment?.trim().isNotEmpty ?? false)
-                              ? widget.staffDepartment!.trim()
-                              : null,
-                      photoUrl:
-                          (widget.staffPhotoUrl?.trim().isNotEmpty ?? false)
-                              ? widget.staffPhotoUrl!.trim()
-                              : null,
-                    ),
+            // ===== Assigned Staff =====
+            if (hasAssigned) ...[
+              const _SectionTitle('Assigned Staff'),
+              SizedBox(height: 8),
 
-                  // ===== Assessment Section =====
-                  if (widget.assessedAt != null ||
-                      (widget.assessment?.trim().isNotEmpty ?? false)) ...[
-                    const SizedBox(height: 14),
-                    _Section(
-                      title: 'Assessment',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Date Assessed
-                          if (widget.assessedAt != null) ...[
-                            KeyValueRow.text(
-                              label: 'Assessed At',
-                              valueText: _relativeOrFullDT(widget.assessedAt),
-                            ),
-                            const SizedBox(height: 8),
-                          ],
+              // Show staff avatar/name if available
+              if ((widget.assignedStaff?.trim().isNotEmpty ?? false))
+                _AvatarNameBlock(
+                  name: widget.assignedStaff!.trim(),
+                  photoUrl: (widget.staffPhotoUrl?.trim().isNotEmpty ?? false)
+                      ? widget.staffPhotoUrl!.trim()
+                      : null,
+                ),
 
-                          // Assessment Notes
-                          if ((widget.assessment ?? '').trim().isNotEmpty) ...[
-                            Text(
-                              widget.assessment!.trim(),
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                  ],
+              // Date Assessed
+              if (widget.assessedAt != null) ...[
+                SizedBox(height: 8),
+                KeyValueRow.text(
+                  label: 'Date Assessed',
+                  valueText: _relativeOrFullDT(widget.assessedAt),
+                ),
+              ],
 
-                  // Attachments
-                  if ((widget.staffAttachments ?? const <String>[])
-                      .isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _Section(
-                      title: "Assessment Attachments",
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children:
-                            (widget.staffAttachments ?? const <String>[])
-                                .map((u) => _thumb(u, h: 80, w: 140))
-                                .toList(),
-                      ),
-                    ),
-                  ],
-                ],
+              SizedBox(height: 14),
+            ],
+
+            if ((widget.assessment?.trim().isNotEmpty ?? false)) ...[
+              SizedBox(height: 10),
+              _SectionCard(
+                title: 'Assessment',
+                content: widget.assessment!.trim(),
+                padding: EdgeInsets.all(14),
+                hideIfEmpty: false,
               ),
-            ),
+              SizedBox(height: 14),
+            ],
 
           // Materials used (optional)
           if ((widget.materialsUsed ?? const <String>[]).isNotEmpty)
@@ -2331,7 +2181,7 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                 ),
               ),
             ),
-        ],
+        ],  
       ),
     );
   }

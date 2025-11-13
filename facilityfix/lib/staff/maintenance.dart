@@ -303,9 +303,10 @@ class _MaintenancePageState extends State<MaintenancePage> {
 
   List<Map<String, dynamic>> get _filteredSorted {
     final list = List<Map<String, dynamic>>.from(_filtered);
+    // Sort by created_at descending so the most recently created tasks appear first
     list.sort((a, b) {
-      final aDate = DateTime.tryParse(a['scheduled_date'] ?? '') ?? DateTime.now();
-      final bDate = DateTime.tryParse(b['scheduled_date'] ?? '') ?? DateTime.now();
+      final aDate = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime.tryParse(a['scheduled_date'] ?? '') ?? DateTime.now();
+      final bDate = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime.tryParse(b['scheduled_date'] ?? '') ?? DateTime.now();
       return bDate.compareTo(aDate);
     });
     return list;

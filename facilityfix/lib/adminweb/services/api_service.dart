@@ -2341,9 +2341,14 @@ class ApiService {
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
+      } else if (response.statusCode == 204) {
+        // Some backends return 204 No Content for successful deletes.
+        // Normalize to a Map response so callers can rely on a consistent
+        // return type.
+        return {'success': true};
       } else {
         throw Exception(
-          'Failed to delete announcement: ${response.statusCode}',
+          'Failed to delete announcement: ${response.statusCode} ${response.body}',
         );
       }
     } catch (e) {

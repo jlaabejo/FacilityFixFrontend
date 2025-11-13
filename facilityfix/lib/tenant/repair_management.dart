@@ -61,28 +61,37 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
               allRequests.map((request) {
                 // Convert API response to WorkOrder-like structure
                 // For work orders, try to get department from various fields
-                final requestType = (request['request_type'] ?? '').toLowerCase();
+                final requestType =
+                    (request['request_type'] ?? '').toLowerCase();
                 String? department;
-                
-                if (requestType.contains('work order') || requestType.contains('work permit')) {
+
+                if (requestType.contains('work order') ||
+                    requestType.contains('work permit')) {
                   // For work orders, try department_tag, then request_type_detail, then category
-                  department = request['department_tag'] ?? 
-                               request['request_type_detail'] ?? 
-                               request['category'] ?? 
-                               'general';
+                  department =
+                      request['department_tag'] ??
+                      request['request_type_detail'] ??
+                      request['category'] ??
+                      'general';
                 } else {
                   // For other requests, use category or department_tag
-                  department = request['category'] ?? 
-                               request['department_tag'] ?? 
-                               'general';
+                  department =
+                      request['category'] ??
+                      request['department_tag'] ??
+                      'general';
                 }
-                
+
                 return {
                   'id': request['id'] ?? '', // Use raw ID for navigation
-                  'formatted_id': request['formatted_id'] ?? request['id'] ?? '', // Keep formatted ID for display
+                  'formatted_id':
+                      request['formatted_id'] ??
+                      request['id'] ??
+                      '', // Keep formatted ID for display
                   // Preserve job service identifiers so cards can show the same JS id as details
-                  'job_service_id': request['job_service_id'] ?? request['js_id'] ?? null,
-                  'js_id': request['js_id'] ?? request['job_service_id'] ?? null,
+                  'job_service_id':
+                      request['job_service_id'] ?? request['js_id'] ?? null,
+                  'js_id':
+                      request['js_id'] ?? request['job_service_id'] ?? null,
                   'title': request['title'] ?? 'Untitled Request',
                   'created_at':
                       request['created_at'] ?? DateTime.now().toIso8601String(),
@@ -92,14 +101,13 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                   'request_type': request['request_type'] ?? 'Concern Slip',
                   'unit_id': request['unit_id'] ?? request['location'] ?? '',
                   'assigned_staff':
-                      request['assigned_to_name'] ?? 
-                      request['assigned_staff'] ?? 
+                      request['assigned_to_name'] ??
+                      request['assigned_staff'] ??
                       request['assigned_to'],
-                  'staff_department':
-                      request['staff_department'] ?? department,
+                  'staff_department': request['staff_department'] ?? department,
                   'staff_photo_url':
-                      request['staff_photo_url'] ?? 
-                      request['assigned_photo_url'] ?? 
+                      request['staff_photo_url'] ??
+                      request['assigned_photo_url'] ??
                       request['photo_url'],
                   'description': request['description'] ?? '',
                   'location': request['location'] ?? '',
@@ -120,7 +128,10 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   }
 
   /// Fetch and populate staff name when we have staff user ID
-  Future<void> _enrichWithStaffName(Map<String, dynamic> data, APIService apiService) async {
+  Future<void> _enrichWithStaffName(
+    Map<String, dynamic> data,
+    APIService apiService,
+  ) async {
     try {
       // Fetch assigned_to name if we have the ID but not the name
       if (data.containsKey('assigned_to') &&
@@ -129,7 +140,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
           !data.containsKey('assigned_to_name')) {
         final userId = data['assigned_to'].toString();
         print('[DEBUG] Fetching staff name for assigned_to: $userId');
-        
+
         try {
           final userData = await apiService.getUserById(userId);
           if (userData != null) {
@@ -208,9 +219,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                 context,
                 MaterialPageRoute(
                   builder:
-                      (_) => const RequestForm(
-                        requestType: 'Concern Slip',
-                      ),
+                      (_) => const RequestForm(requestType: 'Concern Slip'),
                 ),
               );
             },
@@ -225,7 +234,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     try {
       final requestId = request['id'] ?? '';
       final requestType = (request['request_type'] ?? '').toLowerCase();
-      
+
       if (requestId.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -332,12 +341,20 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     if (desired == null) return true;
 
     // Compute task token using canonical mapper
-    final taskToken = _mapStatus(w['status'], w['request_type'] ?? w['workflow'], w['resolution_type']);
+    final taskToken = _mapStatus(
+      w['status'],
+      w['request_type'] ?? w['workflow'],
+      w['resolution_type'],
+    );
 
     // If the backend did not update the top-level status but staff has assessed
     // the task (assessment fields exist), treat it as 'inspected' for filtering.
     final raw = w['rawData'] ?? {};
-    final bool hasAssessment = (raw?['assessed_by'] != null) || (raw?['assessed_at'] != null) || (raw?['staff_assessment'] != null) || (raw?['staff_recommendation'] != null);
+    final bool hasAssessment =
+        (raw?['assessed_by'] != null) ||
+        (raw?['assessed_at'] != null) ||
+        (raw?['staff_assessment'] != null) ||
+        (raw?['staff_recommendation'] != null);
     final effectiveTaskToken = hasAssessment ? 'inspected' : taskToken;
 
     return effectiveTaskToken == desired;
@@ -345,18 +362,18 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
 
   bool _departmentMatches(Map<String, dynamic> w) {
     if (_selectedDepartment == 'All') return true;
-    
+
     final category = _norm(w['category']);
     final selectedDept = _norm(_selectedDepartment);
-    
+
     // If "Others" is selected, show all categories that are NOT the main 4 departments
     if (selectedDept == 'others') {
-      return category != 'carpentry' && 
-             category != 'plumbing' && 
-             category != 'electrical' && 
-             category != 'masonry';
+      return category != 'carpentry' &&
+          category != 'plumbing' &&
+          category != 'electrical' &&
+          category != 'masonry';
     }
-    
+
     // For specific departments, match exactly
     return category == selectedDept;
   }
@@ -400,25 +417,12 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
 
   List<String> get _statusOptions {
     // Fixed status list for all tabs
-    return [
-      'All',
-      'Assessed',
-      'Assigned',
-      'Completed',
-      'Pending',
-    ];
+    return ['All', 'Assessed', 'Assigned', 'Completed', 'Pending'];
   }
 
   List<String> get _deptOptions {
     // Fixed department list
-    return [
-      'All',
-      'Carpentry',
-      'Plumbing',
-      'Electrical',
-      'Masonry',
-      'Others',
-    ];
+    return ['All', 'Carpentry', 'Plumbing', 'Electrical', 'Masonry', 'Others'];
   }
 
   List<TabItem> get _tabs {
@@ -436,12 +440,15 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       TabItem(label: 'All', count: visible.length),
       TabItem(label: 'Concern Slip', count: countFor('concern slip')),
       TabItem(label: 'Job Service', count: countFor('job service')),
-      TabItem(label: 'Work Order', count: countFor('work order') + countFor('work order permit')),
+      TabItem(
+        label: 'Work Order',
+        count: countFor('work order') + countFor('work order permit'),
+      ),
     ];
   }
 
   // Normalize input and reduce statuses to the project's canonical token set.
-  // Allowed token outputs (lowercase): 'pending', 'in progress', 'to inspect', 'inspected'.
+  // Allowed token outputs (lowercase): 'pending', 'in progress', 'to inspect', 'inspected', 'completed'.
   String _mapStatus(dynamic status, dynamic workflow, dynamic resolutionType) {
     final s = (status ?? '').toString().toLowerCase();
 
@@ -449,15 +456,27 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     if (s.contains('pending')) return 'pending';
 
     // To Inspect (assigned / to inspect variants)
-    if (s.contains('assigned') || s.contains('to inspect') || s.contains('to_inspect')) {
+    if (s.contains('assigned') ||
+        s.contains('to inspect') ||
+        s.contains('to_inspect')) {
       return 'to inspect';
     }
 
     // In Progress
-    if (s.contains('in_progress') || s.contains('in progress')) return 'in progress';
+    if (s.contains('in_progress') || s.contains('in progress'))
+      return 'in progress';
 
-    // Inspected / Assessed / Completed and similar => 'inspected'
-    if (s.contains('inspected') || s.contains('assessed') || s.contains('completed') || s.contains('assess')) {
+    // Completed - show as "completed" if status explicitly says completed
+    if (s.contains('completed') ||
+        s.contains('complete') ||
+        s.contains('done')) {
+      return 'completed';
+    }
+
+    // Inspected / Assessed (but not completed) => 'inspected'
+    if (s.contains('inspected') ||
+        s.contains('assessed') ||
+        s.contains('assess')) {
       return 'inspected';
     }
 
@@ -466,7 +485,8 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   }
 
   Widget buildCard(Map<String, dynamic> r) {
-    final createdAt = DateTime.tryParse(r['created_at'] ?? '') ?? DateTime.now();
+    final createdAt =
+        DateTime.tryParse(r['created_at'] ?? '') ?? DateTime.now();
     final requestType = (r['request_type'] ?? '').toLowerCase();
     final concernSlipId = r['id'] ?? '';
 
@@ -474,15 +494,25 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       title: r['title'] ?? 'Untitled Request',
       // Use formatted_id when available so the card ID matches the details view
       // For Job Service requests, prefer the job_service_id / js_id (matches details view).
-      id: (() {
-        if (requestType.contains('job service')) {
-          return (r['job_service_id'] ?? r['js_id'] ?? r['formatted_id'] ?? r['id'] ?? '').toString();
-        }
-        return (r['formatted_id'] ?? r['id'] ?? '').toString();
-      })(),
-  createdAt: createdAt,
-  // Map status to canonical display label. Pass workflow/request_type and resolution_type
-  statusTag: _mapStatus(r['status'], r['request_type'] ?? r['workflow'], r['resolution_type']),
+      id:
+          (() {
+            if (requestType.contains('job service')) {
+              return (r['job_service_id'] ??
+                      r['js_id'] ??
+                      r['formatted_id'] ??
+                      r['id'] ??
+                      '')
+                  .toString();
+            }
+            return (r['formatted_id'] ?? r['id'] ?? '').toString();
+          })(),
+      createdAt: createdAt,
+      // Map status to canonical display label. Pass workflow/request_type and resolution_type
+      statusTag: _mapStatus(
+        r['status'],
+        r['request_type'] ?? r['workflow'],
+        r['resolution_type'],
+      ),
       departmentTag: r['category'],
       priorityTag: r['priority'],
       unitId: r['unit_id'] ?? '',
@@ -496,23 +526,31 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => TenantJobServiceDetailPage(jobServiceId: concernSlipId, initialTitle: r['title']),
+              builder:
+                  (_) => TenantJobServiceDetailPage(
+                    jobServiceId: concernSlipId,
+                    initialTitle: r['title'],
+                  ),
             ),
           );
-        }
-        else if (requestType.contains('work order')) {
+        } else if (requestType.contains('work order')) {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => WorkOrderDetailsPage(workOrderId: r['id'], selectedTabLabel: ''),
+              builder:
+                  (_) => WorkOrderDetailsPage(
+                    workOrderId: r['id'],
+                    selectedTabLabel: '',
+                  ),
             ),
           );
-        }
-        else if (requestType.contains('concern slip')) {
+        } else if (requestType.contains('concern slip')) {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => TenantConcernSlipDetailPage(concernSlipId: concernSlipId),
+              builder:
+                  (_) =>
+                      TenantConcernSlipDetailPage(concernSlipId: concernSlipId),
             ),
           );
         } else {
@@ -520,7 +558,9 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => TenantConcernSlipDetailPage(concernSlipId: concernSlipId),
+              builder:
+                  (_) =>
+                      TenantConcernSlipDetailPage(concernSlipId: concernSlipId),
             ),
           );
         }

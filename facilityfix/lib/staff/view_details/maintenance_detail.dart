@@ -112,74 +112,6 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
     return null;
   }
 
-  bool _isDeletableStatus(dynamic status) {
-    if (status == null) return false;
-    final s = status.toString().toLowerCase().trim();
-    return s == 'pending' || s == 'complete' || s == 'completed' || s == 'done';
-  }
-
-  void _showDeleteDialog() {
-    final status = (widget.task['status'] ?? '').toString().toLowerCase();
-    if (!_isDeletableStatus(status)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Only pending or completed requests can be deleted'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-      return;
-    }
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Request'),
-        content: const Text('Are you sure you want to delete this request? This action cannot be undone.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _deleteMaintenanceTask();
-            },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _deleteMaintenanceTask() async {
-    try {
-      final apiService = APIService(roleOverride: AppRole.staff);
-      final taskId = widget.task['id']?.toString() ?? '';
-      if (taskId.isEmpty) throw Exception('No task ID available');
-      await apiService.deleteWorkOrder(taskId);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Request deleted successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to delete request: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   String _formatTimestamp(dynamic timestamp) {
     if (timestamp == null) return '';
     
@@ -430,7 +362,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
 
   Future<void> _createAssessment() async {
     // Navigate to the assessment form page with maintenance task data
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => AssessmentForm(
@@ -440,10 +372,38 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
           showResolutionType: false,
         ),
       ),
-    ).then((_) {
-      // Refresh data when returning from assessment form
-      _loadInventoryRequests();
-    });
+    );
+
+    // After returning from the assessment form, refresh the task details
+    // from the server so the UI reflects the newly created assessment and
+    // updated status (e.g., completed). We also reload inventory requests
+    // and rebuild _checklistItems from the fresh data.
+    try {
+      final apiService = APIService(roleOverride: AppRole.staff);
+      final taskId = widget.task['id'];
+      if (taskId != null && taskId.toString().isNotEmpty) {
+        final fresh = await apiService.getMaintenanceTaskById(taskId.toString());
+
+  if (fresh.isNotEmpty) {
+          // Merge fresh values into the existing task map so callers using
+          // the same Map reference (this.widget.task) observe changes.
+          fresh.forEach((k, v) {
+            widget.task[k] = v;
+          });
+
+          // Recompute derived state
+          setState(() {
+            _checklistItems = _convertChecklistToMap(widget.task['checklist_completed'], widget.task['category'] ?? 'general');
+          });
+
+          // Reload inventory requests as these may have changed too
+          await _loadInventoryRequests();
+        }
+      }
+    } catch (e) {
+      print('DEBUG: Failed to refresh task after assessment: $e');
+      // Not fatal - inventory and checklist may be slightly out-of-date.
+    }
   }
 
   void _showInventoryItemModal(Map<String, dynamic> request) {
@@ -657,14 +617,21 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+  // Determine whether an assessment exists (completion notes or staff photos)
+  // and only expose an assessedAt timestamp to the details widget when
+  // there's actually an assessment recorded.
+  final bool _hasAssessment =
+    (widget.task['completion_notes'] != null &&
+      widget.task['completion_notes'].toString().trim().isNotEmpty) ||
+    (widget.task['photos'] is List && (widget.task['photos'] as List).isNotEmpty);
+
+  final DateTime? _assessedAtForDetails = _hasAssessment ? _parseDate(widget.task['updated_at']) : null;
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
         leading: const BackButton(),
         title: 'Maintenance Details',
-        showMore: true,
-        showDelete: _isDeletableStatus(widget.task['status']),
-        onDeleteTap: _showDeleteDialog,
+        actions: null,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -718,8 +685,8 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
                 const SizedBox(height: 16),
               ],
               
-              // Use MaintenanceDetails widget - it has its own SingleChildScrollView
-              MaintenanceDetails(
+  // Use MaintenanceDetails widget - it has its own SingleChildScrollView
+  MaintenanceDetails(
                 // Basic Information
                 id: widget.task['id'] ?? '',
                 createdAt: _parseDate(widget.task['created_at']) ?? DateTime.now(),
@@ -748,7 +715,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
                 assignedStaff: widget.task['assigned_staff_name'] ?? widget.task['assigned_to'],
                 staffDepartment: widget.task['department'],
                 staffPhotoUrl: null,
-                assessedAt: _parseDate(widget.task['updated_at']),
+                assessedAt: _assessedAtForDetails,
                 assessment: widget.task['completion_notes'],
                 staffAttachments: widget.task['photos'] is List 
                     ? (widget.task['photos'] as List).map((e) => e.toString()).toList()
@@ -839,6 +806,179 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
                         ),
                       ),
                     ),
+                  // Inventory Requests Section (rendered after the details widget)
+                  if (_inventoryRequests.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Header
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: const BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(color: Color(0xFFE5E7EB)),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.inventory_2_outlined,
+                                  size: 20,
+                                  color: Color(0xFF6B7280),
+                                ),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Required Materials & Tools',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1F2937),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Inventory Items
+                          ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _inventoryRequests.length,
+                            separatorBuilder:
+                                (_, __) => const Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  color: Color(0xFFE5E7EB),
+                                ),
+                            itemBuilder: (context, index) {
+                              final request = _inventoryRequests[index];
+                              final itemName = request['item_name'] ?? 'Unknown Item';
+                              final quantity =
+                                  request['quantity_requested'] ??
+                                  request['stock_quantity'] ??
+                                  0;
+                              final status = (request['status'] ?? 'pending').toString();
+                              final unit = request['unit'] ?? '';
+                              final category = request['category'] ?? '';
+
+                              // Determine if item is received
+                              bool isReceived =
+                                  status.toLowerCase() == 'fulfilled' ||
+                                  status.toLowerCase() == 'received';
+
+                              return Container(
+                                padding: const EdgeInsets.all(16),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            itemName,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                              color: Color(0xFF1F2937),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              Text(
+                                                'RESERVE $quantity',
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(0xFF1F2937),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              // Text(
+                                              //   'STOCK $quantity',
+                                              //   style: const TextStyle(
+                                              //     fontSize: 12,
+                                              //     color: Color(0xFF6B7280),
+                                              //   ),
+                                              // ),
+                                            ],
+                                          ),
+                                          if (category.toString().isNotEmpty) ...[
+                                            const SizedBox(height: 4),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 2,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF3F4F6),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                category.toString().toUpperCase(),
+                                                style: const TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(0xFF6B7280),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color:
+                                                isReceived
+                                                    ? const Color(0xFFECFDF5)
+                                                    : Colors.white,
+                                            border: Border.all(
+                                              color:
+                                                  isReceived
+                                                      ? const Color(0xFF059669)
+                                                      : const Color(0xFF005CE7),
+                                            ),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          // child: Text(
+                                          //   isReceived ? 'Received' : 'Request',
+                                          //   style: TextStyle(
+                                          //     fontSize: 12,
+                                          //     fontWeight: FontWeight.w600,
+                                          //     color:
+                                          //         isReceived
+                                          //             ? const Color(0xFF059669)
+                                          //             : const Color(0xFF005CE7),
+                                          //   ),
+                                          // ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   ],
                 ),
               ),

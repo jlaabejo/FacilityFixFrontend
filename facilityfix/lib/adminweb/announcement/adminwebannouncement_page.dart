@@ -329,10 +329,16 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
           ),
         );
 
-        // Optional: Refresh from server to ensure sync
-        // Comment this out if you don't want to refresh after delete
-        // await Future.delayed(const Duration(milliseconds: 500));
-        // await _fetchAnnouncements();
+        // Refresh from server to ensure the deletion is persisted server-side.
+        // If the backend marks announcements as inactive instead of removing
+        // them, we still refresh the list so the UI matches the server state
+        // (this prevents the deleted item from reappearing on the next fetch).
+        try {
+          await Future.delayed(const Duration(milliseconds: 300));
+          await _fetchAnnouncements();
+        } catch (e) {
+          print('[DELETE] Warning: failed to refresh announcements after delete: $e');
+        }
       }
     } catch (e) {
       print('[DELETE] Error occurred: $e');
@@ -607,8 +613,12 @@ class _AdminWebAnnouncementPageState extends State<AdminWebAnnouncementPage> {
               for (final ann in announcements) {
                 // Use announcement ID as key to avoid duplicates
                 final id = ann['id'] ?? ann['formatted_id'];
-                if (id != null) {
-                  allAnnouncementsMap[id] = ann as Map<String, dynamic>;
+                  if (id != null) {
+                  final annSrc = ann ?? {};
+                  final Map<String, dynamic> annMap = annSrc is Map<String, dynamic>
+                      ? annSrc
+                      : Map<String, dynamic>.from(annSrc as Map);
+                  allAnnouncementsMap[id] = annMap;
                 }
               }
             }

@@ -4,7 +4,6 @@ import '../layout/facilityfix_layout.dart';
 import '../../services/api_services.dart'; 
 import '../../utils/ui_format.dart';
 import 'internalmaintenance_form.dart';
-import 'externalmaintenance_form.dart';
 import '../widgets/tags.dart';
 
 
@@ -280,20 +279,24 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     // Be generous with fallback keys for assignee name & department
     setText(_assigneeNameCtrl, [
       'assigned_staff_name',
-      'assigneeName',
-      'assigned_to',
-      'assignee',
-      'assignee_name',
-      'created_by'
+      // 'assigneeName',
+      // 'assigned_to',
+      // 'assignee',
+      // 'assignee_name',
+      // 'created_by'
     ]);
     setText(_assigneeDeptCtrl, [
       'department',
-      'assigneeDept',
-      'assignee_department',
-      'assigned_staff_department',
-      'staff_department'
+      // 'assigneeDept',
+      // 'assignee_department',
+      // 'assigned_staff_department',
+      // 'staff_department'
     ]);
-  setText(_adminNotifyCtrl, ['admin_notification', 'adminNotify', 'remarks', 'additional_notes', 'additional_note', 'additional_comments', 'notes']);
+    setText(_adminNotifyCtrl, ['admin_notification']);
+    // Debug log: show what admin notes were populated for this task (helps trace missing notes)
+    try {
+      print('[InternalView] admin notes (populated): ${_adminNotifyCtrl.text}');
+    } catch (_) {}
     setText(_staffNotifyCtrl, ['staff_notification', 'staffNotify']);
 
     // Set selected staff ID if available
@@ -552,7 +555,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
       for (final item in _selectedInventoryItems) {
         final response = await _apiService.createInventoryRequest(
           inventoryId: item['inventory_id'],
-          buildingId: 'default_building_id', // TODO: Use actual building ID
+          buildingId: 'default_building_id', 
           quantityRequested: item['quantity'],
           purpose: 'Maintenance Task: ${widget.taskId}',
           requestedBy: _createdByCtrl.text.isNotEmpty ? _createdByCtrl.text : 'system',
@@ -678,47 +681,47 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               _isEditMode
-                                  ? TextFormField(
-                                      controller: _titleCtrl,
-                                      validator: _req,
-                                      style: const TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black87,
-                                      ),
-                                      decoration: const InputDecoration(
-                                        isDense: true,
-                                        border: OutlineInputBorder(),
-                                        hintText: 'Enter task title',
-                                      ),
-                                    )
-                                  : Text(
-                                      _titleCtrl.text.isNotEmpty
-                                          ? _titleCtrl.text
-                                          : 'Maintenance Task',
-                                      style: const TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black87,
-                                      ),
-                                    ),
+                                ? TextFormField(
+                                  controller: _titleCtrl,
+                                  validator: _req,
+                                  style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                  ),
+                                  decoration: const InputDecoration(
+                                  isDense: true,
+                                  border: OutlineInputBorder(),
+                                  hintText: 'Enter task title',
+                                  ),
+                                )
+                                : Text(
+                                  _titleCtrl.text.isNotEmpty
+                                    ? _titleCtrl.text
+                                    : 'Maintenance Task',
+                                  style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                  ),
+                                ),
                               const SizedBox(height: 4),
                               // Show formatted maintenance identifier if available, else fall back to the route taskId
                               Text(
-                                _taskData?['formatted_id'] ?? _taskData?['maintenance_id'] ?? widget.taskId,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[600],
-                                ),
+                              _taskData?['formatted_id'] ?? _taskData?['maintenance_id'] ?? widget.taskId,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[600],
+                              ),
                               ),
                               const SizedBox(height: 4),
-                              // Also show the backend numeric/database id (UID/request id) for clarity
+                              // Show date created (with multiple fallback keys)
                               Text(
-                                'Request ID: ${_taskData?['id'] ?? _taskData?['request_id'] ?? widget.taskId}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[500],
-                                ),
+                              'Date Created: ${_formatDateString((_taskData?['created_at'] ?? _taskData?['created_on'] ?? _taskData?['created_date'] ?? _taskData?['date_created'] ?? _taskData?['created'] ?? '').toString())}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[500],
+                              ),
                               ),
                             ],
                           ),
@@ -953,21 +956,27 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Edit task button - kept prominent
+                // Edit task button - open InternalMaintenanceFormPage (edit mode)
                 SizedBox(
                   width: 180,
                   child: ElevatedButton(
                     onPressed: () async {
-                      // Open the external maintenance form in edit mode and pass the current task data
                       try {
+                        // Navigate to the internal maintenance form with the current task data
                         await Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (context) => ExternalMaintenanceFormPage(
-                              maintenanceData: _taskData ?? {},
+                            builder: (context) => InternalMaintenanceFormPage(
+                              maintenanceData: Map<String, dynamic>.from(_taskData ?? {}),
                               isEditMode: true,
                             ),
                           ),
                         );
+
+                        // After returning from edit form, refresh the task data to reflect any changes
+                        if (mounted) {
+                          setState(() => _isLoading = true);
+                          await _initializeData();
+                        }
                       } catch (e, st) {
                         print('[InternalView] Failed to open edit form: $e\n$st');
                         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to open edit form: $e')));
@@ -1584,7 +1593,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
               ),
               const SizedBox(width: 12),
               const Text(
-                "Inventory Requests",
+                "Inventory Item",
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,

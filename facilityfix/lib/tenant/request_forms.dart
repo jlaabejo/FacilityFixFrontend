@@ -29,6 +29,11 @@ class RequestForm extends StatefulWidget {
 
   /// Whether this is an edit operation
   final bool isEditing;
+  /// If true, the form will return to the caller after successful submit instead
+  /// of redirecting to the Repair Request Management page. Callers that want to
+  /// handle post-submit navigation (for example to refresh a parent view) can
+  /// set this to true.
+  final bool returnToCallerOnSuccess;
 
   const RequestForm({
     super.key, 
@@ -37,6 +42,7 @@ class RequestForm extends StatefulWidget {
     this.initialData,
     this.requestId,
     this.isEditing = false,
+    this.returnToCallerOnSuccess = false,
   });
 
   @override
@@ -991,7 +997,37 @@ class _RequestFormState extends State<RequestForm> {
 
       if (result['success'] == true) {
         print('[SUBMIT] Success: ${result['formatted_id']}');
-        _showRequestDialog(context, result['formatted_id']);
+        // If caller requested to handle navigation, return to caller so it
+        // can refresh or navigate as needed. Otherwise keep existing
+        // behavior of showing the success dialog and redirecting to the
+        // Repair Request Management page.
+        if (widget.returnToCallerOnSuccess) {
+          // Normalize the returned payload so callers have a stable shape.
+          // resource_type: 'job_service'|'work_order'|'concern_slip'
+          // resource_id: the primary id string (id, job_service_id, work_order_id, or formatted_id)
+          final String resourceType = (type == 'Job Service')
+              ? 'job_service'
+              : (type == 'Work Order')
+                  ? 'work_order'
+                  : 'concern_slip';
+
+          String? resourceId;
+          // Prefer explicit keys if present
+          resourceId = result['job_service_id']?.toString()
+              ?? result['work_order_id']?.toString()
+              ?? result['id']?.toString()
+              ?? result['formatted_id']?.toString();
+
+          final canonical = {
+            'resource_type': resourceType,
+            'resource_id': resourceId ?? '',
+            'raw': result,
+          };
+
+          Navigator.pop(context, canonical);
+        } else {
+          _showRequestDialog(context, result['formatted_id']);
+        }
       } else {
         _showSnack('Failed to submit $type. Please try again.');
       }

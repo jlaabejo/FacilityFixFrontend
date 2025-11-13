@@ -16,6 +16,9 @@ import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart' as fx;
 import 'package:facilityfix/widgets/modals.dart';
+import 'package:facilityfix/tenant/request_forms.dart';
+import 'package:facilityfix/tenant/view_details/concern_slip_details.dart';
+import 'package:facilityfix/tenant/view_details/workorder_details.dart';
 
 class TenantJobServiceDetailPage extends StatefulWidget {
   final String jobServiceId;
@@ -33,6 +36,7 @@ class _TenantJobServiceDetailPageState extends State<TenantJobServiceDetailPage>
   bool _isLoading = true;
   bool _hasError = false;
   String _errorMessage = '';
+  Map<String, dynamic>? _fallbackConcernSlip;
   Map<String, dynamic>? _jobServiceData;
   String? _currentUserId;
 
@@ -189,11 +193,24 @@ class _TenantJobServiceDetailPageState extends State<TenantJobServiceDetailPage>
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _hasError = true;
-          _errorMessage = e.toString();
-          _isLoading = false;
-        });
+        // If job service fetch failed, try to fetch a concern slip with the
+        // same id so we can present the tenant with an action (fill JS/WOP)
+        try {
+          final api = APIService();
+          final cs = await api.getConcernSlipById(widget.jobServiceId);
+          setState(() {
+            _fallbackConcernSlip = cs;
+            _isLoading = false;
+            _hasError = false;
+          });
+          return;
+        } catch (_) {
+          setState(() {
+            _hasError = true;
+            _errorMessage = e.toString();
+            _isLoading = false;
+          });
+        }
       }
     }
   }
@@ -233,6 +250,113 @@ class _TenantJobServiceDetailPageState extends State<TenantJobServiceDetailPage>
       print('[DEBUG] Error enriching user names: $e');
       // Don't fail the entire load if we can't fetch user names
     }
+  }
+
+  void _viewConcernSlipFromFallback() {
+    final csId = _fallbackConcernSlip?['id']?.toString() ?? widget.jobServiceId;
+    if (csId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No concern slip available'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TenantConcernSlipDetailPage(concernSlipId: csId),
+      ),
+    );
+  }
+
+  Future<void> _createJobServiceFromConcernSlip() async {
+    final csId = _fallbackConcernSlip?['id']?.toString() ?? widget.jobServiceId;
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RequestForm(
+          requestType: 'Job Service',
+          concernSlipId: csId,
+          returnToCallerOnSuccess: true,
+        ),
+      ),
+    );
+
+    // Support the new canonical return shape {resource_type, resource_id, raw}
+    // while remaining backwards-compatible with older raw result maps.
+    if (mounted && result is Map<String, dynamic>) {
+      String? jsId;
+      if (result.containsKey('resource_type') && result.containsKey('resource_id')) {
+        final rt = result['resource_type']?.toString() ?? '';
+        final rid = result['resource_id']?.toString() ?? '';
+        if (rt == 'job_service' && rid.isNotEmpty) jsId = rid;
+        // If resource_type was omitted but resource_id exists, try it below
+      }
+
+      // Backwards compatibility: check legacy keys
+      jsId ??= result['job_service_id']?.toString()
+          ?? result['id']?.toString()
+          ?? result['formatted_id']?.toString();
+
+      if (jsId != null && jsId.isNotEmpty) {
+        // Navigate directly to the Job Service details page
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TenantJobServiceDetailPage(jobServiceId: jsId!),
+          ),
+        );
+        return;
+      }
+    }
+
+    // Fallback: refresh the page data as before
+    if (mounted) await _loadJobServiceData();
+  }
+
+  Future<void> _createWorkOrderFromConcernSlip() async {
+    final csId = _fallbackConcernSlip?['id']?.toString() ?? widget.jobServiceId;
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RequestForm(
+          requestType: 'Work Order',
+          concernSlipId: csId,
+          returnToCallerOnSuccess: true,
+        ),
+      ),
+    );
+
+    // Accept canonical return shape and legacy maps
+    if (mounted && result is Map<String, dynamic>) {
+      String? woId;
+      if (result.containsKey('resource_type') && result.containsKey('resource_id')) {
+        final rt = result['resource_type']?.toString() ?? '';
+        final rid = result['resource_id']?.toString() ?? '';
+        if (rt == 'work_order' && rid.isNotEmpty) woId = rid;
+      }
+
+      woId ??= result['work_order_id']?.toString()
+          ?? result['id']?.toString()
+          ?? result['formatted_id']?.toString();
+
+      if (woId != null && woId.isNotEmpty) {
+        // Navigate directly to the Work Order details page
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WorkOrderDetailsPage(workOrderId: woId!, selectedTabLabel: ''),
+          ),
+        );
+        return;
+      }
+    }
+
+    // Fallback: refresh the page data as before
+    if (mounted) await _loadJobServiceData();
   }
 
   void _onTabTapped(int index) {
@@ -846,6 +970,78 @@ class _TenantJobServiceDetailPageState extends State<TenantJobServiceDetailPage>
                             title: (_jobServiceData!['title'] != null && _jobServiceData!['title'].toString().isNotEmpty)
                                 ? _jobServiceData!['title'].toString()
                                 : widget.initialTitle,
+                          ),
+                        ] else if (_fallbackConcernSlip != null) ...[
+                          // Show an action required panel when the job service is
+                          // missing but a concern slip exists that requires tenant action
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFE6EDF8)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Action required',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'This request has been inspected by staff and requires you to fill the next step. Please open the appropriate form to continue.',
+                                  style: const TextStyle(fontSize: 14, color: Color(0xFF374151)),
+                                ),
+                                const SizedBox(height: 12),
+                                Builder(builder: (ctx) {
+                                  // Determine which button(s) to show based on the
+                                  // concern slip's resolution_type for clearer UX.
+                                  final resType = (_fallbackConcernSlip!['resolution_type']?.toString() ?? '').toLowerCase();
+                                  final showJS = resType.isEmpty || resType.contains('job') || resType.contains('job_service');
+                                  final showWO = resType.isEmpty || resType.contains('work') || resType.contains('work_permit') || resType.contains('work_order') || resType.contains('wop');
+
+                                  final List<Widget> buttons = [];
+                                  if (showJS) {
+                                    buttons.add(
+                                      Expanded(
+                                        child: fx.FilledButton(
+                                          label: 'Open Job Service Form',
+                                          backgroundColor: const Color(0xFF005CE7),
+                                          textColor: Colors.white,
+                                          withOuterBorder: false,
+                                          onPressed: _createJobServiceFromConcernSlip,
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                  if (showWO) {
+                                    if (buttons.isNotEmpty) buttons.add(const SizedBox(width: 12));
+                                    buttons.add(
+                                      Expanded(
+                                        child: fx.OutlinedPillButton(
+                                          label: 'Open Work Order Form',
+                                          borderColor: const Color(0xFF005CE7),
+                                          foregroundColor: const Color(0xFF005CE7),
+                                          onPressed: _createWorkOrderFromConcernSlip,
+                                        ),
+                                      ),
+                                    );
+                                  }
+
+                                  return Row(children: buttons);
+                                }),
+                                const SizedBox(height: 8),
+                                TextButton(
+                                  onPressed: _viewConcernSlipFromFallback,
+                                  child: const Text('View Concern Slip'),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ],

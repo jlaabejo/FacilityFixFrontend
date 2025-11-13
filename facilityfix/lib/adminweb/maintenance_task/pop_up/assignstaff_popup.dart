@@ -18,8 +18,7 @@ class AssignScheduleWorkDialog extends StatefulWidget {
   });
 
   @override
-  State<AssignScheduleWorkDialog> createState() =>
-      _AssignScheduleWorkDialogState();
+  State<AssignScheduleWorkDialog> createState() => _AssignScheduleWorkDialogState();
 
   static void show(
     BuildContext context,
@@ -46,6 +45,7 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
   final APIService _apiService = APIService();
   final admin_api.ApiService _adminApiService = admin_api.ApiService();
   final RoundRobinAssignmentService _roundRobinService = RoundRobinAssignmentService();
+
   bool _formValid = false;
   bool _isLoading = false;
   bool _isAssigning = false;
@@ -99,11 +99,7 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
         }
       }
 
-      if (parsed != null) {
-        setState(() {
-          selectedDate = parsed;
-        });
-      }
+      if (parsed != null) setState(() => selectedDate = parsed);
     } catch (e) {
       print('[AssignScheduleWorkDialog] Error parsing schedule date: $e');
     }
@@ -374,11 +370,63 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
   }
 
   Widget _buildStaffDropdown() {
+    final hasSelected = selectedStaffName != null && selectedStaffName!.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('Assign Staff', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black87)),
         const SizedBox(height: 12),
+
+        // ConcernSlip-style compact display when a staff is selected
+        if (hasSelected)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.blueGrey[700],
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      (selectedStaffName ?? 'SM').split(' ').map((p) => p.isNotEmpty ? p[0].toUpperCase() : '').take(2).join(),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(selectedStaffName ?? 'Staff Member', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
+                      const SizedBox(height: 4),
+                      Text(
+                        () {
+                          try {
+                            final found = _staffList.firstWhere((s) => _getStaffId(s) == selectedStaffId, orElse: () => {});
+                            if (found != null && found is Map && found.isNotEmpty) return (found['staff_department'] ?? found['department'] ?? '').toString();
+                          } catch (_) {}
+                          return '';
+                        }(),
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
         if (_isLoading)
           Container(
             height: 50,

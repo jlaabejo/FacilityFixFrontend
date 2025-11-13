@@ -1,3 +1,4 @@
+import 'package:facilityfix/adminweb/inventory_management/admininventoryitems_page.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
@@ -364,14 +365,14 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                    children: [
                     // Basic Information Section
                     const Text(
                       'Basic Information',
                       style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF2D3748),
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2D3748),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -380,28 +381,28 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                     TextFormField(
                       controller: _itemNameController,
                       decoration: InputDecoration(
-                        labelText: 'Item Name *',
-                        hintText: 'Enter item name',
-                        labelStyle: TextStyle(color: Colors.grey[700]),
-                        hintStyle: TextStyle(color: Colors.grey[400]),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey[400]!),
-                        ),
+                      labelText: 'Item Name *',
+                      hintText: 'Enter item name',
+                      labelStyle: TextStyle(color: Colors.grey[700]),
+                      hintStyle: TextStyle(color: Colors.grey[400]),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey[400]!),
+                      ),
                       ),
                       validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Item name is required';
-                        }
-                        return null;
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Item name is required';
+                      }
+                      return null;
                       },
                     ),
                     const SizedBox(height: 16),
@@ -409,49 +410,49 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                     // Item Code (Row)
                     Row(
                       children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _itemCodeController,
-                            readOnly: true,
-                            decoration: InputDecoration(
-                              labelText: 'Item Code (Auto-generated) *',
-                              hintText: 'Select classification & department',
-                              labelStyle: TextStyle(color: Colors.grey[700]),
-                              hintStyle: TextStyle(color: Colors.grey[400]),
-                              suffixIcon: const Tooltip(
-                                message: 'Auto-generated based on classification and department',
-                                child: Icon(Icons.auto_awesome, size: 18, color: Colors.blue),
-                              ),
-                              filled: true,
-                              fillColor: Colors.grey[50],
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
-                              ),
-                              disabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[400]!),
-                              ),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please select classification & department';
-                              }
-                              return null;
-                            },
+                      Expanded(
+                        child: TextFormField(
+                        controller: _itemCodeController,
+                        readOnly: true,
+                        decoration: InputDecoration(
+                          labelText: 'Item Code (Auto-generated) *',
+                          hintText: 'Select classification & department',
+                          labelStyle: TextStyle(color: Colors.grey[700]),
+                          hintStyle: TextStyle(color: Colors.grey[400]),
+                          suffixIcon: const Tooltip(
+                          message: 'Auto-generated based on classification and department',
+                          child: Icon(Icons.auto_awesome, size: 18, color: Colors.blue),
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey[50],
+                          border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          disabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[400]!),
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        
-                        const Spacer(),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                          return 'Please select classification & department';
+                          }
+                          return null;
+                        },
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      
+                      const Spacer(),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -459,98 +460,98 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                     // Classification & Department (Row)
                     Row(
                       children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _selectedClassification,
-                            decoration: InputDecoration(
-                              labelText: 'Classification *',
-                              labelStyle: TextStyle(color: Colors.grey[700]),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[300]!),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.grey[400]!),
-                              ),
-                            ),
-                            items: _classifications.map((classification) {
-                              return DropdownMenuItem(
-                                value: classification,
-                                child: Text(classification.toUpperCase()),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedClassification = value;
-                              });
-                              _generateItemCode(); // Auto-generate item code
-                            },
-                            validator: (value) {
-                              if (value == null) {
-                                return 'Classification is required';
-                              }
-                              return null;
-                            },
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                        value: _selectedClassification,
+                        decoration: InputDecoration(
+                          labelText: 'Classification *',
+                          labelStyle: TextStyle(color: Colors.grey[700]),
+                          border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[400]!),
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _selectedDepartment,
-                            decoration: _getInputDecoration('Department *'),
-                            items: _departments.map((department) {
-                              return DropdownMenuItem(
-                                value: department,
-                                child: Text(department.toUpperCase()),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedDepartment = value;
-                              });
-                              _generateItemCode(); // Auto-generate item code
-                            },
-                            validator: (value) {
-                              if (value == null) {
-                                return 'Department is required';
-                              }
-                              return null;
-                            },
-                          ),
+                        items: _classifications.map((classification) {
+                          return DropdownMenuItem(
+                          value: classification,
+                          child: Text(classification.toUpperCase()),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                          _selectedClassification = value;
+                          });
+                          _generateItemCode(); // Auto-generate item code
+                        },
+                        validator: (value) {
+                          if (value == null) {
+                          return 'Classification is required';
+                          }
+                          return null;
+                        },
                         ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                        value: _selectedDepartment,
+                        decoration: _getInputDecoration('Department *'),
+                        items: _departments.map((department) {
+                          return DropdownMenuItem(
+                          value: department,
+                          child: Text(department.toUpperCase()),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                          _selectedDepartment = value;
+                          });
+                          _generateItemCode(); // Auto-generate item code
+                        },
+                        validator: (value) {
+                          if (value == null) {
+                          return 'Department is required';
+                          }
+                          return null;
+                        },
+                        ),
+                      ),
                       ],
                     ),
 
                     // Item Code Format Info
                     if (_itemCodeController.text.isNotEmpty)
                       Container(
-                        margin: const EdgeInsets.only(top: 8),
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[50],
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue[100]!),
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue[100]!),
+                      ),
+                      child: Row(
+                        children: [
+                        Icon(Icons.info_outline, size: 16, color: Colors.blue[700]),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                          'Item code format: [Classification]-[Department]-[Unique ID]',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.blue[700],
+                          ),
+                          ),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline, size: 16, color: Colors.blue[700]),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Item code format: [Classification]-[Department]-[Unique ID]',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.blue[700],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                        ],
+                      ),
                       ),
 
                     const SizedBox(height: 24),
@@ -561,9 +562,9 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                     const Text(
                       'Stock Information',
                       style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF2D3748),
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2D3748),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -571,63 +572,63 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                     // Current Stock, Reorder Level, Unit (Row)
                     Row(
                       children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _currentStockController,
-                            decoration: _getInputDecoration('Current Stock *', hint: '0'),
-                            keyboardType: TextInputType.number,
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Current stock is required';
-                              }
-                              if (int.tryParse(value) == null) {
-                                return 'Enter a valid number';
-                              }
-                              return null;
-                            },
-                          ),
+                      Expanded(
+                        child: TextFormField(
+                        controller: _currentStockController,
+                        decoration: _getInputDecoration('Current Stock *', hint: '0'),
+                        keyboardType: TextInputType.number,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                          return 'Current stock is required';
+                          }
+                          if (int.tryParse(value) == null) {
+                          return 'Enter a valid number';
+                          }
+                          return null;
+                        },
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _reorderLevelController,
-                            decoration: _getInputDecoration('Reorder Level *', hint: '0'),
-                            keyboardType: TextInputType.number,
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Reorder level is required';
-                              }
-                              if (int.tryParse(value) == null) {
-                                return 'Enter a valid number';
-                              }
-                              return null;
-                            },
-                          ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextFormField(
+                        controller: _reorderLevelController,
+                        decoration: _getInputDecoration('Reorder Level *', hint: '0'),
+                        keyboardType: TextInputType.number,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                          return 'Reorder level is required';
+                          }
+                          if (int.tryParse(value) == null) {
+                          return 'Enter a valid number';
+                          }
+                          return null;
+                        },
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _selectedUnit,
-                            decoration: _getInputDecoration('Unit *'),
-                            items: _units.map((unit) {
-                              return DropdownMenuItem(
-                                value: unit,
-                                child: Text(unit),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedUnit = value;
-                              });
-                            },
-                            validator: (value) {
-                              if (value == null) {
-                                return 'Unit is required';
-                              }
-                              return null;
-                            },
-                          ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                        value: _selectedUnit,
+                        decoration: _getInputDecoration('Unit *'),
+                        items: _units.map((unit) {
+                          return DropdownMenuItem(
+                          value: unit,
+                          child: Text(unit),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                          _selectedUnit = value;
+                          });
+                        },
+                        validator: (value) {
+                          if (value == null) {
+                          return 'Unit is required';
+                          }
+                          return null;
+                        },
                         ),
+                      ),
                       ],
                     ),
                     const SizedBox(height: 24),
@@ -651,7 +652,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                       decoration: _getInputDecoration('Supplier Name *', hint: 'Enter supplier name'),
                       validator: (value) {
                       if (value == null || value.trim().isEmpty) {
-                        return 'Supplier name is required';
+                      return 'Supplier name is required';
                       }
                       return null;
                       },
@@ -666,7 +667,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                       if (value == null || value.trim().isEmpty) return null; // optional
                       final pattern = RegExp(r'^\+?[0-9\s\-]{6,20}$');
                       if (!pattern.hasMatch(value.trim())) {
-                        return 'Enter a valid phone number';
+                      return 'Enter a valid phone number';
                       }
                       return null;
                       },
@@ -681,7 +682,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                       if (value == null || value.trim().isEmpty) return null; // optional
                       final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
                       if (!emailRegex.hasMatch(value.trim())) {
-                        return 'Enter a valid email address';
+                      return 'Enter a valid email address';
                       }
                       return null;
                       },
@@ -692,107 +693,129 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Recommend On (Locations)',
+                      const Text(
+                        'Recommend On (Locations)',
+                        style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF2D3748),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.all(12),
+                        child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _locations.map((location) {
+                          final isSelected = _selectedRecommendedLocations.contains(location);
+                          return FilterChip(
+                          label: Text(location),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            setState(() {
+                            if (selected) {
+                              _selectedRecommendedLocations.add(location);
+                            } else {
+                              _selectedRecommendedLocations.remove(location);
+                            }
+                            });
+                          },
+                          selectedColor: const Color(0xFF1976D2).withOpacity(0.2),
+                          checkmarkColor: const Color(0xFF1976D2),
+                          backgroundColor: Colors.grey[50],
+                          labelStyle: TextStyle(
+                            fontSize: 13,
+                            color: isSelected ? const Color(0xFF1976D2) : Colors.grey[700],
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                          );
+                        }).toList(),
+                        ),
+                      ),
+                      if (_selectedRecommendedLocations.isNotEmpty)
+                        Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          '${_selectedRecommendedLocations.length} location(s) selected',
                           style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF2D3748),
+                          fontSize: 12,
+                          color: Colors.grey[600],
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey[300]!),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.all(12),
-                          child: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: _locations.map((location) {
-                              final isSelected = _selectedRecommendedLocations.contains(location);
-                              return FilterChip(
-                                label: Text(location),
-                                selected: isSelected,
-                                onSelected: (selected) {
-                                  setState(() {
-                                    if (selected) {
-                                      _selectedRecommendedLocations.add(location);
-                                    } else {
-                                      _selectedRecommendedLocations.remove(location);
-                                    }
-                                  });
-                                },
-                                selectedColor: const Color(0xFF1976D2).withOpacity(0.2),
-                                checkmarkColor: const Color(0xFF1976D2),
-                                backgroundColor: Colors.grey[50],
-                                labelStyle: TextStyle(
-                                  fontSize: 13,
-                                  color: isSelected ? const Color(0xFF1976D2) : Colors.grey[700],
-                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                ),
-                              );
-                            }).toList(),
-                          ),
                         ),
-                        if (_selectedRecommendedLocations.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              '${_selectedRecommendedLocations.length} location(s) selected',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ),
                       ],
                     ),
                     const SizedBox(height: 16),
 
                     // Critical Item Checkbox
-                
+                  
                     // Action Buttons
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        OutlinedButton(
-                          onPressed: _isLoading
-                              ? null
-                              : () => context.go('/inventory/items'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 32,
-                              vertical: 16,
+                      OutlinedButton(
+                        onPressed: _isLoading
+                          ? null
+                          : () {
+                            // Navigate to InventoryManagementItemsPage when cancelling
+                            Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => InventoryManagementItemsPage(),
                             ),
-                          ),
-                          child: const Text('Cancel'),
+                            );
+                          },
+                        style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 16,
                         ),
-                        const SizedBox(width: 16),
-                        ElevatedButton(
-                          onPressed: _isLoading ? null : _submitForm,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1976D2),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 32,
-                              vertical: 16,
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton(
+                        onPressed: _isLoading
+                          ? null
+                          : () async {
+                            // Submit the form first
+                            await _submitForm();
+                            // If submission succeeded (no error message), navigate to InventoryManagementItemsPage
+                            if (mounted && _errorMessage == null) {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                              builder: (_) => InventoryManagementItemsPage(),
+                              ),
+                            );
+                            }
+                          },
+                        style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1976D2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32,
+                          vertical: 16,
+                        ),
+                        ),
+                        child: _isLoading
+                          ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
                             ),
+                          )
+                          : const Text(
+                            'Create Item',
+                            style: TextStyle(color: Colors.white),
                           ),
-                          child: _isLoading
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Text(
-                                  'Create Item',
-                                  style: TextStyle(color: Colors.white),
-                                ),
-                        ),
+                      ),
                       ],
                     ),
                   ],

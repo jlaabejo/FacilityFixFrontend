@@ -41,7 +41,7 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
   // Form state
   String _selectedStatus = 'pending';
   bool _isSubmittingStatus = false;
-  
+
   // On Hold state
   Map<String, dynamic>? holdMeta;
 
@@ -69,7 +69,8 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
     super.initState();
     // Ensure we have a valid default status
     if (!_statusOptions.contains(_selectedStatus)) {
-      _selectedStatus = _statusOptions.isNotEmpty ? _statusOptions.first : 'pending';
+      _selectedStatus =
+          _statusOptions.isNotEmpty ? _statusOptions.first : 'pending';
     }
     _loadJobServiceData();
     _loadCurrentUser();
@@ -114,7 +115,7 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
           _selectedStatus = currentStatus;
           _isLoading = false;
         });
-        
+
         // Debug: Print available fields
         print('[JobService] Available data fields:');
         print('  id: ${data['id']}');
@@ -136,7 +137,6 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
         print('  category: ${data['category']}');
         print('  department: ${data['department']}');
         print('  staff_department: ${data['staff_department']}');
-        print('\n[JobService] ALL data keys: ${data.keys.toList()}');
       }
     } catch (e) {
       if (mounted) {
@@ -149,7 +149,10 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
     }
   }
 
-  Future<void> _enrichWithUserNames(Map<String, dynamic> data, APIService apiService) async {
+  Future<void> _enrichWithUserNames(
+    Map<String, dynamic> data,
+    APIService apiService,
+  ) async {
     try {
       // Fetch requested_by name if we have the ID but not the name
       if (data.containsKey('requested_by') &&
@@ -162,7 +165,9 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
           final firstName = userData['first_name'] ?? '';
           final lastName = userData['last_name'] ?? '';
           data['requested_by_name'] = '$firstName $lastName'.trim();
-          print('[DEBUG] Set requested_by_name to: ${data['requested_by_name']}');
+          print(
+            '[DEBUG] Set requested_by_name to: ${data['requested_by_name']}',
+          );
         }
       }
 
@@ -276,14 +281,16 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
     // Show confirmation dialog first
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => CustomPopup(
-        title: 'Complete Job Service',
-        message: 'Are you sure you want to mark this job service as completed? This action cannot be undone.',
-        primaryText: 'Complete',
-        secondaryText: 'Cancel',
-        onPrimaryPressed: () => Navigator.of(context).pop(true),
-        onSecondaryPressed: () => Navigator.of(context).pop(false),
-      ),
+      builder:
+          (_) => CustomPopup(
+            title: 'Complete Job Service',
+            message:
+                'Are you sure you want to mark this job service as completed? This action cannot be undone.',
+            primaryText: 'Complete',
+            secondaryText: 'Cancel',
+            onPrimaryPressed: () => Navigator.of(context).pop(true),
+            onSecondaryPressed: () => Navigator.of(context).pop(false),
+          ),
     );
 
     if (confirmed != true) return;
@@ -296,20 +303,21 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
 
       if (mounted) {
         setState(() => _isSubmittingStatus = false);
-        
+
         // Show success dialog
         showDialog(
           context: context,
-          builder: (_) => CustomPopup(
-            title: 'Success',
-            message: 'Job service has been marked as completed.',
-            primaryText: 'OK',
-            onPrimaryPressed: () {
-              Navigator.of(context).pop();
-              // Refresh the job service data
-              _loadJobServiceData();
-            },
-          ),
+          builder:
+              (_) => CustomPopup(
+                title: 'Success',
+                message: 'Job service has been marked as completed.',
+                primaryText: 'OK',
+                onPrimaryPressed: () {
+                  Navigator.of(context).pop();
+                  // Refresh the job service data
+                  _loadJobServiceData();
+                },
+              ),
         );
       }
     } catch (e) {
@@ -366,21 +374,27 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Request'),
-        content: const Text('Are you sure you want to delete this request? This action cannot be undone.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _deleteJobService();
-            },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Delete Request'),
+            content: const Text(
+              'Are you sure you want to delete this request? This action cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await _deleteJobService();
+                },
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Delete'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -424,9 +438,10 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
       return;
     }
 
-    String pendingStatus = _statusOptions.contains(_selectedStatus)
-        ? _selectedStatus
-        : _statusOptions.first;
+    String pendingStatus =
+        _statusOptions.contains(_selectedStatus)
+            ? _selectedStatus
+            : _statusOptions.first;
 
     _notesController.clear();
 
@@ -479,14 +494,17 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
                         labelText: 'Status',
                         border: OutlineInputBorder(),
                       ),
-                      items: _statusOptions
-                          .map(
-                            (status) => DropdownMenuItem<String>(
-                              value: status,
-                              child: Text(status.replaceAll('_', ' ').toUpperCase()),
-                            ),
-                          )
-                          .toList(),
+                      items:
+                          _statusOptions
+                              .map(
+                                (status) => DropdownMenuItem<String>(
+                                  value: status,
+                                  child: Text(
+                                    status.replaceAll('_', ' ').toUpperCase(),
+                                  ),
+                                ),
+                              )
+                              .toList(),
                       onChanged: (value) {
                         if (value == null) return;
                         setModalState(() => pendingStatus = value);
@@ -503,7 +521,8 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
                     ),
                     const SizedBox(height: 24),
                     fx.FilledButton(
-                      label: _isSubmittingStatus ? 'Updating...' : 'Update Status',
+                      label:
+                          _isSubmittingStatus ? 'Updating...' : 'Update Status',
                       backgroundColor: const Color(0xFF005CE7),
                       textColor: Colors.white,
                       withOuterBorder: false,
@@ -554,12 +573,14 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
 
   void _openChat() async {
     if (_jobServiceData == null) return;
-    
+
     final tenantId = _jobServiceData!['tenant_id']?.toString();
     if (tenantId == null || tenantId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Unable to start chat: Tenant information not available'),
+          content: Text(
+            'Unable to start chat: Tenant information not available',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -575,13 +596,17 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
 
   Future<void> _onHoldPressed() async {
     // Check if currently on hold
-    bool isOnHold = _jobServiceData?['status']?.toString().toLowerCase() == 'on_hold';
+    bool isOnHold =
+        _jobServiceData?['status']?.toString().toLowerCase() == 'on_hold';
 
     if (isOnHold) {
       // Resume task - set status back to assigned
       try {
-        await _updateJobServiceStatus('assigned', notes: 'Task resumed from on-hold status');
-        
+        await _updateJobServiceStatus(
+          'assigned',
+          notes: 'Task resumed from on-hold status',
+        );
+
         setState(() {
           holdMeta = null;
         });
@@ -599,9 +624,9 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
     } else {
       // Put on hold - show bottom sheet
       final result = await showHoldSheet(context);
-      
+
       if (result == null) return; // User cancelled
-      
+
       try {
         String notes = 'Reason: ${result.reason}';
         if (result.note != null && result.note!.isNotEmpty) {
@@ -610,9 +635,9 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
         if (result.resumeAt != null) {
           notes += '\nResume at: ${result.resumeAt}';
         }
-        
+
         await _updateJobServiceStatus('on_hold', notes: notes);
-        
+
         setState(() {
           holdMeta = {
             'reason': result.reason,
@@ -620,7 +645,7 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
             'resumeAt': result.resumeAt,
           };
         });
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -647,15 +672,19 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
     if (_jobServiceData == null) return;
 
     // Navigate to assessment form (simplified version without resolution type)
+    // Pass a flag to indicate this is for a Job Sevice
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AssessmentForm(
-          concernSlipId: widget.jobServiceId, // Use job service ID
-          concernSlipData: _jobServiceData, // Pass job service data for context
-          requestType: 'Job Service ${_jobServiceData!['formatted_id'] ?? _jobServiceData!['id'] ?? ''}',
-          showResolutionType: false, // Hide resolution type for job services
-        ),
+        builder:
+            (context) => AssessmentForm(
+              concernSlipId: widget.jobServiceId, // Use job service ID
+              concernSlipData: _jobServiceData,
+              requestType:
+                  'Job Service ${_jobServiceData!['formatted_id'] ?? _jobServiceData!['id'] ?? ''}',
+              showResolutionType:
+                  false, // Hide resolution type for job services
+            ),
       ),
     );
 
@@ -667,7 +696,7 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
 
   void _viewConcernSlip() {
     if (_jobServiceData == null) return;
-    
+
     final concernSlipId = _jobServiceData!['concern_slip_id'];
     if (concernSlipId == null || concernSlipId.toString().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -682,9 +711,10 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => StaffConcernSlipDetailPage(
-          concernSlipId: concernSlipId.toString(),
-        ),
+        builder:
+            (context) => StaffConcernSlipDetailPage(
+              concernSlipId: concernSlipId.toString(),
+            ),
       ),
     );
   }
@@ -697,107 +727,213 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
         leading: const BackButton(),
         title: 'Job Service Details',
         showMore: true,
-        showDelete: _jobServiceData != null && _isDeletableStatus(_jobServiceData!['status']),
+        showDelete:
+            _jobServiceData != null &&
+            _isDeletableStatus(_jobServiceData!['status']),
         onDeleteTap: _showDeleteDialog,
       ),
       body: SafeArea(
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _hasError
+        child:
+            _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _hasError
                 ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          size: 64,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        size: 64,
+                        color: Color(0xFF6B7280),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Error loading job service',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF374151),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _errorMessage,
+                        style: const TextStyle(
+                          fontSize: 14,
                           color: Color(0xFF6B7280),
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Error loading job service',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF374151),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _errorMessage,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Color(0xFF6B7280),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 24),
-                        fx.FilledButton(
-                          label: 'Retry',
-                          backgroundColor: const Color(0xFF005CE7),
-                          textColor: Colors.white,
-                          withOuterBorder: false,
-                          onPressed: _loadJobServiceData,
-                        ),
-                      ],
-                    ),
-                  )
-                : SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
-                    child: Column(
-                      children: [
-                        // Job Service Information
-                        if (_jobServiceData != null) ...[
-                          JobServiceDetails(
-                            // Basic Information
-                            // Use job_service_id or js_id if available, otherwise use formatted_id
-                            id: _jobServiceData!['job_service_id']?.toString() ?? 
-                                _jobServiceData!['js_id']?.toString() ?? 
-                                _jobServiceData!['formatted_id'] ?? 
-                                _jobServiceData!['id'] ?? '',
-                            formattedId: _jobServiceData!['formatted_id'],
-                            concernSlipId: _jobServiceData!['concern_slip_id']?.toString() ?? '',
-                            createdAt: _parseDateTime(_jobServiceData!['created_at']) ?? DateTime.now(),
-                            updatedAt: _parseDateTime(_jobServiceData!['updated_at']),
-                            requestTypeTag: _jobServiceData!['request_type'] ?? 'Job Service',
-                            priority: _jobServiceData!['priority'],
-                            statusTag: _jobServiceData!['status'] ?? 'pending',
-                            resolutionType: _jobServiceData!['resolution_type'],
-                            departmentTag: _jobServiceData!['category'],
-                            
-                            // Tenant / Requester - Use name fields, fallback to IDs
-                            requestedBy: _jobServiceData!['requested_by_name'] ?? 
-                                        _jobServiceData!['requested_by'] ?? '',
-                            unitId: _jobServiceData!['location'] ?? 
-                                     _jobServiceData!['unit_id'] ?? '',
-                            scheduleAvailability: _jobServiceData!['schedule_availability'] ??
-                                        _jobServiceData!['availability'] ??
-                                        _jobServiceData!['scheduled_date'],
-                            additionalNotes: _jobServiceData!['additional_notes'] ?? 
-                                            _jobServiceData!['description'] ?? 
-                                            _jobServiceData!['notes'],
-                            
-                            // Staff - Use assigned_to_name (enriched from getUserById)
-                            assignedStaff: _jobServiceData!['assigned_to_name'] ?? 
-                                          _jobServiceData!['assigned_to'],
-                            staffDepartment: _jobServiceData!['staff_department'],
-                            staffPhotoUrl: _jobServiceData!['staff_photo_url'],
-                            
-                            // Documentation
-                            startedAt: _parseDateTime(_jobServiceData!['started_at'] ?? _jobServiceData!['start_time']),
-                            completedAt: _parseDateTime(_jobServiceData!['completed_at'] ?? _jobServiceData!['end_time']),
-                            completionAt: _parseDateTime(_jobServiceData!['completion_at']),
-                            assessedAt: _parseDateTime(_jobServiceData!['assessed_at']),
-                            assessment: _jobServiceData!['assessment'] ?? _jobServiceData!['staff_assessment'],
-                            staffAttachments: _parseStringList(_jobServiceData!['staff_attachments'] ?? _jobServiceData!['attachments']),
-                            
-                            // Callbacks
-                            onViewConcernSlip: _viewConcernSlip,
-                          ),
-                        ],
-                      ],
-                    ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      fx.FilledButton(
+                        label: 'Retry',
+                        backgroundColor: const Color(0xFF005CE7),
+                        textColor: Colors.white,
+                        withOuterBorder: false,
+                        onPressed: _loadJobServiceData,
+                      ),
+                    ],
                   ),
+                )
+                : SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
+                  child: Column(
+                    children: [
+                      // Job Service Information
+                      if (_jobServiceData != null) ...[
+                        JobServiceDetails(
+                          // Basic Information
+                          // Use job_service_id or js_id if available, otherwise use formatted_id
+                          id:
+                              _jobServiceData!['job_service_id']?.toString() ??
+                              _jobServiceData!['js_id']?.toString() ??
+                              _jobServiceData!['formatted_id'] ??
+                              _jobServiceData!['id'] ??
+                              '',
+                          formattedId: _jobServiceData!['formatted_id'],
+                          concernSlipId:
+                              _jobServiceData!['concern_slip_id']?.toString() ??
+                              '',
+                          createdAt:
+                              _parseDateTime(_jobServiceData!['created_at']) ??
+                              DateTime.now(),
+                          updatedAt: _parseDateTime(
+                            _jobServiceData!['updated_at'],
+                          ),
+                          requestTypeTag:
+                              _jobServiceData!['request_type'] ?? 'Job Service',
+                          priority: _jobServiceData!['priority'],
+                          statusTag: _jobServiceData!['status'] ?? 'pending',
+                          resolutionType: _jobServiceData!['resolution_type'],
+                          departmentTag: _jobServiceData!['category'],
+
+                          // Tenant / Requester - Use name fields, fallback to IDs
+                          requestedBy:
+                              _jobServiceData!['requested_by_name'] ??
+                              _jobServiceData!['requested_by'] ??
+                              '',
+                          unitId:
+                              _jobServiceData!['location'] ??
+                              _jobServiceData!['unit_id'] ??
+                              '',
+                          scheduleAvailability:
+                              _jobServiceData!['schedule_availability'] ??
+                              _jobServiceData!['availability'] ??
+                              _jobServiceData!['scheduled_date'],
+                          additionalNotes:
+                              _jobServiceData!['additional_notes'] ??
+                              _jobServiceData!['description'] ??
+                              _jobServiceData!['notes'],
+
+                          // Staff - Use assigned_to_name (enriched from getUserById)
+                          assignedStaff:
+                              _jobServiceData!['assigned_to_name'] ??
+                              _jobServiceData!['assigned_to'],
+                          staffDepartment: _jobServiceData!['staff_department'],
+                          staffPhotoUrl: _jobServiceData!['staff_photo_url'],
+
+                          // Documentation
+                          startedAt: _parseDateTime(
+                            _jobServiceData!['started_at'] ??
+                                _jobServiceData!['start_time'],
+                          ),
+                          completedAt: _parseDateTime(
+                            _jobServiceData!['completed_at'] ??
+                                _jobServiceData!['end_time'],
+                          ),
+                          completionAt: _parseDateTime(
+                            _jobServiceData!['completion_at'],
+                          ),
+                          assessedAt: _parseDateTime(
+                            _jobServiceData!['assessed_at'],
+                          ),
+                          assessment:
+                              _jobServiceData!['assessment'] ??
+                              _jobServiceData!['staff_assessment'],
+                          staffAttachments: _parseStringList(
+                            _jobServiceData!['staff_attachments'] ??
+                                _jobServiceData!['attachments'],
+                          ),
+
+                          // Callbacks
+                          onViewConcernSlip: _viewConcernSlip,
+                        ),
+                      ],
+                      if (_jobServiceData!['assessment'] != null ||
+                          _jobServiceData!['completion_notes'] != null ||
+                          _jobServiceData!['staff_assessment'] != null) ...[
+                        const SizedBox(height: 24),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.blue[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.blue[200]!),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.assignment_turned_in,
+                                    color: Colors.blue[700],
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Completion Assessment',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1F2937),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                _jobServiceData!['assessment'] ??
+                                    _jobServiceData!['completion_notes'] ??
+                                    _jobServiceData!['staff_assessment'] ??
+                                    '',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  height: 1.5,
+                                  color: Color(0xFF374151),
+                                ),
+                              ),
+                              if (_jobServiceData!['assessed_by_name'] !=
+                                  null) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Assessed by: ${_jobServiceData!['assessed_by_name']}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                              if (_jobServiceData!['assessed_at'] != null) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Date: ${_parseDateTime(_jobServiceData!['assessed_at'])?.toString() ?? 'N/A'}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
       ),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
@@ -806,8 +942,10 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
           if (_jobServiceData != null &&
               _jobServiceData!['assigned_to'] != null &&
               _jobServiceData!['assessment'] == null &&
-              (_jobServiceData!['status']?.toString().toLowerCase() == 'assigned' || 
-               _jobServiceData!['status']?.toString().toLowerCase() == 'on_hold'))
+              (_jobServiceData!['status']?.toString().toLowerCase() ==
+                      'assigned' ||
+                  _jobServiceData!['status']?.toString().toLowerCase() ==
+                      'on_hold'))
             SafeArea(
               top: false,
               child: Container(
@@ -822,12 +960,20 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
                       child: SizedBox(
                         height: 48,
                         child: fx.OutlinedPillButton(
-                          label: _jobServiceData!['status']?.toString().toLowerCase() == 'on_hold'
-                              ? 'Resume Task'
-                              : 'On Hold',
-                          icon: _jobServiceData!['status']?.toString().toLowerCase() == 'on_hold'
-                              ? Icons.play_arrow
-                              : Icons.pause,
+                          label:
+                              _jobServiceData!['status']
+                                          ?.toString()
+                                          .toLowerCase() ==
+                                      'on_hold'
+                                  ? 'Resume Task'
+                                  : 'On Hold',
+                          icon:
+                              _jobServiceData!['status']
+                                          ?.toString()
+                                          .toLowerCase() ==
+                                      'on_hold'
+                                  ? Icons.play_arrow
+                                  : Icons.pause,
                           borderColor: const Color(0xFF005CE7),
                           foregroundColor: const Color(0xFF005CE7),
                           onPressed: _onHoldPressed,

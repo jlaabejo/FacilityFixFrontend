@@ -20,13 +20,10 @@ import 'adminweb/repair_task/adminrepair_cs_page.dart';
 import 'adminweb/repair_task/adminrepair_js_page.dart';
 import 'adminweb/repair_task/adminrepair_wop_page.dart';
 import 'adminweb/inventory_management/inventory_item_create_page.dart' as new_inv;
-import 'adminweb/inventory_management/inventory_item_details_page.dart' as new_inv;
 import 'adminweb/maintenance_task/internalmaintenance_form.dart';
 import 'adminweb/maintenance_task/internalmaintenance_viewform.dart';
 import 'adminweb/maintenance_task/externalmaintenance_form.dart';
 import 'adminweb/maintenance_task/externalmaintenance_viewform.dart';
-import 'adminweb/inventory_management/createwebinventoryitems_page.dart';
-import 'adminweb/inventory_management/webinventoryitems_viewdetails.dart';
 import 'adminweb/announcement/createwebannouncement_page.dart';
 import 'adminweb/announcement/editwebannouncement_page.dart';
 import 'adminweb/pages/adminsettings_page.dart';
@@ -212,28 +209,6 @@ class _MyAppState extends State<MyApp> {
         path: '/inventory/item/create',
         name: 'inventory_item_create',
         builder: (context, state) => const new_inv.InventoryItemCreatePage(),
-      ),
-      GoRoute(
-        path: '/inventory/item/:itemId',
-        name: 'inventory_item_details',
-        builder: (context, state) {
-          final itemId = state.pathParameters['itemId']!;
-          return new_inv.InventoryItemDetailsPage(itemId: itemId);
-        },
-      ),
-      // Legacy inventory routes (using old pages)
-      GoRoute(
-        path: '/inventory/create',
-        name: 'create_inventory_item',
-        builder: (context, state) => const InventoryItemCreatePage(),
-      ),
-      GoRoute(
-        path: '/inventory/details/:itemId',
-        name: 'inventory_details',
-        builder: (context, state) {
-          final itemId = state.pathParameters['itemId']!;
-          return InventoryItemDetailsPage(itemId: itemId);
-        },
       ),
       GoRoute(
         path: '/adminweb/pages/createannouncement',

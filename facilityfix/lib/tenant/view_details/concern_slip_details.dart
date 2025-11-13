@@ -294,7 +294,9 @@ class _TenantConcernSlipDetailPageState
 
   @override
   Widget build(BuildContext context) {
-    final status = _normalizeStatus((_concernSlipData?['status'] ?? '').toString());
+    final status = _normalizeStatus(
+      (_concernSlipData?['status'] ?? '').toString(),
+    );
     final isPending = status.startsWith('pending');
     final isComplete = status.contains('complete') || status == 'done';
 
@@ -372,6 +374,7 @@ class _TenantConcernSlipDetailPageState
 
     final data = _concernSlipData!;
     final resolutionType = data['resolution_type']?.toString().toLowerCase();
+    final rawStatus = data['status']?.toString();
 
     // Debug logging
     print('[DEBUG] Concern Slip Data:');
@@ -392,11 +395,6 @@ class _TenantConcernSlipDetailPageState
     final candidates = [
       data['schedule_availability'],
       data['rawData']?['schedule_availability'],
-      data['rawData']?['schedule'],
-      data['rawData']?['availability'],
-      data['rawData']?['schedule_availabilities'],
-      data['schedule'],
-      data['availability'],
       data['requested_at'],
       data['dateRequested'],
     ];
@@ -431,8 +429,9 @@ class _TenantConcernSlipDetailPageState
 
     // Convert the extracted schedule string into a DateTimeRange now so the
     // details widget receives a typed value and doesn't need to re-parse.
-    final DateTimeRange? scheduleRange =
-        UiDateUtils.parseRange(scheduleAvailabilityStr);
+    final DateTimeRange? scheduleRange = UiDateUtils.parseRange(
+      scheduleAvailabilityStr,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -449,7 +448,7 @@ class _TenantConcernSlipDetailPageState
           requestTypeTag: 'Concern Slip',
           // Normalize certain backend status variants (e.g. 'sent to client')
           // to show the 'inspected' state in the tenant UI.
-          statusTag: _normalizeStatus(data['status']?.toString() ?? '') ,
+          statusTag: _normalizeStatus(data['status']?.toString() ?? ''),
           priority: data['priority'] ?? '',
           departmentTag: data['category'],
           requestedBy: data['reported_by_name'] ?? data['reported_by'] ?? '',
@@ -471,10 +470,10 @@ class _TenantConcernSlipDetailPageState
               (data['assessment_attachments'] as List?)?.cast<String>(),
         ),
         // Show embedded form if resolution type is set and status allows it
-          if (resolutionType != null &&
+        if (resolutionType != null &&
             resolutionType.isNotEmpty &&
             resolutionType != 'rejected' &&
-            _shouldShowEmbeddedForm(_normalizeStatus(data['status']?.toString()), resolutionType))
+            _shouldShowEmbeddedForm(rawStatus, resolutionType))
           _buildEmbeddedForm(resolutionType, data),
       ],
     );
@@ -482,11 +481,17 @@ class _TenantConcernSlipDetailPageState
 
   bool _shouldShowEmbeddedForm(String? status, String resolutionType) {
     // Show embedded form if:
-    // 1. Status is 'sent', 'evaluated', or 'approved' (admin has processed it)
+    // 1. Status is 'sent', 'sent to client', 'evaluated', or 'approved' (admin has processed it)
     // 2. Resolution type is set to job_service or work_order
     // 3. The concern slip hasn't been completed yet
-    final normalizedStatus = (status ?? '').toLowerCase();
-    return ['sent', 'evaluated', 'approved'].contains(normalizedStatus) &&
+    final normalizedStatus = (status ?? '').toLowerCase().replaceAll('_', ' ');
+    return [
+          'sent',
+          'sent to client',
+          'sent to tenant',
+          'evaluated',
+          'approved',
+        ].contains(normalizedStatus) &&
         ['job_service', 'work_order', 'work_permit'].contains(resolutionType);
   }
 
@@ -495,48 +500,129 @@ class _TenantConcernSlipDetailPageState
   // so tenant-facing screens consistently show the inspected state.
   String _normalizeStatus(String? raw) {
     if (raw == null) return '';
-    final s = raw.toString().toLowerCase().trim();
+    final s = raw.trim().toLowerCase();
 
-    // Map some backend variants to our canonical token values (lowercase)
-    if (s == 'sent to client' || s == 'sent_to_client' || s == 'sent to tenant' || s == 'sent') return 'inspected';
-    if (s.contains('completed') || s == 'done') return 'inspected';
-    if (s.contains('assigned')) return 'to inspect';
-
-    // Fallback: normalize separators and return a lowercase token (e.g. 'in progress')
-    final cleaned = s.replaceAll(RegExp(r'[_\-]+'), ' ').trim();
-    return cleaned;
+    // Map backend statuses to tenant-facing canonical statuses
+    switch (s) {
+      case 'sent to client':
+      case 'sent_to_client':
+      case 'sent to tenant':
+      case 'sent':
+      case 'evaluated': // Admin has evaluated, tenant needs to act
+      case 'approved': // Admin has approved, tenant needs to act
+        return 'inspected';
+      case 'completed':
+      case 'done':
+        return 'inspected';
+      case 'assigned':
+        return 'to inspect';
+      default:
+        return s.replaceAll(RegExp(r'[_\-]+'), ' ').trim();
+    }
   }
-
 
   /// Build an embedded form widget for job service / work order resolution types.
   /// This returns a RequestFormWrapper so the user can open/submit the corresponding form inline.
   Widget _buildEmbeddedForm(String resolutionType, Map<String, dynamic> data) {
     // Normalize resolutionType to a human-friendly request type label
-    final requestType =
-        resolutionType == 'job_service'
-            ? 'Job Service'
-            : (resolutionType == 'work_permit' ? 'Work Order' : 'Work Order');
+    final String formType;
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 24),
+    if (resolutionType == 'job_service') {
+      formType = 'Job Service';
+    } else if (resolutionType == 'work_order' ||
+        resolutionType == 'work_permit') {
+      formType = 'Work Order';
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 24),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Informational header
-          Text(
-            '$requestType for this Request',
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF0F172A),
-            ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.assignment,
+                  color: Color(0xFF3B82F6),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Proceed with $formType',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Complete the form below to proceed with your request',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          // Use the RequestFormWrapper which will open the full RequestForm when tapped.
-          RequestFormWrapper(
-            requestType: requestType,
-            concernSlipId: widget.concernSlipId,
-            concernSlipData: data,
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder:
+                      (context) => EmbeddedRequestFormPage(
+                        requestType: formType,
+                        concernSlipId: data['id'] ?? '',
+                        concernSlipData: data,
+                      ),
+                ),
+              ).then((submitted) {
+                if (submitted == true) {
+                  // Refresh the concern slip data after form submission
+                  _loadConcernSlipData();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('$formType submitted successfully'),
+                      backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              });
+            },
+            icon: const Icon(Icons.edit_document),
+            label: Text('Fill $formType Form'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3B82F6),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
           ),
         ],
       ),

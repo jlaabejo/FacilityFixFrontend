@@ -641,8 +641,10 @@ class _AdminRolePageState extends State<AdminRolePage> {
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
               itemCount: permissions.length,
               itemBuilder: (context, index) {
-                final permission =
-                    (permissions[index] ?? {}) as Map<String, dynamic>;
+        final permissionSrc = permissions[index] ?? {};
+        final Map<String, dynamic> permission = permissionSrc is Map<String, dynamic>
+          ? permissionSrc
+          : Map<String, dynamic>.from(permissionSrc as Map);
                 final IconData permissionIcon =
                     permission['icon'] is IconData
                         ? permission['icon'] as IconData

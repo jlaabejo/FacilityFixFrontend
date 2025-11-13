@@ -18,51 +18,54 @@ class RepairJobServicePage extends StatefulWidget {
 class _RepairJobServicePageState extends State<RepairJobServicePage> {
   // Loading state
   bool _isLoading = true;
-  
+
   // Dynamic data from API
   List<Map<String, dynamic>> _repairTasks = [];
   List<Map<String, dynamic>> _filteredTasks = [];
-  
+
   // Pagination state
   int _currentPage = 0;
   final int _itemsPerPage = 10;
-  
+
   // Sorting state
   bool _sortAscending = false;
-  
+
   // Get paginated tasks
   List<Map<String, dynamic>> get _paginatedTasks {
     final startIndex = _currentPage * _itemsPerPage;
-    final endIndex = (startIndex + _itemsPerPage).clamp(0, _filteredTasks.length);
-    
+    final endIndex = (startIndex + _itemsPerPage).clamp(
+      0,
+      _filteredTasks.length,
+    );
+
     if (startIndex >= _filteredTasks.length) {
       return [];
     }
-    
+
     return _filteredTasks.sublist(startIndex, endIndex);
   }
-  
+
   // Get total pages
   int get _totalPages {
     return (_filteredTasks.length / _itemsPerPage).ceil();
   }
-  
+
   // Sort by date
   void _sortByDate() {
     setState(() {
       _filteredTasks.sort((a, b) {
         final dateA = _parseDate(a['dateRequested']);
         final dateB = _parseDate(b['dateRequested']);
-        
+
         if (dateA == null && dateB == null) return 0;
         if (dateA == null) return 1;
         if (dateB == null) return -1;
-        
+
         return _sortAscending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
       });
     });
   }
-  
+
   // Parse date helper
   DateTime? _parseDate(dynamic dateStr) {
     if (dateStr == null) return null;
@@ -74,7 +77,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       return null;
     }
   }
-  
+
   // Toggle sort order
   void _toggleSortOrder() {
     setState(() {
@@ -82,10 +85,10 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       _sortByDate();
     });
   }
-  
+
   // Error handling
   String? _errorMessage;
-  
+
   // Dropdown values for filtering
   String _selectedCategory = 'All Categories';
   String _selectedStatus = 'All Status';
@@ -158,16 +161,28 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
         final concernSlipId = jobService['concern_slip_id'];
         if (concernSlipId != null && concernSlipId.toString().isNotEmpty) {
           try {
-            final concernSlip = await apiService.getConcernSlip(concernSlipId.toString());
+            final concernSlip = await apiService.getConcernSlip(
+              concernSlipId.toString(),
+            );
 
             // Add assessment and recommendation from concern slip
-            taskData['assessment'] = concernSlip['staff_assessment'] ?? 'No assessment available';
-            taskData['recommendation'] = concernSlip['staff_recommendation'] ?? 'No recommendation available';
-            taskData['concernId'] = concernSlip['formatted_id'] ?? concernSlipId.toString();
+            taskData['assessment'] =
+                concernSlip['staff_assessment'] ??
+                concernSlip['assessment'] ??
+                'No assessment available';
+            taskData['recommendation'] =
+                concernSlip['staff_recommendation'] ??
+                'No recommendation available';
+            taskData['concernId'] =
+                concernSlip['formatted_id'] ?? concernSlipId.toString();
 
-            print('[Job Services] Fetched concern slip $concernSlipId: assessment=${concernSlip['staff_assessment']}, recommendation=${concernSlip['staff_recommendation']}');
+            print(
+              '[Job Services] Fetched concern slip $concernSlipId: assessment=${concernSlip['staff_assessment']}, recommendation=${concernSlip['staff_recommendation']}',
+            );
           } catch (e) {
-            print('[Job Services] Error fetching concern slip $concernSlipId: $e');
+            print(
+              '[Job Services] Error fetching concern slip $concernSlipId: $e',
+            );
             // Set default values if concern slip fetch fails
             taskData['assessment'] = 'Unable to load assessment';
             taskData['recommendation'] = 'Unable to load recommendation';
@@ -176,6 +191,11 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
           // No concern slip ID, use defaults
           taskData['assessment'] = 'No assessment available';
           taskData['recommendation'] = 'No recommendation available';
+        }
+
+        // Directly check for assessment on the job service itself
+        if (jobService['assessment'] != null) {
+          taskData['assessment'] = jobService['assessment'];
         }
 
         tasks.add(taskData);
@@ -201,39 +221,46 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       }
     }
   }
-  
+
   // Apply filters
   void _applyFilters() {
     setState(() {
-      _filteredTasks = _repairTasks.where((task) {
-        // Category filter
-        if (_selectedCategory != 'All Categories') {
-          final taskCategory = (task['category']?.toString().toLowerCase() ?? '').trim();
-          final selectedCategory = _selectedCategory.trim().toLowerCase();
+      _filteredTasks =
+          _repairTasks.where((task) {
+            // Category filter
+            if (_selectedCategory != 'All Categories') {
+              final taskCategory =
+                  (task['category']?.toString().toLowerCase() ?? '').trim();
+              final selectedCategory = _selectedCategory.trim().toLowerCase();
 
-          if (selectedCategory == 'others') {
-            // For "Other", match anything NOT in the main categories
-            if (['carpentry', 'electrical', 'masonry', 'plumbing'].contains(taskCategory)) {
-              return false;
+              if (selectedCategory == 'others') {
+                // For "Other", match anything NOT in the main categories
+                if ([
+                  'carpentry',
+                  'electrical',
+                  'masonry',
+                  'plumbing',
+                ].contains(taskCategory)) {
+                  return false;
+                }
+              } else {
+                // Match exact category (case-insensitive)
+                if (taskCategory != selectedCategory) {
+                  return false;
+                }
+              }
             }
-          } else {
-            // Match exact category (case-insensitive)
-            if (taskCategory != selectedCategory) {
-              return false;
+
+            // Status filter
+            if (_selectedStatus != 'All Status') {
+              final taskStatus = task['status']?.toString() ?? '';
+              if (taskStatus != _selectedStatus) {
+                return false;
+              }
             }
-          }
-        }
 
-        // Status filter
-        if (_selectedStatus != 'All Status') {
-          final taskStatus = task['status']?.toString() ?? '';
-          if (taskStatus != _selectedStatus) {
-            return false;
-          }
-        }
-
-        return true;
-      }).toList();
+            return true;
+          }).toList();
 
       // Reset to first page when filters change
       _currentPage = 0;
@@ -242,7 +269,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
 
   // Process job service data from API to match UI format
   Map<String, dynamic> _processJobServiceData(Map<String, dynamic> jobService) {
-    // Format Job Service ID with JS- prefix
+    // Format Job Service ID with JS- prefix FOR DISPLAY ONLY
     String serviceId = 'N/A';
     if (jobService['formatted_id'] != null) {
       serviceId = jobService['formatted_id'].toString();
@@ -251,21 +278,34 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       // Add JS- prefix if not already present
       serviceId = id.startsWith('JS-') ? id : 'JS-$id';
     }
-    
+
     return {
-      'serviceId': serviceId,
-      'id': jobService['concern_slip_id'] ?? jobService['id'] ?? 'N/A',
+      'serviceId': serviceId, // Display ID with "JS-" prefix
+      'id': jobService['id'] ?? 'N/A', // Store raw UUID for API calls
       'buildingUnit': jobService['location'] ?? jobService['unit_id'] ?? 'N/A',
-      'schedule': _formatDate(jobService['scheduled_date'] ?? jobService['created_at']),
+      'schedule': _formatDate(
+        jobService['scheduled_date'] ?? jobService['created_at'],
+      ),
       'priority': _capitalizePriority(jobService['priority']),
       'status': _mapStatus(jobService['status'], jobService['workflow']),
 
       // Additional task data
+      'requestedBy':
+          jobService['requested_by_name'] ??
+          jobService['requester_name'] ??
+          jobService['reported_by'] ??
+          'N/A',
       'title': jobService['title'] ?? 'Job Service Request',
       'dateRequested': _formatDate(jobService['created_at']),
       'created_by': jobService['created_by'] ?? 'N/A',
       'department': _mapCategoryToDepartment(jobService['category']),
       'description': jobService['description'] ?? '',
+      'concern_slip_id': jobService['concern_slip_id'], // Add concern slip ID
+      'additionalNotes':
+          jobService['additional_notes'] ??
+          jobService['notes'] ??
+          jobService['description'] ??
+          '',
       'rawData': jobService, // Store raw data for detailed view and checks
       // assessment and recommendation will be fetched from concern slip in _loadJobServices
     };
@@ -284,7 +324,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
 
   String _mapStatus(dynamic status, dynamic workflow) {
     // Custom mapping logic for Job Service (JS)
-  final s = (status ?? '').toString().toLowerCase();
+    final s = (status ?? '').toString().toLowerCase();
 
     if (s == 'completed') return 'Completed';
     if (s == 'cancelled') return 'Cancelled';
@@ -294,7 +334,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     if (s == 'assigned') return 'To Inspect';
     if (s == 'in_progress') return 'In Progress';
     if (s == 'assessed') return 'Assessed';
-    if (s == 'sent') return 'Sent to Client';
+    if (s == 'sent' || s == 'sent_to_client') return 'Sent to Client';
     if (s == 'approved') return 'Approved';
     // fallback
     return 'Pending';
@@ -312,9 +352,13 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       case 'critical':
         return 'Critical';
       default:
-        return priority.split('_').map((word) => 
-          word.isEmpty ? '' : word[0].toUpperCase() + word.substring(1)
-        ).join(' ');
+        return priority
+            .split('_')
+            .map(
+              (word) =>
+                  word.isEmpty ? '' : word[0].toUpperCase() + word.substring(1),
+            )
+            .join(' ');
     }
   }
 
@@ -350,11 +394,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
         value: 'view',
         child: Row(
           children: [
-            Icon(
-              Icons.visibility_outlined,
-              color: Colors.green[600],
-              size: 18,
-            ),
+            Icon(Icons.visibility_outlined, color: Colors.green[600], size: 18),
             const SizedBox(width: 12),
             Text(
               'View',
@@ -464,7 +504,9 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       if (result == true && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Changes saved for: ${task['serviceId'] ?? task['id']}'),
+            content: Text(
+              'Changes saved for: ${task['serviceId'] ?? task['id']}',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -478,7 +520,8 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     final confirmed = await showDeleteDialog(
       context,
       itemName: 'Task',
-      description: 'Are you sure you want to delete this task ${task['id']}? This action cannot be undone. All associated data will be permanently removed from the system.',
+      description:
+          'Are you sure you want to delete this task ${task['id']}? This action cannot be undone. All associated data will be permanently removed from the system.',
     );
 
     if (confirmed) {
@@ -531,7 +574,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     130, // DATE REQUESTED
     100, // BUILDING & UNIT
     70, // PRIORITY
-    80, // DEPARTMENT  
+    80, // DEPARTMENT
     70, // STATUS
     38, // ACTION
   ];
@@ -584,52 +627,50 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
             // Table Section - Repair Tasks (Job Service)
             _isLoading
                 ? Container(
-                    height: 400,
-                    child: const Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                  )
+                  height: 400,
+                  child: const Center(child: CircularProgressIndicator()),
+                )
                 : _errorMessage != null
-                    ? Container(
-                        height: 400,
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.error_outline,
-                                size: 64,
-                                color: Colors.grey[400],
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Error loading job services',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: Colors.grey[600],
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                _errorMessage!,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[500],
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton.icon(
-                                onPressed: _loadJobServices,
-                                icon: const Icon(Icons.refresh),
-                                label: const Text('Retry'),
-                              ),
-                            ],
+                ? Container(
+                  height: 400,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Error loading job services',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                      )
-                    : _buildTableSection(),
+                        const SizedBox(height: 8),
+                        Text(
+                          _errorMessage!,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[500],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: _loadJobServices,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                : _buildTableSection(),
           ],
         ),
       ),
@@ -768,7 +809,9 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                         return DropdownMenuItem<String>(
                           value: value,
                           child: Text(
-                            value == 'All Categories' ? value : 'Category: $value',
+                            value == 'All Categories'
+                                ? value
+                                : 'Category: $value',
                             style: const TextStyle(fontSize: 14),
                           ),
                         );
@@ -801,28 +844,29 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                         _applyFilters();
                       });
                     },
-                    items: <String>[
-                      'All Status',
-                      'Pending',
-                      'To Inspect',
-                      'In Progress',
-                      'Assessed',
-                      'Sent to Client',
-                      'Approved',
-                      'Rejected',
-                      'Completed',
-                      'Returned to Tenant',
-                      'Cancelled',
-                    ].map<DropdownMenuItem<String>>((String value) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(
-                          'Status: $value',
-                          style: const TextStyle(fontSize: 14),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    }).toList(),
+                    items:
+                        <String>[
+                          'All Status',
+                          'Pending',
+                          'To Inspect',
+                          'In Progress',
+                          'Assessed',
+                          'Sent to Client',
+                          'Approved',
+                          'Rejected',
+                          'Completed',
+                          'Returned to Tenant',
+                          'Cancelled',
+                        ].map<DropdownMenuItem<String>>((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(
+                              'Status: $value',
+                              style: const TextStyle(fontSize: 14),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
                   ),
                 ),
               ),
@@ -844,7 +888,11 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.refresh_rounded, size: 20, color: Colors.blue[600]),
+                  Icon(
+                    Icons.refresh_rounded,
+                    size: 20,
+                    color: Colors.blue[600],
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'Refresh',
@@ -857,8 +905,6 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                 ],
               ),
             ),
-            
-            
           ),
         ],
       ),
@@ -944,272 +990,345 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
 
           // Data Table
           Expanded(
-            child: _repairTasks.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+            child:
+                _repairTasks.isEmpty
+                    ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.work_outline,
+                            size: 64,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No Job Services Found',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'There are currently no job service requests to display.',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                    : Column(
                       children: [
-                        Icon(
-                          Icons.work_outline,
-                          size: 64,
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: DataTable(
+                                columnSpacing: 50,
+                                headingRowHeight: 56,
+                                dataRowHeight: 64,
+                                headingRowColor: WidgetStateProperty.all(
+                                  Colors.grey[50],
+                                ),
+                                headingTextStyle: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[600],
+                                  letterSpacing: 0.5,
+                                ),
+                                dataTextStyle: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black87,
+                                ),
+                                columns: [
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      0,
+                                      const Text("JOB SERVICE ID"),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      1,
+                                      const Text("TASK TITLE"),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      2,
+                                      InkWell(
+                                        onTap: _toggleSortOrder,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Text("DATE REQUESTED"),
+                                            const SizedBox(width: 4),
+                                            Icon(
+                                              _sortAscending
+                                                  ? Icons.arrow_upward
+                                                  : Icons.arrow_downward,
+                                              size: 16,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      3,
+                                      const Text("BUILDING / UNIT"),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      4,
+                                      const Text("PRIORITY"),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      5,
+                                      const Text("DEPARTMENT"),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(6, const Text("STATUS")),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(7, const Text("")),
+                                  ),
+                                ],
+                                rows:
+                                    _paginatedTasks.map((task) {
+                                      return DataRow(
+                                        cells: [
+                                          // SERVICE ID
+                                          DataCell(
+                                            _fixedCell(
+                                              0,
+                                              _ellipsis(
+                                                task['serviceId'] ?? 'N/A',
+                                                style: TextStyle(
+                                                  color: Colors.grey[700],
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+
+                                          // TASK TITLE
+                                          DataCell(
+                                            _fixedCell(
+                                              1,
+                                              _ellipsis(
+                                                task['title'] ??
+                                                    'Job Service Request',
+                                                style: TextStyle(
+                                                  color: Colors.grey[700],
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+
+                                          // DATE REQUESTED
+                                          DataCell(
+                                            _fixedCell(
+                                              2,
+                                              _ellipsis(
+                                                task['dateRequested'] ?? 'N/A',
+                                              ),
+                                            ),
+                                          ),
+
+                                          // BUILDING / UNIT
+                                          DataCell(
+                                            _fixedCell(
+                                              3,
+                                              _ellipsis(
+                                                task['buildingUnit'] ?? 'N/A',
+                                              ),
+                                            ),
+                                          ),
+
+                                          // PRIORITY
+                                          DataCell(
+                                            _fixedCell(
+                                              4,
+                                              _buildPriorityChip(
+                                                task['priority'] ?? 'Medium',
+                                              ),
+                                            ),
+                                          ),
+
+                                          // DEPARTMENT
+                                          DataCell(
+                                            _fixedCell(
+                                              5,
+                                              DepartmentTag(
+                                                task['department'] ?? 'N/A',
+                                              ),
+                                            ),
+                                          ),
+
+                                          // STATUS
+                                          DataCell(
+                                            _fixedCell(
+                                              6,
+                                              _buildStatusChip(
+                                                task['status'] ?? 'Pending',
+                                              ),
+                                            ),
+                                          ),
+
+                                          // Action menu cell (narrow, centered)
+                                          DataCell(
+                                            _fixedCell(
+                                              7,
+                                              Builder(
+                                                builder: (context) {
+                                                  return IconButton(
+                                                    onPressed: () {
+                                                      final rbx =
+                                                          context.findRenderObject()
+                                                              as RenderBox;
+                                                      final position = rbx
+                                                          .localToGlobal(
+                                                            Offset.zero,
+                                                          );
+                                                      _showActionMenu(
+                                                        context,
+                                                        task,
+                                                        position,
+                                                      );
+                                                    },
+                                                    icon: Icon(
+                                                      Icons.more_vert,
+                                                      color: Colors.grey[400],
+                                                      size: 20,
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                              align: Alignment.center,
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }).toList(),
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Pagination Section
+                        Divider(
+                          height: 1,
+                          thickness: 1,
                           color: Colors.grey[400],
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No Job Services Found',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'There are currently no job service requests to display.',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                        
-                      ],
-                    ),
-                  )
-                : Column(
-                    children: [
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: DataTable(
-                  columnSpacing: 50,
-                  headingRowHeight: 56,
-                  dataRowHeight: 64,
-                  headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
-                  headingTextStyle: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[600],
-                    letterSpacing: 0.5,
-                  ),
-                  dataTextStyle: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.black87,
-                  ),
-                  columns: [
-                    DataColumn(label: _fixedCell(0, const Text("JOB SERVICE ID"))),
-                    DataColumn(label: _fixedCell(1, const Text("TASK TITLE"))),
-                    DataColumn(
-                      label: _fixedCell(
-                        2,
-                        InkWell(
-                          onTap: _toggleSortOrder,
+                        Padding(
+                          padding: const EdgeInsets.all(20.0),
                           child: Row(
-                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text("DATE REQUESTED"),
-                              const SizedBox(width: 4),
-                              Icon(
-                                _sortAscending 
-                                  ? Icons.arrow_upward 
-                                  : Icons.arrow_downward,
-                                size: 16,
-                                color: Colors.grey[600],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    DataColumn(label: _fixedCell(3, const Text("BUILDING / UNIT"))),
-                    DataColumn(label: _fixedCell(4, const Text("PRIORITY"))),
-                    DataColumn(label: _fixedCell(5, const Text("DEPARTMENT"))),
-                    DataColumn(label: _fixedCell(6, const Text("STATUS"))),
-                    DataColumn(label: _fixedCell(7, const Text(""))),
-                  ],
-                  rows: _paginatedTasks.map((task) {
-                    return DataRow(
-                      cells: [
-                        // SERVICE ID
-                        DataCell(
-                          _fixedCell(
-                            0,
-                            _ellipsis(
-                              task['serviceId'] ?? 'N/A',
-                              style: TextStyle(
-                                color: Colors.grey[700],
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        // TASK TITLE
-                        DataCell(
-                          _fixedCell(
-                            1,
-                            _ellipsis(
-                              task['title'] ?? 'Job Service Request',
-                              style: TextStyle(
-                                color: Colors.grey[700],
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        // DATE REQUESTED
-                        DataCell(
-                          _fixedCell(2, _ellipsis(task['dateRequested'] ?? 'N/A')),
-                        ),
-
-                        // BUILDING / UNIT
-                        DataCell(
-                          _fixedCell(
-                            3,
-                            _ellipsis(task['buildingUnit'] ?? 'N/A'),
-                          ),
-                        ),
-
-                        // PRIORITY
-                        DataCell(
-                          _fixedCell(
-                            4,
-                            _buildPriorityChip(task['priority'] ?? 'Medium'),
-                          ),
-                        ),
-
-                        // DEPARTMENT
-                        DataCell(
-                          _fixedCell(5, DepartmentTag(task['department'] ?? 'N/A')),
-                        ),
-
-                        // STATUS
-                        DataCell(
-                          _fixedCell(6, _buildStatusChip(task['status'] ?? 'Pending')),
-                        ),
-
-                        // Action menu cell (narrow, centered)
-                        DataCell(
-                          _fixedCell(
-                            7,
-                            Builder(
-                              builder: (context) {
-                                return IconButton(
-                                  onPressed: () {
-                                    final rbx = context.findRenderObject() as RenderBox;
-                                    final position = rbx.localToGlobal(Offset.zero);
-                                    _showActionMenu(
-                                      context,
-                                      task,
-                                      position,
-                                    );
-                                  },
-                                  icon: Icon(
-                                    Icons.more_vert,
-                                    color: Colors.grey[400],
-                                    size: 20,
-                                  ),
-                                );
-                              },
-                            ),
-                            align: Alignment.center,
-                          ),
-                        ),
-                      ],
-                    );
-                  }).toList(),
-                ),
-                          ),
-                        ),
-                      ),
-                      // Pagination Section
-                      Divider(height: 1, thickness: 1, color: Colors.grey[400]),
-                      Padding(
-                        padding: const EdgeInsets.all(20.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              _filteredTasks.isEmpty
-                                  ? "No entries"
-                                  : "Showing ${_currentPage * _itemsPerPage + 1} to ${((_currentPage + 1) * _itemsPerPage).clamp(0, _filteredTasks.length)} of ${_filteredTasks.length} ${_filteredTasks.length == 1 ? 'entry' : 'entries'}",
-                              style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                            ),
-                            Row(
-                              children: [
-                                // Previous button
-                                IconButton(
-                                  onPressed: _currentPage > 0
-                                      ? () {
-                                          setState(() {
-                                            _currentPage--;
-                                          });
-                                        }
-                                      : null,
-                                  icon: const Icon(Icons.chevron_left),
-                                  color: Colors.blue,
-                                  disabledColor: Colors.grey[300],
+                              Text(
+                                _filteredTasks.isEmpty
+                                    ? "No entries"
+                                    : "Showing ${_currentPage * _itemsPerPage + 1} to ${((_currentPage + 1) * _itemsPerPage).clamp(0, _filteredTasks.length)} of ${_filteredTasks.length} ${_filteredTasks.length == 1 ? 'entry' : 'entries'}",
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 14,
                                 ),
-                                // Page numbers
-                                ...List.generate(
-                                  _totalPages,
-                                  (index) => Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                                    child: InkWell(
-                                      onTap: () {
-                                        setState(() {
-                                          _currentPage = index;
-                                        });
-                                      },
-                                      child: Container(
-                                        width: 32,
-                                        height: 32,
-                                        decoration: BoxDecoration(
-                                          color: _currentPage == index
-                                              ? Colors.blue
-                                              : Colors.transparent,
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(
-                                            color: _currentPage == index
-                                                ? Colors.blue
-                                                : Colors.grey[300]!,
+                              ),
+                              Row(
+                                children: [
+                                  // Previous button
+                                  IconButton(
+                                    onPressed:
+                                        _currentPage > 0
+                                            ? () {
+                                              setState(() {
+                                                _currentPage--;
+                                              });
+                                            }
+                                            : null,
+                                    icon: const Icon(Icons.chevron_left),
+                                    color: Colors.blue,
+                                    disabledColor: Colors.grey[300],
+                                  ),
+                                  // Page numbers
+                                  ...List.generate(
+                                    _totalPages,
+                                    (index) => Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                      ),
+                                      child: InkWell(
+                                        onTap: () {
+                                          setState(() {
+                                            _currentPage = index;
+                                          });
+                                        },
+                                        child: Container(
+                                          width: 32,
+                                          height: 32,
+                                          decoration: BoxDecoration(
+                                            color:
+                                                _currentPage == index
+                                                    ? Colors.blue
+                                                    : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                            border: Border.all(
+                                              color:
+                                                  _currentPage == index
+                                                      ? Colors.blue
+                                                      : Colors.grey[300]!,
+                                            ),
                                           ),
-                                        ),
-                                        alignment: Alignment.center,
-                                        child: Text(
-                                          '${index + 1}',
-                                          style: TextStyle(
-                                            color: _currentPage == index
-                                                ? Colors.white
-                                                : Colors.black87,
-                                            fontSize: 14,
+                                          alignment: Alignment.center,
+                                          child: Text(
+                                            '${index + 1}',
+                                            style: TextStyle(
+                                              color:
+                                                  _currentPage == index
+                                                      ? Colors.white
+                                                      : Colors.black87,
+                                              fontSize: 14,
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
                                   ),
-                                ),
-                                // Next button
-                                IconButton(
-                                  onPressed: _currentPage < _totalPages - 1
-                                      ? () {
-                                          setState(() {
-                                            _currentPage++;
-                                          });
-                                        }
-                                      : null,
-                                  icon: const Icon(Icons.chevron_right),
-                                  color: Colors.blue,
-                                  disabledColor: Colors.grey[300],
-                                ),
-                              ],
-                            ),
-                          ],
+                                  // Next button
+                                  IconButton(
+                                    onPressed:
+                                        _currentPage < _totalPages - 1
+                                            ? () {
+                                              setState(() {
+                                                _currentPage++;
+                                              });
+                                            }
+                                            : null,
+                                    icon: const Icon(Icons.chevron_right),
+                                    color: Colors.blue,
+                                    disabledColor: Colors.grey[300],
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
           ),
         ],
       ),

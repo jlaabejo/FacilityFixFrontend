@@ -1,14 +1,14 @@
 // Tenant-only Work Order / Permit detail view (stable, minimal)
+import 'package:facilityfix/tenant/repair_management.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/models/work_orders.dart';
 import 'package:facilityfix/tenant/home.dart';
-import 'package:facilityfix/tenant/repair_management.dart';
 import 'package:facilityfix/tenant/announcement.dart';
 import 'package:facilityfix/tenant/profile.dart';
 import 'package:facilityfix/tenant/view_details/concern_slip_details.dart';
+import 'package:facilityfix/tenant/view_details/job_service_details.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/view_details.dart';
-import 'dart:convert';
 import 'package:facilityfix/services/api_services.dart';
 
 /// Tenant-only details page.
@@ -36,6 +36,8 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
   WorkOrderDetails? _fetchedWorkOrder;
   bool _isLoading = false;
   String? _errorMessage;
+  bool _navigatedToConcernSlip = false;
+  bool _navigatedToJobService = false;
 
   final APIService _apiService = APIService();
 
@@ -50,48 +52,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
   void initState() {
     super.initState();
     if (widget.workOrder == null) _fetchWorkOrderData();
-  }
-
-  Future<void> _markAsCompleted(String permitId, String? completionNotes) async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final body = jsonEncode({
-        if (completionNotes != null && completionNotes.isNotEmpty) 'completion_notes': completionNotes,
-      });
-
-      final response = await _apiService.patch('/work-order-permits/$permitId/complete', body: body);
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Work order marked as completed'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-        // refresh details
-        await _fetchWorkOrderData();
-      } else {
-        final text = response.body;
-        throw Exception('Failed to complete: ${response.statusCode} ${text}');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error completing work order: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
   }
 
   void _showHistorySheet() {
@@ -110,7 +70,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
 
     // Only allow editing if status is pending
     final status = w.statusTag.toLowerCase();
-    // treat any status that starts with 'pending' as editable (covers 'pending', 'pending cs', 'pending js', 'pending wop')
     final isPending = status.startsWith('pending');
     if (!isPending) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -125,7 +84,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     // Navigate to edit page based on request type
     final id = w.id.toUpperCase();
     final idLower = w.id.toLowerCase();
-    
+
     String requestType;
     if (id.startsWith('CS-') || idLower.startsWith('cs_')) {
       requestType = 'Concern Slip';
@@ -157,9 +116,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     final w = widget.workOrder ?? _fetchedWorkOrder;
     if (w == null) return;
 
-    // Allow deleting if status is pending or complete/done
     final status = w.statusTag.toLowerCase();
-    // Allow deleting for any 'pending*' statuses (pending, pending cs/js/wop) or completed variants
     final deletable = status.startsWith('pending') || status.contains('complete') || status == 'done';
     if (!deletable) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -175,14 +132,9 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Request'),
-        content: const Text(
-          'Are you sure you want to delete this request? This action cannot be undone.',
-        ),
+        content: const Text('Are you sure you want to delete this request? This action cannot be undone.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
@@ -360,55 +312,49 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     final idLower = w.id.toLowerCase();
     
     if (id.startsWith('CS-') || idLower.startsWith('cs_')) {
-      return ConcernSlipDetails(
-        id: w.id,
-        createdAt: w.createdAt,
-        updatedAt: w.updatedAt,
-        departmentTag: w.departmentTag,
-        requestTypeTag: 'Concern Slip',
-        priority: w.priority,
-        statusTag: w.statusTag,
-        requestedBy: w.requestedBy ?? '—',
-        unitId: w.unitId ?? '—',
-        scheduleAvailability: w.scheduleAvailability,
-        title: w.title,
-        description: w.description ?? '—',
-        attachments: w.attachments,
-        assignedStaff: w.assignedStaff,
-        staffDepartment: w.staffDepartment,
-        staffPhotoUrl: w.assignedPhotoUrl,
-        assessedAt: w.assessedAt,
-        assessment: w.assessment,
-        staffAttachments: w.staffAttachments,
-      );
+      // Open the full Tenant Concern Slip page instead of embedding the
+      // ConcernSlipDetails widget here. We schedule navigation after build
+      // to avoid calling Navigator during the build phase.
+      if (!_navigatedToConcernSlip) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() => _navigatedToConcernSlip = true);
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => TenantConcernSlipDetailPage(concernSlipId: w.id)),
+          ).then((_) {
+            if (!mounted) return;
+            setState(() => _navigatedToConcernSlip = false);
+            // Refresh details when returning from the concern slip page
+            _fetchWorkOrderData();
+          });
+        });
+      }
+
+      return const Center(child: Padding(padding: EdgeInsets.all(24.0), child: Text('Opening Concern Slip...')));
     }
 
     if (id.startsWith('JS-') || idLower.startsWith('js_')) {
-      return JobServiceDetails(
-        id: w.id,
-        concernSlipId: w.concernSlipId ?? '—',
-        createdAt: w.createdAt,
-        updatedAt: w.updatedAt,
-        requestTypeTag: 'Job Service',
-        priority: w.priority,
-        statusTag: w.statusTag,
-        resolutionType: w.resolutionType,
-        requestedBy: w.requestedBy ?? '—',
-        unitId: w.unitId ?? '—',
-        scheduleAvailability: w.scheduleAvailability,
-        additionalNotes: w.additionalNotes,
-        assignedStaff: w.assignedStaff,
-        staffDepartment: w.staffDepartment,
-        staffPhotoUrl: w.assignedPhotoUrl,
-        startedAt: w.startedAt,
-        completedAt: w.completedAt,
-        assessedAt: w.assessedAt,
-        assessment: w.assessment,
-        staffAttachments: w.staffAttachments,
-        onViewConcernSlip: (w.concernSlipId != null && w.concernSlipId != '—')
-            ? () => _navigateToConcernSlip(w.concernSlipId!)
-            : null,
-      );
+      // Open the full Tenant Job Service page instead of embedding the
+      // staff JobServiceDetails widget here. Schedule navigation after build
+      // to avoid calling Navigator during the build phase.
+      if (!_navigatedToJobService) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() => _navigatedToJobService = true);
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => TenantJobServiceDetailPage(jobServiceId: w.id)),
+          ).then((_) {
+            if (!mounted) return;
+            setState(() => _navigatedToJobService = false);
+            // Refresh details when returning from the job service page
+            _fetchWorkOrderData();
+          });
+        });
+      }
+
+      return const Center(child: Padding(padding: EdgeInsets.all(24.0), child: Text('Opening Job Service...')));
     }
 
     // Default: work order permit (handles WP- or wp_ format only)
@@ -426,7 +372,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       title: w.title, // Add title field
       contractorName: w.contractorName ?? '—',
       contractorNumber: w.contractorNumber ?? '—',
-      contractorEmail: w.contractorEmail ?? '—',
+      contractorEmail: w.contractorEmail,
       workScheduleFrom: w.workScheduleFrom ?? w.createdAt,
       workScheduleTo: w.workScheduleTo ?? w.createdAt,
       approvedBy: w.approvedBy,
@@ -436,9 +382,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       onViewConcernSlip: (w.concernSlipId != null && w.concernSlipId != '—')
           ? () => _navigateToConcernSlip(w.concernSlipId!)
           : null,
-      onComplete: (permitId, completionNotes) async {
-        await _markAsCompleted(permitId, completionNotes);
-      },
     );
   }
 
@@ -674,13 +617,7 @@ class _EditWorkOrderPageState extends State<EditWorkOrderPage> {
           scheduleAvailability: _availabilityController.text.trim(),
         );
       } else if (widget.requestType == 'Work Order') {
-        // Parse entry equipments from comma-separated string
-        final equipments = _entryEquipmentsController.text
-            .split(',')
-            .map((e) => e.trim())
-            .where((e) => e.isNotEmpty)
-            .toList();
-
+        // Work Order update
         await apiService.updateWorkOrder(
           workOrderId: widget.workOrderId,
           contractorName: _contractorNameController.text.trim(),
@@ -688,7 +625,6 @@ class _EditWorkOrderPageState extends State<EditWorkOrderPage> {
           contractorEmail: _contractorEmailController.text.trim(),
           workScheduleFrom: _workScheduleFromController.text.trim(),
           workScheduleTo: _workScheduleToController.text.trim(),
-          attachments: equipments,
         );
       }
 

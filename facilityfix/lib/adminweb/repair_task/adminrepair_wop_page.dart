@@ -532,11 +532,14 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
         break;
       case 'edit':
         // Open Edit dialog for WOP and refresh on success
-        final raw = task['rawData'] ?? task;
+        final rawSrc = task['rawData'] ?? task ?? {};
+        final Map<String, dynamic> raw = rawSrc is Map<String, dynamic>
+            ? rawSrc
+            : Map<String, dynamic>.from(rawSrc as Map);
         EditDialog.show(
           context,
           type: EditDialogType.workOrderPermit,
-          task: raw as Map<String, dynamic>,
+          task: raw,
           onSave: () {},
         ).then((result) {
           if (result == true && mounted) {

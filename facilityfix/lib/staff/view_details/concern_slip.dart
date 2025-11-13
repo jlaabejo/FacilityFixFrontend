@@ -390,7 +390,6 @@ class _StaffConcernSlipDetailPageState
         leading: const BackButton(),
         title: 'Concern Slip Details',
         showMore: true,
-        // Show delete when status is pending or completed
         showDelete: _concernSlipData != null && _isDeletableStatus(_concernSlipData!['status']),
         onDeleteTap: _showDeleteDialog,
       ),

@@ -2257,23 +2257,6 @@ class _InternalMaintenanceFormPageState
                           ),
                           const SizedBox(width: 8),
 
-                          // // Edit Task (only shown when not already editing)
-                          // if (!_isEditing)
-                          //   OutlinedButton(
-                          //     onPressed: () {
-                          //       setState(() => _isLocalEdit = true);
-                          //     },
-                          //     style: OutlinedButton.styleFrom(
-                          //       side: BorderSide(color: Colors.blue.shade200),
-                          //       padding: const EdgeInsets.symmetric(
-                          //         horizontal: 18,
-                          //         vertical: 14,
-                          //       ),
-                          //     ),
-                          //     child: const Text('Edit Task'),
-                          //   ),
-                          // if (!_isEditing) const SizedBox(width: 8),
-
                           // Primary action (Submit / Save)
                           ElevatedButton(
                             onPressed: _onNext, // VALIDATE then NAVIGATE

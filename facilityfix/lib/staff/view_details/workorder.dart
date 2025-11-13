@@ -1,3 +1,4 @@
+import 'package:facilityfix/config/env.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/models/work_orders.dart'; // <-- unified WorkOrderDetails class only
 import 'package:facilityfix/staff/announcement.dart';
@@ -105,7 +106,41 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         final maintenance = Maintenance.fromJson(data);
         _fetchedWorkOrder = _maintenanceToWorkOrderDetails(maintenance);
       } else {
-        throw Exception('Unknown work order type: $workOrderId');
+        // ID has no known prefix. Try graceful fallbacks in order: ConcernSlip -> JobService -> Maintenance
+        bool found = false;
+
+        try {
+          data = await _apiService.getConcernSlipById(workOrderId);
+          if (data != null) {
+            await _enrichWithUserNames(data);
+            final concernSlip = ConcernSlip.fromJson(data);
+            _fetchedWorkOrder = _concernSlipToWorkOrderDetails(concernSlip);
+            found = true;
+          }
+        } catch (e) {
+          debugPrint('[Details] getConcernSlipById fallback failed: $e');
+        }
+
+        if (!found) {
+          try {
+            data = await _apiService.getJobServiceById(workOrderId);
+            if (data != null) {
+              await _enrichWithUserNames(data);
+              final jobService = JobService.fromJson(data);
+              _fetchedWorkOrder = _jobServiceToWorkOrderDetails(jobService);
+              found = true;
+            }
+          } catch (e) {
+            debugPrint('[Details] getJobServiceById fallback failed: $e');
+          }
+        }
+
+        // Fallback to Work Order / Maintenance removed per request.
+        // We no longer attempt to resolve other types here; explicit ID prefixes are required.
+
+        if (!found) {
+          throw Exception('Unknown work order type: $workOrderId');
+        }
       }
 
       // Remap labels if needed
@@ -258,6 +293,36 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       assessment: mt.assessment,
       attachments: mt.attachments,
       staffAttachments: mt.staffAttachments,
+    );
+  }
+
+  WorkOrderDetails _workOrderPermitToWorkOrderDetails(WorkOrderPermit wop) {
+    return WorkOrderDetails(
+      id: wop.id,
+      createdAt: wop.createdAt,
+      updatedAt: wop.updatedAt,
+      requestTypeTag: wop.requestTypeTag,
+      departmentTag: wop.departmentTag,
+      priority: wop.priority,
+      statusTag: wop.statusTag,
+      requestedBy: wop.requestedBy,
+      concernSlipId: wop.concernSlipId,
+      unitId: wop.unitId,
+      title: wop.title,
+      assignedStaff: wop.assignedStaff,
+      staffDepartment: wop.staffDepartment,
+      assignedPhotoUrl: wop.assignedPhotoUrl,
+      contractorName: wop.contractorName,
+      contractorNumber: wop.contractorNumber,
+      contractorEmail: wop.contractorEmail,
+      workScheduleFrom: wop.workScheduleFrom,
+      workScheduleTo: wop.workScheduleTo,
+      approvedBy: wop.approvedBy,
+      approvalDate: wop.approvalDate,
+      denialReason: wop.denialReason,
+      adminNotes: wop.adminNotes,
+      attachments: wop.attachments,
+      staffAttachments: wop.staffAttachments,
     );
   }
 
@@ -544,6 +609,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     return 'concern slip assigned';
   }
 
+  
   // -------------------- main tab content --------------------
   Widget _buildTabContent() {
     // Show loading indicator while fetching data
@@ -647,18 +713,92 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     );
   }
 
+  // Determine whether a work order with the given status can be deleted.
+  // Adjust the list of deletable statuses as needed for your business rules.
+  bool _isDeletableStatus(String? status) {
+    if (status == null) return false;
+    final s = status.toLowerCase().trim();
+    // Common deletable statuses — modify to match backend semantics
+    return s == 'draft' || s == 'cancelled' || s == 'rejected' || s == 'closed';
+  }
+
+    void _showDeleteDialog() {
+    final workOrder = widget.workOrder ?? _fetchedWorkOrder;
+    if (workOrder == null) return;
+
+    final status = (workOrder.statusTag ?? '').toString().toLowerCase();
+    if (!_isDeletableStatus(status)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Only pending or completed requests can be deleted'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Request'),
+        content: const Text('Are you sure you want to delete this request? This action cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _deleteWorkOrder();
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+    Future<void> _deleteWorkOrder() async {
+    try {
+      final apiService = APIService(roleOverride: AppRole.staff);
+      await apiService.deleteWorkOrder(widget.workOrderId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Request deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete request: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        title: 'View Details',
-        leading: const Padding(
-          padding: EdgeInsets.only(right: 8),
-          child: BackButton(),
-        ),
+        leading: const BackButton(),
+        title: 'Work Order Details',
         showMore: true,
-        showHistory: true,
+        showDelete: ((widget.workOrder ?? _fetchedWorkOrder) != null) &&
+            _isDeletableStatus((widget.workOrder ?? _fetchedWorkOrder)!.statusTag),
+        onDeleteTap: _showDeleteDialog,
       ),
       body: SafeArea(
         child: SingleChildScrollView(

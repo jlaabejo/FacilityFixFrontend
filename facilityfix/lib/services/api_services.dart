@@ -29,13 +29,16 @@ class APIService {
       },
       _currentRoleLabel = (roleOverride ?? AppRole.tenant).name;
 
-  APIService.fromBaseUrl(this.baseUrl, {Map<String, String>? headers, AppRole? roleOverride})
-    : role = roleOverride ?? AppRole.tenant,
-      defaultHeaders = {
-        'Content-Type': 'application/json',
-        if (headers != null) ...headers,
-      },
-      _currentRoleLabel = (roleOverride ?? AppRole.tenant).name;
+  APIService.fromBaseUrl(
+    this.baseUrl, {
+    Map<String, String>? headers,
+    AppRole? roleOverride,
+  }) : role = roleOverride ?? AppRole.tenant,
+       defaultHeaders = {
+         'Content-Type': 'application/json',
+         if (headers != null) ...headers,
+       },
+       _currentRoleLabel = (roleOverride ?? AppRole.tenant).name;
 
   // ===== Low-level helpers =====
   Map<String, String> _authHeaders(String token) => {
@@ -67,9 +70,8 @@ class APIService {
     _logReq('POST', path);
     return http.post(_u(path), headers: _mergeHeaders(headers), body: body);
   }
-  
 
-    Future<http.Response> patch(
+  Future<http.Response> patch(
     String path, {
     Map<String, String>? headers,
     Object? body,
@@ -77,9 +79,12 @@ class APIService {
     _logReq('PATCH', path);
     final resolvedToken = await _requireToken();
 
-    return http.patch(_u(path), headers: _mergeHeaders(_authHeaders(resolvedToken)), body: body);
+    return http.patch(
+      _u(path),
+      headers: _mergeHeaders(_authHeaders(resolvedToken)),
+      body: body,
+    );
   }
-
 
   Future<http.Response> put(
     String path, {
@@ -307,31 +312,39 @@ class APIService {
       print('[API] Fetching current user profile from server...');
 
       // Try the complete profile endpoint first
-      final response = await get('/profiles/me/complete', headers: _authHeaders(token));
-      
+      final response = await get(
+        '/profiles/me/complete',
+        headers: _authHeaders(token),
+      );
+
       if (response.statusCode == 200) {
         final profileData = jsonDecode(response.body) as Map<String, dynamic>;
         print('[API] Profile fetched successfully from /profiles/me/complete');
-        
+
         // Save to local storage for offline access
         await AuthStorage.saveProfile(profileData);
         return profileData;
       }
-      
+
       // Fallback to /auth/me if complete profile is not available
-      final fallbackResponse = await get('/auth/me', headers: _authHeaders(token));
+      final fallbackResponse = await get(
+        '/auth/me',
+        headers: _authHeaders(token),
+      );
       if (fallbackResponse.statusCode == 200) {
-        final profileData = jsonDecode(fallbackResponse.body) as Map<String, dynamic>;
+        final profileData =
+            jsonDecode(fallbackResponse.body) as Map<String, dynamic>;
         print('[API] Profile fetched successfully from /auth/me fallback');
-        
+
         // Save to local storage
         await AuthStorage.saveProfile(profileData);
         return profileData;
       }
-      
-      print('[API] Failed to fetch profile from server: ${response.statusCode}');
+
+      print(
+        '[API] Failed to fetch profile from server: ${response.statusCode}',
+      );
       return null;
-      
     } catch (e) {
       print('[API] Error fetching current user profile: $e');
       return null;
@@ -374,9 +387,11 @@ class APIService {
       if (phoneNumber != null) updateData['phone_number'] = phoneNumber;
       if (birthDate != null) updateData['birth_date'] = birthDate;
       if (department != null) updateData['department'] = department;
-      if (staffDepartment != null) updateData['staff_department'] = staffDepartment;
+      if (staffDepartment != null)
+        updateData['staff_department'] = staffDepartment;
       if (departments != null) updateData['departments'] = departments;
-      if (staffDepartments != null) updateData['staff_departments'] = staffDepartments;
+      if (staffDepartments != null)
+        updateData['staff_departments'] = staffDepartments;
       if (buildingId != null) updateData['building_id'] = buildingId;
       if (unitId != null) updateData['unit_id'] = unitId;
 
@@ -395,10 +410,10 @@ class APIService {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final result = jsonDecode(response.body) as Map<String, dynamic>;
         print('[API] Profile updated successfully');
-        
+
         // Refresh the cached profile
         await fetchCurrentUserProfile();
-        
+
         return result;
       } else {
         final errorBody = _tryDecode(response.body);
@@ -415,12 +430,9 @@ class APIService {
   /// Get user profile with local-first approach (for backward compatibility)
   Future<Map<String, dynamic>?> getUserProfile() async {
     try {
-
-
       // Otherwise fetch from server
       print('[API] Fetching fresh profile data from server');
       return await fetchCurrentUserProfile();
-
     } catch (e) {
       print('[API] Error in getUserProfile: $e');
       // Fallback to local storage if server fetch fails
@@ -468,7 +480,10 @@ class APIService {
       // Fallback to staff list
       try {
         final list = await getStaffMembers();
-        final found = list.firstWhere((s) => (s['user_id'] ?? s['id'] ?? s['uid'] ?? '').toString() == id, orElse: () => {});
+        final found = list.firstWhere(
+          (s) => (s['user_id'] ?? s['id'] ?? s['uid'] ?? '').toString() == id,
+          orElse: () => {},
+        );
         if (found.isNotEmpty) return Map<String, dynamic>.from(found);
       } catch (_) {}
       return null;
@@ -479,7 +494,8 @@ class APIService {
   }
 
   /// Alias for older code expecting getStaffMemberById
-  Future<Map<String, dynamic>?> getStaffMemberById(String id) async => getStaffById(id);
+  Future<Map<String, dynamic>?> getStaffMemberById(String id) async =>
+      getStaffById(id);
 
   // ===== ID Generation =====
 
@@ -646,33 +662,27 @@ class APIService {
     };
   }
 
-
-
   Future<http.Response> uploadMultipartFile({
-  required String path,
-  required PlatformFile file,
-  required Map<String, String> fields,
-}) async {
-  final token = await _requireToken();
-  
-  final request = http.MultipartRequest('POST', _u(path))
-    ..headers.addAll(_authHeaders(token))
-    ..fields.addAll(fields);
-  
-  if (file.bytes != null) {
-    request.files.add(http.MultipartFile.fromBytes(
-      'file',
-      file.bytes!,
-      filename: file.name,
-    ));
+    required String path,
+    required PlatformFile file,
+    required Map<String, String> fields,
+  }) async {
+    final token = await _requireToken();
+
+    final request =
+        http.MultipartRequest('POST', _u(path))
+          ..headers.addAll(_authHeaders(token))
+          ..fields.addAll(fields);
+
+    if (file.bytes != null) {
+      request.files.add(
+        http.MultipartFile.fromBytes('file', file.bytes!, filename: file.name),
+      );
+    }
+
+    final streamedResponse = await request.send();
+    return await http.Response.fromStream(streamedResponse);
   }
-  
-  final streamedResponse = await request.send();
-  return await http.Response.fromStream(streamedResponse);
-}
-
-
-
 
   // ===== Concern Slips - Direct Firebase Integration =====
 
@@ -690,12 +700,9 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-
       // Get user profile for additional context
       final profile = await getUserProfile();
       final userId = profile?['id'] ?? profile?['user_id'];
-
-
 
       final body = {
         'title': title,
@@ -722,24 +729,21 @@ class APIService {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final result = jsonDecode(response.body) as Map<String, dynamic>;
 
+        // upload files to firebase storage
 
-
-      // upload files to firebase storage 
-
-    for (final file in attachments) {
-        final uploadResponse = await uploadMultipartFile(
-          path: '/files/upload',
-          file: file,
-          fields: {
-            'entity_type': 'concern_slips',
-            'entity_id': result['id'],
-            'file_type': 'any',
-            if (description != null) 'description': description,
-          },
-        );
-
-    }
-   // Generate formatted ID if not provided
+        for (final file in attachments) {
+          final uploadResponse = await uploadMultipartFile(
+            path: '/files/upload',
+            file: file,
+            fields: {
+              'entity_type': 'concern_slips',
+              'entity_id': result['id'],
+              'file_type': 'any',
+              if (description != null) 'description': description,
+            },
+          );
+        }
+        // Generate formatted ID if not provided
         if (!result.containsKey('formatted_id') && result.containsKey('id')) {
           final now = DateTime.now();
           final year = now.year;
@@ -770,10 +774,6 @@ class APIService {
     }
   }
 
-
-
-
-
   // ===== Job Services =====
 
   Future<Map<String, dynamic>> submitJobService({
@@ -783,7 +783,7 @@ class APIService {
     List<String>? attachments,
     String? scheduleAvailability,
     DateTime? startTime, // Added structured times
-    DateTime? endTime,   // Added structured times
+    DateTime? endTime, // Added structured times
     String? concernSlipId,
   }) async {
     try {
@@ -804,9 +804,8 @@ class APIService {
       print('[API] Submitting job service request...');
 
       // If concernSlipId is provided, use the tenant job service endpoint
-      final endpoint = concernSlipId != null 
-          ? '/tenant-job-services/' 
-          : '/job-services/';
+      final endpoint =
+          concernSlipId != null ? '/tenant-job-services/' : '/job-services/';
 
       final response = await post(
         endpoint,
@@ -893,7 +892,7 @@ class APIService {
     required String validTo,
     required List<Map<String, String>> contractors,
     String? unitId,
-    String? concernSlipId,  // Add concern_slip_id parameter
+    String? concernSlipId, // Add concern_slip_id parameter
     List<String>? attachments,
   }) async {
     try {
@@ -910,7 +909,8 @@ class APIService {
         'work_schedule_to': validTo,
         'contractors': contractors,
         if (unitId != null) 'unit_id': unitId,
-        if (concernSlipId != null) 'concern_slip_id': concernSlipId,  // Include concern_slip_id in body
+        if (concernSlipId != null)
+          'concern_slip_id': concernSlipId, // Include concern_slip_id in body
         'attachments': attachments ?? [],
       };
 
@@ -1059,9 +1059,10 @@ class APIService {
       if (category != null) body['category'] = category;
       if (priority != null) body['priority'] = _mapPriorityToBackend(priority);
       if (unitId != null) body['unit_id'] = unitId;
-      if (scheduleAvailability != null) body['schedule_availability'] = scheduleAvailability;
-  if (status != null) body['status'] = status;
-  if (resolutionType != null) body['resolution_type'] = resolutionType;
+      if (scheduleAvailability != null)
+        body['schedule_availability'] = scheduleAvailability;
+      if (status != null) body['status'] = status;
+      if (resolutionType != null) body['resolution_type'] = resolutionType;
       if (attachments != null) body['attachments'] = attachments;
 
       final response = await http.patch(
@@ -1100,7 +1101,8 @@ class APIService {
       if (notes != null) body['notes'] = notes;
       if (location != null) body['location'] = location;
       if (unitId != null) body['unit_id'] = unitId;
-      if (scheduleAvailability != null) body['schedule_availability'] = scheduleAvailability;
+      if (scheduleAvailability != null)
+        body['schedule_availability'] = scheduleAvailability;
       if (attachments != null) body['attachments'] = attachments;
 
       final response = await http.patch(
@@ -1138,9 +1140,11 @@ class APIService {
 
       final body = <String, dynamic>{};
       if (contractorName != null) body['contractor_name'] = contractorName;
-      if (contractorNumber != null) body['contractor_number'] = contractorNumber;
+      if (contractorNumber != null)
+        body['contractor_number'] = contractorNumber;
       if (contractorEmail != null) body['contractor_email'] = contractorEmail;
-      if (workScheduleFrom != null) body['work_schedule_from'] = workScheduleFrom;
+      if (workScheduleFrom != null)
+        body['work_schedule_from'] = workScheduleFrom;
       if (workScheduleTo != null) body['work_schedule_to'] = workScheduleTo;
       if (attachments != null) body['attachments'] = attachments;
 
@@ -1299,12 +1303,12 @@ class APIService {
   }) async {
     try {
       await _refreshRoleLabelFromToken();
-      
+
       final body = {
         'status': status,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
       };
-      
+
       final response = await patch(
         '/job-services/$jobServiceId/status',
         body: jsonEncode(body),
@@ -1332,7 +1336,7 @@ class APIService {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
-      
+
       final response = await patch(
         '/job-services/$jobServiceId/complete',
         headers: _authHeaders(token),
@@ -1364,11 +1368,9 @@ class APIService {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
-      
-      final body = {
-        'notes': notes,
-      };
-      
+
+      final body = {'notes': notes};
+
       final response = await post(
         '/job-services/$jobServiceId/notes',
         headers: _authHeaders(token),
@@ -1450,15 +1452,23 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
       print('[API] getAllMaintenance - Token length: ${token.length}');
-      print('[API] getAllMaintenance - Making request to: $baseUrl/maintenance/');
+      print(
+        '[API] getAllMaintenance - Making request to: $baseUrl/maintenance/',
+      );
 
       final response = await get('/maintenance/', headers: _authHeaders(token));
-      print('[API] getAllMaintenance - Response status: ${response.statusCode}');
-      print('[API] getAllMaintenance - Response body length: ${response.body.length}');
+      print(
+        '[API] getAllMaintenance - Response status: ${response.statusCode}',
+      );
+      print(
+        '[API] getAllMaintenance - Response body length: ${response.body.length}',
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final List<dynamic> data = jsonDecode(response.body);
-        print('[API] getAllMaintenance - Parsed ${data.length} maintenance tasks');
+        print(
+          '[API] getAllMaintenance - Parsed ${data.length} maintenance tasks',
+        );
         return data.cast<Map<String, dynamic>>();
       } else {
         print('[API] getAllMaintenance - Error response: ${response.body}');
@@ -1488,22 +1498,36 @@ class APIService {
       if (status != null) queryParams['status'] = status;
       if (category != null) queryParams['category'] = category;
 
-      final queryString = queryParams.isEmpty
-          ? ''
-          : '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}';
+      final queryString =
+          queryParams.isEmpty
+              ? ''
+              : '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}';
 
-      print('[API] getMyAssignedMaintenance - Making request to: $baseUrl/maintenance/assigned-to-me$queryString');
+      print(
+        '[API] getMyAssignedMaintenance - Making request to: $baseUrl/maintenance/assigned-to-me$queryString',
+      );
 
-      final response = await get('/maintenance/assigned-to-me$queryString', headers: _authHeaders(token));
-      print('[API] getMyAssignedMaintenance - Response status: ${response.statusCode}');
-      print('[API] getMyAssignedMaintenance - Response body length: ${response.body.length}');
+      final response = await get(
+        '/maintenance/assigned-to-me$queryString',
+        headers: _authHeaders(token),
+      );
+      print(
+        '[API] getMyAssignedMaintenance - Response status: ${response.statusCode}',
+      );
+      print(
+        '[API] getMyAssignedMaintenance - Response body length: ${response.body.length}',
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final List<dynamic> data = jsonDecode(response.body);
-        print('[API] getMyAssignedMaintenance - Parsed ${data.length} assigned tasks');
+        print(
+          '[API] getMyAssignedMaintenance - Parsed ${data.length} assigned tasks',
+        );
         return data.cast<Map<String, dynamic>>();
       } else {
-        print('[API] getMyAssignedMaintenance - Error response: ${response.body}');
+        print(
+          '[API] getMyAssignedMaintenance - Error response: ${response.body}',
+        );
         final errorBody = _tryDecode(response.body);
         throw Exception(
           'Failed to get assigned maintenance tasks: ${errorBody['detail'] ?? response.body}',
@@ -1519,7 +1543,10 @@ class APIService {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
-      final response = await get('/maintenance/$taskId', headers: _authHeaders(token));
+      final response = await get(
+        '/maintenance/$taskId',
+        headers: _authHeaders(token),
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return jsonDecode(response.body);
@@ -1535,7 +1562,10 @@ class APIService {
     }
   }
 
-  Future<Map<String, dynamic>> updateMaintenanceTask(String taskId, Map<String, dynamic> updateData) async {
+  Future<Map<String, dynamic>> updateMaintenanceTask(
+    String taskId,
+    Map<String, dynamic> updateData,
+  ) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
@@ -1567,13 +1597,11 @@ class APIService {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
-      
+
       final response = await patch(
         '/maintenance/$taskId/checklist',
         headers: _authHeaders(token),
-        body: jsonEncode({
-          'checklist_completed': checklistCompleted,
-        }),
+        body: jsonEncode({'checklist_completed': checklistCompleted}),
       );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -1601,10 +1629,7 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      final body = {
-        'item_id': itemId,
-        'completed': completed,
-      };
+      final body = {'item_id': itemId, 'completed': completed};
       if (task != null) {
         body['task'] = task;
       }
@@ -1637,10 +1662,17 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      print('[API] getSpecialMaintenanceTasks - Making request to: $baseUrl/maintenance/special');
+      print(
+        '[API] getSpecialMaintenanceTasks - Making request to: $baseUrl/maintenance/special',
+      );
 
-      final response = await get('/maintenance/special', headers: _authHeaders(token));
-      print('[API] getSpecialMaintenanceTasks - Response status: ${response.statusCode}');
+      final response = await get(
+        '/maintenance/special',
+        headers: _authHeaders(token),
+      );
+      print(
+        '[API] getSpecialMaintenanceTasks - Response status: ${response.statusCode}',
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body);
@@ -1652,7 +1684,9 @@ class APIService {
           final tasks = data['tasks'] as List;
           return tasks.cast<Map<String, dynamic>>();
         } else {
-          throw Exception('Unexpected response format for special maintenance tasks');
+          throw Exception(
+            'Unexpected response format for special maintenance tasks',
+          );
         }
       } else {
         final errorBody = _tryDecode(response.body);
@@ -1672,10 +1706,17 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      print('[API] getSpecialMaintenanceTasksSummary - Making request to: $baseUrl/maintenance/special/summary');
+      print(
+        '[API] getSpecialMaintenanceTasksSummary - Making request to: $baseUrl/maintenance/special/summary',
+      );
 
-      final response = await get('/maintenance/special/summary', headers: _authHeaders(token));
-      print('[API] getSpecialMaintenanceTasksSummary - Response status: ${response.statusCode}');
+      final response = await get(
+        '/maintenance/special/summary',
+        headers: _authHeaders(token),
+      );
+      print(
+        '[API] getSpecialMaintenanceTasksSummary - Response status: ${response.statusCode}',
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return jsonDecode(response.body);
@@ -1697,10 +1738,17 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      print('[API] getSpecialMaintenanceTask - Making request to: $baseUrl/maintenance/special/$taskKey');
+      print(
+        '[API] getSpecialMaintenanceTask - Making request to: $baseUrl/maintenance/special/$taskKey',
+      );
 
-      final response = await get('/maintenance/special/$taskKey', headers: _authHeaders(token));
-      print('[API] getSpecialMaintenanceTask - Response status: ${response.statusCode}');
+      final response = await get(
+        '/maintenance/special/$taskKey',
+        headers: _authHeaders(token),
+      );
+      print(
+        '[API] getSpecialMaintenanceTask - Response status: ${response.statusCode}',
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -1724,19 +1772,25 @@ class APIService {
   }
 
   /// Reset a special maintenance task checklist
-  Future<Map<String, dynamic>> resetSpecialMaintenanceTask(String taskKey) async {
+  Future<Map<String, dynamic>> resetSpecialMaintenanceTask(
+    String taskKey,
+  ) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      print('[API] resetSpecialMaintenanceTask - Making request to: $baseUrl/maintenance/special/$taskKey/reset');
+      print(
+        '[API] resetSpecialMaintenanceTask - Making request to: $baseUrl/maintenance/special/$taskKey/reset',
+      );
 
       final response = await post(
         '/maintenance/special/$taskKey/reset',
         headers: _authHeaders(token),
         body: jsonEncode({}),
       );
-      print('[API] resetSpecialMaintenanceTask - Response status: ${response.statusCode}');
+      print(
+        '[API] resetSpecialMaintenanceTask - Response status: ${response.statusCode}',
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return jsonDecode(response.body);
@@ -1758,14 +1812,18 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      print('[API] initializeSpecialMaintenanceTasks - Making request to: $baseUrl/maintenance/special/initialize');
+      print(
+        '[API] initializeSpecialMaintenanceTasks - Making request to: $baseUrl/maintenance/special/initialize',
+      );
 
       final response = await post(
         '/maintenance/special/initialize',
         headers: _authHeaders(token),
         body: jsonEncode({}),
       );
-      print('[API] initializeSpecialMaintenanceTasks - Response status: ${response.statusCode}');
+      print(
+        '[API] initializeSpecialMaintenanceTasks - Response status: ${response.statusCode}',
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return jsonDecode(response.body);
@@ -1793,17 +1851,18 @@ class APIService {
 
       final taskId = 'SPECIAL-${taskKey.toUpperCase()}-001';
 
-      print('[API] assignSpecialMaintenanceChecklistItem - Making request to: $baseUrl/maintenance/$taskId/checklist/$itemId/assign');
+      print(
+        '[API] assignSpecialMaintenanceChecklistItem - Making request to: $baseUrl/maintenance/$taskId/checklist/$itemId/assign',
+      );
 
       final response = await post(
         '/maintenance/$taskId/checklist/$itemId/assign',
         headers: _authHeaders(token),
-        body: jsonEncode({
-          'staff_id': staffId,
-          'assigned_to': staffId,
-        }),
+        body: jsonEncode({'staff_id': staffId, 'assigned_to': staffId}),
       );
-      print('[API] assignSpecialMaintenanceChecklistItem - Response status: ${response.statusCode}');
+      print(
+        '[API] assignSpecialMaintenanceChecklistItem - Response status: ${response.statusCode}',
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return jsonDecode(response.body);
@@ -1831,17 +1890,18 @@ class APIService {
 
       final taskId = 'SPECIAL-${taskKey.toUpperCase()}-001';
 
-      print('[API] updateSpecialMaintenanceChecklistItem - Making request to: $baseUrl/maintenance/$taskId/checklist/$itemId');
+      print(
+        '[API] updateSpecialMaintenanceChecklistItem - Making request to: $baseUrl/maintenance/$taskId/checklist/$itemId',
+      );
 
       final response = await patch(
         '/maintenance/$taskId/checklist/$itemId',
         headers: _authHeaders(token),
-        body: jsonEncode({
-          'item_id': itemId,
-          'completed': completed,
-        }),
+        body: jsonEncode({'item_id': itemId, 'completed': completed}),
       );
-      print('[API] updateSpecialMaintenanceChecklistItem - Response status: ${response.statusCode}');
+      print(
+        '[API] updateSpecialMaintenanceChecklistItem - Response status: ${response.statusCode}',
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return jsonDecode(response.body);
@@ -1865,7 +1925,7 @@ class APIService {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
-      
+
       final queryParams = includeInactive ? '?include_inactive=true' : '';
       final response = await get(
         '/inventory/items$queryParams',
@@ -1890,7 +1950,7 @@ class APIService {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
-      
+
       final response = await get(
         '/inventory/items',
         headers: _authHeaders(token),
@@ -2027,7 +2087,8 @@ class APIService {
       if (buildingId != null) queryParams.add('building_id=$buildingId');
       if (status != null) queryParams.add('status=$status');
       if (requestedBy != null) queryParams.add('requested_by=$requestedBy');
-      if (maintenanceTaskId != null) queryParams.add('maintenance_task_id=$maintenanceTaskId');
+      if (maintenanceTaskId != null)
+        queryParams.add('maintenance_task_id=$maintenanceTaskId');
 
       final query = queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
       final response = await get(
@@ -2085,12 +2146,16 @@ class APIService {
   }
 
   /// Get a specific inventory request by ID - uses dedicated backend endpoint
-  Future<Map<String, dynamic>?> getInventoryRequestById(String requestId) async {
+  Future<Map<String, dynamic>?> getInventoryRequestById(
+    String requestId,
+  ) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      print('DEBUG: Fetching inventory request from /inventory/requests/$requestId');
+      print(
+        'DEBUG: Fetching inventory request from /inventory/requests/$requestId',
+      );
 
       final response = await get(
         '/inventory/requests/$requestId',
@@ -2107,7 +2172,9 @@ class APIService {
           // Enrich with item details if inventory_id is available
           if (request['inventory_id'] != null) {
             try {
-              final itemData = await getInventoryItemById(request['inventory_id']);
+              final itemData = await getInventoryItemById(
+                request['inventory_id'],
+              );
               if (itemData != null) {
                 request['item_name'] = itemData['item_name'];
                 request['item_code'] = itemData['item_code'];
@@ -2167,7 +2234,7 @@ class APIService {
         'limit': limit.toString(),
         'published_only': 'true',
       };
-      
+
       if (announcementType != null) {
         queryParams['announcement_type'] = announcementType;
       }
@@ -2466,13 +2533,14 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      final qs = Uri(
-        queryParameters: {
-          'building_id': buildingId,
-          'active_only': activeOnly.toString(),
-          'limit': limit.toString(),
-        },
-      ).query;
+      final qs =
+          Uri(
+            queryParameters: {
+              'building_id': buildingId,
+              'active_only': activeOnly.toString(),
+              'limit': limit.toString(),
+            },
+          ).query;
 
       final response = await get(
         '/announcements/user/targeted?$qs',
@@ -2484,7 +2552,9 @@ class APIService {
         if (decoded is Map<String, dynamic>) {
           final list = decoded['announcements'];
           if (list is List) {
-            return list.whereType<Map<String, dynamic>>().toList(growable: false);
+            return list.whereType<Map<String, dynamic>>().toList(
+              growable: false,
+            );
           }
           return const <Map<String, dynamic>>[];
         }
@@ -2502,7 +2572,9 @@ class APIService {
   }
 
   /// Mark announcement as viewed
-  Future<Map<String, dynamic>> markAnnouncementViewed(String announcementId) async {
+  Future<Map<String, dynamic>> markAnnouncementViewed(
+    String announcementId,
+  ) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
@@ -2528,7 +2600,9 @@ class APIService {
 
   // ===== Tenant Requests =====
 
-  Future<List<Map<String, dynamic>>> getAllTenantRequests([String user_id = ""]) async {
+  Future<List<Map<String, dynamic>>> getAllTenantRequests([
+    String user_id = "",
+  ]) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
@@ -2651,7 +2725,8 @@ class APIService {
 
       // Build query parameters
       final queryParams = <String, String>{};
-      if (normalizedDept != null && allowedDepartments.contains(normalizedDept)) {
+      if (normalizedDept != null &&
+          allowedDepartments.contains(normalizedDept)) {
         queryParams['department'] = normalizedDept;
       }
       if (availableOnly) {
@@ -2679,8 +2754,12 @@ class APIService {
         }
         return [];
       } else {
-        print('[API] Error fetching staff members: ${response.statusCode} ${response.body}');
-        throw Exception('Failed to fetch staff members: ${response.statusCode}');
+        print(
+          '[API] Error fetching staff members: ${response.statusCode} ${response.body}',
+        );
+        throw Exception(
+          'Failed to fetch staff members: ${response.statusCode}',
+        );
       }
     } catch (e) {
       print('[API] Error getting staff members: $e');
@@ -2697,9 +2776,7 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      final body = jsonEncode({
-        'assigned_to': staffUserId,
-      });
+      final body = jsonEncode({'assigned_to': staffUserId});
 
       print(
         '[API] Assigning staff $staffUserId to concern slip $concernSlipId',
@@ -2729,6 +2806,48 @@ class APIService {
     }
   }
 
+  /// Submit assessment for a job service (Staff only)
+  Future<Map<String, dynamic>> submitJobServiceAssessment({
+    required String jobServiceId,
+    required String assessment,
+    String? recommendation,
+    List<String>? attachments,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = <String, dynamic>{
+        'assessment': assessment,
+        'status': 'assessed', // Explicitly set status to assessed
+      };
+      if (recommendation != null && recommendation.isNotEmpty) {
+        body['recommendation'] = recommendation;
+      }
+      if (attachments != null && attachments.isNotEmpty) {
+        body['attachments'] = attachments;
+      }
+
+      final response = await http.patch(
+        _u('/job-services/$jobServiceId/assess'),
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to submit job service assessment: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error submitting job service assessment: $e');
+      rethrow;
+    }
+  }
+
   /// Set resolution type for an assessed concern slip (Admin only)
   Future<Map<String, dynamic>> setResolutionType(
     String concernSlipId, {
@@ -2739,9 +2858,7 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      final body = <String, dynamic>{
-        'resolution_type': resolutionType,
-      };
+      final body = <String, dynamic>{'resolution_type': resolutionType};
       if (adminNotes != null && adminNotes.isNotEmpty) {
         body['admin_notes'] = adminNotes;
       }
@@ -2766,7 +2883,8 @@ class APIService {
         );
         final err = _tryDecode(response.body);
         throw Exception(
-          err['detail'] ?? 'Failed to set resolution type: ${response.statusCode}',
+          err['detail'] ??
+              'Failed to set resolution type: ${response.statusCode}',
         );
       }
     } catch (e) {
@@ -2787,15 +2905,19 @@ class APIService {
     try {
       await _refreshRoleLabelFromToken();
 
-      final body = jsonEncode({'staff_user_id': staffUserId});
+      final body = jsonEncode({'assigned_to': staffUserId});
 
       // Use the patch helper which will include auth headers.
-      final response = await patch('/job-services/$jobServiceId/assign', body: body);
+      final response = await patch(
+        '/job-services/$jobServiceId/assign',
+        body: body,
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       } else {
-        final msg = 'Assign staff to job service failed: ${response.statusCode} ${response.body}';
+        final msg =
+            'Assign staff to job service failed: ${response.statusCode} ${response.body}';
         print('[API] $msg');
         throw Exception(msg);
       }
@@ -2821,12 +2943,16 @@ class APIService {
       if (bodyMap.isEmpty) return <String, dynamic>{};
 
       final body = jsonEncode(bodyMap);
-      final response = await patch('/job-services/$jobServiceId', body: body);
+      final response = await patch(
+        '/job-services/$jobServiceId/schedule',
+        body: body,
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       } else {
-        final msg = 'Update job service schedule failed: ${response.statusCode} ${response.body}';
+        final msg =
+            'Update job service schedule failed: ${response.statusCode} ${response.body}';
         print('[API] $msg');
         throw Exception(msg);
       }
@@ -2870,7 +2996,9 @@ class APIService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return data['data'] as Map<String, dynamic>;
       } else {
-        throw Exception('Failed to create/get chat room: ${response.statusCode}');
+        throw Exception(
+          'Failed to create/get chat room: ${response.statusCode}',
+        );
       }
     } catch (e) {
       print('Error creating/getting chat room: $e');
@@ -2928,7 +3056,8 @@ class APIService {
 
   /// Get chat room by reference (concern slip, job service, work permit)
   Future<Map<String, dynamic>?> getChatRoomByReference({
-    required String referenceType,  // 'concern_slip', 'job_service', 'work_permit'
+    required String
+    referenceType, // 'concern_slip', 'job_service', 'work_permit'
     required String referenceId,
   }) async {
     try {
@@ -2946,7 +3075,9 @@ class APIService {
       } else if (response.statusCode == 404) {
         return null;
       } else {
-        throw Exception('Failed to get chat room by reference: ${response.statusCode}');
+        throw Exception(
+          'Failed to get chat room by reference: ${response.statusCode}',
+        );
       }
     } catch (e) {
       print('Error getting chat room by reference: $e');
@@ -2996,7 +3127,7 @@ class APIService {
   Future<List<Map<String, dynamic>>> getChatMessages({
     required String roomId,
     int limit = 100,
-    String? before,  // ISO timestamp
+    String? before, // ISO timestamp
   }) async {
     try {
       await _refreshRoleLabelFromToken();
@@ -3099,14 +3230,11 @@ class APIService {
         'limit': limit.toString(),
       };
 
-      final uri = Uri.parse('$baseUrl/notifications/').replace(
-        queryParameters: queryParams,
-      );
+      final uri = Uri.parse(
+        '$baseUrl/notifications/',
+      ).replace(queryParameters: queryParams);
 
-      final response = await http.get(
-        uri,
-        headers: _authHeaders(token),
-      );
+      final response = await http.get(uri, headers: _authHeaders(token));
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body);
@@ -3229,4 +3357,3 @@ class APIService {
     }
   }
 }
-

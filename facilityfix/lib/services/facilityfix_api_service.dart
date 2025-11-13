@@ -43,6 +43,24 @@ class FacilityFixAPIService {
     print('[FacilityFix] Auth token set');
   }
 
+  /// Safely decode a JSON body to a Map<String, dynamic>.
+  ///
+  /// The API sometimes returns a LinkedHashMap<dynamic,dynamic> which causes
+  /// type errors when code expects Map<String,dynamic>. This helper converts
+  /// the decoded JSON into a typed Map, and unwraps a top-level `data` field
+  /// if present.
+  Map<String, dynamic> _decodeJsonMap(String body) {
+    final decoded = jsonDecode(body);
+    if (decoded is Map) {
+      final map = Map<String, dynamic>.from(decoded as Map);
+      if (map.containsKey('data') && map['data'] is Map) {
+        return Map<String, dynamic>.from(map['data'] as Map);
+      }
+      return map;
+    }
+    throw FormatException('Expected JSON object but got ${decoded.runtimeType}');
+  }
+
   void clearAuthToken() {
     _authToken = null;
     // ignore: avoid_print
@@ -92,7 +110,7 @@ class FacilityFixAPIService {
       print('[FacilityFix] Exchange token response: ${response.statusCode}');
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final data = _decodeJsonMap(response.body);
         final authResponse = AuthResponse.fromJson(
           data,
         ); // expects accessToken, tokenType
@@ -120,7 +138,7 @@ class FacilityFixAPIService {
       print('[FacilityFix] Register user response: ${response.statusCode}');
 
       if (response.statusCode == 201) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final data = _decodeJsonMap(response.body);
         return UserResponse.fromJson(data);
       }
       throw Exception(
@@ -149,7 +167,7 @@ class FacilityFixAPIService {
       );
 
       if (response.statusCode == 201) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final data = _decodeJsonMap(response.body);
         return RepairRequestResponse.fromJson(data);
       }
       throw Exception(
@@ -235,7 +253,7 @@ class FacilityFixAPIService {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final data = _decodeJsonMap(response.body);
         return RepairRequestResponse.fromJson(data);
       }
       throw Exception(

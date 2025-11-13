@@ -149,7 +149,12 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
     // Process dashboard stats
     if (_dashboardStats != null) {
       // Extract from overall_metrics which contains aggregated data
-      final overallMetrics = _dashboardStats!['overall_metrics'] as Map<String, dynamic>?;
+    final overallMetricsSrc = _dashboardStats!['overall_metrics'];
+    final Map<String, dynamic>? overallMetrics = overallMetricsSrc == null
+      ? null
+      : (overallMetricsSrc is Map<String, dynamic>
+        ? overallMetricsSrc
+        : Map<String, dynamic>.from(overallMetricsSrc as Map));
       if (overallMetrics != null) {
         _totalRequests = overallMetrics['total_requests'] ?? 0;
         _openIssues = overallMetrics['pending_items'] ?? 0;
@@ -157,7 +162,12 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
         _resolutionTime = (overallMetrics['average_resolution_time_days'] ?? 0.0).toDouble();
 
         // Extract comparison metrics if available
-        final comparisons = overallMetrics['comparisons'] as Map<String, dynamic>?;
+    final comparisonsSrc = overallMetrics['comparisons'];
+    final Map<String, dynamic>? comparisons = comparisonsSrc == null
+      ? null
+      : (comparisonsSrc is Map<String, dynamic>
+        ? comparisonsSrc
+        : Map<String, dynamic>.from(comparisonsSrc as Map));
         if (comparisons != null) {
           _totalRequestsChange = (comparisons['total_requests_change'] ?? 0.0).toDouble();
           _totalRequestsIncreasing = comparisons['total_requests_increasing'] ?? true;
@@ -170,7 +180,12 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
         }
       } else {
         // Fallback: try to get from concern_slips directly
-        final concernSlips = _dashboardStats!['concern_slips'] as Map<String, dynamic>?;
+    final concernSlipsSrc = _dashboardStats!['concern_slips'];
+    final Map<String, dynamic>? concernSlips = concernSlipsSrc == null
+      ? null
+      : (concernSlipsSrc is Map<String, dynamic>
+        ? concernSlipsSrc
+        : Map<String, dynamic>.from(concernSlipsSrc as Map));
         _totalRequests = concernSlips?['total_requests'] ?? 0;
         _openIssues = concernSlips?['pending_concerns'] ?? 0;
         _resolvedToday = 0;
@@ -181,14 +196,24 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
     // Process category breakdown
     if (_categoryBreakdown != null) {
       // Try to get from combined_overview first (aggregated data)
-      final combinedOverview = _categoryBreakdown!['combined_overview'] as Map<String, dynamic>?;
+    final combinedOverviewSrc = _categoryBreakdown!['combined_overview'];
+    final Map<String, dynamic>? combinedOverview = combinedOverviewSrc == null
+      ? null
+      : (combinedOverviewSrc is Map<String, dynamic>
+        ? combinedOverviewSrc
+        : Map<String, dynamic>.from(combinedOverviewSrc as Map));
       final proper_categories = ['plumbing', 'electrical', 'HVAC', 'hvac', 'carpentry', 'masonry', 'pest control'];
 
       
       
       
       if (combinedOverview != null) {
-        final categories = combinedOverview['categories'] as Map<String, dynamic>?;
+    final categoriesSrc = combinedOverview['categories'];
+    final Map<String, dynamic>? categories = categoriesSrc == null
+      ? null
+      : (categoriesSrc is Map<String, dynamic>
+        ? categoriesSrc
+        : Map<String, dynamic>.from(categoriesSrc as Map));
         if (categories != null) {
           _categoryData = Map.fromEntries(
             categories.entries.where((entry) => proper_categories.contains(entry.key) || proper_categories.contains(entry.key.toLowerCase())).map((entry) => MapEntry(entry.key, entry.value as int)),
@@ -196,9 +221,19 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
         }
       } else {
         // Fallback: try concern_slips categories
-        final concernSlips = _categoryBreakdown!['concern_slips'] as Map<String, dynamic>?;
+    final concernSlipsSrc = _categoryBreakdown!['concern_slips'];
+    final Map<String, dynamic>? concernSlips = concernSlipsSrc == null
+      ? null
+      : (concernSlipsSrc is Map<String, dynamic>
+        ? concernSlipsSrc
+        : Map<String, dynamic>.from(concernSlipsSrc as Map));
         if (concernSlips != null) {
-          final categories = concernSlips['categories'] as Map<String, dynamic>?;
+          final categoriesSrc = concernSlips['categories'];
+          final Map<String, dynamic>? categories = categoriesSrc == null
+              ? null
+              : (categoriesSrc is Map<String, dynamic>
+                  ? categoriesSrc
+                  : Map<String, dynamic>.from(categoriesSrc as Map));
           if (categories != null) {
             _categoryData = categories.map(
               (key, value) => MapEntry(key, value as int),
