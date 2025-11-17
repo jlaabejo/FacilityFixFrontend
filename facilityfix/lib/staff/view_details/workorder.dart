@@ -69,14 +69,17 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       _fetchWorkOrderData();
     } else {
       // Remap generic labels using actual data (unified model)
-      if (_detailsLabel == 'repair detail' || _detailsLabel == 'maintenance detail') {
+      if (_detailsLabel == 'repair detail' ||
+          _detailsLabel == 'maintenance detail') {
         _detailsLabel = _autoLabelFromWorkOrder(widget.workOrder!);
         debugPrint('[Details] remapped to: $_detailsLabel');
       }
     }
 
-    debugPrint('DETAILS label="${widget.selectedTabLabel}" '
-        'stored="$_detailsLabel" hasWorkOrder=${widget.workOrder != null}');
+    debugPrint(
+      'DETAILS label="${widget.selectedTabLabel}" '
+      'stored="$_detailsLabel" hasWorkOrder=${widget.workOrder != null}',
+    );
   }
 
   Future<void> _fetchWorkOrderData() async {
@@ -144,7 +147,8 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       }
 
       // Remap labels if needed
-      if (_detailsLabel == 'repair detail' || _detailsLabel == 'maintenance detail') {
+      if (_detailsLabel == 'repair detail' ||
+          _detailsLabel == 'maintenance detail') {
         _detailsLabel = _autoLabelFromWorkOrder(_fetchedWorkOrder!);
         debugPrint('[Details] remapped to: $_detailsLabel');
       }
@@ -175,7 +179,9 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
           final firstName = userData['first_name'] ?? '';
           final lastName = userData['last_name'] ?? '';
           data['requested_by_name'] = '$firstName $lastName'.trim();
-          print('[DEBUG] Set requested_by_name to: ${data['requested_by_name']}');
+          print(
+            '[DEBUG] Set requested_by_name to: ${data['requested_by_name']}',
+          );
         }
       }
 
@@ -206,6 +212,21 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
           final lastName = userData['last_name'] ?? '';
           data['assigned_to_name'] = '$firstName $lastName'.trim();
           print('[DEBUG] Set assigned_to_name to: ${data['assigned_to_name']}');
+        }
+      }
+
+      // Fetch approved_by name if we have the ID but not the name
+      if (data.containsKey('approved_by') &&
+          data['approved_by'] != null &&
+          !data.containsKey('approved_by_name')) {
+        final userId = data['approved_by'].toString();
+        print('[DEBUG] Fetching user name for approved_by: $userId');
+        final userData = await _apiService.getUserById(userId);
+        if (userData != null) {
+          final firstName = userData['first_name'] ?? '';
+          final lastName = userData['last_name'] ?? '';
+          data['approved_by_name'] = '$firstName $lastName'.trim();
+          print('[DEBUG] Set approved_by_name to: ${data['approved_by_name']}');
         }
       }
     } catch (e) {
@@ -305,7 +326,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       departmentTag: wop.departmentTag,
       priority: wop.priority,
       statusTag: wop.statusTag,
-      requestedBy: wop.requestedBy,
+      requestedBy: wop.requestedByName ?? wop.requestedBy,
       concernSlipId: wop.concernSlipId,
       unitId: wop.unitId,
       title: wop.title,
@@ -317,7 +338,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       contractorEmail: wop.contractorEmail,
       workScheduleFrom: wop.workScheduleFrom,
       workScheduleTo: wop.workScheduleTo,
-      approvedBy: wop.approvedBy,
+      approvedBy: wop.approvedByName ?? wop.approvedBy,
       approvalDate: wop.approvalDate,
       denialReason: wop.denialReason,
       adminNotes: wop.adminNotes,
@@ -345,7 +366,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
   Future<void> _showMarkAsCompleteDialog() async {
     debugPrint('[Details] _showMarkAsCompleteDialog called');
     final completionNotesController = TextEditingController();
-    
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -355,7 +376,9 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Are you sure you want to mark this work order as completed?'),
+              const Text(
+                'Are you sure you want to mark this work order as completed?',
+              ),
               const SizedBox(height: 16),
               TextField(
                 controller: completionNotesController,
@@ -393,32 +416,34 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     );
 
     debugPrint('[Details] Dialog confirmed: $confirmed, mounted: $mounted');
-    
+
     if (confirmed == true && mounted) {
       debugPrint('[Details] Proceeding with completion...');
       // Get the work order data
       final workOrder = widget.workOrder ?? _fetchedWorkOrder;
-      
+
       debugPrint('[Details] Work order data: ${workOrder?.id}');
-      
+
       if (workOrder != null) {
         try {
           // Update the work order status to completed
           final completionNotes = completionNotesController.text.trim();
-          
+
           debugPrint('[Details] Completing work order: ${workOrder.id}');
           debugPrint('[Details] Work order type: ${workOrder.requestTypeTag}');
           debugPrint('[Details] Completion notes: $completionNotes');
-          
+
           // Call the appropriate API endpoint based on work order type
           final workOrderId = workOrder.id;
-          debugPrint('[Details] Work order ID uppercase: ${workOrderId.toUpperCase()}');
-          
+          debugPrint(
+            '[Details] Work order ID uppercase: ${workOrderId.toUpperCase()}',
+          );
+
           if (workOrderId.toUpperCase().startsWith('JS-')) {
             debugPrint('[Details] Executing Job Service completion');
             // Complete Job Service
             await _apiService.completeJobService(workOrderId);
-            
+
             // Add completion notes if provided
             if (completionNotes.isNotEmpty) {
               await _apiService.addJobServiceNotes(
@@ -437,12 +462,12 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
             );
           } else if (workOrderId.toUpperCase().startsWith('MT-')) {
             // Complete Maintenance Task
-            await _apiService.updateMaintenanceTask(
-              workOrderId,
-              {'status': 'completed', 'completion_notes': completionNotes},
-            );
+            await _apiService.updateMaintenanceTask(workOrderId, {
+              'status': 'completed',
+              'completion_notes': completionNotes,
+            });
           }
-          
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -451,7 +476,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
                 behavior: SnackBarBehavior.floating,
               ),
             );
-            
+
             // Navigate back to work order list
             Navigator.of(context).pop();
           }
@@ -469,7 +494,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         }
       }
     }
-    
+
     completionNotesController.dispose();
   }
 
@@ -556,18 +581,18 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       // Tenant / requester
       requestedBy: w.requestedBy ?? '—',
       scheduleDate: w.scheduleAvailability, // String? in your widget API
-
       // Request details
       title: w.title,
       startedAt: w.startedAt,
       completedAt: w.completedAt,
       location: w.location ?? w.unitId, // prefer location, fallback to unit
       description: w.description,
-      checklist: (w.checklist ?? '')
-          .split('\n')
-          .map((s) => s.trim())
-          .where((s) => s.isNotEmpty)
-          .toList(),
+      checklist:
+          (w.checklist ?? '')
+              .split('\n')
+              .map((s) => s.trim())
+              .where((s) => s.isNotEmpty)
+              .toList(),
       attachments: w.attachments,
       adminNote: w.adminNotes ?? w.additionalNotes,
 
@@ -588,8 +613,8 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     final s = (w.statusTag).toLowerCase().trim();
 
     bool isMaint() => type.contains('maintenance') || id.startsWith('MT');
-    bool isSlip()  => type.contains('concern')    || id.startsWith('CS');
-    bool isJS()    => type.contains('job service')|| id.startsWith('JS');
+    bool isSlip() => type.contains('concern') || id.startsWith('CS');
+    bool isJS() => type.contains('job service') || id.startsWith('JS');
 
     if (isMaint()) {
       return (s == 'scheduled' || s == 'assigned' || s == 'in progress')
@@ -609,7 +634,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     return 'concern slip assigned';
   }
 
-  
   // -------------------- main tab content --------------------
   Widget _buildTabContent() {
     // Show loading indicator while fetching data
@@ -650,7 +674,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
 
     // Use the passed work order or the fetched one
     final w = widget.workOrder ?? _fetchedWorkOrder;
-    
+
     // If still no data, show error
     if (w == null) {
       return const Center(
@@ -669,17 +693,23 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     switch (_detailsLabel) {
       case 'concern slip assigned':
       case 'concern slip assessed':
-        children.add(_buildConcernSlip(w, assessed: _detailsLabel.contains('assessed')));
+        children.add(
+          _buildConcernSlip(w, assessed: _detailsLabel.contains('assessed')),
+        );
         break;
 
       case 'job service assigned':
       case 'job service assessed':
-        children.add(_buildJobService(w, assessed: _detailsLabel.contains('assessed')));
+        children.add(
+          _buildJobService(w, assessed: _detailsLabel.contains('assessed')),
+        );
         break;
 
       case 'maintenance task scheduled':
       case 'maintenance task assessed':
-        children.add(_buildMaintenance(w, assessed: _detailsLabel.contains('assessed')));
+        children.add(
+          _buildMaintenance(w, assessed: _detailsLabel.contains('assessed')),
+        );
         break;
 
       // generic -> infer from data
@@ -687,22 +717,34 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       case 'maintenance detail':
         final mapped = _autoLabelFromWorkOrder(w);
         if (mapped.contains('maintenance')) {
-          children.add(_buildMaintenance(w, assessed: mapped.contains('assessed')));
+          children.add(
+            _buildMaintenance(w, assessed: mapped.contains('assessed')),
+          );
         } else if (mapped.contains('job service')) {
-          children.add(_buildJobService(w, assessed: mapped.contains('assessed')));
+          children.add(
+            _buildJobService(w, assessed: mapped.contains('assessed')),
+          );
         } else {
-          children.add(_buildConcernSlip(w, assessed: mapped.contains('assessed')));
+          children.add(
+            _buildConcernSlip(w, assessed: mapped.contains('assessed')),
+          );
         }
         break;
 
       default:
         final mapped = _autoLabelFromWorkOrder(w);
         if (mapped.contains('maintenance')) {
-          children.add(_buildMaintenance(w, assessed: mapped.contains('assessed')));
+          children.add(
+            _buildMaintenance(w, assessed: mapped.contains('assessed')),
+          );
         } else if (mapped.contains('job service')) {
-          children.add(_buildJobService(w, assessed: mapped.contains('assessed')));
+          children.add(
+            _buildJobService(w, assessed: mapped.contains('assessed')),
+          );
         } else {
-          children.add(_buildConcernSlip(w, assessed: mapped.contains('assessed')));
+          children.add(
+            _buildConcernSlip(w, assessed: mapped.contains('assessed')),
+          );
         }
         break;
     }
@@ -722,7 +764,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     return s == 'draft' || s == 'cancelled' || s == 'rejected' || s == 'closed';
   }
 
-    void _showDeleteDialog() {
+  void _showDeleteDialog() {
     final workOrder = widget.workOrder ?? _fetchedWorkOrder;
     if (workOrder == null) return;
 
@@ -741,25 +783,31 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Request'),
-        content: const Text('Are you sure you want to delete this request? This action cannot be undone.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _deleteWorkOrder();
-            },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Delete Request'),
+            content: const Text(
+              'Are you sure you want to delete this request? This action cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await _deleteWorkOrder();
+                },
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Delete'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
-    Future<void> _deleteWorkOrder() async {
+  Future<void> _deleteWorkOrder() async {
     try {
       final apiService = APIService(roleOverride: AppRole.staff);
       await apiService.deleteWorkOrder(widget.workOrderId);
@@ -796,8 +844,11 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         leading: const BackButton(),
         title: 'Work Order Details',
         showMore: true,
-        showDelete: ((widget.workOrder ?? _fetchedWorkOrder) != null) &&
-            _isDeletableStatus((widget.workOrder ?? _fetchedWorkOrder)!.statusTag),
+        showDelete:
+            ((widget.workOrder ?? _fetchedWorkOrder) != null) &&
+            _isDeletableStatus(
+              (widget.workOrder ?? _fetchedWorkOrder)!.statusTag,
+            ),
         onDeleteTap: _showDeleteDialog,
       ),
       body: SafeArea(

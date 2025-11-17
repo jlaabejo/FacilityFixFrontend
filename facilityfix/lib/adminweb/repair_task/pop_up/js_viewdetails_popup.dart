@@ -1086,20 +1086,18 @@ class _JobServiceConcernSlipDialogState
                 'REQUESTED BY',
                 (() {
                   final candidates = [
+                    task['requested_by_name'],
                     task['requestedBy'],
                     task['requester_name'],
-                    task['requested_by_name'],
+                    task['rawData']?['requested_by_name'],
                     task['rawData']?['requester_name'],
-                    task['rawData']?['requested_by_name'],
-                    task['rawData']?['requested_by_name'],
                     task['rawData']?['reported_by'],
                   ];
-                  return candidates
-                      .firstWhere(
-                        (c) => c != null && c.toString().trim().isNotEmpty,
-                        orElse: () => 'N/A',
-                      )
-                      .toString();
+                  final name = candidates.firstWhere(
+                    (c) => c != null && c.toString().trim().isNotEmpty,
+                    orElse: () => null,
+                  );
+                  return name?.toString() ?? 'N/A';
                 })(),
               ),
             ),

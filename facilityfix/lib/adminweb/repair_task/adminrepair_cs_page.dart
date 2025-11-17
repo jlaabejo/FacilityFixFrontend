@@ -25,49 +25,52 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   // Pagination state
   int _currentPage = 0;
   final int _itemsPerPage = 10;
-  
+
   // Sorting state
   bool _sortAscending = false;
-  
+
   // Get paginated tasks
   List<Map<String, dynamic>> get _paginatedTasks {
     final startIndex = _currentPage * _itemsPerPage;
-    final endIndex = (startIndex + _itemsPerPage).clamp(0, _filteredTasks.length);
-    
+    final endIndex = (startIndex + _itemsPerPage).clamp(
+      0,
+      _filteredTasks.length,
+    );
+
     if (startIndex >= _filteredTasks.length) {
       return [];
     }
-    
+
     return _filteredTasks.sublist(startIndex, endIndex);
   }
-  
+
   // Get total pages
   int get _totalPages {
     return (_filteredTasks.length / _itemsPerPage).ceil();
   }
-  
+
   // Dropdown values for filtering
   String _selectedCategory = 'All Categories';
   String _selectedStatus = 'All Status';
   String _selectedConcernType = 'Concern Slip';
   String _searchQuery = '';
-  
+
   // Sort by date
   void _sortByDate() {
     setState(() {
       _filteredTasks.sort((a, b) {
         final dateA = _parseDate(a['dateRequested']);
         final dateB = _parseDate(b['dateRequested']);
-        
+
         if (dateA == null && dateB == null) return 0;
         if (dateA == null) return 1;
         if (dateB == null) return -1;
-        
+
         return _sortAscending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
       });
     });
   }
-  
+
   // Parse date helper
   DateTime? _parseDate(dynamic dateStr) {
     if (dateStr == null) return null;
@@ -79,14 +82,16 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       return null;
     }
   }
-  
+
   // Toggle sort order
   void _toggleSortOrder() {
     setState(() {
       _sortAscending = !_sortAscending;
       _sortByDate();
     });
-  }  @override
+  }
+
+  @override
   void initState() {
     super.initState();
     _loadConcernSlips();
@@ -117,42 +122,70 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
 
       setState(() {
         _repairTasks =
-            concernSlips.map((slip) {
-              // Derive canonical status token
-              final mapped = _mapStatus(
-                slip['status'],
-                slip['workflow'],
-                slip['resolution_type'],
-              );
+            concernSlips
+                .map((slip) {
+                  // Derive canonical status token
+                  final mapped = _mapStatus(
+                    slip['status'],
+                    slip['workflow'],
+                    slip['resolution_type'],
+                  );
 
-              // If staff already provided assessment/recommendation or completion
-              // information, consider the task 'inspected' even if top-level
-              // status hasn't been updated by the backend yet.
-              final hasAssessment = (slip['staff_assessment'] != null) ||
-                  (slip['staff_recommendation'] != null) ||
-                  (slip['assessed_by'] != null) ||
-                  (slip['assessed_at'] != null) ||
-                  (slip['completed_at'] != null) ||
-                  (slip['dateCompleted'] != null) ||
-                  (slip['status']?.toString().toLowerCase().contains('inspected') == true);
+                  // If staff already provided assessment/recommendation or completion
+                  // information, consider the task 'inspected' even if top-level
+                  // status hasn't been updated by the backend yet.
+                  final hasAssessment =
+                      (slip['staff_assessment'] != null) ||
+                      (slip['staff_recommendation'] != null) ||
+                      (slip['assessed_by'] != null) ||
+                      (slip['assessed_at'] != null) ||
+                      (slip['completed_at'] != null) ||
+                      (slip['dateCompleted'] != null) ||
+                      (slip['status']?.toString().toLowerCase().contains(
+                            'inspected',
+                          ) ==
+                          true);
 
-              final statusToken = hasAssessment ? 'inspected' : mapped;
+                  final statusToken = hasAssessment ? 'inspected' : mapped;
 
-              return {
-                'id': slip['formatted_id'] ?? slip['_doc_id'] ?? 'N/A',
-                'title': slip['title'] ?? 'No Title',
-                'dateRequested': _formatDate(slip['created_at']),
-                'buildingUnit': _getBuildingUnit(slip),
-                'priority': _capitalizePriority(slip['priority'] ?? 'medium'),
-                'department': _getDepartment(slip['category']),
-                'status': statusToken,
-                'location': slip['location'] ?? 'N/A',
-                'description': slip['description'] ?? 'No Description',
-                'category': slip['category'],
-                'reportedBy': slip['reported_by'] ?? 'Unknown',
-                'rawData': slip, // Store raw data for detailed view
-              };
-            }).toList();
+                  return {
+                    'id': slip['formatted_id'] ?? slip['_doc_id'] ?? 'N/A',
+                    'title': slip['title'] ?? 'No Title',
+                    'dateRequested': _formatDate(slip['created_at']),
+                    'buildingUnit': _getBuildingUnit(slip),
+                    'priority': _capitalizePriority(
+                      slip['priority'] ?? 'medium',
+                    ),
+                    'department': _getDepartment(slip['category']),
+                    'status': statusToken,
+                    'location': slip['location'] ?? 'N/A',
+                    'description': slip['description'] ?? 'No Description',
+                    'category': slip['category'],
+                    'reportedBy': slip['reported_by'] ?? 'Unknown',
+                    'rawData': slip, // Store raw data for detailed view
+                  };
+                })
+                .where((task) {
+                  final rawData = task['rawData'] as Map<String, dynamic>?;
+                  final status =
+                      rawData?['status']?.toString().toLowerCase() ?? '';
+                  final resolutionType =
+                      rawData?['resolution_type']?.toString().toLowerCase() ??
+                      '';
+
+                  // Hide concern slips that are completed or have been converted to Job Service or Work Order
+                  if (status == 'completed') return false;
+                  if (resolutionType == 'job_service' ||
+                      resolutionType == 'job service')
+                    return false;
+                  if (resolutionType == 'work_permit' ||
+                      resolutionType == 'work_order' ||
+                      resolutionType == 'work order')
+                    return false;
+
+                  return true;
+                })
+                .toList();
 
         // Sort tasks by priority (high to low)
         _repairTasks.sort((a, b) {
@@ -225,15 +258,21 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     if (s.contains('pending')) return 'pending';
 
     // To Inspect (assigned / to inspect variants)
-    if (s.contains('assigned') || s.contains('to inspect') || s.contains('to_inspect')) {
+    if (s.contains('assigned') ||
+        s.contains('to inspect') ||
+        s.contains('to_inspect')) {
       return 'to inspect';
     }
 
     // In Progress
-    if (s.contains('in_progress') || s.contains('in progress')) return 'in progress';
+    if (s.contains('in_progress') || s.contains('in progress'))
+      return 'in progress';
 
     // Inspected / Assessed / Completed and similar => 'inspected'
-    if (s.contains('inspected') || s.contains('assessed') || s.contains('completed') || s.contains('assess')) {
+    if (s.contains('inspected') ||
+        s.contains('assessed') ||
+        s.contains('completed') ||
+        s.contains('assess')) {
       return 'inspected';
     }
 
@@ -242,7 +281,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   }
 
   // single _mapStatus defined above; duplicate removed
-  
+
   String _getDepartment(String? category) {
     switch (category?.toLowerCase()) {
       case 'electrical':
@@ -280,12 +319,14 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
             // Category filter
             bool matchesDepartment = true;
             if (_selectedCategory != 'All Categories') {
-              final taskDept = task['department']?.toString().toLowerCase() ?? '';
+              final taskDept =
+                  task['department']?.toString().toLowerCase() ?? '';
               final selectedDept = _selectedCategory.toLowerCase();
-              
+
               if (selectedDept == 'other') {
                 // For "Other", match HVAC and Pest Control categories
-                matchesDepartment = taskDept == 'hvac' || taskDept == 'pest control';
+                matchesDepartment =
+                    taskDept == 'hvac' || taskDept == 'pest control';
               } else {
                 matchesDepartment = taskDept == selectedDept;
               }
@@ -294,11 +335,17 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
             // Status filter - normalize both the selected label and the task status
             bool matchesStatus = _selectedStatus == 'All Status';
             if (!matchesStatus) {
-                String taskStatus = (task['status']?.toString() ?? '').toLowerCase();
-                // If staff has already assessed/filled assessment fields, treat as inspected
-                final raw = task['rawData'] ?? {};
-                final bool hasAssessment = (raw?['assessed_by'] != null) || (raw?['assessed_at'] != null) || (raw?['staff_assessment'] != null) || (raw?['staff_recommendation'] != null) || (raw?['assessment'] != null);
-                if (hasAssessment) taskStatus = 'inspected';
+              String taskStatus =
+                  (task['status']?.toString() ?? '').toLowerCase();
+              // If staff has already assessed/filled assessment fields, treat as inspected
+              final raw = task['rawData'] ?? {};
+              final bool hasAssessment =
+                  (raw?['assessed_by'] != null) ||
+                  (raw?['assessed_at'] != null) ||
+                  (raw?['staff_assessment'] != null) ||
+                  (raw?['staff_recommendation'] != null) ||
+                  (raw?['assessment'] != null);
+              if (hasAssessment) taskStatus = 'inspected';
               final selectedStatus = _selectedStatus;
               final normalizedSelected = selectedStatus.toLowerCase();
 
@@ -311,20 +358,37 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                   'pending': ['pending'],
                   'in progress': ['in progress', 'in_progress'],
                   'to inspect': ['to inspect', 'to_inspect', 'assigned'],
-                  'inspected': ['inspected', 'completed', 'assessed', 'sent', 'sent to client', 'done'],
+                  'inspected': [
+                    'inspected',
+                    'completed',
+                    'assessed',
+                    'sent',
+                    'sent to client',
+                    'done',
+                  ],
                   // allow filtering by resolution types shown as Status dropdown options
                   'job service': ['job service', 'pending js', 'pending js'],
                   'work order': ['work order', 'pending wop', 'pending wop'],
                 };
 
-                final validStatuses = canonicalMap[normalizedSelected] ?? [normalizedSelected];
+                final validStatuses =
+                    canonicalMap[normalizedSelected] ?? [normalizedSelected];
                 matchesStatus = validStatuses.contains(taskStatus);
 
                 // As a fallback, check resolution_type for Job Service / Work Order selections
-                if (!matchesStatus && (normalizedSelected == 'job service' || normalizedSelected == 'work order')) {
-                  final resolution = (task['rawData']?['resolution_type'] ?? '').toString().toLowerCase();
+                if (!matchesStatus &&
+                    (normalizedSelected == 'job service' ||
+                        normalizedSelected == 'work order')) {
+                  final resolution =
+                      (task['rawData']?['resolution_type'] ?? '')
+                          .toString()
+                          .toLowerCase();
                   if (resolution.isNotEmpty) {
-                    matchesStatus = resolution.contains(normalizedSelected.replaceAll(' ', '_')) || resolution.contains(normalizedSelected);
+                    matchesStatus =
+                        resolution.contains(
+                          normalizedSelected.replaceAll(' ', '_'),
+                        ) ||
+                        resolution.contains(normalizedSelected);
                   }
                 }
               }
@@ -332,7 +396,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
 
             return matchesSearch && matchesDepartment && matchesStatus;
           }).toList();
-      
+
       // Reset to first page when filters change
       _currentPage = 0;
     });
@@ -404,7 +468,10 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   bool _areActionButtonsDisabled(Map<String, dynamic> task) {
     final status = task['status']?.toString().toLowerCase();
     // Mapped 'assigned' -> 'to inspect'
-    return (status == 'assigned' || status == 'to inspect' || status == 'to_inspect') && task['rawData']?['assessed_by'] == null;
+    return (status == 'assigned' ||
+            status == 'to inspect' ||
+            status == 'to_inspect') &&
+        task['rawData']?['assessed_by'] == null;
   }
 
   // Action dropdown menu methods
@@ -426,11 +493,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
         value: 'view',
         child: Row(
           children: [
-            Icon(
-              Icons.visibility_outlined,
-              color: Colors.green[600],
-              size: 18,
-            ),
+            Icon(Icons.visibility_outlined, color: Colors.green[600], size: 18),
             const SizedBox(width: 12),
             Text(
               'View',
@@ -538,9 +601,10 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   void _editTask(Map<String, dynamic> task) {
     // Open the EditDialog for concern slips and refresh on success
     final rawSrc = task['rawData'] ?? task ?? {};
-    final Map<String, dynamic> raw = rawSrc is Map<String, dynamic>
-        ? rawSrc
-        : Map<String, dynamic>.from(rawSrc as Map);
+    final Map<String, dynamic> raw =
+        rawSrc is Map<String, dynamic>
+            ? rawSrc
+            : Map<String, dynamic>.from(rawSrc as Map);
     EditDialog.show(
       context,
       type: EditDialogType.concernSlip,
@@ -564,17 +628,19 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     final confirmed = await showDeleteDialog(
       context,
       itemName: 'Task',
-      description: 'Are you sure you want to delete this task ${task['id']}? This action cannot be undone. All associated data will be permanently removed from the system.',
+      description:
+          'Are you sure you want to delete this task ${task['id']}? This action cannot be undone. All associated data will be permanently removed from the system.',
     );
 
     if (confirmed) {
       try {
-    // Determine backend id (prefer rawData._doc_id or rawData.id if available)
-    final rawSrc = task['rawData'] ?? {};
-    final Map<String, dynamic> raw = rawSrc is Map<String, dynamic>
-      ? rawSrc
-      : Map<String, dynamic>.from(rawSrc as Map);
-    final idToDelete = raw['_doc_id'] ?? raw['id'] ?? task['id'];
+        // Determine backend id (prefer rawData._doc_id or rawData.id if available)
+        final rawSrc = task['rawData'] ?? {};
+        final Map<String, dynamic> raw =
+            rawSrc is Map<String, dynamic>
+                ? rawSrc
+                : Map<String, dynamic>.from(rawSrc as Map);
+        final idToDelete = raw['_doc_id'] ?? raw['id'] ?? task['id'];
 
         if (idToDelete == null) {
           throw Exception('Unable to determine task id to delete');
@@ -810,7 +876,9 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                         return DropdownMenuItem<String>(
                           value: value,
                           child: Text(
-                            value == 'All Categories' ? value : 'Category: $value',
+                            value == 'All Categories'
+                                ? value
+                                : 'Category: $value',
                             style: const TextStyle(fontSize: 14),
                           ),
                         );
@@ -840,14 +908,14 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                       _applyFilters();
                     });
                   },
-                                  items:
-                                    <String>[
-                                      'All Status',
-                                      'Pending',
-                                      'In Progress',
-                                      'To Inspect',
-                                      'Inspected',
-                                    ].map<DropdownMenuItem<String>>((String value) {
+                  items:
+                      <String>[
+                        'All Status',
+                        'Pending',
+                        'In Progress',
+                        'To Inspect',
+                        'Inspected',
+                      ].map<DropdownMenuItem<String>>((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
                           child: Text(
@@ -876,7 +944,11 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.refresh_rounded, size: 20, color: Colors.blue[600]),
+                  Icon(
+                    Icons.refresh_rounded,
+                    size: 20,
+                    color: Colors.blue[600],
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'Refresh',
@@ -1007,281 +1079,313 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                     : _filteredTasks.isEmpty
                     ? Center(
                       child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.work_outline,
-                          size: 64,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No Concern Slip Found',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'There are currently no concern slip requests to display.',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                        
-                      ],
-                    ),
-                    )
-                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Expanded(
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: SingleChildScrollView(
-                                child: DataTable(
-                                  columnSpacing: 50,
-                                  headingRowHeight: 56,
-                                  dataRowHeight: 64,
-                                  headingRowColor: WidgetStateProperty.all(
-                                    Colors.grey[50],
-                                  ),
-                                  headingTextStyle: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.grey[600],
-                                    letterSpacing: 0.5,
-                                  ),
-                                  dataTextStyle: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
+                          Icon(
+                            Icons.work_outline,
+                            size: 64,
+                            color: Colors.grey[400],
                           ),
-                          columns: [
-                            DataColumn(
-                              label: _fixedCell(0, const Text("CONCERN ID")),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No Concern Slip Found',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
                             ),
-                            DataColumn(
-                              label: _fixedCell(1, const Text("CONCERN TITLE")),
-                            ),
-                            DataColumn(
-                              label: _fixedCell(
-                                2,
-                                InkWell(
-                                  onTap: _toggleSortOrder,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Text("DATE REQUESTED"),
-                                      const SizedBox(width: 4),
-                                      Icon(
-                                        _sortAscending 
-                                          ? Icons.arrow_upward 
-                                          : Icons.arrow_downward,
-                                        size: 16,
-                                        color: Colors.grey[600],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            DataColumn(
-                              label: _fixedCell(
-                                3,
-                                const Text("BUILDING & UNIT"),
-                              ),
-                            ),
-                            DataColumn(
-                              label: _fixedCell(4, const Text("PRIORITY")),
-                            ),
-                            DataColumn(
-                              label: _fixedCell(5, const Text("CATEGORY")),
-                            ),
-                            DataColumn(
-                              label: _fixedCell(6, const Text("STATUS")),
-                            ),
-                            DataColumn(label: _fixedCell(7, const Text(""))),
-                          ],
-                          rows:
-                              _paginatedTasks.map((task) {
-                                return DataRow(
-                                  cells: [
-                                    DataCell(
-                                      _fixedCell(
-                                        0,
-                                        _ellipsis(
-                                          task['id'],
-                                          style: TextStyle(
-                                            color: Colors.grey[700],
-                                            fontSize: 13,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    DataCell(
-                                      _fixedCell(1, _ellipsis(task['title'])),
-                                    ),
-                                    DataCell(
-                                      _fixedCell(
-                                        2,
-                                        _ellipsis(task['dateRequested']),
-                                      ),
-                                    ),
-                                    DataCell(
-                                      _fixedCell(
-                                        3,
-                                        _ellipsis(task['buildingUnit']),
-                                      ),
-                                    ),
-
-                                    // Chips get a fixed box too (and aligned left)
-                                    DataCell(
-                                      _fixedCell(
-                                        4,
-                                        PriorityTag(task['priority']),
-                                      ),
-                                    ),
-                                    DataCell(
-                                      _fixedCell(
-                                        5,
-                                        DepartmentTag(
-                                          task['department'],
-                                        ),
-                                      ),
-                                    ),
-                                    DataCell(
-                                      _fixedCell(
-                                        6,
-                                        StatusTag(task['status']),
-                                      ),
-                                    ),
-
-                                    // Action menu cell (narrow, centered)
-                                    DataCell(
-                                      _fixedCell(
-                                        7,
-                                        Builder(
-                                          builder: (context) {
-                                            return IconButton(
-                                              onPressed: () {
-                                                final rbx =
-                                                    context.findRenderObject()
-                                                        as RenderBox;
-                                                final position = rbx
-                                                    .localToGlobal(Offset.zero);
-                                                _showActionMenu(
-                                                  context,
-                                                  task,
-                                                  position,
-                                                );
-                                              },
-                                              icon: Icon(
-                                                Icons.more_vert,
-                                                color: Colors.grey[400],
-                                                size: 20,
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                        align: Alignment.center,
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              }).toList(),
-                        ),
-                      ),
-                    ),
-                        ),
-                          // Pagination Section
-                          Divider(height: 1, thickness: 1, color: Colors.grey[400]),
-                          Padding(
-                            padding: const EdgeInsets.all(20.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  _filteredTasks.isEmpty
-                                      ? "No entries"
-                                      : "Showing ${_currentPage * _itemsPerPage + 1} to ${((_currentPage + 1) * _itemsPerPage).clamp(0, _filteredTasks.length)} of ${_filteredTasks.length} ${_filteredTasks.length == 1 ? 'entry' : 'entries'}",
-                                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                                ),
-                                Row(
-                                  children: [
-                                    // Previous button
-                                    IconButton(
-                                      onPressed: _currentPage > 0
-                                          ? () {
-                                              setState(() {
-                                                _currentPage--;
-                                              });
-                                            }
-                                          : null,
-                                      icon: const Icon(Icons.chevron_left),
-                                      color: Colors.blue,
-                                      disabledColor: Colors.grey[300],
-                                    ),
-                                    // Page numbers
-                                    ...List.generate(
-                                      _totalPages,
-                                      (index) => Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                                        child: InkWell(
-                                          onTap: () {
-                                            setState(() {
-                                              _currentPage = index;
-                                            });
-                                          },
-                                          child: Container(
-                                            width: 32,
-                                            height: 32,
-                                            decoration: BoxDecoration(
-                                              color: _currentPage == index
-                                                  ? Colors.blue
-                                                  : Colors.transparent,
-                                              borderRadius: BorderRadius.circular(4),
-                                              border: Border.all(
-                                                color: _currentPage == index
-                                                    ? Colors.blue
-                                                    : Colors.grey[300]!,
-                                              ),
-                                            ),
-                                            alignment: Alignment.center,
-                                            child: Text(
-                                              '${index + 1}',
-                                              style: TextStyle(
-                                                color: _currentPage == index
-                                                    ? Colors.white
-                                                    : Colors.black87,
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    // Next button
-                                    IconButton(
-                                      onPressed: _currentPage < _totalPages - 1
-                                          ? () {
-                                              setState(() {
-                                                _currentPage++;
-                                              });
-                                            }
-                                          : null,
-                                      icon: const Icon(Icons.chevron_right),
-                                      color: Colors.blue,
-                                      disabledColor: Colors.grey[300],
-                                    ),
-                                  ],
-                                ),
-                              ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'There are currently no concern slip requests to display.',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[500],
                             ),
                           ),
                         ],
                       ),
+                    )
+                    : Column(
+                      children: [
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: SingleChildScrollView(
+                              child: DataTable(
+                                columnSpacing: 50,
+                                headingRowHeight: 56,
+                                dataRowHeight: 64,
+                                headingRowColor: WidgetStateProperty.all(
+                                  Colors.grey[50],
+                                ),
+                                headingTextStyle: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[600],
+                                  letterSpacing: 0.5,
+                                ),
+                                dataTextStyle: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black87,
+                                ),
+                                columns: [
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      0,
+                                      const Text("CONCERN ID"),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      1,
+                                      const Text("CONCERN TITLE"),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      2,
+                                      InkWell(
+                                        onTap: _toggleSortOrder,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Text("DATE REQUESTED"),
+                                            const SizedBox(width: 4),
+                                            Icon(
+                                              _sortAscending
+                                                  ? Icons.arrow_upward
+                                                  : Icons.arrow_downward,
+                                              size: 16,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      3,
+                                      const Text("BUILDING & UNIT"),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      4,
+                                      const Text("PRIORITY"),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      5,
+                                      const Text("CATEGORY"),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(6, const Text("STATUS")),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(7, const Text("")),
+                                  ),
+                                ],
+                                rows:
+                                    _paginatedTasks.map((task) {
+                                      return DataRow(
+                                        cells: [
+                                          DataCell(
+                                            _fixedCell(
+                                              0,
+                                              _ellipsis(
+                                                task['id'],
+                                                style: TextStyle(
+                                                  color: Colors.grey[700],
+                                                  fontSize: 13,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            _fixedCell(
+                                              1,
+                                              _ellipsis(task['title']),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            _fixedCell(
+                                              2,
+                                              _ellipsis(task['dateRequested']),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            _fixedCell(
+                                              3,
+                                              _ellipsis(task['buildingUnit']),
+                                            ),
+                                          ),
+
+                                          // Chips get a fixed box too (and aligned left)
+                                          DataCell(
+                                            _fixedCell(
+                                              4,
+                                              PriorityTag(task['priority']),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            _fixedCell(
+                                              5,
+                                              DepartmentTag(task['department']),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            _fixedCell(
+                                              6,
+                                              StatusTag(task['status']),
+                                            ),
+                                          ),
+
+                                          // Action menu cell (narrow, centered)
+                                          DataCell(
+                                            _fixedCell(
+                                              7,
+                                              Builder(
+                                                builder: (context) {
+                                                  return IconButton(
+                                                    onPressed: () {
+                                                      final rbx =
+                                                          context.findRenderObject()
+                                                              as RenderBox;
+                                                      final position = rbx
+                                                          .localToGlobal(
+                                                            Offset.zero,
+                                                          );
+                                                      _showActionMenu(
+                                                        context,
+                                                        task,
+                                                        position,
+                                                      );
+                                                    },
+                                                    icon: Icon(
+                                                      Icons.more_vert,
+                                                      color: Colors.grey[400],
+                                                      size: 20,
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                              align: Alignment.center,
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }).toList(),
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Pagination Section
+                        Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: Colors.grey[400],
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(20.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                _filteredTasks.isEmpty
+                                    ? "No entries"
+                                    : "Showing ${_currentPage * _itemsPerPage + 1} to ${((_currentPage + 1) * _itemsPerPage).clamp(0, _filteredTasks.length)} of ${_filteredTasks.length} ${_filteredTasks.length == 1 ? 'entry' : 'entries'}",
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 14,
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  // Previous button
+                                  IconButton(
+                                    onPressed:
+                                        _currentPage > 0
+                                            ? () {
+                                              setState(() {
+                                                _currentPage--;
+                                              });
+                                            }
+                                            : null,
+                                    icon: const Icon(Icons.chevron_left),
+                                    color: Colors.blue,
+                                    disabledColor: Colors.grey[300],
+                                  ),
+                                  // Page numbers
+                                  ...List.generate(
+                                    _totalPages,
+                                    (index) => Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                      ),
+                                      child: InkWell(
+                                        onTap: () {
+                                          setState(() {
+                                            _currentPage = index;
+                                          });
+                                        },
+                                        child: Container(
+                                          width: 32,
+                                          height: 32,
+                                          decoration: BoxDecoration(
+                                            color:
+                                                _currentPage == index
+                                                    ? Colors.blue
+                                                    : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                            border: Border.all(
+                                              color:
+                                                  _currentPage == index
+                                                      ? Colors.blue
+                                                      : Colors.grey[300]!,
+                                            ),
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: Text(
+                                            '${index + 1}',
+                                            style: TextStyle(
+                                              color:
+                                                  _currentPage == index
+                                                      ? Colors.white
+                                                      : Colors.black87,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  // Next button
+                                  IconButton(
+                                    onPressed:
+                                        _currentPage < _totalPages - 1
+                                            ? () {
+                                              setState(() {
+                                                _currentPage++;
+                                              });
+                                            }
+                                            : null,
+                                    icon: const Icon(Icons.chevron_right),
+                                    color: Colors.blue,
+                                    disabledColor: Colors.grey[300],
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
           ),
         ],
       ),

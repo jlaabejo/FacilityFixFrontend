@@ -5,8 +5,9 @@ class ConcernSlip {
   final DateTime? updatedAt;
   final String? departmentTag;
   final String requestTypeTag;
-  final String? priority;       // High | Medium | Low
-  final String statusTag;       // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+  final String? priority; // High | Medium | Low
+  final String
+  statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
   final String? resolutionType; // job_service, work_permit, rejected
 
   // Tenant / Requester
@@ -33,7 +34,7 @@ class ConcernSlip {
     required this.createdAt,
     this.updatedAt,
     this.departmentTag,
-    this.requestTypeTag ='Concern Slip',
+    this.requestTypeTag = 'Concern Slip',
     this.priority,
     required this.statusTag,
     this.resolutionType,
@@ -55,10 +56,14 @@ class ConcernSlip {
     // Handle both field name conventions
     final statusField = json['status'] ?? json['status_tag'];
     final categoryField = json['category'] ?? json['department_tag'];
-    
+
+    final displayId = json['formatted_id'] ?? json['id'] ?? '';
+
     return ConcernSlip(
-      id: json['id'] ?? json['formatted_id'] ?? '',
-      createdAt: DateTime.tryParse(json['created_at'] ?? json['submitted_at'] ?? '') ?? DateTime.now(),
+      id: displayId,
+      createdAt:
+          DateTime.tryParse(json['created_at'] ?? json['submitted_at'] ?? '') ??
+          DateTime.now(),
       updatedAt: DateTime.tryParse(json['updated_at'] ?? ''),
       departmentTag: categoryField,
       requestTypeTag: json['request_type'] ?? 'Concern Slip',
@@ -70,13 +75,17 @@ class ConcernSlip {
       scheduleAvailability: json['schedule_availability'],
       title: json['title'] ?? '',
       description: json['description'] ?? '',
-      attachments: (json['attachments'] as List?)?.map((e) => e.toString()).toList(),
+      attachments:
+          (json['attachments'] as List?)?.map((e) => e.toString()).toList(),
       assignedStaff: json['assigned_staff'],
       staffDepartment: json['staff_department'],
       assignedPhotoUrl: json['assigned_photo_url'],
       assessedAt: DateTime.tryParse(json['assessed_at'] ?? ''),
       assessment: json['assessment'],
-      staffAttachments: (json['staff_attachments'] as List?)?.map((e) => e.toString()).toList(),
+      staffAttachments:
+          (json['staff_attachments'] as List?)
+              ?.map((e) => e.toString())
+              .toList(),
     );
   }
 
@@ -104,7 +113,6 @@ class ConcernSlip {
   };
 }
 
-
 // JOB SERVICE
 // ===== JOB SERVICE (single model for card + details) =========================
 class JobService {
@@ -112,10 +120,11 @@ class JobService {
   final String id;
   final DateTime createdAt;
   final DateTime? updatedAt;
-  final String requestTypeTag;     // "Job Service"
+  final String requestTypeTag; // "Job Service"
   final String? departmentTag;
-  final String? priority;       // High | Medium | Low
-  final String statusTag;       // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+  final String? priority; // High | Medium | Low
+  final String
+  statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
   final String? resolutionType; // job_service | work_permit | rejected
 
   // Details
@@ -140,7 +149,7 @@ class JobService {
   final DateTime? completedAt;
   final DateTime? assessedAt;
   final String? assessment;
-  final List<String>? attachments;      // work-order/request attachments
+  final List<String>? attachments; // work-order/request attachments
   final List<String>? staffAttachments; // staff-side docs
 
   // Tracking
@@ -187,7 +196,8 @@ class JobService {
   });
 
   factory JobService.fromJson(Map<String, dynamic> json) {
-    DateTime? _dt(dynamic x) => x == null ? null : DateTime.tryParse(x.toString());
+    DateTime? _dt(dynamic x) =>
+        x == null ? null : DateTime.tryParse(x.toString());
     List<String>? _list(dynamic v) =>
         (v as List?)?.map((e) => e.toString()).toList();
 
@@ -195,9 +205,12 @@ class JobService {
     final statusField = json['status'] ?? json['status_tag'];
     final categoryField = json['category'] ?? json['department_tag'];
 
+    final displayId = json['formatted_id'] ?? json['id'] ?? '';
+
     return JobService(
-      id: json['id'] ?? json['formatted_id'] ?? '',
-      createdAt: _dt(json['created_at'] ?? json['submitted_at']) ?? DateTime.now(),
+      id: displayId,
+      createdAt:
+          _dt(json['created_at'] ?? json['submitted_at']) ?? DateTime.now(),
       updatedAt: _dt(json['updated_at']),
       requestTypeTag: json['request_type'] ?? 'Job Service',
       departmentTag: categoryField,
@@ -261,17 +274,17 @@ class JobService {
   };
 }
 
-
 // ===== WORK ORDER  ===================================
 class WorkOrderPermit {
   // Basic Information
   final String id;
   final DateTime createdAt;
   final DateTime? updatedAt;
-  final String requestTypeTag;     // "Work Order"
+  final String requestTypeTag; // "Work Order"
   final String? departmentTag;
-  final String? priority;       // High | Medium | Low
-  final String statusTag;       // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+  final String? priority; // High | Medium | Low
+  final String
+  statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
   final String? resolutionType; // job_service | work_permit | rejected
 
   // Details
@@ -284,22 +297,24 @@ class WorkOrderPermit {
   final String? assignedPhotoUrl;
 
   // Linkage / requester
-  final String? concernSlipId;     // links back to slip
+  final String? concernSlipId; // links back to slip
   final String? requestedBy;
-  final String? requestedByName;   // Full name of requester
+  final String? requestedByName; // Full name of requester
 
   // Permit Specific Details
-  final String contractorName;     // required
-  final String contractorNumber;   // required
+  final String contractorName; // required
+  final String contractorNumber; // required
   final String? contractorEmail;
+  final String? additionalNotes;
 
   // Work Specifics
   final DateTime workScheduleFrom; // required
-  final DateTime workScheduleTo;   // required
+  final DateTime workScheduleTo; // required
   final String? entryEquipments;
 
   // Approval tracking
   final String? approvedBy;
+  final String? approvedByName;
   final DateTime? approvalDate;
   final String? denialReason;
   final String? adminNotes;
@@ -338,6 +353,7 @@ class WorkOrderPermit {
     required this.contractorName,
     required this.contractorNumber,
     this.contractorEmail,
+    this.additionalNotes,
 
     // Work specifics
     required this.workScheduleFrom,
@@ -346,6 +362,7 @@ class WorkOrderPermit {
 
     // Approval
     this.approvedBy,
+    this.approvedByName,
     this.approvalDate,
     this.denialReason,
     this.adminNotes,
@@ -385,8 +402,18 @@ class WorkOrderPermit {
 
             // Convert month string to number
             const months = {
-              'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
-              'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
+              'Jan': 1,
+              'Feb': 2,
+              'Mar': 3,
+              'Apr': 4,
+              'May': 5,
+              'Jun': 6,
+              'Jul': 7,
+              'Aug': 8,
+              'Sep': 9,
+              'Oct': 10,
+              'Nov': 11,
+              'Dec': 12,
             };
             final month = months[monthStr] ?? 1;
 
@@ -410,16 +437,21 @@ class WorkOrderPermit {
     // Handle both field name conventions from different API endpoints
     // Extract contractor info from contractors array if present
     String contractorName = json['contractor_name'] ?? '';
-    String contractorContact = json['contractor_contact'] ?? json['contractor_number'] ?? '';
+    String contractorContact =
+        json['contractor_contact'] ?? json['contractor_number'] ?? '';
     String? contractorEmail = json['contractor_company'];
 
     // Check if contractors array exists and extract first contractor
-    if (json['contractors'] != null && json['contractors'] is List && (json['contractors'] as List).isNotEmpty) {
+    if (json['contractors'] != null &&
+        json['contractors'] is List &&
+        (json['contractors'] as List).isNotEmpty) {
       final firstContractor = (json['contractors'] as List)[0];
       if (firstContractor is Map) {
         contractorName = firstContractor['name']?.toString() ?? contractorName;
-        contractorContact = firstContractor['contact']?.toString() ?? contractorContact;
-        contractorEmail = firstContractor['company']?.toString() ?? contractorEmail;
+        contractorContact =
+            firstContractor['contact']?.toString() ?? contractorContact;
+        contractorEmail =
+            firstContractor['company']?.toString() ?? contractorEmail;
       }
     }
 
@@ -429,9 +461,12 @@ class WorkOrderPermit {
     final statusField = json['status'] ?? json['status_tag'];
     final categoryField = json['category'] ?? json['department_tag'];
 
+    final displayId = json['formatted_id'] ?? json['id'] ?? '';
+
     return WorkOrderPermit(
-      id: json['id'] ?? json['formatted_id'] ?? '',
-      createdAt: _dt(json['created_at'] ?? json['submitted_at']) ?? DateTime.now(),
+      id: displayId,
+      createdAt:
+          _dt(json['created_at'] ?? json['submitted_at']) ?? DateTime.now(),
       updatedAt: _dt(json['updated_at']),
       requestTypeTag: json['request_type'] ?? 'Work Order',
       departmentTag: categoryField,
@@ -452,12 +487,14 @@ class WorkOrderPermit {
       contractorName: contractorName,
       contractorNumber: contractorContact,
       contractorEmail: contractorEmail,
+      additionalNotes: json['additional_notes'] ?? json['notes'],
 
       workScheduleFrom: _dt(validFrom) ?? DateTime.now(),
       workScheduleTo: _dt(validTo) ?? DateTime.now(),
       entryEquipments: entryReqs,
 
       approvedBy: json['approved_by'],
+      approvedByName: json['approved_by_name'],
       approvalDate: _dt(json['approval_date']),
       denialReason: json['denial_reason'],
       adminNotes: json['admin_notes'],
@@ -491,12 +528,14 @@ class WorkOrderPermit {
     'contractor_name': contractorName,
     'contractor_number': contractorNumber,
     'contractor_company': contractorEmail,
+    'additional_notes': additionalNotes,
 
     'work_schedule_from': workScheduleFrom.toIso8601String(),
     'work_schedule_to': workScheduleTo.toIso8601String(),
     'entry_equipments': entryEquipments,
 
     'approved_by': approvedBy,
+    'approved_by_name': approvedByName,
     'approval_date': approvalDate?.toIso8601String(),
     'denial_reason': denialReason,
     'admin_notes': adminNotes,
@@ -507,7 +546,6 @@ class WorkOrderPermit {
   };
 }
 
-
 // MAINTENANCE ========================================
 
 class Maintenance {
@@ -516,19 +554,20 @@ class Maintenance {
   final DateTime createdAt;
   final DateTime? updatedAt;
   final String? departmentTag;
-  final String requestTypeTag;     // "Maintenance"
-  final String? priority;       // High | Medium | Low
-  final String statusTag;       // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+  final String requestTypeTag; // "Maintenance"
+  final String? priority; // High | Medium | Low
+  final String
+  statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
   final String? resolutionType; // job_service, work_permit, rejected
 
   // Requester
-  final String requestedBy;     // admin name
+  final String requestedBy; // admin name
 
   // Request Details
   final String location;
   final String title;
   final String description;
-  final String checklist;           // NOTE: single string (can be \n separated)
+  final String checklist; // NOTE: single string (can be \n separated)
   final List<String>? attachments;
   final String? adminNote;
 
@@ -537,8 +576,8 @@ class Maintenance {
   final String? staffDepartment;
   final String? assignedPhotoUrl;
 
-  final DateTime? assessedAt;       // staff assessment timestamp
-  final String? assessment;         // staff assessment text
+  final DateTime? assessedAt; // staff assessment timestamp
+  final String? assessment; // staff assessment text
   final List<String>? staffAttachments;
 
   Maintenance({
@@ -582,9 +621,12 @@ class Maintenance {
     final statusField = json['status'] ?? json['status_tag'];
     final categoryField = json['category'] ?? json['department_tag'];
 
+    final displayId = json['formatted_id'] ?? json['id'] ?? '';
+
     return Maintenance(
-      id: json['id'] ?? json['formatted_id'] ?? '',
-      createdAt: _dt(json['created_at'] ?? json['submitted_at']) ?? DateTime.now(),
+      id: displayId,
+      createdAt:
+          _dt(json['created_at'] ?? json['submitted_at']) ?? DateTime.now(),
       updatedAt: _dt(json['updated_at']),
       departmentTag: categoryField,
       requestTypeTag: json['request_type'] ?? 'Maintenance',
@@ -647,26 +689,27 @@ class WorkOrderDetails {
   final String id;
   final DateTime createdAt;
   final DateTime? updatedAt;
-  final String requestTypeTag;      // "Work Order", "Job Service", or "Maintenance"
+  final String requestTypeTag; // "Work Order", "Job Service", or "Maintenance"
   final String? departmentTag;
-  final String? priority;           // High | Medium | Low
-  final String statusTag;           // Pending | Scheduled | Assigned | In Progress | On Hold | Done
-  final String? resolutionType;     // job_service | work_permit | rejected
+  final String? priority; // High | Medium | Low
+  final String
+  statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+  final String? resolutionType; // job_service | work_permit | rejected
 
   // Requester / Linkage
-  final String? requestedBy;        // tenant or admin user ID (e.g., T-0001, S-0002)
-  final String? requestedByName;    // full name of requester
-  final String? requestedByEmail;   // email of requester
-  final String? concernSlipId;      // link to related concern slip
-  final String? unitId;             // unit or location identifier
+  final String? requestedBy; // tenant or admin user ID (e.g., T-0001, S-0002)
+  final String? requestedByName; // full name of requester
+  final String? requestedByEmail; // email of requester
+  final String? concernSlipId; // link to related concern slip
+  final String? unitId; // unit or location identifier
   final String? scheduleAvailability; // for scheduling availability
 
   // Request Details
   final String title;
   final String? description;
-  final String? location;           // optional: used for maintenance requests
-  final String? checklist;          // maintenance checklist (string or \n separated)
-  final String? additionalNotes;    // additional remarks or admin notes
+  final String? location; // optional: used for maintenance requests
+  final String? checklist; // maintenance checklist (string or \n separated)
+  final String? additionalNotes; // additional remarks or admin notes
 
   // Staff (assigned info)
   final String? assignedStaff;
@@ -684,6 +727,7 @@ class WorkOrderDetails {
 
   // Approval & Admin Tracking
   final String? approvedBy;
+  final String? approvedByName;
   final DateTime? approvalDate;
   final String? denialReason;
   final String? adminNotes;
@@ -696,8 +740,8 @@ class WorkOrderDetails {
   final String? assessment;
 
   // Attachments
-  final List<String>? attachments;       // request attachments (tenant/admin)
-  final List<String>? staffAttachments;  // staff-side documentation
+  final List<String>? attachments; // request attachments (tenant/admin)
+  final List<String>? staffAttachments; // staff-side documentation
 
   const WorkOrderDetails({
     // Basic Info
@@ -741,6 +785,7 @@ class WorkOrderDetails {
 
     // Approval / Admin
     this.approvedBy,
+    this.approvedByName,
     this.approvalDate,
     this.denialReason,
     this.adminNotes,

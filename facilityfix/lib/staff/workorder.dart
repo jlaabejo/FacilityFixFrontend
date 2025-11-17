@@ -61,8 +61,10 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
               allRequests.map((request) {
                 // Convert API response to WorkOrder-like structure
                 // Determine canonical status; prefer assessment-derived 'inspected'
-                final rawStatus = (request['status'] ?? '').toString().toLowerCase();
-                final hasAssessment = (request['staff_assessment'] != null) ||
+                final rawStatus =
+                    (request['status'] ?? '').toString().toLowerCase();
+                final hasAssessment =
+                    (request['staff_assessment'] != null) ||
                     (request['staff_recommendation'] != null) ||
                     (request['assessed_by'] != null) ||
                     (request['assessed_at'] != null) ||
@@ -73,9 +75,12 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                 String statusToken;
                 if (hasAssessment) {
                   statusToken = 'inspected';
-                } else if (rawStatus.contains('assigned') || rawStatus.contains('to inspect') || rawStatus.contains('to_inspect')) {
+                } else if (rawStatus.contains('assigned') ||
+                    rawStatus.contains('to inspect') ||
+                    rawStatus.contains('to_inspect')) {
                   statusToken = 'to inspect';
-                } else if (rawStatus.contains('in_progress') || rawStatus.contains('in progress')) {
+                } else if (rawStatus.contains('in_progress') ||
+                    rawStatus.contains('in progress')) {
                   statusToken = 'in progress';
                 } else if (rawStatus.contains('pending')) {
                   statusToken = 'pending';
@@ -84,27 +89,33 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                 }
 
                 return {
-                    'id': request['formatted_id'] ?? request['id'] ?? '',
-                    'raw_id': request['id'] ?? '', // Store the raw ID for API calls
-                    'title': request['title'] ?? 'Untitled Request',
-                    'created_at':
-                        request['created_at'] ?? DateTime.now().toIso8601String(),
-                    'status': statusToken,
-                    'category':
-                        request['category'] ??
-                        request['department_tag'] ??
-                        'general',
-                    'priority': request['priority'] ?? '',
-                    'request_type': request['request_type'] ?? 'Concern Slip',
-                    'unit_id': request['unit_id'] ?? '',
-                    // Prefer explicit assigned staff name fields if available; keep assigned_to id separately
-                    'assigned_staff': request['assigned_staff_name'] ?? request['assigned_staff'] ?? '',
-                    'assigned_to_id': request['assigned_to'] ?? '',
-                    'staff_department':
-                        request['staff_department'] ?? request['category'],
-                    'description': request['description'] ?? '',
-                    'location': request['location'] ?? '',
-                  };
+                  'id': request['formatted_id'] ?? request['id'] ?? '',
+                  'raw_id':
+                      request['id'] ?? '', // Store the raw ID for API calls
+                  'title': request['title'] ?? 'Untitled Request',
+                  'created_at':
+                      request['created_at'] ?? DateTime.now().toIso8601String(),
+                  'status': statusToken,
+                  'category':
+                      request['category'] ??
+                      request['department_tag'] ??
+                      'general',
+                  'priority': request['priority'] ?? '',
+                  'request_type': request['request_type'] ?? 'Concern Slip',
+                  'unit_id': request['unit_id'] ?? '',
+                  // Prefer explicit assigned staff name fields if available; keep assigned_to id separately
+                  'assigned_staff':
+                      request['assigned_staff_name'] ??
+                      request['assigned_staff'] ??
+                      '',
+                  'assigned_to_id': request['assigned_to'] ?? '',
+                  'staff_department':
+                      request['staff_department'] ?? request['category'],
+                  'description': request['description'] ?? '',
+                  'location': request['location'] ?? '',
+                  'raw_status': request['status'] ?? 'pending',
+                  'job_service_id': request['job_service_id'] ?? '',
+                };
               }).toList();
           _isLoading = false;
         });
@@ -204,7 +215,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     try {
       final requestId = request['raw_id'] ?? request['id'] ?? '';
       final requestType = (request['request_type'] ?? '').toLowerCase();
-      
+
       if (requestId.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -259,7 +270,8 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       builder:
           (_) => CustomPopup(
             title: 'Staff Access',
-            message: 'Staff members can view and respond to requests. Only tenants can create new requests.',
+            message:
+                'Staff members can view and respond to requests. Only tenants can create new requests.',
             primaryText: 'OK',
             onPrimaryPressed: () {
               Navigator.of(context).pop();
@@ -293,12 +305,21 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
     final s = raw.toString().toLowerCase().trim();
 
     if (s.contains('pending')) return 'pending';
-    if (s == 'sent to client' || s == 'sent_to_client' || s == 'sent to tenant' || s == 'sent') return 'inspected';
+    if (s == 'sent to client' ||
+        s == 'sent_to_client' ||
+        s == 'sent to tenant' ||
+        s == 'sent')
+      return 'inspected';
     if (s.contains('inspected') || s.contains('sent')) return 'inspected';
-    if (s.contains('to inspect') || s.contains('to be inspect') || s.contains('to_be_inspect') || s.contains('to_inspect')) return 'to inspect';
+    if (s.contains('to inspect') ||
+        s.contains('to be inspect') ||
+        s.contains('to_be_inspect') ||
+        s.contains('to_inspect'))
+      return 'to inspect';
     // Map assigned -> to inspect per request
     if (s == 'assigned') return 'to inspect';
-    if (s.contains('in progress') || s.contains('in_progress')) return 'in progress';
+    if (s.contains('in progress') || s.contains('in_progress'))
+      return 'in progress';
     if (s.contains('on hold') || s.contains('on_hold')) return 'on hold';
 
     return s.isEmpty ? 'pending' : s;
@@ -306,6 +327,13 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
 
   bool _tabMatchesByRequestType(Map<String, dynamic> w) {
     final type = _norm(w['request_type']);
+    final rawStatus = _norm(w['raw_status'] ?? w['status'] ?? '');
+
+    // Hide completed concern slips (they've been converted to job service/work order)
+    if (type == 'concern slip' && rawStatus == 'completed') {
+      return false;
+    }
+
     switch (_norm(_selectedTabLabel)) {
       case 'all':
         return true;
@@ -333,7 +361,8 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   bool _assignmentMatches(Map<String, dynamic> w) {
     if (!_showOnlyMyAssignments || _currentUserId == null) return true;
     // Prefer explicit assigned_to_id (internal id) for matching against current user
-    final assignedId = (w['assigned_to_id'] ?? w['assigned_to'] ?? '').toString();
+    final assignedId =
+        (w['assigned_to_id'] ?? w['assigned_to'] ?? '').toString();
     if (assignedId.isNotEmpty) return assignedId == (_currentUserId ?? '');
     // fallback to name comparison (unlikely) — compare raw assigned_staff string
     final assignedStaff = w['assigned_staff'] ?? '';
@@ -404,8 +433,21 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
             .where(_searchMatches)
             .toList();
 
-    int countFor(String type) =>
-        visible.where((w) => _norm(w['request_type']) == _norm(type)).length;
+    int countFor(String type) {
+      if (_norm(type) == 'concern slip') {
+        // For concern slips, exclude completed ones (they've been converted)
+        return visible
+            .where(
+              (w) =>
+                  _norm(w['request_type']) == _norm(type) &&
+                  _norm(w['raw_status'] ?? w['status'] ?? '') != 'completed',
+            )
+            .length;
+      }
+      return visible
+          .where((w) => _norm(w['request_type']) == _norm(type))
+          .length;
+    }
 
     return [
       TabItem(label: 'All', count: visible.length),
@@ -418,10 +460,17 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   Widget buildCard(Map<String, dynamic> r) {
     final createdAt =
         DateTime.tryParse(r['created_at'] ?? '') ?? DateTime.now();
+    final requestType = (r['request_type'] ?? '').toLowerCase();
 
     return RepairCard(
       title: r['title'] ?? 'Untitled Request',
-      id: r['id'] ?? '',
+      id:
+          (() {
+            if (requestType.contains('job service')) {
+              return (r['job_service_id'] ?? r['id'] ?? '').toString();
+            }
+            return (r['formatted_id'] ?? r['id'] ?? '').toString();
+          })(),
       createdAt: createdAt,
       // display a normalized, human-friendly status for the card
       statusTag: _displayStatus(r['status'] ?? 'pending'),
@@ -435,7 +484,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
         // Extract the raw ID from the formatted ID or use the ID directly
         final requestId = r['raw_id'] ?? r['id'] ?? '';
         final requestType = (r['request_type'] ?? '').toLowerCase();
-        
+
         if (requestId.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -445,15 +494,14 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
           );
           return;
         }
-        
+
         // Navigate to appropriate detail page based on request type
         if (requestType.contains('job service')) {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => StaffJobServiceDetailPage(
-                jobServiceId: requestId,
-              ),
+              builder:
+                  (_) => StaffJobServiceDetailPage(jobServiceId: requestId),
             ),
           ).then((_) {
             // Refresh data when returning
@@ -464,9 +512,8 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => StaffConcernSlipDetailPage(
-                concernSlipId: requestId,
-              ),
+              builder:
+                  (_) => StaffConcernSlipDetailPage(concernSlipId: requestId),
             ),
           ).then((_) {
             // Refresh data when returning

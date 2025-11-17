@@ -24,7 +24,8 @@ class ConcernSlipDetails extends StatelessWidget {
   //  Tenant / Requester
   final String requestedBy;
   final String unitId;
-  final DateTimeRange? scheduleAvailability; // e.g. a DateTimeRange describing availability window
+  final DateTimeRange?
+  scheduleAvailability; // e.g. a DateTimeRange describing availability window
 
   // Request Details
   final String title;
@@ -53,9 +54,9 @@ class ConcernSlipDetails extends StatelessWidget {
     this.resolutionType,
 
     //  Tenant / Requester
-  required this.requestedBy,
-  required this.unitId,
-  Object? scheduleAvailability,
+    required this.requestedBy,
+    required this.unitId,
+    Object? scheduleAvailability,
 
     // Request Details
     required this.title,
@@ -83,50 +84,52 @@ class ConcernSlipDetails extends StatelessWidget {
       if (s.isEmpty) return null;
 
       // Try common separators for ranges
-        for (final sep in ['—', ' - ', ' to ', '|']) {
-          if (s.contains(sep)) {
-            final parts = s.split(sep);
-            if (parts.length >= 2) {
-              final leftRaw = parts[0].trim();
-              final rightRaw = parts[1].trim();
+      for (final sep in ['—', ' - ', ' to ', '|']) {
+        if (s.contains(sep)) {
+          final parts = s.split(sep);
+          if (parts.length >= 2) {
+            final leftRaw = parts[0].trim();
+            final rightRaw = parts[1].trim();
 
-              DateTime? a;
-              DateTime? b;
+            DateTime? a;
+            DateTime? b;
 
-              // Parse left (prefer full parse)
-              try {
-                a = DateTime.tryParse(leftRaw) ?? UiDateUtils.parse(leftRaw);
-              } catch (_) {
-                a = null;
-              }
-
-              // Parse right: handle time-only (e.g. "11:00 AM") relative to left
-              try {
-                // time-only pattern like "11:00 AM" or "9:00 PM" (allow with/without minutes)
-                // NOTE: previous pattern accidentally included an escaped dollar which prevented matches.
-                final timeOnly = RegExp(r'^\s*\d{1,2}(:\d{2})?\s*(AM|PM|am|pm)\s*\$?');
-                if (timeOnly.hasMatch(rightRaw) && a != null) {
-                  // Use locale-aware jm() parser which accepts both "9 AM" and "9:00 AM"
-                  final t = DateFormat.jm().parse(rightRaw);
-                  b = DateTime(a.year, a.month, a.day, t.hour, t.minute);
-                } else {
-                  b = DateTime.tryParse(rightRaw) ?? UiDateUtils.parse(rightRaw);
-                }
-              } catch (_) {
-                b = null;
-              }
-
-              if (a != null && b != null) {
-                return UiDateUtils.normalizeRange(a, b);
-              }
-              // If we couldn't parse properly, skip to fallback below
+            // Parse left (prefer full parse)
+            try {
+              a = DateTime.tryParse(leftRaw) ?? UiDateUtils.parse(leftRaw);
+            } catch (_) {
+              a = null;
             }
+
+            // Parse right: handle time-only (e.g. "11:00 AM") relative to left
+            try {
+              // time-only pattern like "11:00 AM" or "9:00 PM" (allow with/without minutes)
+              // NOTE: previous pattern accidentally included an escaped dollar which prevented matches.
+              final timeOnly = RegExp(
+                r'^\s*\d{1,2}(:\d{2})?\s*(AM|PM|am|pm)\s*\$?',
+              );
+              if (timeOnly.hasMatch(rightRaw) && a != null) {
+                // Use locale-aware jm() parser which accepts both "9 AM" and "9:00 AM"
+                final t = DateFormat.jm().parse(rightRaw);
+                b = DateTime(a.year, a.month, a.day, t.hour, t.minute);
+              } else {
+                b = DateTime.tryParse(rightRaw) ?? UiDateUtils.parse(rightRaw);
+              }
+            } catch (_) {
+              b = null;
+            }
+
+            if (a != null && b != null) {
+              return UiDateUtils.normalizeRange(a, b);
+            }
+            // If we couldn't parse properly, skip to fallback below
           }
         }
+      }
 
-        // Fallback: try to parse a single DateTime and create a 1-hour window
-  final dt = DateTime.tryParse(s) ?? UiDateUtils.parse(s);
-  return UiDateUtils.normalizeRange(dt, dt.add(const Duration(hours: 1)));
+      // Fallback: try to parse a single DateTime and create a 1-hour window
+      final dt = DateTime.tryParse(s) ?? UiDateUtils.parse(s);
+      return UiDateUtils.normalizeRange(dt, dt.add(const Duration(hours: 1)));
     }
     return null;
   }
@@ -151,16 +154,15 @@ class ConcernSlipDetails extends StatelessWidget {
   static String? _fmtScheduleAvailFromRaw(String? raw) {
     if (raw == null) return null;
     // If it's already a DateTimeRange serialized by our parse step, handle it
-    if (raw is String) {
-      final parsedRange = UiDateUtils.parseRange(raw);
-      if (parsedRange != null) return UiDateUtils.dateTimeRange(parsedRange.start, parsedRange.end);
-      // Try parsing as single datetime
-      try {
-        final dt = DateTime.tryParse(raw) ?? UiDateUtils.parse(raw);
-        return UiDateUtils.dateTimeRange(dt, dt.add(const Duration(hours: 1)));
-      } catch (_) {
-        return null;
-      }
+    final parsedRange = UiDateUtils.parseRange(raw);
+    if (parsedRange != null)
+      return UiDateUtils.dateTimeRange(parsedRange.start, parsedRange.end);
+    // Try parsing as single datetime
+    try {
+      final dt = DateTime.tryParse(raw) ?? UiDateUtils.parse(raw);
+      return UiDateUtils.dateTimeRange(dt, dt.add(const Duration(hours: 1)));
+    } catch (_) {
+      return null;
     }
     return null;
   }
@@ -499,9 +501,9 @@ class JobServiceDetails extends StatelessWidget {
     required this.requestedBy,
     this.requestedByName,
     required this.unitId,
-  this.scheduleAvailability,
+    this.scheduleAvailability,
     this.additionalNotes,
-  this.title,
+    this.title,
 
     // Staff
     this.assignedStaff,
@@ -540,9 +542,9 @@ class JobServiceDetails extends StatelessWidget {
 
   // Force the status chip to show "Rejected" when resolutionType == rejected.
   String get _displayStatus =>
-    (resolutionType?.trim().toLowerCase() == 'rejected')
-      ? 'rejected'
-      : statusTag;
+      (resolutionType?.trim().toLowerCase() == 'rejected')
+          ? 'rejected'
+          : statusTag;
 
   @override
   Widget build(BuildContext context) {
@@ -560,11 +562,14 @@ class JobServiceDetails extends StatelessWidget {
         (assessment?.trim().isNotEmpty ?? false) ||
         ((staffAttachments ?? const []).isNotEmpty);
 
-  final displayType = _effectiverequestTypeTag();
-  final headerTitle = (title != null && title!.trim().isNotEmpty) ? title!.trim() : (displayType.isNotEmpty ? displayType : 'Job Service');
+    final displayType = _effectiverequestTypeTag();
+    final headerTitle =
+        (title != null && title!.trim().isNotEmpty)
+            ? title!.trim()
+            : (displayType.isNotEmpty ? displayType : 'Job Service');
 
     // Format helpers using UiDateUtils
-    String _fmtDate(DateTime d) => DateFormat(UiDateUtils.fullDate as String?).format(d);
+    String _fmtDate(DateTime d) => UiDateUtils.fullDate(d);
     String _fmtDateTime(DateTime d) => UiDateUtils.humanDateTime(d);
     String? _fmtSchedAvail(Object? raw) {
       if (raw == null) return null;
@@ -574,7 +579,10 @@ class JobServiceDetails extends StatelessWidget {
       }
 
       if (raw is DateTime) {
-        return UiDateUtils.dateTimeRange(raw, raw.add(const Duration(hours: 1)));
+        return UiDateUtils.dateTimeRange(
+          raw,
+          raw.add(const Duration(hours: 1)),
+        );
       }
 
       if (raw is String) {
@@ -586,7 +594,10 @@ class JobServiceDetails extends StatelessWidget {
 
         try {
           final dt = DateTime.tryParse(s) ?? UiDateUtils.parse(s);
-          return UiDateUtils.dateTimeRange(dt, dt.add(const Duration(hours: 1)));
+          return UiDateUtils.dateTimeRange(
+            dt,
+            dt.add(const Duration(hours: 1)),
+          );
         } catch (_) {
           return null;
         }
@@ -752,9 +763,9 @@ class JobServiceDetails extends StatelessWidget {
           ],
           if (scheduleAvailability != null &&
               ((scheduleAvailability is String &&
-                  (scheduleAvailability as String).trim().isNotEmpty) ||
-               scheduleAvailability is DateTimeRange ||
-               scheduleAvailability is DateTime)) ...[
+                      (scheduleAvailability as String).trim().isNotEmpty) ||
+                  scheduleAvailability is DateTimeRange ||
+                  scheduleAvailability is DateTime)) ...[
             SizedBox(height: 4 * s),
             KeyValueRow.text(
               label: 'Schedule Date',
@@ -1357,19 +1368,27 @@ class WorkOrderPermitDetails extends StatelessWidget {
     print('  onComplete: ${onComplete != null}');
     print('  id: $id');
 
-  // Can complete if:
-  // 1. Status is approved/accepted or in progress
-  // 2. Not already completed
-  // 3. Not rejected
-  final bool statusIsAcceptLike = status.contains('accept') || displayStatus.contains('accept') || status.contains('approved') || displayStatus.contains('approved');
-  final bool statusIsInProgress = status.contains('in progress') || status.contains('in_progress') || displayStatus.contains('in progress') || displayStatus.contains('in_progress');
+    // Can complete if:
+    // 1. Status is approved/accepted or in progress
+    // 2. Not already completed
+    // 3. Not rejected
+    final bool statusIsAcceptLike =
+        status.contains('accept') ||
+        displayStatus.contains('accept') ||
+        status.contains('approved') ||
+        displayStatus.contains('approved');
+    final bool statusIsInProgress =
+        status.contains('in progress') ||
+        status.contains('in_progress') ||
+        displayStatus.contains('in progress') ||
+        displayStatus.contains('in_progress');
 
-  final canComplete =
-    (statusIsAcceptLike || statusIsInProgress) &&
-    !status.contains('completed') &&
-    !status.contains('rejected') &&
-    !displayStatus.contains('completed') &&
-    !displayStatus.contains('rejected');
+    final canComplete =
+        (statusIsAcceptLike || statusIsInProgress) &&
+        !status.contains('completed') &&
+        !status.contains('rejected') &&
+        !displayStatus.contains('completed') &&
+        !displayStatus.contains('rejected');
 
     print('  canComplete: $canComplete');
     return canComplete;
@@ -1501,7 +1520,7 @@ class MaintenanceDetails extends StatefulWidget {
   final Function(Map<String, dynamic>)? onInventoryItemTap;
   final String? currentStaffId;
   final String? taskCategory;
-  
+
   // Action callbacks
   final VoidCallback? onHold;
   final VoidCallback? onCreateAssessment;
@@ -1695,16 +1714,20 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                   const SizedBox(height: 8),
                   KeyValueRow.text(
                     label: 'Schedule',
-                    valueText: (() {
-                      final raw = widget.scheduleDate;
-                      if (raw == null || raw.trim().isEmpty) return _relativeOrFullDT(null);
-                      try {
-                        final dt = DateTime.tryParse(raw.trim()) ?? UiDateUtils.parse(raw.trim());
-                        return _relativeOrFullDT(dt);
-                      } catch (_) {
-                        return _relativeOrFullDT(null);
-                      }
-                    })(),
+                    valueText:
+                        (() {
+                          final raw = widget.scheduleDate;
+                          if (raw == null || raw.trim().isEmpty)
+                            return _relativeOrFullDT(null);
+                          try {
+                            final dt =
+                                DateTime.tryParse(raw.trim()) ??
+                                UiDateUtils.parse(raw.trim());
+                            return _relativeOrFullDT(dt);
+                          } catch (_) {
+                            return _relativeOrFullDT(null);
+                          }
+                        })(),
                   ),
                 ],
               ],
@@ -2100,42 +2123,43 @@ class _MaintenanceState extends State<MaintenanceDetails> {
           ffDivider(),
           const SizedBox(height: 8),
 
-            // ===== Assigned Staff =====
-            if (hasAssigned) ...[
-              const _SectionTitle('Assigned Staff'),
-              SizedBox(height: 8),
+          // ===== Assigned Staff =====
+          if (hasAssigned) ...[
+            const _SectionTitle('Assigned Staff'),
+            SizedBox(height: 8),
 
-              // Show staff avatar/name if available
-              if ((widget.assignedStaff?.trim().isNotEmpty ?? false))
-                _AvatarNameBlock(
-                  name: widget.assignedStaff!.trim(),
-                  photoUrl: (widget.staffPhotoUrl?.trim().isNotEmpty ?? false)
-                      ? widget.staffPhotoUrl!.trim()
-                      : null,
-                ),
-
-              // Date Assessed
-              if (widget.assessedAt != null) ...[
-                SizedBox(height: 8),
-                KeyValueRow.text(
-                  label: 'Date Assessed',
-                  valueText: _relativeOrFullDT(widget.assessedAt),
-                ),
-              ],
-
-              SizedBox(height: 14),
-            ],
-
-            if ((widget.assessment?.trim().isNotEmpty ?? false)) ...[
-              SizedBox(height: 10),
-              _SectionCard(
-                title: 'Assessment',
-                content: widget.assessment!.trim(),
-                padding: EdgeInsets.all(14),
-                hideIfEmpty: false,
+            // Show staff avatar/name if available
+            if ((widget.assignedStaff?.trim().isNotEmpty ?? false))
+              _AvatarNameBlock(
+                name: widget.assignedStaff!.trim(),
+                photoUrl:
+                    (widget.staffPhotoUrl?.trim().isNotEmpty ?? false)
+                        ? widget.staffPhotoUrl!.trim()
+                        : null,
               ),
-              SizedBox(height: 14),
+
+            // Date Assessed
+            if (widget.assessedAt != null) ...[
+              SizedBox(height: 8),
+              KeyValueRow.text(
+                label: 'Date Assessed',
+                valueText: _relativeOrFullDT(widget.assessedAt),
+              ),
             ],
+
+            SizedBox(height: 14),
+          ],
+
+          if ((widget.assessment?.trim().isNotEmpty ?? false)) ...[
+            SizedBox(height: 10),
+            _SectionCard(
+              title: 'Assessment',
+              content: widget.assessment!.trim(),
+              padding: EdgeInsets.all(14),
+              hideIfEmpty: false,
+            ),
+            SizedBox(height: 14),
+          ],
 
           // Materials used (optional)
           if ((widget.materialsUsed ?? const <String>[]).isNotEmpty)
@@ -2181,7 +2205,7 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                 ),
               ),
             ),
-        ],  
+        ],
       ),
     );
   }
@@ -3169,10 +3193,10 @@ class _SectionCard extends StatelessWidget {
   const _SectionCard({
     this.title,
     this.content,
-    this.child,
     required this.padding,
-    this.margin,
     required this.hideIfEmpty,
+    this.child,
+    this.margin,
   });
 
   double _scale(BuildContext context) => uiScale(context);
