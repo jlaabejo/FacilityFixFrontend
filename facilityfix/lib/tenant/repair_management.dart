@@ -111,6 +111,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
                       request['photo_url'],
                   'description': request['description'] ?? '',
                   'location': request['location'] ?? '',
+                  'raw_status': request['status'] ?? 'pending',
                 };
               }).toList();
           _isLoading = false;
@@ -301,6 +302,13 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
 
   bool _tabMatchesByRequestType(Map<String, dynamic> w) {
     final type = _norm(w['request_type']);
+    final rawStatus = _norm(w['raw_status'] ?? w['status'] ?? '');
+
+    // Hide completed concern slips (they've been converted to job service/work order)
+    if (type == 'concern slip' && rawStatus == 'completed') {
+      return false;
+    }
+
     switch (_norm(_selectedTabLabel)) {
       case 'all':
         return true;
@@ -433,8 +441,21 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
             .where(_searchMatches)
             .toList();
 
-    int countFor(String type) =>
-        visible.where((w) => _norm(w['request_type']) == _norm(type)).length;
+    int countFor(String type) {
+      if (_norm(type) == 'concern slip') {
+        // For concern slips, exclude completed ones (they've been converted)
+        return visible
+            .where(
+              (w) =>
+                  _norm(w['request_type']) == _norm(type) &&
+                  _norm(w['raw_status'] ?? w['status'] ?? '') != 'completed',
+            )
+            .length;
+      }
+      return visible
+          .where((w) => _norm(w['request_type']) == _norm(type))
+          .length;
+    }
 
     return [
       TabItem(label: 'All', count: visible.length),
@@ -497,13 +518,10 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
       id:
           (() {
             if (requestType.contains('job service')) {
-              return (r['job_service_id'] ??
-                      r['js_id'] ??
-                      r['formatted_id'] ??
-                      r['id'] ??
-                      '')
-                  .toString();
+              // For Job Services, use job_service_id which already contains the formatted ID
+              return (r['job_service_id'] ?? r['id'] ?? '').toString();
             }
+            // For other types, use formatted_id if available, otherwise id
             return (r['formatted_id'] ?? r['id'] ?? '').toString();
           })(),
       createdAt: createdAt,

@@ -105,7 +105,8 @@ class AppDialog extends StatefulWidget {
   State<AppDialog> createState() => _AppDialogState();
 }
 
-class _AppDialogState extends State<AppDialog> with SingleTickerProviderStateMixin {
+class _AppDialogState extends State<AppDialog>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
@@ -117,8 +118,14 @@ class _AppDialogState extends State<AppDialog> with SingleTickerProviderStateMix
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    _scaleAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeOutBack);
-    _fadeAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _scaleAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutBack,
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOut,
+    );
     _controller.forward();
   }
 
@@ -195,11 +202,7 @@ class DialogContainer extends StatelessWidget {
   final Widget child;
   final double maxWidth;
 
-  const DialogContainer({
-    super.key,
-    required this.child,
-    this.maxWidth = 420,
-  });
+  const DialogContainer({super.key, required this.child, this.maxWidth = 420});
 
   @override
   Widget build(BuildContext context) {
@@ -339,7 +342,8 @@ class _DialogActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Determine colors based on the isDestructive flag
-    final primaryBg = isDestructive ? const Color(0xFFEF4444) : const Color(0xFF2563EB);
+    final primaryBg =
+        isDestructive ? const Color(0xFFEF4444) : const Color(0xFF2563EB);
     final primaryFg = Colors.white;
     final secondaryBg = const Color(0xFFF3F4F6);
     final secondaryFg = const Color(0xFF374151);
@@ -416,15 +420,16 @@ class _DialogButtonState extends State<DialogButton> {
           decoration: BoxDecoration(
             color: widget.bg,
             borderRadius: BorderRadius.circular(widget.radius),
-            boxShadow: _isPressed
-                ? []
-                : [
-                    BoxShadow(
-                      color: widget.bg.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+            boxShadow:
+                _isPressed
+                    ? []
+                    : [
+                      BoxShadow(
+                        color: widget.bg.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
           ),
           child: Center(
             child: Text(

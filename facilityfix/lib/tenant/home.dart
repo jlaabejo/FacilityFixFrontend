@@ -70,17 +70,22 @@ class _HomeState extends State<HomePage> {
           _allRequests = allRequests;
 
           _activeRequestsCount =
-              allRequests
-                  .where(
-                    (data) =>
-                        (data['status'] ?? '').toString().toLowerCase() !=
-                            'done' &&
-                        (data['status'] ?? '').toString().toLowerCase() !=
-                            'completed' &&
-                        (data['status'] ?? '').toString().toLowerCase() !=
-                            'closed',
-                  )
-                  .length;
+              allRequests.where((data) {
+                final status = (data['status'] ?? '').toString().toLowerCase();
+                final requestType =
+                    (data['request_type'] ?? '').toString().toLowerCase();
+
+                // Exclude completed concern slips (they've been converted to job service/work order)
+                if (requestType.contains('concern slip') &&
+                    status == 'completed') {
+                  return false;
+                }
+
+                // Exclude done/completed/closed requests
+                return status != 'done' &&
+                    status != 'completed' &&
+                    status != 'closed';
+              }).length;
 
           _doneRequestsCount =
               allRequests
@@ -105,10 +110,11 @@ class _HomeState extends State<HomePage> {
     try {
       // Get user profile to determine building
       final profile = await AuthStorage.getProfile();
-      final buildingId = profile?['building_id']?.toString() ?? 'default_building';
-      
+      final buildingId =
+          profile?['building_id']?.toString() ?? 'default_building';
+
       final apiService = APIService();
-      
+
       // Fetch more announcements to ensure we have 3 after filtering
       final announcements = await apiService.getAllAnnouncements(
         buildingId: buildingId,
@@ -119,10 +125,12 @@ class _HomeState extends State<HomePage> {
 
       if (mounted) {
         // Filter to only include announcements for tenants or all audiences
-        final filteredAnnouncements = announcements.where((ann) {
-          final audience = (ann['audience'] ?? 'all').toString().toLowerCase();
-          return audience == 'tenants' || audience == 'all';
-        }).toList();
+        final filteredAnnouncements =
+            announcements.where((ann) {
+              final audience =
+                  (ann['audience'] ?? 'all').toString().toLowerCase();
+              return audience == 'tenants' || audience == 'all';
+            }).toList();
 
         setState(() {
           // Take only the 3 most recent after filtering
@@ -259,6 +267,13 @@ class _HomeState extends State<HomePage> {
     // Determine the request type and format accordingly
     final requestType = request['request_type'] ?? 'Concern Slip';
     final status = request['status'] ?? 'pending';
+
+    // Don't display completed concern slips (they've been converted)
+    if (requestType.toLowerCase().contains('concern slip') &&
+        status.toLowerCase() == 'completed') {
+      return const SizedBox.shrink();
+    }
+
     final priority = request['priority'] ?? 'medium';
 
     // Format the ID based on request type
@@ -511,8 +526,10 @@ class _HomeState extends State<HomePage> {
     final content = announcement['content'] ?? '';
     final announcementType = announcement['type'] ?? 'general';
     final priorityLevel = announcement['priority_level'] ?? 'normal';
-    final createdAt = announcement['date_added'] ?? announcement['created_at'] ?? '';
-    final formattedId = announcement['formatted_id'] ?? 'ANN-${announcement['id'] ?? ''}';
+    final createdAt =
+        announcement['date_added'] ?? announcement['created_at'] ?? '';
+    final formattedId =
+        announcement['formatted_id'] ?? 'ANN-${announcement['id'] ?? ''}';
     final announcementId = announcement['id'] ?? '';
 
     // Truncate content for preview
@@ -543,10 +560,11 @@ class _HomeState extends State<HomePage> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => AnnouncementDetailsPage(
-                  announcementId: announcementId,
-                  announcementData: announcement,
-                ),
+                builder:
+                    (_) => AnnouncementDetailsPage(
+                      announcementId: announcementId,
+                      announcementData: announcement,
+                    ),
               ),
             ).then((_) {
               // Refresh announcements when returning
@@ -562,7 +580,9 @@ class _HomeState extends State<HomePage> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: _getAnnouncementTypeColor(announcementType).withOpacity(0.1),
+                    color: _getAnnouncementTypeColor(
+                      announcementType,
+                    ).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
@@ -921,49 +941,54 @@ class _HomeState extends State<HomePage> {
                         const SizedBox(height: 12),
                         _latestAnnouncements.isEmpty
                             ? Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(24),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF9FAFB),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF9FAFB),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFFE5E7EB),
                                 ),
-                                child: const Column(
-                                  children: [
-                                    Icon(
-                                      Icons.announcement_outlined,
-                                      size: 48,
-                                      color: Color(0xFF9CA3AF),
-                                    ),
-                                    SizedBox(height: 12),
-                                    Text(
-                                      'No announcements',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF374151),
-                                      ),
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      'Building announcements will appear here',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Color(0xFF6B7280),
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : Column(
-                                children:
-                                    _latestAnnouncements
-                                        .map(
-                                          (announcement) => _buildAnnouncementCard(announcement),
-                                        )
-                                        .toList(),
                               ),
+                              child: const Column(
+                                children: [
+                                  Icon(
+                                    Icons.announcement_outlined,
+                                    size: 48,
+                                    color: Color(0xFF9CA3AF),
+                                  ),
+                                  SizedBox(height: 12),
+                                  Text(
+                                    'No announcements',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF374151),
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    'Building announcements will appear here',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Color(0xFF6B7280),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
+                            )
+                            : Column(
+                              children:
+                                  _latestAnnouncements
+                                      .map(
+                                        (announcement) =>
+                                            _buildAnnouncementCard(
+                                              announcement,
+                                            ),
+                                      )
+                                      .toList(),
+                            ),
                         const SizedBox(height: 24),
                       ],
                     ),

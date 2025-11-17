@@ -56,7 +56,7 @@ class _HomeState extends State<HomePage> {
     // Verify user role matches staff
     final profile = await AuthStorage.getProfile();
     final role = profile?['role']?.toString().toLowerCase() ?? '';
-    
+
     if (role.isEmpty) {
       print('[Staff Home] No role found in profile');
       // Continue loading anyway
@@ -76,7 +76,7 @@ class _HomeState extends State<HomePage> {
     } else {
       print('[Staff Home] Role verified: staff');
     }
-    
+
     // Load data
     _loadUserData();
     _loadAllRequests();
@@ -106,17 +106,22 @@ class _HomeState extends State<HomePage> {
           _allRequests = allRequests;
 
           _activeRequestsCount =
-              allRequests
-                  .where(
-                    (data) =>
-                        (data['status'] ?? '').toString().toLowerCase() !=
-                            'done' &&
-                        (data['status'] ?? '').toString().toLowerCase() !=
-                            'completed' &&
-                        (data['status'] ?? '').toString().toLowerCase() !=
-                            'closed',
-                  )
-                  .length;
+              allRequests.where((data) {
+                final status = (data['status'] ?? '').toString().toLowerCase();
+                final requestType =
+                    (data['request_type'] ?? '').toString().toLowerCase();
+
+                // Exclude completed concern slips (they've been converted to job service/work order)
+                if (requestType.contains('concern slip') &&
+                    status == 'completed') {
+                  return false;
+                }
+
+                // Exclude done/completed/closed requests
+                return status != 'done' &&
+                    status != 'completed' &&
+                    status != 'closed';
+              }).length;
 
           _doneRequestsCount =
               allRequests
@@ -141,11 +146,12 @@ class _HomeState extends State<HomePage> {
     try {
       // Get user profile to determine building
       final profile = await AuthStorage.getProfile();
-      final buildingId = profile?['building_id']?.toString() ?? 'default_building';
-      
+      final buildingId =
+          profile?['building_id']?.toString() ?? 'default_building';
+
       // Use staff role for API service
       final apiService = APIService(roleOverride: AppRole.staff);
-      
+
       // Fetch announcements with limit of 3
       final announcements = await apiService.getAllAnnouncements(
         buildingId: buildingId,
@@ -169,11 +175,12 @@ class _HomeState extends State<HomePage> {
     try {
       // Use staff role for API service
       final apiService = APIService(roleOverride: AppRole.staff);
-      
+
       // Get user profile for building context
       final profile = await AuthStorage.getProfile();
-      final buildingId = profile?['building_id']?.toString() ?? 'default_building';
-      
+      final buildingId =
+          profile?['building_id']?.toString() ?? 'default_building';
+
       // Fetch all inventory requests for the building
       final requests = await apiService.getInventoryRequests(
         buildingId: buildingId,
@@ -215,12 +222,12 @@ class _HomeState extends State<HomePage> {
   String _getInitials(String fullName) {
     final trimmed = fullName.trim();
     if (trimmed.isEmpty) return 'U';
-    
+
     final parts = trimmed.split(RegExp(r'\s+'));
     if (parts.length == 1) {
       return parts[0][0].toUpperCase();
     }
-    
+
     // Take first letter of first name and last name
     return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
   }
@@ -232,10 +239,12 @@ class _HomeState extends State<HomePage> {
       // Verify role is persisted
       final localProfile = await AuthStorage.getProfile();
       final storedRole = localProfile?['role']?.toString().toLowerCase() ?? '';
-      
+
       // If role mismatch, redirect to tenant (security measure)
       if (storedRole.isNotEmpty && storedRole != 'staff') {
-        print('[Staff Home] Role mismatch detected: $storedRole, expected staff');
+        print(
+          '[Staff Home] Role mismatch detected: $storedRole, expected staff',
+        );
         // This shouldn't happen, but if it does, don't continue loading
         if (mounted) {
           setState(() => _isLoading = false);
@@ -279,7 +288,8 @@ class _HomeState extends State<HomePage> {
       firstName = _titleCaseFirstOnly(firstRaw);
       // Build full name for initials
       final lastRaw = (profile['last_name'] ?? '').toString().trim();
-      fullNameForInitials = '$firstRaw ${lastRaw.isNotEmpty ? lastRaw : ''}'.trim();
+      fullNameForInitials =
+          '$firstRaw ${lastRaw.isNotEmpty ? lastRaw : ''}'.trim();
     } else {
       final fullName = (profile['full_name'] ?? '').toString().trim();
       if (fullName.isNotEmpty) {
@@ -290,13 +300,16 @@ class _HomeState extends State<HomePage> {
 
     // ---- Staff Department (instead of building_unit for staff) ----
     final staffDept = (profile['staff_department'] ?? '').toString().trim();
-    final formattedDept = staffDept.isNotEmpty ? _formatDepartment(staffDept) : 'Staff';
+    final formattedDept =
+        staffDept.isNotEmpty ? _formatDepartment(staffDept) : 'Staff';
 
     if (mounted) {
       setState(() {
         _userName = firstName.isNotEmpty ? firstName : 'User';
         _unitLabel = formattedDept; // Show department for staff
-        _userInitials = _getInitials(fullNameForInitials.isNotEmpty ? fullNameForInitials : 'User');
+        _userInitials = _getInitials(
+          fullNameForInitials.isNotEmpty ? fullNameForInitials : 'User',
+        );
       });
     }
   }
@@ -385,6 +398,13 @@ class _HomeState extends State<HomePage> {
     // Determine the request type and format accordingly
     final requestType = request['request_type'] ?? 'Concern Slip';
     final status = request['status'] ?? 'pending';
+
+    // Don't display completed concern slips (they've been converted)
+    if (requestType.toLowerCase().contains('concern slip') &&
+        status.toLowerCase() == 'completed') {
+      return const SizedBox.shrink();
+    }
+
     final priority = request['priority'] ?? 'medium';
 
     // Format the ID based on request type
@@ -395,13 +415,17 @@ class _HomeState extends State<HomePage> {
           displayId = 'CS-${request['id'] ?? ''}';
           break;
         case 'job service':
-            displayId = 'JS-${(request['id'] ?? '').toString().padLeft(5, '0').substring(0, 5)}';
+          displayId =
+              'JS-${(request['id'] ?? '').toString().padLeft(5, '0').substring(0, 5)}';
           break;
         case 'work order':
           displayId = 'WO-${request['id'] ?? ''}';
           break;
         default:
-            displayId = (request['id'] ?? '').toString().padLeft(11, '0').substring(0, 11);
+          displayId = (request['id'] ?? '')
+              .toString()
+              .padLeft(11, '0')
+              .substring(0, 11);
       }
     }
 
@@ -425,7 +449,7 @@ class _HomeState extends State<HomePage> {
           // Extract the raw ID from the request data
           // Use the raw ID (not formatted_id) for API calls
           final requestId = request['id']?.toString() ?? '';
-          
+
           if (requestId.isEmpty) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -435,15 +459,14 @@ class _HomeState extends State<HomePage> {
             );
             return;
           }
-          
+
           // Navigate to appropriate detail page based on request type
           if (request['title'].contains('Job Service for:')) {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => StaffJobServiceDetailPage(
-                  jobServiceId: requestId,
-                ),
+                builder:
+                    (_) => StaffJobServiceDetailPage(jobServiceId: requestId),
               ),
             ).then((_) {
               // Refresh data when returning from detail page
@@ -454,9 +477,8 @@ class _HomeState extends State<HomePage> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => StaffConcernSlipDetailPage(
-                  concernSlipId: requestId,
-                ),
+                builder:
+                    (_) => StaffConcernSlipDetailPage(concernSlipId: requestId),
               ),
             ).then((_) {
               // Refresh data when returning from detail page
@@ -666,8 +688,10 @@ class _HomeState extends State<HomePage> {
     final content = announcement['content'] ?? '';
     final announcementType = announcement['type'] ?? 'general';
     final priorityLevel = announcement['priority_level'] ?? 'normal';
-    final createdAt = announcement['date_added'] ?? announcement['created_at'] ?? '';
-    final formattedId = announcement['formatted_id'] ?? 'ANN-${announcement['id'] ?? ''}';
+    final createdAt =
+        announcement['date_added'] ?? announcement['created_at'] ?? '';
+    final formattedId =
+        announcement['formatted_id'] ?? 'ANN-${announcement['id'] ?? ''}';
 
     // Truncate content for preview
     String contentPreview = content;
@@ -706,7 +730,9 @@ class _HomeState extends State<HomePage> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: _getAnnouncementTypeColor(announcementType).withOpacity(0.1),
+                    color: _getAnnouncementTypeColor(
+                      announcementType,
+                    ).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
@@ -1081,7 +1107,9 @@ class _HomeState extends State<HomePage> {
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF9FAFB),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFE5E7EB)),
+                                border: Border.all(
+                                  color: const Color(0xFFE5E7EB),
+                                ),
                               ),
                               child: const Column(
                                 children: [
@@ -1116,7 +1144,9 @@ class _HomeState extends State<HomePage> {
                                   _latestAnnouncements
                                       .map(
                                         (announcement) =>
-                                            _buildAnnouncementCard(announcement),
+                                            _buildAnnouncementCard(
+                                              announcement,
+                                            ),
                                       )
                                       .toList(),
                             ),

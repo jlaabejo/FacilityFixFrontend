@@ -18,10 +18,11 @@ class WorkOrderConcernSlipDialog extends StatefulWidget {
   });
 
   @override
-  State<WorkOrderConcernSlipDialog> createState() => _WorkOrderConcernSlipDialogState();
+  State<WorkOrderConcernSlipDialog> createState() =>
+      _WorkOrderConcernSlipDialogState();
 
   static void show(
-    BuildContext context, 
+    BuildContext context,
     Map<String, dynamic> task, {
     VoidCallback? onAssignmentComplete,
   }) {
@@ -38,8 +39,10 @@ class WorkOrderConcernSlipDialog extends StatefulWidget {
   }
 }
 
-class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog> {
-  int _currentStep = 1; // 0 = CS Details, 1 = WOP Details (open on WOP details by default)
+class _WorkOrderConcernSlipDialogState
+    extends State<WorkOrderConcernSlipDialog> {
+  int _currentStep =
+      1; // 0 = CS Details, 1 = WOP Details (open on WOP details by default)
   bool _isProcessing = false;
   String? selectedStaffName;
   DateTime? selectedDate;
@@ -53,25 +56,28 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
     final status = task['status']?.toString().toLowerCase() ?? '';
     return status == 'pending' || status == 'pending review';
   }
-  
+
   bool get _isInProgressStatus {
     final status = task['status']?.toString().toLowerCase() ?? '';
     return status == 'in progress' || status == 'inprogress';
   }
-  
+
   bool get _isAcceptedStatus {
     final status = task['status']?.toString().toLowerCase() ?? '';
     return status == 'accepted';
   }
-  
+
   bool get _isCompletedStatus {
     final status = task['status']?.toString().toLowerCase() ?? '';
     return status == 'completed';
   }
-  
+
   // Check if we should show WOP details
   bool get _shouldShowWOPDetails {
-    return _isPendingStatus || _isInProgressStatus || _isAcceptedStatus || _isCompletedStatus;
+    return _isPendingStatus ||
+        _isInProgressStatus ||
+        _isAcceptedStatus ||
+        _isCompletedStatus;
   }
 
   @override
@@ -88,7 +94,12 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
   Future<void> _loadConcernSlipDetails() async {
     try {
       // Try common keys for concern slip id
-  dynamic csId = task['concern_slip_id'] ?? task['concernSlipId'] ?? task['cs_id'] ?? task['csId'] ?? task['rawData']?['concern_slip_id'];
+      dynamic csId =
+          task['concern_slip_id'] ??
+          task['concernSlipId'] ??
+          task['cs_id'] ??
+          task['csId'] ??
+          task['rawData']?['concern_slip_id'];
       if (csId == null) return;
 
       final id = csId.toString();
@@ -98,6 +109,21 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
           // attach to local task copy
           _taskData ??= Map<String, dynamic>.from(widget.task);
           _taskData?['rawData'] = cs;
+
+          if (cs['reported_by'] != null && !_hasValidName(cs['reported_by'])) {
+            try {
+              final userProfile = await _apiService.getUserProfile();
+              if (userProfile != null) {
+                cs['reported_by_name'] =
+                    '${userProfile['first_name'] ?? ''} ${userProfile['last_name'] ?? ''}'
+                        .trim();
+                cs['requester_name'] = cs['reported_by_name'];
+              }
+            } catch (e) {
+              print('[WOPDialog] Could not fetch user profile: $e');
+            }
+          }
+
           // Initialize schedule and populate assigned staff display similar to ConcernSlipDetailDialog
           try {
             _initializeScheduleDate();
@@ -115,11 +141,35 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
     }
   }
 
+  bool _hasValidName(dynamic value) {
+    if (value == null) return false;
+    final str = value.toString().trim();
+    // If it looks like an ID (UUID, numeric, contains underscores), it's not a name
+    if (RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+      caseSensitive: false,
+    ).hasMatch(str)) {
+      return false;
+    }
+    if (RegExp(r'^[0-9]+$').hasMatch(str)) {
+      return false;
+    }
+    if (str.contains('_') || str.length > 50) {
+      return false;
+    }
+    // If it has spaces and multiple words, it's probably a name
+    return str.contains(' ') || str.length < 30;
+  }
+
   void _populateAssignedStaffName() {
     try {
       final data = task;
-      dynamic assigned = data['rawData']?['assigned_staff'] ??
-          data['rawData']?['assigned_to'] ?? data['assigned_staff'] ?? data['assigned_to'] ?? data['assigned_staff_name'];
+      dynamic assigned =
+          data['rawData']?['assigned_staff'] ??
+          data['rawData']?['assigned_to'] ??
+          data['assigned_staff'] ??
+          data['assigned_to'] ??
+          data['assigned_staff_name'];
 
       if (assigned == null) return;
 
@@ -135,8 +185,15 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
       }
 
       if (assigned is Map<String, dynamic>) {
-        final name = assigned['name'] ?? assigned['full_name'] ?? ((assigned['first_name'] ?? '') + ' ' + (assigned['last_name'] ?? '')).trim();
-        if (name != null && name.toString().isNotEmpty) selectedStaffName = name.toString();
+        final name =
+            assigned['name'] ??
+            assigned['full_name'] ??
+            ((assigned['first_name'] ?? '') +
+                    ' ' +
+                    (assigned['last_name'] ?? ''))
+                .trim();
+        if (name != null && name.toString().isNotEmpty)
+          selectedStaffName = name.toString();
         return;
       }
 
@@ -146,7 +203,7 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
     }
   }
 
-    void _initializeScheduleDate() {
+  void _initializeScheduleDate() {
     // Auto-populate inspection schedule from schedule availability
     final scheduleAvailability =
         widget.task['dateRequested'] ??
@@ -178,7 +235,7 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
 
   Widget build(BuildContext context) {
     return Dialog(
-          backgroundColor: Colors.white,
+      backgroundColor: Colors.white,
       insetPadding: const EdgeInsets.all(20),
       child: Container(
         width: MediaQuery.of(context).size.width * 0.7,
@@ -200,10 +257,14 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
             _buildHeader(context),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-                child: _currentStep == 0 
-                    ? _buildConcernSlipDetails()
-                    : _buildWorkOrderDetails(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 24,
+                ),
+                child:
+                    _currentStep == 0
+                        ? _buildConcernSlipDetails()
+                        : _buildWorkOrderDetails(),
               ),
             ),
             _buildFooter(context),
@@ -225,13 +286,11 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
       default:
         title = 'Work Order';
     }
-    
+
     return Container(
       padding: const EdgeInsets.only(left: 32, right: 24, top: 20, bottom: 16),
       decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Colors.grey[200]!, width: 1),
-        ),
+        border: Border(bottom: BorderSide(color: Colors.grey[200]!, width: 1)),
       ),
       child: Row(
         children: [
@@ -256,36 +315,39 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
   }
 
   Widget _buildFooter(BuildContext context) {
-    final bool showBack = (_currentStep > 0 && _currentStep != 1); // hide Back on step 1 (Work Order Details)
+    final bool showBack =
+        (_currentStep > 0 &&
+            _currentStep != 1); // hide Back on step 1 (Work Order Details)
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
       decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: Colors.grey[200]!, width: 1),
-        ),
+        border: Border(top: BorderSide(color: Colors.grey[200]!, width: 1)),
       ),
       child: Row(
         children: [
           if (showBack)
             OutlinedButton(
-              onPressed: _isProcessing
-                  ? null
-                  : () {
-                      setState(() {
-                        _currentStep--;
-                      });
-                    },
+              onPressed:
+                  _isProcessing
+                      ? null
+                      : () {
+                        setState(() {
+                          _currentStep--;
+                        });
+                      },
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.grey[700],
                 side: BorderSide(color: Colors.grey[300]!),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
               ),
               child: const Text('Back'),
             ),
 
           const Spacer(), // ensure action buttons are grouped on the right
-
           // Show Next button on step 0 if status requires WOP details view
           if (_currentStep == 0 && _shouldShowWOPDetails)
             ElevatedButton.icon(
@@ -299,8 +361,14 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue[600],
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
                 elevation: 0,
               ),
             ),
@@ -312,8 +380,14 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.red[700],
                 side: BorderSide(color: Colors.red[300]!),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
               child: const Text('Reject'),
             ),
@@ -323,20 +397,29 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green[600],
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
                 elevation: 0,
               ),
-              child: _isProcessing
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Text('Accept'),
+              child:
+                  _isProcessing
+                      ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      )
+                      : const Text('Accept'),
             ),
           ],
         ],
@@ -378,7 +461,7 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
                   Text(
                     // Format date as: "Aug 23, 2025"
                     'Date Requested: ${(() {
-                      final ds = widget.task['dateRequested'] ?? widget.task['rawData']?['schedule_availability'];
+                      final ds = widget.task['dateRequested'] ?? widget.task['rawData']?['schedule_availability'] ?? widget.task['rawData']?['created_at'];
                       if (ds == null) return 'N/A';
                       try {
                         DateTime date;
@@ -421,7 +504,34 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
             Expanded(
               child: _buildDetailItem(
                 'REQUESTED BY',
-                widget.task['rawData']?['reported_by'] ?? 'N/A',
+                (() {
+                  final rawData = widget.task['rawData'];
+                  if (rawData != null) {
+                    // Try multiple possible field names for the requester name
+                    final name =
+                        rawData['reported_by_name'] ??
+                        rawData['requester_name'] ??
+                        rawData['requested_by_name'] ??
+                        rawData['reported_by'];
+
+                    if (name != null) {
+                      final nameStr = name.toString().trim();
+                      // Only return if it looks like a name, not an ID
+                      if (_hasValidName(nameStr)) {
+                        return nameStr;
+                      }
+                    }
+                  }
+                  // Check top-level task fields as fallback
+                  final topName =
+                      widget.task['requester_name'] ??
+                      widget.task['requested_by_name'] ??
+                      widget.task['reported_by_name'];
+                  if (topName != null && _hasValidName(topName.toString())) {
+                    return topName.toString();
+                  }
+                  return 'N/A';
+                })(),
               ),
             ),
             const SizedBox(width: 24),
@@ -482,18 +592,51 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
         const SizedBox(height: 24),
         Divider(color: Colors.grey[200], thickness: 1, height: 1),
         const SizedBox(height: 24),
-        // Work Description
+        // Work Description from Concern Slip
         _buildSectionTitle('Work Description'),
         const SizedBox(height: 16),
-        Text(
-          widget.task['description'] ?? 'No description available.',
-          style: TextStyle(fontSize: 15, height: 1.6, color: Colors.grey[700]),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey[200]!),
+          ),
+          child: Text(
+            (() {
+              final rawData = widget.task['rawData'];
+              if (rawData != null) {
+                final description =
+                    rawData['description'] ??
+                    rawData['work_description'] ??
+                    rawData['processed_description'] ??
+                    rawData['original_description'];
+                if (description != null &&
+                    description.toString().trim().isNotEmpty) {
+                  return description.toString();
+                }
+              }
+              final topDescription =
+                  widget.task['description'] ?? widget.task['work_description'];
+              if (topDescription != null &&
+                  topDescription.toString().trim().isNotEmpty) {
+                return topDescription.toString();
+              }
+              return 'No description provided';
+            })(),
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[700],
+              height: 1.5,
+            ),
+          ),
         ),
       ],
     );
   }
 
-    String _formatBuildingUnit(String buildingUnit) {
+  String _formatBuildingUnit(String buildingUnit) {
     // Convert "Bldg A - Unit 302" to "A - 1010" format
     if (buildingUnit.contains('Unit')) {
       final parts = buildingUnit.split(' - Unit ');
@@ -505,7 +648,7 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
     return buildingUnit;
   }
 
-    String _formatScheduleDate(String? dateString) {
+  String _formatScheduleDate(String? dateString) {
     if (dateString == null || dateString.isEmpty) return 'N/A';
     try {
       final s = dateString.trim();
@@ -586,6 +729,34 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
 
   // Step 1: Work Order Details
   Widget _buildWorkOrderDetails() {
+    final contractorName =
+        task['contractorName'] ??
+        task['contractors']?[0]?['name'] ??
+        task['contractors']?[0]?['contractor_name'] ??
+        task['rawData']?['contractor_name'] ??
+        'N/A';
+    final contactNumber =
+        task['contactNumber'] ??
+        task['contractors']?[0]?['contact_number'] ??
+        task['contractors']?[0]?['phone'] ??
+        task['rawData']?['contact_number'] ??
+        'N/A';
+    final emailAddress =
+        task['emailAddress'] ??
+        task['contractors']?[0]?['email'] ??
+        task['contractors']?[0]?['email_address'] ??
+        task['rawData']?['email_address'] ??
+        'N/A';
+    final additionalNotes =
+        task['additionalNotes'] ??
+        task['additional_notes'] ??
+        task['specificInstructions'] ??
+        task['specific_instructions'] ??
+        task['description'] ??
+        task['rawData']?['additional_notes'] ??
+        task['rawData']?['description'] ??
+        'No additional notes provided';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -614,36 +785,36 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
                       fontWeight: FontWeight.w400,
                     ),
                   ),
-                  const SizedBox(height: 8),   
+                  const SizedBox(height: 8),
                   Text(
-                  // Format date as: "Aug 23, 2025"
-                  'Date Requested: ${(() {
-                    final ds = task['dateRequested'] ?? task['rawData']?['schedule_availability'];
-                    if (ds == null) return 'N/A';
-                    try {
-                    DateTime date;
-                    final s = ds.toString();
-                    if (s.contains('T')) {
-                      date = DateTime.parse(s);
-                    } else {
-                      final parts = s.split('-');
-                      if (parts.length == 3) {
-                      date = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-                      } else {
-                      return s;
+                    // Format date as: "Aug 23, 2025"
+                    'Date Requested: ${(() {
+                      final ds = task['dateRequested'] ?? task['rawData']?['schedule_availability'];
+                      if (ds == null) return 'N/A';
+                      try {
+                        DateTime date;
+                        final s = ds.toString();
+                        if (s.contains('T')) {
+                          date = DateTime.parse(s);
+                        } else {
+                          final parts = s.split('-');
+                          if (parts.length == 3) {
+                            date = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+                          } else {
+                            return s;
+                          }
+                        }
+                        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                        return '${months[date.month - 1]} ${date.day}, ${date.year}';
+                      } catch (_) {
+                        return ds.toString();
                       }
-                    }
-                    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                    return '${months[date.month - 1]} ${date.day}, ${date.year}';
-                    } catch (_) {
-                    return ds.toString();
-                    }
-                  })()}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
-                    fontWeight: FontWeight.w400,
-                  ),
+                    })()}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[500],
+                      fontWeight: FontWeight.w400,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   // Small action to view the originating concern slip
@@ -677,20 +848,63 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
         const SizedBox(height: 24),
         Divider(color: Colors.grey[200], thickness: 1, height: 1),
         const SizedBox(height: 24),
-        
-                // Permit Validation
+
+        // Permit Validation
         _buildSectionTitle('Permit Validation'),
         const SizedBox(height: 16),
-        
+
         Row(
           children: [
             Expanded(
               child: _buildDetailItem(
-                'SCHEDULED DATE',
-                _formatScheduledDateRange(
-                  task['scheduledDate'] ?? task['rawData']?['scheduled_date'],
-                  task['scheduledTime'] ?? task['rawData']?['scheduled_time'],
-                ),
+                'SCHEDULE VISIBILITY',
+                (() {
+                  final rawData = widget.task['rawData'];
+                  if (rawData != null) {
+                    final schedule =
+                        rawData['schedule_availability'] ??
+                        rawData['schedule'] ??
+                        rawData['proposed_start_date'];
+                    if (schedule != null) {
+                      try {
+                        final s = schedule.toString();
+                        DateTime date;
+                        if (s.contains('T')) {
+                          date = DateTime.parse(s);
+                        } else {
+                          final parts = s.split('-');
+                          if (parts.length == 3) {
+                            date = DateTime(
+                              int.parse(parts[0]),
+                              int.parse(parts[1]),
+                              int.parse(parts[2]),
+                            );
+                          } else {
+                            return s;
+                          }
+                        }
+                        const months = [
+                          'Jan',
+                          'Feb',
+                          'Mar',
+                          'Apr',
+                          'May',
+                          'Jun',
+                          'Jul',
+                          'Aug',
+                          'Sep',
+                          'Oct',
+                          'Nov',
+                          'Dec',
+                        ];
+                        return '${months[date.month - 1]} ${date.day}, ${date.year}';
+                      } catch (_) {
+                        return schedule.toString();
+                      }
+                    }
+                  }
+                  return 'N/A';
+                })(),
               ),
             ),
           ],
@@ -699,67 +913,62 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
         // Contractor/Personnel Information
         _buildSectionTitle('Contractor/Personnel Information'),
         const SizedBox(height: 16),
-        
+
         Row(
           children: [
             Expanded(
               child: _buildDetailItem(
                 'CONTRACTOR/ COMPANY NAME',
-                task['contractorName'] ?? task['rawData']?['contractor_name'] ?? 'Juan Dela Cruz',
+                contractorName,
               ),
             ),
             const SizedBox(width: 24),
-            Expanded(
-              child: _buildDetailItem(
-                'CONTACT NUMBER',
-                task['contactNumber'] ?? task['rawData']?['contact_number'] ?? '+63 917 123 4567',
-              ),
-            ),
+            Expanded(child: _buildDetailItem('CONTACT NUMBER', contactNumber)),
           ],
         ),
         const SizedBox(height: 24),
-        
-        _buildDetailItem(
-          'EMAIL ADDRESS',
-          task['emailAddress'] ?? task['rawData']?['email_address'] ?? 'juan.delacruz@example.com',
-        ),
+
+        _buildDetailItem('EMAIL ADDRESS', emailAddress),
         const SizedBox(height: 24),
 
         // Show return notes if present (persisted after a deny/return action)
-        if ((_taskData?['return_notes'] ?? task['return_notes'] ?? task['rawData']?['return_notes']) != null &&
-            (_taskData?['return_notes'] ?? task['return_notes'] ?? task['rawData']?['return_notes']).toString().trim().isNotEmpty) ...[
+        if ((_taskData?['return_notes'] ??
+                    task['return_notes'] ??
+                    task['rawData']?['return_notes']) !=
+                null &&
+            (_taskData?['return_notes'] ??
+                    task['return_notes'] ??
+                    task['rawData']?['return_notes'])
+                .toString()
+                .trim()
+                .isNotEmpty) ...[
           _buildSectionTitle('Return Notes'),
           const SizedBox(height: 8),
           Text(
-            (_taskData?['return_notes'] ?? task['return_notes'] ?? task['rawData']?['return_notes']).toString(),
-            style: TextStyle(
-              fontSize: 15,
-              height: 1.6,
-              color: Colors.red[700],
-            ),
+            (_taskData?['return_notes'] ??
+                    task['return_notes'] ??
+                    task['rawData']?['return_notes'])
+                .toString(),
+            style: TextStyle(fontSize: 15, height: 1.6, color: Colors.red[700]),
           ),
           const SizedBox(height: 24),
         ],
 
         Divider(color: Colors.grey[200], thickness: 1, height: 1),
         const SizedBox(height: 24),
-        
+
         // Specific Instructions
         _buildSectionTitle('Additional Notes'),
         const SizedBox(height: 16),
         Text(
           task['additionalNotes'] ?? task['rawData']?['additional_notes'] ?? '',
-          style: TextStyle(
-            fontSize: 15,
-            height: 1.6,
-            color: Colors.grey[700],
-          ),
+          style: TextStyle(fontSize: 15, height: 1.6, color: Colors.grey[700]),
         ),
         const SizedBox(height: 24),
-        
+
         Divider(color: Colors.grey[200], thickness: 1, height: 1),
         const SizedBox(height: 24),
-        
+
         // Show validation note only if status is pending
         if (_isPendingStatus) ...[
           const SizedBox(height: 24),
@@ -772,7 +981,11 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
             ),
             child: Row(
               children: [
-                Icon(Icons.warning_amber_rounded, color: Colors.amber[700], size: 20),
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: Colors.amber[700],
+                  size: 20,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -801,8 +1014,13 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
       final adminApi = AdminApi.ApiService();
 
       // Determine permit id from common keys
-      final permitId = task['permitId'] ?? task['id'] ?? task['serviceId'] ?? task['workOrderId'];
-      if (permitId == null) throw Exception('Could not determine permit id for approval');
+      final permitId =
+          task['permitId'] ??
+          task['id'] ??
+          task['serviceId'] ??
+          task['workOrderId'];
+      if (permitId == null)
+        throw Exception('Could not determine permit id for approval');
 
       final resp = await adminApi.approveWorkOrderPermit(permitId.toString());
 
@@ -855,7 +1073,9 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Please provide notes for returning this work order to the tenant.'),
+              const Text(
+                'Please provide notes for returning this work order to the tenant.',
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: _reasonController,
@@ -878,7 +1098,9 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
                 if (_reasonController.text.trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Please enter notes explaining the return to tenant.'),
+                      content: Text(
+                        'Please enter notes explaining the return to tenant.',
+                      ),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
@@ -907,10 +1129,17 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
       final reason = _reasonController.text.trim();
 
       final adminApi = AdminApi.ApiService();
-      final permitId = task['permitId'] ?? task['id'] ?? task['serviceId'] ?? task['workOrderId'];
+      final permitId =
+          task['permitId'] ??
+          task['id'] ??
+          task['serviceId'] ??
+          task['workOrderId'];
       if (permitId == null) throw Exception('Could not determine permit id');
 
-      final resp = await adminApi.rejectWorkOrderPermit(permitId.toString(), reason);
+      final resp = await adminApi.rejectWorkOrderPermit(
+        permitId.toString(),
+        reason,
+      );
 
       _taskData ??= Map<String, dynamic>.from(widget.task);
       _taskData?['status'] = resp['status'] ?? 'returned_to_tenant';
@@ -945,7 +1174,6 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
     }
   }
 
-
   Widget _buildSectionTitle(String title) {
     return Text(
       title.toUpperCase(),
@@ -964,7 +1192,9 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
     final recommendation = task['rawData']?['staff_recommendation'];
     final resolutionType = task['rawData']?['resolution_type'];
 
-    if (assessment == null && recommendation == null && resolutionType == null) {
+    if (assessment == null &&
+        recommendation == null &&
+        resolutionType == null) {
       return const SizedBox.shrink();
     }
 
@@ -987,9 +1217,7 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
             ),
           ),
           const SizedBox(height: 8),
-          RequestTypeTag(
-            resolutionType.toString().replaceAll('_', ' '),
-          ),
+          RequestTypeTag(resolutionType.toString().replaceAll('_', ' ')),
           const SizedBox(height: 24),
         ],
         if (assessment != null) ...[
@@ -1060,7 +1288,8 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
     String staffName = selectedStaffName ?? '';
     if (staffName.isEmpty) {
       final data = task;
-      dynamic assignedStaff = data['rawData']?['assigned_staff'] ??
+      dynamic assignedStaff =
+          data['rawData']?['assigned_staff'] ??
           data['rawData']?['assigned_to'] ??
           data['assigned_staff'] ??
           data['assigned_to'] ??
@@ -1070,9 +1299,13 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
         if (assignedStaff is String) {
           staffName = assignedStaff;
         } else if (assignedStaff is Map<String, dynamic>) {
-          staffName = assignedStaff['name'] ??
+          staffName =
+              assignedStaff['name'] ??
               assignedStaff['full_name'] ??
-              ((assignedStaff['first_name'] ?? '') + ' ' + (assignedStaff['last_name'] ?? '')).trim();
+              ((assignedStaff['first_name'] ?? '') +
+                      ' ' +
+                      (assignedStaff['last_name'] ?? ''))
+                  .trim();
         } else {
           staffName = assignedStaff.toString();
         }
@@ -1118,26 +1351,19 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
                     const SizedBox(height: 4),
                     Text(
                       task['department'] ?? 'No Department',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 13,
-                      ),
+                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
                     ),
                   ],
                 ),
               ),
-              Icon(
-                Icons.check_circle,
-                color: Colors.green[600],
-                size: 20,
-              ),
+              Icon(Icons.check_circle, color: Colors.green[600], size: 20),
             ],
           ),
         ),
       ],
     );
   }
-  
+
   // Helper method to build avatar (similar to ConcernSlipDetailDialog)
   Widget _buildSimpleAvatar(String name, {double size = 32}) {
     // Get initials from name
@@ -1150,7 +1376,7 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
       }
     }
     if (initials.isEmpty) initials = '?';
-    
+
     // Generate color from name
     int hash = 0;
     for (int i = 0; i < name.length; i++) {
@@ -1165,14 +1391,11 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
       Colors.pink[700]!,
     ];
     final color = colors[hash.abs() % colors.length];
-    
+
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       child: Center(
         child: Text(
           initials,
@@ -1215,7 +1438,10 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
 
   /// Helper: format separate scheduled date and time fields into displayable strings.
   /// Returns a map with keys 'date' and 'time'.
-  Map<String, String> _formatScheduledDateAndTime(dynamic dateField, dynamic timeField) {
+  Map<String, String> _formatScheduledDateAndTime(
+    dynamic dateField,
+    dynamic timeField,
+  ) {
     String dateOut = 'N/A';
     String timeOut = 'N/A';
 
@@ -1227,9 +1453,15 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
       if (dateStr.isNotEmpty) {
         if (dateStr.contains('T')) {
           datePart = DateTime.parse(dateStr);
-        } else if (RegExp(r'^\d{4}-\d{2}-\d{2}?').hasMatch(dateStr) || RegExp(r'^\d{4}-\d{2}-\d{2}\$').hasMatch(dateStr)) {
+        } else if (RegExp(r'^\d{4}-\d{2}-\d{2}?').hasMatch(dateStr) ||
+            RegExp(r'^\d{4}-\d{2}-\d{2}\$').hasMatch(dateStr)) {
           final p = dateStr.split('-');
-          if (p.length >= 3) datePart = DateTime(int.parse(p[0]), int.parse(p[1]), int.parse(p[2]));
+          if (p.length >= 3)
+            datePart = DateTime(
+              int.parse(p[0]),
+              int.parse(p[1]),
+              int.parse(p[2]),
+            );
         } else {
           try {
             datePart = DateFormat('MMM d, yyyy').parse(dateStr);
@@ -1249,11 +1481,24 @@ class _WorkOrderConcernSlipDialogState extends State<WorkOrderConcernSlipDialog>
             final t1 = DateFormat('h:mm a').parse(left);
             final t2 = DateFormat('h:mm a').parse(right);
             if (datePart != null) {
-              final start = DateTime(datePart.year, datePart.month, datePart.day, t1.hour, t1.minute);
-              final end = DateTime(datePart.year, datePart.month, datePart.day, t2.hour, t2.minute);
-              timeOut = '${DateFormat('h:mm a').format(start)} - ${DateFormat('h:mm a').format(end)}';
+              final start = DateTime(
+                datePart.year,
+                datePart.month,
+                datePart.day,
+                t1.hour,
+                t1.minute,
+              );
+              final end = DateTime(
+                datePart.year,
+                datePart.month,
+                datePart.day,
+                t2.hour,
+                t2.minute,
+              );
+              timeOut =
+                  '${DateFormat('h:mm a').format(start)} - ${DateFormat('h:mm a').format(end)}';
             } else {
-              timeOut = '$left - $right';
+              timeOut = timeStr;
             }
           } catch (_) {
             timeOut = timeStr;
@@ -1296,7 +1541,8 @@ String _formatScheduledDateRange(dynamic dateField, dynamic timeField) {
         end = DateFormat('MMM d, yyyy').parse(parts[1].trim());
       } catch (_) {}
     }
-    if (start != null && end != null) return UiDateUtils.formatDateRange(start, end);
+    if (start != null && end != null)
+      return UiDateUtils.formatDateRange(start, end);
   }
 
   // Single date: parse and return fullDate
@@ -1304,7 +1550,7 @@ String _formatScheduledDateRange(dynamic dateField, dynamic timeField) {
     DateTime d;
     if (dateStr.contains('T')) {
       d = DateTime.parse(dateStr);
-    } else if (RegExp(r'^\d{4}-\d{2}-\d{2}\$').hasMatch(dateStr)) {
+    } else if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dateStr)) {
       final p = dateStr.split('-');
       d = DateTime(int.parse(p[0]), int.parse(p[1]), int.parse(p[2]));
     } else {
@@ -1359,7 +1605,8 @@ String _formatScheduleString(String? raw) {
 
       try {
         final t = DateFormat('h:mm a').parse(right);
-        if (start != null) end = DateTime(start.year, start.month, start.day, t.hour, t.minute);
+        if (start != null)
+          end = DateTime(start.year, start.month, start.day, t.hour, t.minute);
       } catch (_) {
         try {
           end = DateTime.parse(right);
@@ -1370,7 +1617,8 @@ String _formatScheduleString(String? raw) {
         }
       }
 
-      if (start != null && end != null) return UiDateUtils.dateTimeRange(start, end);
+      if (start != null && end != null)
+        return UiDateUtils.dateTimeRange(start, end);
       return s;
     }
 
@@ -1381,7 +1629,11 @@ String _formatScheduleString(String? raw) {
 
     if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(s)) {
       final parts = s.split('-');
-      final d = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+      final d = DateTime(
+        int.parse(parts[0]),
+        int.parse(parts[1]),
+        int.parse(parts[2]),
+      );
       return UiDateUtils.fullDate(d);
     }
 
@@ -1413,7 +1665,7 @@ class WorkOrderPermitDialog extends StatefulWidget {
   State<WorkOrderPermitDialog> createState() => _WorkOrderPermitDialogState();
 
   static void show(
-    BuildContext context, 
+    BuildContext context,
     Map<String, dynamic> task, {
     VoidCallback? onAssignmentComplete,
   }) {
@@ -1475,10 +1727,14 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
             _buildHeader(context),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-                child: _showAssignmentForm 
-                    ? _buildAssignmentFormView()
-                    : _buildDetailsView(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 24,
+                ),
+                child:
+                    _showAssignmentForm
+                        ? _buildAssignmentFormView()
+                        : _buildDetailsView(),
               ),
             ),
             _buildFooter(context),
@@ -1492,14 +1748,14 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
     return Container(
       padding: const EdgeInsets.only(left: 32, right: 24, top: 20, bottom: 16),
       decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Colors.grey[200]!, width: 1),
-        ),
+        border: Border(bottom: BorderSide(color: Colors.grey[200]!, width: 1)),
       ),
       child: Row(
         children: [
           Text(
-            _showAssignmentForm ? 'Assign & Schedule Work' : 'Work Order Permit Details',
+            _showAssignmentForm
+                ? 'Assign & Schedule Work'
+                : 'Work Order Permit Details',
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -1523,9 +1779,7 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
       decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: Colors.grey[200]!, width: 1),
-        ),
+        border: Border(top: BorderSide(color: Colors.grey[200]!, width: 1)),
       ),
       child: Row(
         children: [
@@ -1540,7 +1794,10 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
               foregroundColor: Colors.red[700],
               side: BorderSide(color: Colors.red[300]!),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              textStyle: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
             ),
             child: const Text('Reject'),
           ),
@@ -1553,7 +1810,10 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
               backgroundColor: Colors.green[600],
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              textStyle: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
               elevation: 0,
             ),
             child: const Text('Approve'),
@@ -1605,11 +1865,11 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
         const SizedBox(height: 24),
         Divider(color: Colors.grey[200], thickness: 1, height: 1),
         const SizedBox(height: 24),
-        
+
         // Request Details
         _buildSectionTitle('Request Details'),
         const SizedBox(height: 16),
-        
+
         Row(
           children: [
             Expanded(
@@ -1628,7 +1888,7 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
           ],
         ),
         const SizedBox(height: 24),
-        
+
         Row(
           children: [
             Expanded(
@@ -1647,39 +1907,41 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
           ],
         ),
         const SizedBox(height: 24),
-        
+
         Divider(color: Colors.grey[200], thickness: 1, height: 1),
         const SizedBox(height: 24),
-        
+
         // Specific Instructions
         _buildSectionTitle('Specific Instructions'),
         const SizedBox(height: 16),
         Text(
-          task['specificInstructions'] ?? 
-          'Replace fan motor and refill refrigerant. Indoor and outdoor access needed. Power shutdown may be required.',
-          style: TextStyle(
-            fontSize: 15,
-            height: 1.6,
-            color: Colors.grey[700],
-          ),
+          task['specificInstructions'] ??
+              'Replace fan motor and refill refrigerant. Indoor and outdoor access needed. Power shutdown may be required.',
+          style: TextStyle(fontSize: 15, height: 1.6, color: Colors.grey[700]),
         ),
         const SizedBox(height: 24),
-        
+
         Divider(color: Colors.grey[200], thickness: 1, height: 1),
         const SizedBox(height: 24),
-        
+
         // Permit Validation
         _buildSectionTitle('Permit Validation'),
         const SizedBox(height: 16),
         _buildDetailItem(
           'SCHEDULE VISIBILITY',
-          _formatScheduleString(task['schedule'] ?? task['rawData']?['schedule'] ?? task['rawData']?['schedule_availability'] ?? task['schedule'] ?? ''),
+          _formatScheduleString(
+            task['schedule'] ??
+                task['rawData']?['schedule'] ??
+                task['rawData']?['schedule_availability'] ??
+                task['schedule'] ??
+                '',
+          ),
         ),
         const SizedBox(height: 24),
-        
+
         Divider(color: Colors.grey[200], thickness: 1, height: 1),
         const SizedBox(height: 24),
-        
+
         // Contractor's Side
         _buildContractorSection(),
       ],
@@ -1728,13 +1990,24 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
           ),
         ),
         const SizedBox(height: 32),
-        
-    // Work Order Details
-    _buildDetailItem('WORK ORDER ID', task['id'] ?? 'WOP-2025-00001'),
+
+        // Work Order Details
+        _buildDetailItem('WORK ORDER ID', task['id'] ?? 'WOP-2025-00001'),
         const SizedBox(height: 24),
-    _buildDetailItem('CONTRACTOR', task['contractorName'] ?? 'AC Pro Services'),
+        _buildDetailItem(
+          'CONTRACTOR',
+          task['contractorName'] ?? 'AC Pro Services',
+        ),
         const SizedBox(height: 24),
-  _buildDetailItem('SCHEDULE', _formatScheduleString(task['schedule'] ?? task['rawData']?['schedule'] ?? task['rawData']?['schedule_availability'] ?? '')),
+        _buildDetailItem(
+          'SCHEDULE',
+          _formatScheduleString(
+            task['schedule'] ??
+                task['rawData']?['schedule'] ??
+                task['rawData']?['schedule_availability'] ??
+                '',
+          ),
+        ),
       ],
     );
   }
@@ -1766,9 +2039,27 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
           _buildSectionTitle('Contractor\'s Side'),
           const SizedBox(height: 12),
           ...shown.map((c) {
-            final name = c is Map ? (c['name'] ?? c['contractor_name'] ?? c['contractorName'] ?? '') : c.toString();
-            final phone = c is Map ? (c['contact_number'] ?? c['phone'] ?? c['contactNumber'] ?? '') : '';
-            final email = c is Map ? (c['email'] ?? c['email_address'] ?? c['emailAddress'] ?? '') : '';
+            final name =
+                c is Map
+                    ? (c['name'] ??
+                        c['contractor_name'] ??
+                        c['contractorName'] ??
+                        '')
+                    : c.toString();
+            final phone =
+                c is Map
+                    ? (c['contact_number'] ??
+                        c['phone'] ??
+                        c['contactNumber'] ??
+                        '')
+                    : '';
+            final email =
+                c is Map
+                    ? (c['email'] ??
+                        c['email_address'] ??
+                        c['emailAddress'] ??
+                        '')
+                    : '';
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1786,9 +2077,16 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
     }
 
     // Single contractor fallback
-    final contractorName = task['contractorName'] ?? task['rawData']?['contractor_name'] ?? 'Leo Fernandez';
-    final phoneNumber = task['contactNumber'] ?? task['rawData']?['contact_number'] ?? '0917-456-7890';
-    final emailAddress = task['emailAddress'] ?? task['rawData']?['email_address'] ?? '';
+    final contractorName =
+        task['contractorName'] ??
+        task['rawData']?['contractor_name'] ??
+        'Leo Fernandez';
+    final phoneNumber =
+        task['contactNumber'] ??
+        task['rawData']?['contact_number'] ??
+        '0917-456-7890';
+    final emailAddress =
+        task['emailAddress'] ?? task['rawData']?['email_address'] ?? '';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1799,7 +2097,10 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
         const SizedBox(height: 12),
         _buildDetailItem('CONTACT NUMBER', phoneNumber),
         const SizedBox(height: 12),
-        _buildDetailItem('EMAIL', emailAddress.isNotEmpty ? emailAddress : 'N/A'),
+        _buildDetailItem(
+          'EMAIL',
+          emailAddress.isNotEmpty ? emailAddress : 'N/A',
+        ),
       ],
     );
   }
@@ -1844,7 +2145,9 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Please provide notes for returning this work order to the tenant.'),
+              const Text(
+                'Please provide notes for returning this work order to the tenant.',
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: _reasonController,
@@ -1868,7 +2171,9 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
                 if (_reasonController.text.trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Please enter notes explaining the return to tenant.'),
+                      content: Text(
+                        'Please enter notes explaining the return to tenant.',
+                      ),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
@@ -1900,13 +2205,20 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
       final adminApi = AdminApi.ApiService();
 
       // Try several common keys for permit id
-      final permitId = task['permitId'] ?? task['id'] ?? task['serviceId'] ?? task['workOrderId'];
+      final permitId =
+          task['permitId'] ??
+          task['id'] ??
+          task['serviceId'] ??
+          task['workOrderId'];
 
       if (permitId == null) {
         throw Exception('Could not determine permit id for this work order');
       }
 
-      final resp = await adminApi.rejectWorkOrderPermit(permitId.toString(), reason);
+      final resp = await adminApi.rejectWorkOrderPermit(
+        permitId.toString(),
+        reason,
+      );
 
       // Update local task with server response
       _taskData ??= Map<String, dynamic>.from(widget.task);
@@ -1948,7 +2260,8 @@ class _WorkOrderPermitDialogState extends State<WorkOrderPermitDialog> {
       context,
       config: DialogConfig.confirmation(
         title: 'Approve Work Order Permit',
-        description: 'Are you sure you want to approve this work order permit? This will allow the contractor to proceed.',
+        description:
+            'Are you sure you want to approve this work order permit? This will allow the contractor to proceed.',
         primaryButtonLabel: 'Approve',
         primaryAction: () {},
         secondaryButtonLabel: 'Cancel',

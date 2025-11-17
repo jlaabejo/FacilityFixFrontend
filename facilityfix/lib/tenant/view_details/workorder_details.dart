@@ -99,11 +99,12 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => EditWorkOrderPage(
-          workOrderId: w.id,
-          requestType: requestType,
-          workOrderData: w,
-        ),
+        builder:
+            (_) => EditWorkOrderPage(
+              workOrderId: w.id,
+              requestType: requestType,
+              workOrderData: w,
+            ),
       ),
     ).then((updated) {
       if (updated == true) {
@@ -117,11 +118,16 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     if (w == null) return;
 
     final status = w.statusTag.toLowerCase();
-    final deletable = status.startsWith('pending') || status.contains('complete') || status == 'done';
+    final deletable =
+        status.startsWith('pending') ||
+        status.contains('complete') ||
+        status == 'done';
     if (!deletable) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Only pending (including pending CS/JS/WOP) or completed requests can be deleted'),
+          content: Text(
+            'Only pending (including pending CS/JS/WOP) or completed requests can be deleted',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
@@ -130,21 +136,27 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Request'),
-        content: const Text('Are you sure you want to delete this request? This action cannot be undone.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _deleteWorkOrder();
-            },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Delete Request'),
+            content: const Text(
+              'Are you sure you want to delete this request? This action cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await _deleteWorkOrder();
+                },
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Delete'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -202,16 +214,20 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         final data = await _apiService.getConcernSlipById(id);
         final cs = ConcernSlip.fromJson(data);
         _fetchedWorkOrder = _concernSlipToWorkOrderDetails(cs);
-      } else if (idUpper.startsWith('JS-') || id.toLowerCase().startsWith('js_')) {
+      } else if (idUpper.startsWith('JS-') ||
+          id.toLowerCase().startsWith('js_')) {
         final data = await _apiService.getJobServiceById(id);
         final js = JobService.fromJson(data);
         _fetchedWorkOrder = _jobServiceToWorkOrderDetails(js);
-      } else if (idUpper.startsWith('WP-') || id.toLowerCase().startsWith('wp_')) {
+      } else if (idUpper.startsWith('WP-') ||
+          id.toLowerCase().startsWith('wp_')) {
         final data = await _apiService.getWorkOrderById(id);
         final wo = WorkOrderPermit.fromJson(data);
         _fetchedWorkOrder = _workOrderPermitToWorkOrderDetails(wo);
       } else {
-        throw Exception('Unknown work order type: $id. Expected CS-, JS-, WP- prefix or cs_, js_, wp_ format.');
+        throw Exception(
+          'Unknown work order type: $id. Expected CS-, JS-, WP- prefix or cs_, js_, wp_ format.',
+        );
       }
 
       setState(() {
@@ -226,7 +242,8 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
   }
 
   // Small converters to the unified WorkOrderDetails used by view widgets
-  WorkOrderDetails _concernSlipToWorkOrderDetails(ConcernSlip cs) => WorkOrderDetails(
+  WorkOrderDetails _concernSlipToWorkOrderDetails(ConcernSlip cs) =>
+      WorkOrderDetails(
         id: cs.id,
         createdAt: cs.createdAt,
         updatedAt: cs.updatedAt,
@@ -244,11 +261,13 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         staffDepartment: cs.staffDepartment,
         assignedPhotoUrl: cs.assignedPhotoUrl,
         assessedAt: cs.assessedAt,
+        additionalNotes: cs.description,
         assessment: cs.assessment,
         staffAttachments: cs.staffAttachments,
       );
 
-  WorkOrderDetails _jobServiceToWorkOrderDetails(JobService js) => WorkOrderDetails(
+  WorkOrderDetails _jobServiceToWorkOrderDetails(JobService js) =>
+      WorkOrderDetails(
         id: js.id,
         createdAt: js.createdAt,
         updatedAt: js.updatedAt,
@@ -273,7 +292,8 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         staffAttachments: js.staffAttachments,
       );
 
-  WorkOrderDetails _workOrderPermitToWorkOrderDetails(WorkOrderPermit wop) => WorkOrderDetails(
+  WorkOrderDetails _workOrderPermitToWorkOrderDetails(WorkOrderPermit wop) =>
+      WorkOrderDetails(
         id: wop.id,
         createdAt: wop.createdAt,
         updatedAt: wop.updatedAt,
@@ -281,36 +301,58 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         departmentTag: wop.departmentTag,
         priority: wop.priority,
         statusTag: wop.statusTag,
-        requestedBy: wop.requestedBy,
-        concernSlipId: wop.concernSlipId,
-        unitId: wop.unitId,
+        resolutionType: wop.resolutionType,
         title: wop.title,
+        unitId: wop.unitId,
         assignedStaff: wop.assignedStaff,
         staffDepartment: wop.staffDepartment,
         assignedPhotoUrl: wop.assignedPhotoUrl,
+        concernSlipId: wop.concernSlipId,
+        requestedBy: wop.requestedByName ?? wop.requestedBy,
         contractorName: wop.contractorName,
         contractorNumber: wop.contractorNumber,
         contractorEmail: wop.contractorEmail,
+        additionalNotes: wop.additionalNotes,
         workScheduleFrom: wop.workScheduleFrom,
         workScheduleTo: wop.workScheduleTo,
-        approvedBy: wop.approvedBy,
+        approvedBy: wop.approvedByName ?? wop.approvedBy,
         approvalDate: wop.approvalDate,
         denialReason: wop.denialReason,
-        adminNotes: wop.adminNotes,
         attachments: wop.attachments,
         staffAttachments: wop.staffAttachments,
       );
 
   Widget _buildTabContent() {
-    if (_isLoading) return const Center(child: Padding(padding: EdgeInsets.all(24.0), child: CircularProgressIndicator()));
-    if (_errorMessage != null) return Center(child: Padding(padding: const EdgeInsets.all(24.0), child: Text(_errorMessage!, style: const TextStyle(color: Colors.red))));
+    if (_isLoading)
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    if (_errorMessage != null)
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Text(
+            _errorMessage!,
+            style: const TextStyle(color: Colors.red),
+          ),
+        ),
+      );
 
     final w = widget.workOrder ?? _fetchedWorkOrder;
-    if (w == null) return const Center(child: Padding(padding: EdgeInsets.all(24.0), child: Text('No data available')));
+    if (w == null)
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: Text('No data available'),
+        ),
+      );
 
     final id = w.id.toUpperCase();
     final idLower = w.id.toLowerCase();
-    
+
     if (id.startsWith('CS-') || idLower.startsWith('cs_')) {
       // Open the full Tenant Concern Slip page instead of embedding the
       // ConcernSlipDetails widget here. We schedule navigation after build
@@ -321,7 +363,9 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
           setState(() => _navigatedToConcernSlip = true);
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => TenantConcernSlipDetailPage(concernSlipId: w.id)),
+            MaterialPageRoute(
+              builder: (_) => TenantConcernSlipDetailPage(concernSlipId: w.id),
+            ),
           ).then((_) {
             if (!mounted) return;
             setState(() => _navigatedToConcernSlip = false);
@@ -331,7 +375,12 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         });
       }
 
-      return const Center(child: Padding(padding: EdgeInsets.all(24.0), child: Text('Opening Concern Slip...')));
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: Text('Opening Concern Slip...'),
+        ),
+      );
     }
 
     if (id.startsWith('JS-') || idLower.startsWith('js_')) {
@@ -344,7 +393,9 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
           setState(() => _navigatedToJobService = true);
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => TenantJobServiceDetailPage(jobServiceId: w.id)),
+            MaterialPageRoute(
+              builder: (_) => TenantJobServiceDetailPage(jobServiceId: w.id),
+            ),
           ).then((_) {
             if (!mounted) return;
             setState(() => _navigatedToJobService = false);
@@ -354,7 +405,12 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         });
       }
 
-      return const Center(child: Padding(padding: EdgeInsets.all(24.0), child: Text('Opening Job Service...')));
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: Text('Opening Job Service...'),
+        ),
+      );
     }
 
     // Default: work order permit (handles WP- or wp_ format only)
@@ -379,9 +435,10 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       approvalDate: w.approvalDate,
       denialReason: w.denialReason,
       adminNotes: w.adminNotes,
-      onViewConcernSlip: (w.concernSlipId != null && w.concernSlipId != '—')
-          ? () => _navigateToConcernSlip(w.concernSlipId!)
-          : null,
+      onViewConcernSlip:
+          (w.concernSlipId != null && w.concernSlipId != '—')
+              ? () => _navigateToConcernSlip(w.concernSlipId!)
+              : null,
     );
   }
 
@@ -389,9 +446,9 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => TenantConcernSlipDetailPage(
-          concernSlipId: concernSlipId,
-        ),
+        builder:
+            (context) =>
+                TenantConcernSlipDetailPage(concernSlipId: concernSlipId),
       ),
     );
   }
@@ -403,32 +460,52 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       const AnnouncementPage(),
       const ProfilePage(),
     ];
-    if (index != _selectedIndex) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => destinations[index]));
+    if (index != _selectedIndex)
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => destinations[index]),
+      );
   }
 
   @override
   Widget build(BuildContext context) {
-  final w = widget.workOrder ?? _fetchedWorkOrder;
-  final status = w?.statusTag.toLowerCase() ?? '';
-  final isPending = status == 'pending';
-  // deletable when pending or completed/done
-  final isDeletable = status == 'pending' || status == 'complete' || status == 'completed' || status == 'done';
+    final w = widget.workOrder ?? _fetchedWorkOrder;
+    final status = w?.statusTag.toLowerCase() ?? '';
+    final isPending = status == 'pending';
+    // deletable when pending or completed/done
+    final isDeletable =
+        status == 'pending' ||
+        status == 'complete' ||
+        status == 'completed' ||
+        status == 'done';
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
         title: 'View Details',
-        leading: const Padding(padding: EdgeInsets.only(right: 8), child: BackButton()),
+        leading: const Padding(
+          padding: EdgeInsets.only(right: 8),
+          child: BackButton(),
+        ),
         showMore: true,
         showHistory: true,
-  showEdit: isPending,
-  showDelete: isDeletable,
+        showEdit: isPending,
+        showDelete: isDeletable,
         onHistoryTap: _showHistorySheet,
         onEditTap: _showEditDialog,
         onDeleteTap: _showDeleteDialog,
       ),
-      body: SafeArea(child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(24, 24, 24, 120), child: _buildTabContent())),
-      bottomNavigationBar: NavBar(items: _navItems, currentIndex: _selectedIndex, onTap: _onTabTapped),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
+          child: _buildTabContent(),
+        ),
+      ),
+      bottomNavigationBar: NavBar(
+        items: _navItems,
+        currentIndex: _selectedIndex,
+        onTap: _onTabTapped,
+      ),
     );
   }
 }
@@ -465,16 +542,14 @@ class _EditWorkOrderPageState extends State<EditWorkOrderPage> {
   @override
   void initState() {
     super.initState();
-    
+
     // Initialize controllers based on request type
     _availabilityController = TextEditingController(
       text: widget.workOrderData.scheduleAvailability ?? '',
     );
-    
+
     // Work Order specific fields
-    _permitIdController = TextEditingController(
-      text: widget.workOrderData.id,
-    );
+    _permitIdController = TextEditingController(text: widget.workOrderData.id);
     _contractorNameController = TextEditingController(
       text: widget.workOrderData.contractorName ?? '',
     );
@@ -485,14 +560,19 @@ class _EditWorkOrderPageState extends State<EditWorkOrderPage> {
       text: widget.workOrderData.contractorEmail ?? '',
     );
     _workScheduleFromController = TextEditingController(
-      text: widget.workOrderData.workScheduleFrom != null
-          ? _formatDateTime(widget.workOrderData.workScheduleFrom!)
-          : '',
+      text:
+          widget.workOrderData.workScheduleFrom != null
+              ? _formatDateTime(widget.workOrderData.workScheduleFrom!)
+              : '',
     );
     _workScheduleToController = TextEditingController(
-      text: widget.workOrderData.workScheduleTo != null
-          ? _formatDateTime(widget.workOrderData.workScheduleTo!)
-          : '',
+      text:
+          widget.workOrderData.workScheduleTo != null
+              ? _formatDateTime(widget.workOrderData.workScheduleTo!)
+              : '',
+    );
+    _entryEquipmentsController = TextEditingController(
+      text: widget.workOrderData.additionalNotes ?? '',
     );
   }
 
@@ -543,7 +623,7 @@ class _EditWorkOrderPageState extends State<EditWorkOrderPage> {
 
     final startMinutes = startTime.hour * 60 + startTime.minute;
     final endMinutes = endTime.hour * 60 + endTime.minute;
-    
+
     if (endMinutes <= startMinutes) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('End time must be after start time')),
@@ -625,6 +705,7 @@ class _EditWorkOrderPageState extends State<EditWorkOrderPage> {
           contractorEmail: _contractorEmailController.text.trim(),
           workScheduleFrom: _workScheduleFromController.text.trim(),
           workScheduleTo: _workScheduleToController.text.trim(),
+          // additionalNotes: _entryEquipmentsController.text.trim(),
         );
       }
 
@@ -714,7 +795,7 @@ class _EditWorkOrderPageState extends State<EditWorkOrderPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   const Text(
                     'Contractor Name',
                     style: TextStyle(
@@ -897,22 +978,25 @@ class _EditWorkOrderPageState extends State<EditWorkOrderPage> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    child: _isSaving
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    child:
+                        _isSaving
+                            ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                            : const Text(
+                              'Save Changes',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          )
-                        : const Text(
-                            'Save Changes',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
                   ),
                 ),
               ],
