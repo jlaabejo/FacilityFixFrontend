@@ -2055,6 +2055,78 @@ class ApiService {
     }
   }
 
+  /// Get all inventory reservations
+  Future<Map<String, dynamic>> getInventoryReservations({
+    String? buildingId,
+    String? maintenanceTaskId,
+  }) async {
+    try {
+      final queryParams = <String, String>{};
+      if (buildingId != null) queryParams['building_id'] = buildingId;
+      if (maintenanceTaskId != null) queryParams['maintenance_task_id'] = maintenanceTaskId;
+
+      final uri = Uri.parse(
+        '$baseUrl/inventory/reservations',
+      ).replace(queryParameters: queryParams);
+
+      final headers = await _getAuthHeaders();
+      final response = await http.get(uri, headers: headers);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data is Map<String, dynamic>) {
+          return data;
+        } else {
+          return {'success': true, 'data': data};
+        }
+      } else {
+        throw Exception(
+          'Failed to load inventory reservations: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error fetching inventory reservations: $e');
+      rethrow;
+    }
+  }
+
+  /// Create a new inventory reservation
+  Future<Map<String, dynamic>> createInventoryReservation({
+    required String inventoryId,
+    required int quantity,
+    required String maintenanceTaskId,
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final reservationData = {
+        'inventory_id': inventoryId,
+        'quantity': quantity,
+        'maintenance_task_id': maintenanceTaskId,
+      };
+
+      print('[v0] Creating inventory reservation: ${json.encode(reservationData)}');
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/inventory/reservations'),
+        headers: headers,
+        body: json.encode(reservationData),
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('[v0] Inventory reservation created successfully: $data');
+        return data;
+      } else {
+        throw Exception(
+          'Failed to create inventory reservation: ${response.statusCode} ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error creating inventory reservation: $e');
+      rethrow;
+    }
+  }
+
   /// Approve an inventory request
   Future<Map<String, dynamic>> approveInventoryRequest(
     String requestId, {
@@ -2181,6 +2253,328 @@ class ApiService {
       }
     } catch (e) {
       print('[v0] Error fetching inventory requests for maintenance task: $e');
+      rethrow;
+    }
+  }
+
+  /// Patch inventory item (partial update)
+  Future<Map<String, dynamic>> patchInventoryItem(
+    String itemId,
+    Map<String, dynamic> updateData,
+  ) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.patch(
+        Uri.parse('$baseUrl/inventory/items/$itemId'),
+        headers: headers,
+        body: json.encode(updateData),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to patch inventory item: ${response.statusCode} ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error patching inventory item: $e');
+      rethrow;
+    }
+  }
+
+  /// Get inventory items by department
+  Future<List<Map<String, dynamic>>> getDepartmentInventory(
+    String buildingId,
+    String department,
+  ) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/inventory/buildings/$buildingId/departments/$department/items'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+        return [];
+      } else {
+        throw Exception(
+          'Failed to get department inventory: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error getting department inventory: $e');
+      rethrow;
+    }
+  }
+
+  /// Search inventory items
+  Future<List<Map<String, dynamic>>> searchInventory(
+    String buildingId,
+    String searchTerm,
+  ) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/inventory/buildings/$buildingId/search?q=${Uri.encodeComponent(searchTerm)}'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+        return [];
+      } else {
+        throw Exception(
+          'Failed to search inventory: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error searching inventory: $e');
+      rethrow;
+    }
+  }
+
+  /// Adjust stock to specific quantity (Admin only)
+  Future<Map<String, dynamic>> adjustStock({
+    required String itemId,
+    required int newQuantity,
+    String? reason,
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final body = <String, dynamic>{
+        'new_quantity': newQuantity,
+        if (reason != null) 'reason': reason,
+      };
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/inventory/items/$itemId/adjust'),
+        headers: headers,
+        body: json.encode(body),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to adjust stock: ${response.statusCode} ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error adjusting stock: $e');
+      rethrow;
+    }
+  }
+
+  /// Update inventory request status and handle stock deduction
+  Future<Map<String, dynamic>> updateInventoryRequest(
+    String requestId,
+    Map<String, dynamic> updateData,
+  ) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.patch(
+        Uri.parse('$baseUrl/inventory/requests/$requestId'),
+        headers: headers,
+        body: json.encode(updateData),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to update inventory request: ${response.statusCode} ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error updating inventory request: $e');
+      rethrow;
+    }
+  }
+
+  /// Get low stock alerts
+  Future<List<Map<String, dynamic>>> getLowStockAlerts({
+    String? buildingId,
+    String status = 'active',
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final queryParams = <String>[];
+      if (buildingId != null) queryParams.add('building_id=$buildingId');
+      queryParams.add('status=$status');
+
+      final query = queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
+      final response = await http.get(
+        Uri.parse('$baseUrl/inventory/alerts/low-stock$query'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+        return [];
+      } else {
+        throw Exception(
+          'Failed to get low stock alerts: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error getting low stock alerts: $e');
+      rethrow;
+    }
+  }
+
+  /// Acknowledge a low stock alert
+  Future<Map<String, dynamic>> acknowledgeLowStockAlert(String alertId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/inventory/alerts/$alertId/acknowledge'),
+        headers: headers,
+        body: json.encode({}),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to acknowledge low stock alert: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error acknowledging low stock alert: $e');
+      rethrow;
+    }
+  }
+
+  /// Get inventory summary statistics for a building
+  Future<Map<String, dynamic>> getInventorySummary(String buildingId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/inventory/buildings/$buildingId/summary'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          return data['data'] as Map<String, dynamic>;
+        }
+        return {};
+      } else {
+        throw Exception(
+          'Failed to get inventory summary: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error getting inventory summary: $e');
+      rethrow;
+    }
+  }
+
+  /// Get usage analytics for inventory items (Admin only)
+  Future<Map<String, dynamic>> getUsageAnalytics(
+    String buildingId, {
+    String periodType = 'monthly',
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/inventory/buildings/$buildingId/analytics?period_type=$periodType'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          return data['data'] as Map<String, dynamic>;
+        }
+        return {};
+      } else {
+        throw Exception(
+          'Failed to get usage analytics: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error getting usage analytics: $e');
+      rethrow;
+    }
+  }
+
+  /// Get all inventory requests linked to a specific maintenance task
+  Future<List<Map<String, dynamic>>> getRequestsByMaintenanceTask(String taskId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/inventory/maintenance-task/$taskId/requests'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+        return [];
+      } else {
+        throw Exception(
+          'Failed to get requests by maintenance task: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error getting requests by maintenance task: $e');
+      rethrow;
+    }
+  }
+
+  /// Get all inventory requests linked to maintenance tasks assigned to current user
+  Future<List<Map<String, dynamic>>> getMyMaintenanceInventoryRequests() async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/inventory/my-maintenance-requests'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+        return [];
+      } else {
+        throw Exception(
+          'Failed to get my maintenance inventory requests: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error getting my maintenance inventory requests: $e');
+      rethrow;
+    }
+  }
+
+  /// Health check for inventory service
+  Future<Map<String, dynamic>> inventoryHealthCheck() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/inventory/health'));
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Inventory health check failed: ${response.body}');
+      }
+    } catch (e) {
+      print('[v0] Error checking inventory health: $e');
       rethrow;
     }
   }

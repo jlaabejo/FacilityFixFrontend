@@ -196,6 +196,8 @@ class RequestItem extends StatefulWidget {
   final String itemId;
   final String unit; // ⬅️ auto from details
   final String stock; // ⬅️ automated stock value (e.g. "24 pcs" or "24")
+  final String maintenanceId;
+  final String staffName;
 
   const RequestItem({
     super.key,
@@ -203,6 +205,8 @@ class RequestItem extends StatefulWidget {
     required this.itemId,
     required this.unit,
     required this.stock,
+    required this.maintenanceId,
+    required this.staffName,
   });
 
   @override
@@ -218,7 +222,31 @@ class _RequestItemState extends State<RequestItem> {
   bool get _isValid {
     final q = _qtyCtrl.text.trim();
     final asNum = double.tryParse(q);
-    return q.isNotEmpty && asNum != null && asNum > 0;
+    if (!q.isNotEmpty || asNum == null || asNum <= 0) return false;
+    
+    // Parse available stock from the stock string
+    final stockParts = widget.stock.split(' ');
+    final availableStock = double.tryParse(stockParts.first) ?? 0.0;
+    
+    // Ensure requested quantity doesn't exceed available stock
+    return asNum <= availableStock;
+  }
+
+  String? get _quantityError {
+    final q = _qtyCtrl.text.trim();
+    if (q.isEmpty) return null;
+    
+    final asNum = double.tryParse(q);
+    if (asNum == null) return 'Please enter a valid number';
+    if (asNum <= 0) return 'Quantity must be greater than 0';
+    
+    // Parse available stock from the stock string
+    final stockParts = widget.stock.split(' ');
+    final availableStock = double.tryParse(stockParts.first) ?? 0.0;
+    
+    if (asNum > availableStock) return 'Cannot request more than available stock (${availableStock.toInt()} ${widget.unit})';
+    
+    return null;
   }
 
   @override
@@ -326,6 +354,26 @@ class _RequestItemState extends State<RequestItem> {
                     ],
                   ),
                 ),
+
+                // // Display maintenance and staff info
+                // Padding(
+                //   padding: const EdgeInsets.symmetric(horizontal: 16),
+                //   child: Column(
+                //     children: [
+                //       Row(
+                //         children: [
+                //           Expanded(
+                //             child: _buildInfoTile("Maintenance ID", widget.maintenanceId),
+                //           ),
+                //           const SizedBox(width: 16),
+                //           Expanded(
+                //             child: _buildInfoTile("Requested By", widget.staffName),
+                //           ),
+                //         ],
+                //       ),
+                //     ],
+                //   ),
+                // ),
                 const SizedBox(height: 8),
 
                 // Scrollable content
@@ -374,6 +422,7 @@ class _RequestItemState extends State<RequestItem> {
                                     const TextInputType.numberWithOptions(decimal: true),
                                 decoration: InputDecoration(
                                   hintText: 'e.g., 50',
+                                  errorText: _quantityError,
                                   isDense: true,
                                   filled: true,
                                   fillColor: const Color(0xFFF9FAFB),
@@ -541,6 +590,32 @@ class _RequestItemState extends State<RequestItem> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildInfoTile(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Color(0xFF6B7280),
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF111827),
+          ),
+        ),
+      ],
     );
   }
 }

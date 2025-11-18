@@ -1,3 +1,4 @@
+import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
@@ -43,29 +44,20 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     return pathMap[routeKey];
   }
 
-  void _handleLogout(BuildContext context) {
-    showDialog(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: const Text('Logout'),
-            content: const Text('Are you sure you want to logout?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  context.go('/');
-                },
-                child: const Text('Logout'),
-              ),
-            ],
-          ),
-    );
+// Logout functionality
+void _handleLogout(BuildContext context) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (BuildContext context) {
+      return const LogoutPopup();
+    },
+  );
+
+  if (result == true) {
+    context.go('/');
   }
+}
+
 
   // ---------------- Edit mode + form state ----------------
   final _formKey = GlobalKey<FormState>();
@@ -96,6 +88,9 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
   final _assessmentNotesCtrl = TextEditingController();
   final _recommendationsCtrl = TextEditingController();
 
+  // Admin Notes
+  final _adminNotifyCtrl = TextEditingController();
+
   // Contractor
   final _contractorNameCtrl = TextEditingController();
   final _contractorDeptCtrl = TextEditingController();
@@ -110,6 +105,9 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
 
   // Checklist items for the task (used when opening full edit form)
   List<Map<String, dynamic>> _checklistItems = [];
+
+  // Reserved inventory items for this task
+  List<Map<String, dynamic>> _reservedInventoryItems = [];
 
   final ApiService _apiService = ApiService();
   bool _isLoading = false;
@@ -139,6 +137,16 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
 
       final taskData = await _apiService.getMaintenanceTaskById(widget.taskId);
       
+      // Debug: print all available fields in task data
+      print('[ExternalView] Task data keys: ${taskData.keys.toList()}');
+      print('[ExternalView] Task data: $taskData');
+      
+      // Ensure assigned contractor/staff details are loaded (if assigned_to is an id)
+      await _ensureAssignedStaffLoaded();
+      
+      // Load reserved inventory items
+      await _loadReservedInventoryItems();
+      
       if (mounted) {
         setState(() {
           // Store the current task data
@@ -146,9 +154,6 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
           
           // Update controllers with fetched data using comprehensive mapping
           _populateFormWithTaskData(taskData);
-          
-          // Ensure assigned contractor/staff details are loaded (if assigned_to is an id)
-          Future.microtask(() => _ensureAssignedStaffLoaded());
 
           // Take snapshot for cancel functionality
           _original = _takeSnapshot();
@@ -252,6 +257,21 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     _recommendationsCtrl.text =
         taskData['recommendation']?.toString() ??
         taskData['recommendations']?.toString() ?? '';
+
+    // Admin Notes - try multiple possible field names
+    _adminNotifyCtrl.text = 
+        taskData['admin_notification']?.toString() ??
+        taskData['admin_notes']?.toString() ??
+        taskData['remarks']?.toString() ??
+        taskData['additional_notes']?.toString() ??
+        taskData['notes']?.toString() ??
+        taskData['comments']?.toString() ??
+        '';
+    // Debug log: show what admin notes were populated for this task (helps trace missing notes)
+    try {
+      print('[ExternalView] admin notes (populated): "${_adminNotifyCtrl.text}"');
+      print('[ExternalView] admin notes field found: ${taskData.keys.where((k) => k.toLowerCase().contains('note') || k.toLowerCase().contains('remark') || k.toLowerCase().contains('comment')).toList()}');
+    } catch (_) {}
   }
 
   // Ensure we have assigned contractor/staff details when needed (fallback fetch)
@@ -285,6 +305,45 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
       if (mounted) setState(() => _isLoadingStaff = false);
     }
   }
+
+  Future<void> _loadReservedInventoryItems() async {
+    try {
+      print('[v0] Loading reserved inventory items for task ${widget.taskId}');
+      final response = await _apiService.getInventoryReservations(maintenanceTaskId: widget.taskId);
+
+      print('[v0] Reserved inventory items response: $response');
+
+      if (response['success'] == true && response['data'] != null) {
+        final reservations = List<Map<String, dynamic>>.from(response['data']);
+
+        // Enrich reserved inventory items with item details
+        for (var reservation in reservations) {
+          if (reservation['inventory_id'] != null) {
+            try {
+              final itemData = await _apiService.getInventoryItem(reservation['inventory_id']);
+              if (itemData != null) {
+                reservation['item_name'] = itemData['item_name'];
+                reservation['item_code'] = itemData['item_code'];
+              }
+            } catch (e) {
+              print('[v0] Error loading inventory item details: $e');
+              // Continue without item details
+            }
+          }
+        }
+
+        setState(() {
+          _reservedInventoryItems = reservations;
+        });
+        print('[v0] Loaded ${_reservedInventoryItems.length} reserved inventory items for task ${widget.taskId}');
+      } else {
+        print('[v0] No reserved inventory items found or invalid response');
+      }
+    } catch (e) {
+      print('[v0] Error loading reserved inventory items: $e');
+      // Don't fail the whole form if inventory items fail to load
+    }
+  }
   
   String? _error;
 
@@ -309,7 +368,7 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     if (raw.trim().isEmpty) return '';
     try {
       final dt = DateTime.tryParse(raw) ?? UiDateUtils.parse(raw);
-      return dt != null ? UiDateUtils.fullDate(dt) : raw;
+      return UiDateUtils.fullDate(dt);
     } catch (_) {
       return raw;
     }
@@ -341,6 +400,7 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
 
     _assessmentNotesCtrl.dispose();
     _recommendationsCtrl.dispose();
+    _adminNotifyCtrl.dispose();
     super.dispose();
   }
 
@@ -365,13 +425,8 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     'email': _contractEmailCtrl.text,
     'assessment_notes': _assessmentNotesCtrl.text,
     'recommendations': _recommendationsCtrl.text,
+    'admin_notification': _adminNotifyCtrl.text,
   };
-
-  void _enterEditMode() {
-    setState(() => _isEditMode = true);
-    // Ensure assigned contractor/staff details are loaded when switching to edit
-    Future.microtask(() => _ensureAssignedStaffLoaded());
-  }
 
   void _cancelEdit() {
     // revert to snapshot - guard in case snapshot isn't initialized
@@ -401,6 +456,7 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
 
       _assessmentNotesCtrl.text = s['assessment_notes']!;
       _recommendationsCtrl.text = s['recommendations']!;
+      _adminNotifyCtrl.text = s['admin_notification']!;
     } catch (e) {
       print('[ExternalView] _cancelEdit: snapshot unavailable, clearing edits: $e');
       _maintenanceTypeCtrl.text = '';
@@ -427,6 +483,7 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
 
       _assessmentNotesCtrl.text = '';
       _recommendationsCtrl.text = '';
+      _adminNotifyCtrl.text = '';
     }
     setState(() => _isEditMode = false);
   }
@@ -469,6 +526,8 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     }
   }
 
+  void _enterEditMode() => setState(() => _isEditMode = true);
+
   // ---------------- Validators ----------------
   String? _req(String? v) =>
       (v == null || v.trim().isEmpty) ? 'Required' : null;
@@ -477,14 +536,6 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     if (v == null || v.trim().isEmpty) return 'Required';
     final ok = RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(v.trim());
     return ok ? null : 'Use YYYY-MM-DD';
-  }
-
-  String? _serviceWindowValidator(String? v) {
-    if (v == null || v.trim().isEmpty) return 'Required';
-    final ok = RegExp(
-      r'^\d{4}-\d{2}-\d{2}\s+to\s+\d{4}-\d{2}-\d{2}$',
-    ).hasMatch(v.trim());
-    return ok ? null : 'Use "YYYY-MM-DD to YYYY-MM-DD"';
   }
 
   String? _emailValidator(String? v) {
@@ -611,6 +662,10 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
                                     _buildTaskScopeCard(),
                                     const SizedBox(height: 24),
                                     _buildContractorInformationCard(),
+                                    const SizedBox(height: 24),
+                                    _buildInventoryRequestsCard(),
+                                    const SizedBox(height: 24),
+                                    _buildAdminNotesCard(),
                                   ],
                                 ),
                               ),
@@ -721,11 +776,6 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
         _currentTaskData['title']?.toString() ??
         'External Maintenance Task';
 
-    final assignedTo = 
-        _currentTaskData['assigned_to']?.toString() ??
-        _currentTaskData['assignedTo']?.toString() ??
-        (_contractorNameCtrl.text.isNotEmpty ? _contractorNameCtrl.text : 'External');
-
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -762,14 +812,14 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // StatusTag (uses internal style mapping)
-                StatusTag((_currentTaskData?['status'] ?? '').toString()),
+                StatusTag((_currentTaskData['status'] ?? '').toString()),
                 const SizedBox(width: 8),
                 // Maintenance type tag
-                MaintenanceTypeTag((_currentTaskData?['maintenance_type'] ?? _currentTaskData?['task_type'] ?? 'External').toString()),
+                MaintenanceTypeTag((_currentTaskData['maintenance_type'] ?? _currentTaskData['task_type'] ?? 'External').toString()),
                 const SizedBox(width: 8),
                 // Priority tag (optional)
-                if ((_currentTaskData?['priority'] ?? '').toString().trim().isNotEmpty)
-                  PriorityTag((_currentTaskData?['priority'] ?? '').toString()),
+                if ((_currentTaskData['priority'] ?? '').toString().trim().isNotEmpty)
+                  PriorityTag((_currentTaskData['priority'] ?? '').toString()),
               ],
             ),
           ],
@@ -1109,6 +1159,62 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     );
   }
 
+  Widget _buildAdminNotesCard() {
+    return _buildCard(
+      icon: Icons.note,
+      iconColor: Colors.grey[600]!,
+      title: 'Admin Notes',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _isEditMode
+              ? TextFormField(
+                  controller: _adminNotifyCtrl,
+                  minLines: 3,
+                  maxLines: 8,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    hintText: 'Enter admin notes...',
+                  ),
+                )
+              : Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[200]!),
+                  ),
+                  child: _adminNotifyCtrl.text.trim().isNotEmpty
+                      ? Text(
+                          _adminNotifyCtrl.text,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.black87,
+                            height: 1.4,
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            TextButton.icon(
+                              onPressed: _enterEditMode,
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('Add Notes'),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+        ],
+      ),
+    );
+  }
+
   // -------- Card wrapper --------
   Widget _buildCard({
     required IconData icon,
@@ -1150,38 +1256,6 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
   }
 
   // -------- Shared row helpers --------
-  Widget _viewOnlyRow(String label, String value, {bool highlight = false}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Expanded(
-            flex: 2,
-            child: Text(
-              "Maintenance Type",
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 14,
-                color: highlight ? Colors.red[600] : Colors.black87,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _editableInfoRow(
     String label,
@@ -1362,7 +1436,7 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
               }
 
               // Prepare edit payload
-              final Map<String, dynamic> editData = Map<String, dynamic>.from(_currentTaskData ?? {});
+              final Map<String, dynamic> editData = Map<String, dynamic>.from(_currentTaskData);
               if ((editData['remarks'] == null || editData['remarks'].toString().isEmpty) && _assessmentNotesCtrl.text.trim().isNotEmpty) {
                 editData['remarks'] = _assessmentNotesCtrl.text.trim();
               }
@@ -1420,6 +1494,242 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
           child: const Text('Save Changes'),
         ),
       ],
+    );
+  }
+
+  String _formatDateString(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return '';
+    DateTime? dt = DateTime.tryParse(value);
+    if (dt == null) {
+      try {
+        dt = UiDateUtils.parse(value);
+      } catch (_) {
+        dt = null;
+      }
+    }
+    return dt != null ? UiDateUtils.fullDate(dt) : value;
+  }
+
+  Future<void> _receiveInventoryItem(String requestId) async {
+    try {
+      setState(() => _isLoading = true);
+      
+      final response = await _apiService.fulfillInventoryRequest(requestId);
+      
+      if (response['success'] == true) {
+        // Refresh the inventory items
+        await _loadReservedInventoryItems();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Item marked as received successfully')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to mark item as received: ${response['message'] ?? 'Unknown error'}')),
+        );
+      }
+    } catch (e) {
+      print('[v0] Error receiving inventory item: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: Failed to mark item as received')),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Widget _buildInventoryRequestsCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE3F2FD),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF2196F3)),
+                ),
+                child: const Icon(
+                  Icons.inventory_2,
+                  color: Color(0xFF2196F3),
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                "Reserved Items",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          if (_reservedInventoryItems.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: Text(
+                'No items reserved for this task.',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                textAlign: TextAlign.center,
+              ),
+            )
+          else
+            Column(
+              children: _reservedInventoryItems.map((request) {
+                final status = request['status'] ?? 'pending';
+                final itemName = request['item_name'] ?? 'Unknown Item';
+                final quantity = request['quantity_requested'] ?? 0;
+                final startDate = request['start_date'] ?? request['requested_date'] ?? '';
+                
+                Color statusColor;
+                IconData statusIcon;
+                switch (status) {
+                  case 'approved':
+                    statusColor = Colors.green;
+                    statusIcon = Icons.check_circle;
+                    break;
+                  case 'fulfilled':
+                    statusColor = Colors.blue;
+                    statusIcon = Icons.done_all;
+                    break;
+                  case 'denied':
+                    statusColor = Colors.red;
+                    statusIcon = Icons.cancel;
+                    break;
+                  default:
+                    statusColor = Colors.orange;
+                    statusIcon = Icons.pending;
+                }
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.inventory_2_outlined,
+                        color: Colors.grey[600],
+                        size: 24,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              itemName,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Quantity: $quantity',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            if (request['current_stock'] != null)
+                              Text(
+                                'Stock: ${request['current_stock']}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.blueGrey[600],
+                                ),
+                              ),
+                            if (startDate.isNotEmpty)
+                              Text(
+                                'Reserved: ${_formatDateString(startDate)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[500],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              statusIcon,
+                              color: statusColor,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              status.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: statusColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Add receive button for admin when status is approved
+                      if (status == 'approved') ...[
+                        const SizedBox(width: 8),
+                        TextButton.icon(
+                          onPressed: _isLoading ? null : () => _receiveInventoryItem(request['id'] ?? request['request_id']),
+                          icon: const Icon(Icons.check_circle_outline, size: 16),
+                          label: const Text('Receive'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.green,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            textStyle: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
+      ),
     );
   }
 }

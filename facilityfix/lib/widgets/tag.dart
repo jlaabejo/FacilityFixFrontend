@@ -191,6 +191,7 @@ class StatusTag extends StatelessWidget {
   // Inventory / Approval
   'Approved':     _StatusStyle(fg: Color(0xFF065F46), bg: Color(0xFFF1FBF5)),
   'Rejected':     _StatusStyle(fg: Color(0xFFDC2626), bg: Color(0xFFFFF1F2)),
+  'Received':     _StatusStyle(fg: Color(0xFF0891B2), bg: Color(0xFFE0F2FE)),
   };
 
   // Normalize "In-Progress", "in_progress", "in progress" → "in progress"

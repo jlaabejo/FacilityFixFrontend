@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
@@ -126,8 +127,6 @@ class _ExternalMaintenanceFormPageState
 
   DateTime _calculateNextDueDate(DateTime base, String frequency) {
     switch (frequency) {
-      case 'Daily':
-        return base.add(const Duration(days: 1));
       case 'Weekly':
         return base.add(const Duration(days: 7));
       case 'Monthly':
@@ -351,29 +350,20 @@ class _ExternalMaintenanceFormPageState
     return pathMap[routeKey];
   }
 
-  void _handleLogout(BuildContext context) {
-    showDialog(
-      context: context,
-      builder:
-          (_) => AlertDialog(
-            title: const Text('Logout'),
-            content: const Text('Are you sure you want to logout?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  context.go('/');
-                },
-                child: const Text('Logout'),
-              ),
-            ],
-          ),
-    );
+// Logout functionality
+void _handleLogout(BuildContext context) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (BuildContext context) {
+      return const LogoutPopup();
+    },
+  );
+
+  if (result == true) {
+    context.go('/');
   }
+}
+
 
   // ---------- Init: auto-fill automated fields ----------
   final ApiService _apiService = ApiService();
@@ -406,7 +396,9 @@ class _ExternalMaintenanceFormPageState
           data['task_code'] ?? data['id']?.toString() ?? '';
       _descriptionController.text =
           data['task_description'] ?? data['description'] ?? '';
-      _estimatedDurationController.text = data['estimated_duration'] ?? '';
+      _estimatedDurationController.text = data['estimated_duration'] is int 
+          ? _formatMinutesToDuration(data['estimated_duration']) 
+          : (data['estimated_duration'] ?? '');
 
       // Contractor information
       _contractorNameController.text =
@@ -458,9 +450,8 @@ class _ExternalMaintenanceFormPageState
               return word[0].toUpperCase() + word.substring(1).toLowerCase();
             })
             .join(' ');
-        // Valid recurrence options: Daily, Weekly, Monthly, Quarterly, Annually
+        // Valid recurrence options: Weekly, Monthly, Quarterly, Annually
         final validRecurrences = [
-          'Daily',
           'Weekly',
           'Monthly',
           'Quarterly',
@@ -617,7 +608,7 @@ class _ExternalMaintenanceFormPageState
 
   Future<void> _loadInventoryItems() async {
     try {
-      final response = await _mainApiService.getInventoryItems();
+      final response = await _mainApiService.getBuildingInventory('default_building_id');
       if (response['success'] == true && response['data'] != null) {
         setState(() {
           _availableInventoryItems = List<Map<String, dynamic>>.from(
@@ -628,6 +619,52 @@ class _ExternalMaintenanceFormPageState
     } catch (e) {
       print('[v0] Error loading inventory items: $e');
       // ignore: no-op
+    }
+  }
+
+  // Auto-populate recommended inventory items for selected location
+  void _autoPopulateInventoryForLocation(String? location) {
+    if (location == null || location.isEmpty) return;
+    if (_availableInventoryItems.isEmpty) return;
+
+    // Find items recommended for this location
+    final recommendedItems = _availableInventoryItems.where((item) {
+      final locations = item['recommended_locations'];
+      if (locations is List) {
+        return locations.any((loc) => loc.toString().toLowerCase() == location.toLowerCase());
+      }
+      return false;
+    }).toList();
+
+    // Add recommended items that aren't already selected
+    for (final item in recommendedItems) {
+      final itemId = item['id'] ?? item['_doc_id'];
+      final alreadyAdded = _selectedInventoryItems.any(
+        (selected) => (selected['inventory_id'] ?? selected['id']) == itemId,
+      );
+
+      if (!alreadyAdded) {
+        setState(() {
+          _selectedInventoryItems.add({
+            'inventory_id': itemId,
+            'itemName': item['itemName'] ?? item['name'] ?? 'Unknown',
+            'quantity': 1, // Default quantity
+            'unit': item['unit'] ?? 'pcs',
+          });
+        });
+      }
+    }
+
+    // Show feedback to user
+    if (recommendedItems.isNotEmpty && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Added ${recommendedItems.length} recommended inventory item(s) for $location',
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 
@@ -698,6 +735,42 @@ class _ExternalMaintenanceFormPageState
       return null;
     }
     return 'Enter a valid duration (e.g. 3 hrs 30 mins) or time';
+  }
+
+  int? _parseDurationToMinutes(String? durationText) {
+    if (durationText == null || durationText.trim().isEmpty) return null;
+
+    final s = durationText.trim();
+    int totalMinutes = 0;
+
+    // Match hours
+    final hourMatch = RegExp(r'(\d+)\s*(hrs?|hours?)', caseSensitive: false).firstMatch(s);
+    if (hourMatch != null) {
+      totalMinutes += int.parse(hourMatch.group(1)!) * 60;
+    }
+
+    // Match minutes
+    final minuteMatch = RegExp(r'(\d+)\s*mins?', caseSensitive: false).firstMatch(s);
+    if (minuteMatch != null) {
+      totalMinutes += int.parse(minuteMatch.group(1)!);
+    }
+
+    return totalMinutes > 0 ? totalMinutes : null;
+  }
+
+  String _formatMinutesToDuration(int? minutes) {
+    if (minutes == null || minutes <= 0) return '';
+
+    final hours = minutes ~/ 60;
+    final mins = minutes % 60;
+
+    if (hours > 0 && mins > 0) {
+      return '$hours hrs $mins mins';
+    } else if (hours > 0) {
+      return '$hours hrs';
+    } else {
+      return '$mins mins';
+    }
   }
 
   // ---------- UI ----------
@@ -905,6 +978,7 @@ class _ExternalMaintenanceFormPageState
                                     _otherLocationController.clear();
                                   }
                                 });
+                                _autoPopulateInventoryForLocation(v);
                               },
                               validator: (v) => v == null ? 'Required' : null,
                             ),
@@ -1055,7 +1129,6 @@ class _ExternalMaintenanceFormPageState
                               value: _selectedRecurrence,
                               placeholder: 'Select frequency...',
                               options: const [
-                                'Daily',
                                 'Weekly',
                                 'Monthly',
                                 'Quarterly',
@@ -1809,7 +1882,7 @@ class _ExternalMaintenanceFormPageState
       'start_date': formatDate(_startDate!),
       'scheduled_date': scheduledDateIso,
       'next_due_date': _nextDueDate != null ? formatDate(_nextDueDate!) : null,
-      'estimated_duration': _estimatedDurationController.text.trim(),
+      'estimated_duration': _parseDurationToMinutes(_estimatedDurationController.text.trim()),
 
       // Assessment and Tracking
       'assessment_received': _selectedAssessmentReceived,
@@ -1879,6 +1952,17 @@ class _ExternalMaintenanceFormPageState
         final createdId =
             createdTask?['id'] ?? result['id'] ?? result['task_id'];
         print('[v0] External maintenance task created: $createdId');
+
+        // Create inventory reservations for selected items
+        if (createdId != null && _selectedInventoryItems.isNotEmpty) {
+          try {
+            final inventoryReservationIds = await _createInventoryReservations(createdId.toString());
+            print('[v0] Created ${inventoryReservationIds.length} inventory reservations for external task $createdId');
+          } catch (e) {
+            print('[v0] Error creating inventory reservations for external task: $e');
+            // Don't fail the whole operation if inventory reservations fail
+          }
+        }
 
         if (mounted) {
           context.push('/work/maintenance', extra: taskData);
@@ -2157,7 +2241,32 @@ class _ExternalMaintenanceFormPageState
     );
   }
 
-  // ---------- Dispose ----------
+  Future<List<String>> _createInventoryReservations(String taskId) async {
+    if (_selectedInventoryItems.isEmpty) return [];
+
+    final List<String> createdReservationIds = [];
+
+    try {
+      for (final item in _selectedInventoryItems) {
+        final response = await _apiService.createInventoryReservation(
+          inventoryId: item['id'] ?? item['_doc_id'] ?? item['inventory_id'],
+          quantity: item['quantity'] ?? 1,
+          maintenanceTaskId: taskId,
+        );
+        if (response['success'] == true) {
+          final reservationId = response['reservation_id'] ?? response['data']?['_doc_id'] ?? response['data']?['id'];
+          if (reservationId != null) {
+            createdReservationIds.add(reservationId.toString());
+          }
+        }
+      }
+      print('[v0] Created ${createdReservationIds.length} inventory reservations for external task ${taskId}');
+      return createdReservationIds;
+    } catch (e) {
+      print('[v0] Error creating inventory reservations: $e');
+      throw Exception('Failed to create inventory reservations: $e');
+    }
+  }
   @override
   void dispose() {
     _taskTitleController.dispose();

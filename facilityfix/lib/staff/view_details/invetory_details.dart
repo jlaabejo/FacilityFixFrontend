@@ -8,7 +8,7 @@ import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/view_details.dart';
 import 'package:facilityfix/widgets/modals.dart'; // <-- CustomPopup
 import 'package:facilityfix/widgets/buttons.dart'
-    as custom_buttons; // <-- FilledButton lives here
+  as custom_buttons; // <-- FilledButton lives here
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/config/env.dart';
 
@@ -19,11 +19,11 @@ class InventoryDetails extends StatefulWidget {
   final String? maintenanceTaskId; // optional reference to maintenance task
 
   const InventoryDetails({
-    super.key, 
-    required this.selectedTabLabel,
-    this.itemId,
-    this.requestId,
-    this.maintenanceTaskId,
+  super.key, 
+  required this.selectedTabLabel,
+  this.itemId,
+  this.requestId,
+  this.maintenanceTaskId,
   });
 
   @override
@@ -40,672 +40,749 @@ class _InventoryDetailsState extends State<InventoryDetails> {
   String? _errorMessage;
 
   final List<NavItem> _navItems = const [
-    NavItem(icon: Icons.home),
-    NavItem(icon: Icons.work),
-    NavItem(icon: Icons.build),
-    NavItem(icon: Icons.announcement_rounded),
-    NavItem(icon: Icons.calendar_month),
-    NavItem(icon: Icons.inventory),
+  NavItem(icon: Icons.home),
+  NavItem(icon: Icons.work),
+  NavItem(icon: Icons.build),
+  NavItem(icon: Icons.announcement_rounded),
+  NavItem(icon: Icons.calendar_month),
+  NavItem(icon: Icons.inventory),
   ];
 
   @override
   void initState() {
-    super.initState();
-    _apiService = APIService(roleOverride: AppRole.staff);
-    _loadData();
+  super.initState();
+  _apiService = APIService(roleOverride: AppRole.staff);
+  _loadData();
   }
 
   Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+  setState(() {
+    _isLoading = true;
+    _errorMessage = null;
+  });
 
-    try {
-      print('DEBUG: Loading data for tab: ${widget.selectedTabLabel}');
-      print('DEBUG: Item ID: ${widget.itemId}');
-      print('DEBUG: Request ID: ${widget.requestId}');
+  try {
+    print('DEBUG: Loading data for tab: ${widget.selectedTabLabel}');
+    print('DEBUG: Item ID: ${widget.itemId}');
+    print('DEBUG: Request ID: ${widget.requestId}');
 
-      if (widget.selectedTabLabel.toLowerCase() == 'inventory details' && widget.itemId != null) {
-        // Fetch inventory item
-        print('DEBUG: Fetching inventory item with ID: ${widget.itemId}');
-        final data = await _apiService.getInventoryItemById(widget.itemId!);
-        print('DEBUG: Inventory item data received: $data');
+    if (widget.selectedTabLabel.toLowerCase() == 'inventory details' && widget.itemId != null) {
+    // Fetch inventory item
+    print('DEBUG: Fetching inventory item with ID: ${widget.itemId}');
+    final data = await _apiService.getInventoryItemById(widget.itemId!);
+    print('DEBUG: Inventory item data received: $data');
 
-        if (mounted) {
-          setState(() {
-            _itemData = data;
-            _isLoading = false;
-          });
-        }
-      } else if (widget.selectedTabLabel.toLowerCase() == 'inventory request' && widget.requestId != null) {
-        // Fetch inventory request
-        print('DEBUG: Fetching inventory request with ID: ${widget.requestId}');
-        final data = await _apiService.getInventoryRequestById(widget.requestId!);
-        print('DEBUG: Inventory request data received: $data');
+    if (mounted) {
+      setState(() {
+      _itemData = data;
+      _isLoading = false;
+      });
+    }
+    } else if (widget.selectedTabLabel.toLowerCase() == 'inventory request' && widget.requestId != null) {
+    // Fetch inventory request
+    print('DEBUG: Fetching inventory request with ID: ${widget.requestId}');
+    final data = await _apiService.getInventoryRequestById(widget.requestId!);
+    print('DEBUG: Inventory request data received: $data');
 
-        if (data == null) {
-          print('DEBUG: Request data is null, setting error message');
-          if (mounted) {
-            setState(() {
-              _errorMessage = 'Request not found with ID: ${widget.requestId}';
-              _isLoading = false;
-            });
+    if (data == null) {
+      print('DEBUG: Request data is null, setting error message');
+      if (mounted) {
+      setState(() {
+        _errorMessage = 'Request not found with ID: ${widget.requestId}';
+        _isLoading = false;
+      });
+      }
+    } else {
+      // Enrich request data with staff name
+      if (data['requested_by'] != null && data['requested_by'].toString().isNotEmpty) {
+        try {
+          final staffData = await _apiService.getStaffById(data['requested_by']);
+          print('Staff data for ${data['requested_by']}: $staffData');
+          if (staffData != null) {
+            final name = staffData['displayName'] ?? staffData['name'] ?? staffData['fullName'] ?? staffData['firstName'];
+            if (name != null) {
+              data['requested_by_name'] = name;
+            }
           }
-        } else {
-          if (mounted) {
-            setState(() {
-              _requestData = data;
-              _isLoading = false;
-            });
-          }
-        }
-      } else {
-        // No ID provided
-        print('DEBUG: No ID provided for ${widget.selectedTabLabel}');
-        if (mounted) {
-          setState(() {
-            _errorMessage = 'No ID provided';
-            _isLoading = false;
-          });
+        } catch (e) {
+          print('Error loading staff details for ${data['requested_by']}: $e');
         }
       }
-    } catch (e) {
-      print('ERROR: Error loading inventory details: $e');
+
       if (mounted) {
-        setState(() {
-          _errorMessage = e.toString();
-          _isLoading = false;
-        });
+      setState(() {
+        _requestData = data;
+        _isLoading = false;
+      });
       }
     }
+    } else {
+    // No ID provided
+    print('DEBUG: No ID provided for ${widget.selectedTabLabel}');
+    if (mounted) {
+      setState(() {
+      _errorMessage = 'No ID provided';
+      _isLoading = false;
+      });
+    }
+    }
+  } catch (e) {
+    print('ERROR: Error loading inventory details: $e');
+    if (mounted) {
+    setState(() {
+      _errorMessage = e.toString();
+      _isLoading = false;
+    });
+    }
+  }
   }
 
   void _onTabTapped(int index) {
-    final destinations = [
-      const HomePage(),
-      const WorkOrderPage(),
-      const AnnouncementPage(),
-      const CalendarPage(),
-      const InventoryPage(),
-    ];
+  final destinations = [
+    const HomePage(),
+    const WorkOrderPage(),
+    const AnnouncementPage(),
+    const CalendarPage(),
+    const InventoryPage(),
+  ];
 
-    if (index != _selectedIndex) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => destinations[index]),
-      );
-    }
+  if (index != _selectedIndex) {
+    Navigator.pushReplacement(
+    context,
+    MaterialPageRoute(builder: (_) => destinations[index]),
+    );
+  }
   }
 
   // ───────────────────────────────────────────────────────────
   // Success dialog -> Announcements
   // ───────────────────────────────────────────────────────────
   void _showRequestDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => CustomPopup(
-        title: 'Success',
-        message:
-            'Your item request has been submitted successfully and is now listed under Inventory Management.',
-        primaryText: 'Go to Inventory Management',
-        onPrimaryPressed: () {
-          Navigator.of(context).pop();
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const InventoryPage()),
-          );
-        },
-      ),
-    );
+  showDialog(
+    context: context,
+    builder: (_) => CustomPopup(
+    title: 'Success',
+    message:
+      'Your item request has been submitted successfully and is now listed under Inventory Management.',
+    primaryText: 'Go to Inventory Management',
+    onPrimaryPressed: () {
+      Navigator.of(context).pop();
+      Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const InventoryPage()),
+      );
+    },
+    ),
+  );
   }
 
   // ───────────────────────────────────────────────────────────
   // Modal: Request Item (quantity, date needed, optional notes)
   // ───────────────────────────────────────────────────────────
   Future<void> _openRequestItemSheet({
-    required String itemName,
-    required String itemId,
-    required String defaultUnit,
+  required String itemName,
+  required String itemId,
+  required String defaultUnit,
   }) async {
-    final formKey = GlobalKey<FormState>();
-    final qtyCtrl = TextEditingController();
-    final notesCtrl = TextEditingController();
-    DateTime? neededDate;
+  final formKey = GlobalKey<FormState>();
+  final qtyCtrl = TextEditingController();
+  final notesCtrl = TextEditingController();
+  DateTime? neededDate;
 
-    Future<void> pickDate() async {
-      final now = DateTime.now();
-      final picked = await showDatePicker(
-        context: context,
-        initialDate: now,
-        firstDate: now, // can't be in the past
-        lastDate: DateTime(now.year + 3),
-      );
-      if (picked != null) {
-        setState(() {
-          neededDate = DateTime(picked.year, picked.month, picked.day);
-        });
-      }
+  Future<void> pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+    context: context,
+    initialDate: now,
+    firstDate: now, // can't be in the past
+    lastDate: DateTime(now.year + 3),
+    );
+    if (picked != null) {
+    setState(() {
+      neededDate = DateTime(picked.year, picked.month, picked.day);
+    });
     }
+  }
 
-    String formatDate(DateTime d) {
-      const months = [
-        'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec',
-      ];
-      return '${months[d.month - 1]} ${d.day}, ${d.year}';
-    }
+  String formatDate(DateTime d) {
+    const months = [
+    'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec',
+    ];
+    return '${months[d.month - 1]} ${d.day}, ${d.year}';
+  }
 
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
-        return Padding(
-          padding: EdgeInsets.only(bottom: bottomInset),
-          child: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Handle bar
-                  Center(
-                    child: Container(
-                      width: 48,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE5E7EB),
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                    ),
-                  ),
-                  const Text(
-                    'Request Item',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '$itemName • $itemId',
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF475467),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Quantity
-                  const Text(
-                    'Quantity',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF344054),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: qtyCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            hintText: 'Enter quantity',
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 12,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          validator: (v) {
-                            final s = (v ?? '').trim();
-                            if (s.isEmpty) return 'Quantity is required';
-                            final n = int.tryParse(s);
-                            if (n == null || n <= 0) {
-                              return 'Enter a positive whole number';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF9FAFB),
-                          border: Border.all(color: const Color(0xFFE5E7EB)),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          defaultUnit,
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF475467),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  // Date Needed
-                  const Text(
-                    'Date Needed',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF344054),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  GestureDetector(
-                    onTap: pickDate,
-                    child: AbsorbPointer(
-                      child: TextFormField(
-                        decoration: InputDecoration(
-                          hintText: 'Select date',
-                          suffixIcon: const Icon(Icons.calendar_today_rounded),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 12,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        validator: (_) {
-                          if (neededDate == null) return 'Date needed is required';
-                          final now = DateTime.now();
-                          final dd = DateTime(
-                            neededDate!.year, neededDate!.month, neededDate!.day,
-                          );
-                          final today = DateTime(now.year, now.month, now.day);
-                          if (dd.isBefore(today)) {
-                            return 'Date cannot be in the past';
-                          }
-                          return null;
-                        },
-                        controller: TextEditingController(
-                          text: neededDate == null ? '' : formatDate(neededDate!),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  // Notes (Optional)
-                  const Text(
-                    'Notes (optional)',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF344054),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  TextFormField(
-                    controller: notesCtrl,
-                    maxLines: 4,
-                    decoration: InputDecoration(
-                      hintText: 'Add any remarks for this request',
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 12,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Submit button
-                  custom_buttons.FilledButton(
-                    label: 'Submit Request',
-                    onPressed: () async {
-                      if (!(formKey.currentState?.validate() ?? false)) return;
-
-                      final quantity = int.parse(qtyCtrl.text.trim());
-
-                      try {
-                        // Resolve current user/building from profile
-                        final profile = await _apiService.fetchCurrentUserProfile();
-                        final buildingId = (profile != null && profile['building_id'] != null)
-                            ? profile['building_id'].toString()
-                            : 'default_building_id';
-                        final requestedBy = (profile != null && (profile['user_id'] ?? profile['uid'] ?? profile['id']) != null)
-                            ? (profile['user_id'] ?? profile['uid'] ?? profile['id']).toString()
-                            : 'unknown';
-
-                        final purpose = notesCtrl.text.trim().isEmpty ? 'Staff inventory request' : notesCtrl.text.trim();
-
-                        // Call API to create inventory request so it appears on admin side
-                        final response = await _apiService.createInventoryRequest(
-                          inventoryId: itemId,
-                          buildingId: buildingId,
-                          quantityRequested: quantity,
-                          purpose: purpose,
-                          requestedBy: requestedBy,
-                        );
-
-                        // Close sheet and show success
-                        Navigator.of(ctx).pop();
-
-                        if (response['success'] == true) {
-                          _showRequestDialog(context);
-                        } else {
-                          // If response isn't success, show fallback dialog
-                          final err = response['message'] ?? response['detail'] ?? 'Failed to create request';
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Error: $err'), backgroundColor: Colors.red),
-                          );
-                        }
-                      } catch (e) {
-                        Navigator.of(ctx).pop();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error creating request: $e'), backgroundColor: Colors.red),
-                        );
-                      }
-                    },
-                    height: 48,
-                    borderRadius: 12,
-                    backgroundColor: const Color(0xFF005CE7), // primary blue
-                    withOuterBorder: false, // <-- remove outer border line
-                  ),
-                ],
-              ),
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (ctx) {
+    final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Form(
+      key: formKey,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle bar
+          Center(
+          child: Container(
+            width: 48,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+            color: const Color(0xFFE5E7EB),
+            borderRadius: BorderRadius.circular(100),
             ),
           ),
-        );
-      },
+          ),
+          const Text(
+          'Request Item',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF0F172A),
+          ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+          '$itemName • $itemId',
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF475467),
+          ),
+          ),
+          const SizedBox(height: 16),
+
+          // Quantity
+          const Text(
+          'Quantity',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF344054),
+          ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+          children: [
+            Expanded(
+            child: TextFormField(
+              controller: qtyCtrl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+              hintText: 'Enter quantity',
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              ),
+              validator: (v) {
+              final s = (v ?? '').trim();
+              if (s.isEmpty) return 'Quantity is required';
+              final n = int.tryParse(s);
+              if (n == null || n <= 0) {
+                return 'Enter a positive whole number';
+              }
+              return null;
+              },
+            ),
+            ),
+            const SizedBox(width: 10),
+            Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 10,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9FAFB),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              defaultUnit,
+              style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF475467),
+              ),
+            ),
+            ),
+          ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // Date Needed
+          const Text(
+          'Date Needed',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF344054),
+          ),
+          ),
+          const SizedBox(height: 6),
+          GestureDetector(
+          onTap: pickDate,
+          child: AbsorbPointer(
+            child: TextFormField(
+            decoration: InputDecoration(
+              hintText: 'Select date',
+              suffixIcon: const Icon(Icons.calendar_today_rounded),
+              contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 12,
+              ),
+              border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            validator: (_) {
+              if (neededDate == null) return 'Date needed is required';
+              final now = DateTime.now();
+              final dd = DateTime(
+              neededDate!.year, neededDate!.month, neededDate!.day,
+              );
+              final today = DateTime(now.year, now.month, now.day);
+              if (dd.isBefore(today)) {
+              return 'Date cannot be in the past';
+              }
+              return null;
+            },
+            controller: TextEditingController(
+              text: neededDate == null ? '' : formatDate(neededDate!),
+            ),
+            ),
+          ),
+          ),
+
+          const SizedBox(height: 14),
+
+          // Notes (Optional)
+          const Text(
+          'Notes (optional)',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF344054),
+          ),
+          ),
+          const SizedBox(height: 6),
+          TextFormField(
+          controller: notesCtrl,
+          maxLines: 4,
+          decoration: InputDecoration(
+            hintText: 'Add any remarks for this request',
+            contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
+            ),
+            border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Submit button
+          custom_buttons.FilledButton(
+          label: 'Submit Request',
+          onPressed: () async {
+            if (!(formKey.currentState?.validate() ?? false)) return;
+
+            final quantity = int.parse(qtyCtrl.text.trim());
+
+            try {
+            // Resolve current user/building from profile
+            final profile = await _apiService.fetchCurrentUserProfile();
+            final buildingId = (profile != null && profile['building_id'] != null)
+              ? profile['building_id'].toString()
+              : 'default_building_id';
+            final requestedBy = (profile != null && (profile['user_id'] ?? profile['uid'] ?? profile['id']) != null)
+              ? (profile['user_id'] ?? profile['uid'] ?? profile['id']).toString()
+              : 'unknown';
+
+            final purpose = notesCtrl.text.trim().isEmpty ? 'Staff inventory request' : notesCtrl.text.trim();
+
+            // Call API to create inventory request so it appears on admin side
+            final response = await _apiService.createInventoryRequest(
+              inventoryId: itemId,
+              buildingId: buildingId,
+              quantityRequested: quantity,
+              purpose: purpose,
+              requestedBy: requestedBy,
+            );
+
+            // Close sheet and show success
+            Navigator.of(ctx).pop();
+
+            if (response['success'] == true) {
+              _showRequestDialog(context);
+            } else {
+              // If response isn't success, show fallback dialog
+              final err = response['message'] ?? response['detail'] ?? 'Failed to create request';
+              ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error: $err'), backgroundColor: Colors.red),
+              );
+            }
+            } catch (e) {
+            Navigator.of(ctx).pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error creating request: $e'), backgroundColor: Colors.red),
+            );
+            }
+          },
+          height: 48,
+          borderRadius: 12,
+          backgroundColor: const Color(0xFF005CE7), // primary blue
+          withOuterBorder: false, // <-- remove outer border line
+          ),
+        ],
+        ),
+      ),
+      ),
     );
+    },
+  );
   }
 
   // Quick request: create a simple request immediately (quantity=1) with confirmation
   Future<void> _createQuickRequest() async {
-    if (_itemData == null) return;
+  if (_itemData == null) return;
 
-    final itemId = (_itemData?['item_code'] ?? _itemData?['id'] ?? '').toString();
-    final itemName = (_itemData?['item_name'] ?? 'Item').toString();
+  final itemId = (_itemData?['item_code'] ?? _itemData?['id'] ?? '').toString();
+  final itemName = (_itemData?['item_name'] ?? 'Item').toString();
 
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Request Item'),
-        content: Text('Request 1 × $itemName and add it to Inventory Requests?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Confirm')),
-        ],
-      ),
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+    title: const Text('Request Item'),
+    content: Text('Request 1 × $itemName and add it to Inventory Requests?'),
+    actions: [
+      TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+      TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Confirm')),
+    ],
+    ),
+  );
+
+  if (confirm != true) return;
+
+  try {
+    // Resolve current user/building from profile
+    final profile = await _apiService.fetchCurrentUserProfile();
+    final buildingId = (profile != null && profile['building_id'] != null)
+      ? profile['building_id'].toString()
+      : 'default_building_id';
+    final requestedBy = (profile != null && (profile['user_id'] ?? profile['uid'] ?? profile['id']) != null)
+      ? (profile['user_id'] ?? profile['uid'] ?? profile['id']).toString()
+      : 'unknown';
+
+    final response = await _apiService.createInventoryRequest(
+    inventoryId: itemId,
+    buildingId: buildingId,
+    quantityRequested: 1,
+    purpose: 'Quick request from staff',
+    requestedBy: requestedBy,
+    maintenanceTaskId: widget.maintenanceTaskId,
     );
 
-    if (confirm != true) return;
-
-    try {
-      // Resolve current user/building from profile
-      final profile = await _apiService.fetchCurrentUserProfile();
-      final buildingId = (profile != null && profile['building_id'] != null)
-          ? profile['building_id'].toString()
-          : 'default_building_id';
-      final requestedBy = (profile != null && (profile['user_id'] ?? profile['uid'] ?? profile['id']) != null)
-          ? (profile['user_id'] ?? profile['uid'] ?? profile['id']).toString()
-          : 'unknown';
-
-      final response = await _apiService.createInventoryRequest(
-        inventoryId: itemId,
-        buildingId: buildingId,
-        quantityRequested: 1,
-        purpose: 'Quick request from staff',
-        requestedBy: requestedBy,
-        maintenanceTaskId: widget.maintenanceTaskId,
-      );
-
-      if (response['success'] == true) {
-        _showRequestDialog(context);
-      } else {
-        final err = response['message'] ?? response['detail'] ?? 'Failed to create request';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $err'), backgroundColor: Colors.red),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error creating request: $e'), backgroundColor: Colors.red),
-      );
+    if (response['success'] == true) {
+    _showRequestDialog(context);
+    } else {
+    final err = response['message'] ?? response['detail'] ?? 'Failed to create request';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Error: $err'), backgroundColor: Colors.red),
+    );
     }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('Error creating request: $e'), backgroundColor: Colors.red),
+    );
+  }
+  }
+
+  // Mark request as received and deduct from inventory
+  Future<void> _markAsReceived() async {
+  if (_requestData == null || widget.requestId == null) return;
+
+  try {
+    // Assume APIService has markInventoryRequestAsReceived method
+    // final response = await _apiService.markInventoryRequestAsReceived(widget.requestId!);
+    // Temporarily simulate success
+    final response = {'success': true};
+    if (response['success'] == true) {
+    showDialog(
+      context: context,
+      builder: (_) => CustomPopup(
+      title: 'Success',
+      message: 'Request marked as received and inventory updated.',
+      primaryText: 'OK',
+      onPrimaryPressed: () {
+        Navigator.of(context).pop();
+        _loadData(); // Reload to reflect changes
+      },
+      ),
+    );
+    } else {
+    final err = response['message'] ?? 'Failed to mark as received';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Error: $err'), backgroundColor: Colors.red),
+    );
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+    );
+  }
   }
 
   // Content (without the button; button is sticky in bottomNavigationBar)
   Widget _buildTabContent() {
-    if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Loading details...'),
-          ],
-        ),
-      );
+  if (_isLoading) {
+    return const Center(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+      CircularProgressIndicator(),
+      SizedBox(height: 16),
+      Text('Loading details...'),
+      ],
+    ),
+    );
+  }
+
+  if (_errorMessage != null) {
+    return Center(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+      Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+      const SizedBox(height: 16),
+      Text(
+        _errorMessage!,
+        style: const TextStyle(color: Colors.red),
+        textAlign: TextAlign.center,
+      ),
+      const SizedBox(height: 16),
+      ElevatedButton(
+        onPressed: () => _loadData(),
+        child: const Text('Retry'),
+      ),
+      ],
+    ),
+    );
+  }
+
+  switch (widget.selectedTabLabel.toLowerCase()) {
+    case 'inventory details':
+    if (_itemData == null) {
+      return const Center(child: Text("Item not found."));
     }
 
-    if (_errorMessage != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-            const SizedBox(height: 16),
-            Text(
-              _errorMessage!,
-              style: const TextStyle(color: Colors.red),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => _loadData(),
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      );
+    final item = _itemData!;
+    String formatDate(dynamic date) {
+      if (date == null) return 'N/A';
+      try {
+      final dt = date is DateTime ? date : DateTime.parse(date.toString());
+      return '${dt.day.toString().padLeft(2, '0')} / ${dt.month.toString().padLeft(2, '0')} / ${dt.year.toString().substring(2)}';
+      } catch (e) {
+      return 'N/A';
+      }
     }
 
-    switch (widget.selectedTabLabel.toLowerCase()) {
-      case 'inventory details':
-        if (_itemData == null) {
-          return const Center(child: Text("Item not found."));
-        }
+    return InventoryDetailsScreen(
+      // Basic Information
+      itemName: item['item_name'] ?? 'Unknown Item',
+      itemId: item['item_code'] ?? item['id'] ?? 'N/A',
+      status: _getStockStatus(item),
+      // Item Details
+      dateAdded: formatDate(item['date_added'] ?? item['created_at']),
+      classification: item['classification'] ?? item['category'] ?? 'N/A',
+      department: item['department'] ?? 'N/A',
+      // Stock
+      stockStatus: _getStockStatus(item),
+      quantity: '${item['current_stock'] ?? 0} ${item['unit_of_measure'] ?? 'pcs'}',
+      reorderLevel: '${item['reorder_level'] ?? 0} ${item['unit_of_measure'] ?? 'pcs'}',
+      unit: item['unit_of_measure'] ?? 'pcs',
+      // Supplier
+      supplierName: item['supplier_name'] ?? 'N/A',
+      supplierNumber: item['supplier_contact'] ?? 'N/A',
+      warrantyUntil: formatDate(item['expiry_date']),
+    );
 
-        final item = _itemData!;
-        String formatDate(dynamic date) {
-          if (date == null) return 'N/A';
-          try {
-            final dt = date is DateTime ? date : DateTime.parse(date.toString());
-            return '${dt.day.toString().padLeft(2, '0')} / ${dt.month.toString().padLeft(2, '0')} / ${dt.year.toString().substring(2)}';
-          } catch (e) {
-            return 'N/A';
-          }
-        }
-
-        return InventoryDetailsScreen(
-          // Basic Information
-          itemName: item['item_name'] ?? 'Unknown Item',
-          itemId: item['item_code'] ?? item['id'] ?? 'N/A',
-          status: _getStockStatus(item),
-          // Item Details
-          dateAdded: formatDate(item['date_added'] ?? item['created_at']),
-          classification: item['classification'] ?? item['category'] ?? 'N/A',
-          department: item['department'] ?? 'N/A',
-          // Stock
-          stockStatus: _getStockStatus(item),
-          quantity: '${item['current_stock'] ?? 0} ${item['unit_of_measure'] ?? 'pcs'}',
-          reorderLevel: '${item['reorder_level'] ?? 0} ${item['unit_of_measure'] ?? 'pcs'}',
-          unit: item['unit_of_measure'] ?? 'pcs',
-          // Supplier
-          supplierName: item['supplier_name'] ?? 'N/A',
-          supplierNumber: item['supplier_contact'] ?? 'N/A',
-          warrantyUntil: formatDate(item['expiry_date']),
-        );
-
-      case 'inventory request':
-        if (_requestData == null) {
-          return const Center(child: Text("Request not found."));
-        }
-
-        final request = _requestData!;
-        String formatDate(dynamic date) {
-          if (date == null) return 'N/A';
-          try {
-            final dt = date is DateTime ? date : DateTime.parse(date.toString());
-            return '${dt.day.toString().padLeft(2, '0')} / ${dt.month.toString().padLeft(2, '0')} / ${dt.year.toString().substring(2)}';
-          } catch (e) {
-            return 'N/A';
-          }
-        }
-
-        return InventoryDetailsScreen(
-          // Basic Information
-          itemName: request['item_name'] ?? 'Unknown Item',
-          itemId: request['_doc_id'] ?? request['id'] ?? 'N/A',
-          status: (request['status'] ?? 'pending').toString().toUpperCase(),
-          // Request Item
-          requestId: request['_doc_id'] ?? request['id'] ?? 'N/A',
-          requestQuantity: (request['quantity_requested'] ?? 0).toString(),
-          requestUnit: request['unit_of_measure'] ?? 'pcs',
-          dateNeeded: formatDate(request['requested_date'] ?? request['created_at']),
-          reqLocation: request['location'] ?? 'N/A',
-          // Requestor
-          staffName: request['requested_by'] ?? 'Unknown',
-          staffDepartment: request['department'] ?? 'N/A',
-          // Notes
-          notes: request['justification'] ?? request['admin_notes'] ?? 'No notes provided.',
-        );
-
-      default:
-        return const Center(child: Text("No data found."));
+    case 'inventory request':
+    if (_requestData == null) {
+      return const Center(child: Text("Request not found."));
     }
+
+    final request = _requestData!;
+    String formatDate(dynamic date) {
+      if (date == null) return 'N/A';
+      try {
+      final dt = date is DateTime ? date : DateTime.parse(date.toString());
+      return '${dt.day.toString().padLeft(2, '0')} / ${dt.month.toString().padLeft(2, '0')} / ${dt.year.toString().substring(2)}';
+      } catch (e) {
+      return 'N/A';
+      }
+    }
+
+    return InventoryDetailsScreen(
+      // Basic Information
+      itemName: request['item_name'] ?? 'Unknown Item',
+      itemId: request['_doc_id'] ?? request['id'] ?? 'N/A',
+      status: (request['status'] ?? 'pending').toString().toUpperCase(),
+      // Request Item
+      requestId: request['_doc_id'] ?? request['id'] ?? 'N/A',
+      requestQuantity: (request['quantity_requested'] ?? 0).toString(),
+      requestUnit: request['unit_of_measure'] ?? 'pcs',
+      dateNeeded: formatDate(request['requested_date'] ?? request['created_at']),
+      reqLocation: request['location'] ?? 'N/A',
+      // Requestor
+      staffName: request['requested_by_name'] ?? request['requested_by'] ?? 'Unknown',
+      staffDepartment: request['department'] ?? 'N/A',
+      // Notes
+      notes: request['justification'] ?? request['admin_notes'] ?? 'No notes provided.',
+    );
+
+    default:
+    return const Center(child: Text("No data found."));
+  }
   }
 
   String _getStockStatus(Map<String, dynamic> item) {
-    final currentStock = item['current_stock'] ?? 0;
-    final reorderLevel = item['reorder_level'] ?? 0;
+  final currentStock = item['current_stock'] ?? 0;
+  final reorderLevel = item['reorder_level'] ?? 0;
 
-    if (currentStock == 0) {
-      return 'Out of Stock';
-    } else if (currentStock <= reorderLevel) {
-      return 'Critical';
-    } else {
-      return 'In Stock';
-    }
+  if (currentStock == 0) {
+    return 'Out of Stock';
+  } else if (currentStock <= reorderLevel) {
+    return 'Critical';
+  } else {
+    return 'In Stock';
+  }
   }
 
-  // Sticky button builder (only for Inventory Details tab)
+  // Sticky button builder (for both Inventory Details and Inventory Request tabs)
   Widget _buildStickyRequestBar() {
-  // Use actual item data if available, otherwise use defaults
-  final itemName = _itemData?['item_name'] ?? 'Unknown Item';
-  final itemId = _itemData?['item_code'] ?? _itemData?['id'] ?? 'N/A';
-  final defaultUnit = _itemData?['unit_of_measure'] ?? 'pcs';
+  final lowerTab = widget.selectedTabLabel.toLowerCase();
+  if (lowerTab == 'inventory details') {
+    // Use actual item data if available, otherwise use defaults
+    final itemName = _itemData?['item_name'] ?? 'Unknown Item';
+    final itemId = _itemData?['item_code'] ?? _itemData?['id'] ?? 'N/A';
+    final defaultUnit = _itemData?['unit_of_measure'] ?? 'pcs';
     return SafeArea(
-      top: false,
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
-        ),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: GestureDetector(
-            onLongPress: () {
-              // Long-press opens the full request sheet for more options
-              if (_itemData != null) {
-                _openRequestItemSheet(itemName: itemName, itemId: itemId, defaultUnit: defaultUnit);
-              }
-            },
-            child: custom_buttons.FilledButton(
-              label: 'Request Item',
-              onPressed: () {
-                if (_itemData != null) {
-                  _createQuickRequest();
-                }
-              },
-              borderRadius: 12,
-              backgroundColor: const Color(0xFF005CE7), // primary blue
-              withOuterBorder: false, // <-- remove outer border line
-            ),
-          ),
+    top: false,
+    child: Container(
+      decoration: const BoxDecoration(
+      color: Colors.white,
+      border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: GestureDetector(
+        onLongPress: () {
+        // Long-press opens the full request sheet for more options
+        if (_itemData != null) {
+          _openRequestItemSheet(itemName: itemName, itemId: itemId, defaultUnit: defaultUnit);
+        }
+        },
+        child: custom_buttons.FilledButton(
+        label: 'Request Item',
+        onPressed: () {
+          if (_itemData != null) {
+          _createQuickRequest();
+          }
+        },
+        borderRadius: 12,
+        backgroundColor: const Color(0xFF005CE7), // primary blue
+        withOuterBorder: false, // <-- remove outer border line
         ),
       ),
+      ),
+    ),
     );
+  } else if (lowerTab == 'inventory request') {
+    return SafeArea(
+    top: false,
+    child: Container(
+      decoration: const BoxDecoration(
+      color: Colors.white,
+      border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: custom_buttons.FilledButton(
+        label: 'Mark as Received',
+        onPressed: _markAsReceived,
+        borderRadius: 12,
+        backgroundColor: const Color(0xFF005CE7), // primary blue
+        withOuterBorder: false,
+      ),
+      ),
+    ),
+    );
+  }
+  return const SizedBox.shrink();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Enough bottom padding so content never hides behind the sticky bar + nav
-    const contentBottomPadding = 140.0;
+  // Enough bottom padding so content never hides behind the sticky bar + nav
+  const contentBottomPadding = 140.0;
 
-    final lowerTab = widget.selectedTabLabel.toLowerCase();
-    final showSticky = lowerTab == 'inventory details';
+  final lowerTab = widget.selectedTabLabel.toLowerCase();
+  final showSticky = lowerTab == 'inventory details' || lowerTab == 'inventory request';
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: CustomAppBar(
-        title: 'View Details',
-        leading: const Padding(
-          padding: EdgeInsets.only(right: 8),
-          child: BackButton(),
-        ),
-        showMore: true,
-        showHistory: true,
+  return Scaffold(
+    backgroundColor: Colors.white,
+    appBar: CustomAppBar(
+    title: 'View Details',
+    leading: const Padding(
+      padding: EdgeInsets.only(right: 8),
+      child: BackButton(),
+    ),
+    showMore: true,
+    showHistory: true,
+    ),
+    body: SafeArea(
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, contentBottomPadding),
+      child: _buildTabContent(),
+    ),
+    ),
+    bottomNavigationBar: Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (showSticky) _buildStickyRequestBar(),
+      NavBar(
+      items: _navItems,
+      currentIndex: _selectedIndex,
+      onTap: _onTabTapped,
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, contentBottomPadding),
-          child: _buildTabContent(),
-        ),
-      ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (showSticky) _buildStickyRequestBar(),
-          NavBar(
-            items: _navItems,
-            currentIndex: _selectedIndex,
-            onTap: _onTabTapped,
-          ),
-        ],
-      ),
-    );
+    ],
+    ),
+  );
   }
 }
