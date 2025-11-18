@@ -1999,30 +1999,6 @@ class APIService {
     }
   }
 
-  Future<Map<String, dynamic>> getInventoryItems() async {
-    try {
-      await _refreshRoleLabelFromToken();
-      final token = await _requireToken();
-
-      final response = await get(
-        '/inventory/items',
-        headers: _authHeaders(token),
-      );
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(response.body);
-      } else {
-        final errorBody = _tryDecode(response.body);
-        throw Exception(
-          'Failed to get inventory items: ${errorBody['detail'] ?? response.body}',
-        );
-      }
-    } catch (e) {
-      print('Error getting inventory items: $e');
-      rethrow;
-    }
-  }
-
   Future<Map<String, dynamic>> createInventoryRequest({
     required String inventoryId,
     required String buildingId,
@@ -2030,6 +2006,7 @@ class APIService {
     required String purpose,
     required String requestedBy,
     String? maintenanceTaskId,
+    String? status, // Allow overriding status
   }) async {
     try {
       await _refreshRoleLabelFromToken();
@@ -2038,13 +2015,14 @@ class APIService {
       // If the request is created as part of a maintenance task, mark it
       // as 'reserved' so inventory UI can show the item as reserved until
       // the staff receives/fulfills it. Otherwise default to 'pending'.
+      final requestStatus = status ?? (maintenanceTaskId != null ? 'reserved' : 'pending');
       final body = jsonEncode({
         'inventory_id': inventoryId,
         'building_id': buildingId,
         'quantity_requested': quantityRequested,
         'purpose': purpose,
         'requested_by': requestedBy,
-        'status': maintenanceTaskId != null ? 'reserved' : 'pending',
+        'status': requestStatus,
         if (maintenanceTaskId != null) 'maintenance_task_id': maintenanceTaskId,
         if (maintenanceTaskId != null) 'reference_type': 'maintenance_task',
         if (maintenanceTaskId != null) 'reference_id': maintenanceTaskId,
@@ -2066,6 +2044,40 @@ class APIService {
       }
     } catch (e) {
       print('Error creating inventory request: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> updateInventoryRequestStatus({
+    required String requestId,
+    required String status,
+    bool deductStock = false,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = jsonEncode({
+        'status': status,
+        'deduct_stock': deductStock,
+      });
+
+      final response = await patch(
+        '/inventory/requests/$requestId',
+        headers: _authHeaders(token),
+        body: body,
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to update inventory request: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error updating inventory request: $e');
       rethrow;
     }
   }
@@ -2167,6 +2179,190 @@ class APIService {
     }
   }
 
+  Future<Map<String, dynamic>> getInventoryReservations({
+    String? buildingId,
+    String? maintenanceTaskId,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final queryParams = <String>[];
+      if (buildingId != null) queryParams.add('building_id=$buildingId');
+      if (maintenanceTaskId != null) queryParams.add('maintenance_task_id=$maintenanceTaskId');
+
+      final query = queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
+      final response = await get(
+        '/inventory/reservations$query',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        return data;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get inventory reservations: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting inventory reservations: $e');
+      rethrow;
+    }
+  }
+
+  /// Create a new inventory reservation (Admin only)
+  Future<Map<String, dynamic>> createInventoryReservation({
+    required String inventoryId,
+    required int quantity,
+    required String maintenanceTaskId,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = jsonEncode({
+        'inventory_id': inventoryId,
+        'quantity': quantity,
+        'maintenance_task_id': maintenanceTaskId,
+      });
+
+      final response = await post(
+        '/inventory/reservations',
+        headers: _authHeaders(token),
+        body: body,
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to create inventory reservation: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error creating inventory reservation: $e');
+      rethrow;
+    }
+  }
+
+  /// Mark inventory reservation as consumed (items used for completed task)
+  Future<Map<String, dynamic>> markReservationConsumed(String reservationId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await put(
+        '/inventory/reservations/$reservationId/consumed',
+        headers: _authHeaders(token),
+        body: jsonEncode({}),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to mark reservation as consumed: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error marking reservation as consumed: $e');
+      rethrow;
+    }
+  }
+
+  /// Release inventory reservation (cancel reservation)
+  Future<Map<String, dynamic>> releaseReservation(String reservationId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await put(
+        '/inventory/reservations/$reservationId/released',
+        headers: _authHeaders(token),
+        body: jsonEncode({}),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to release reservation: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error releasing reservation: $e');
+      rethrow;
+    }
+  }
+
+  /// Mark inventory reservation as received (staff has picked up the items)
+  Future<Map<String, dynamic>> markReservationReceived(String reservationId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await put(
+        '/inventory/reservations/$reservationId/received',
+        headers: _authHeaders(token),
+        body: jsonEncode({}),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to mark reservation as received: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error marking reservation as received: $e');
+      rethrow;
+    }
+  }
+
+  /// Request replacement for a defective reserved item
+  Future<Map<String, dynamic>> requestReplacementForDefectiveItem(
+    String reservationId, {
+    String reason = "Item found defective during inspection",
+    int? quantityNeeded,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = <String, dynamic>{
+        'reason': reason,
+      };
+      if (quantityNeeded != null) {
+        body['quantity_needed'] = quantityNeeded;
+      }
+
+      final response = await post(
+        '/inventory/reservations/$reservationId/request-replacement',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to request replacement: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error requesting replacement for defective item: $e');
+      rethrow;
+    }
+  }
+
   /// Get a specific inventory item by ID
   Future<Map<String, dynamic>?> getInventoryItemById(String itemId) async {
     try {
@@ -2258,6 +2454,637 @@ class APIService {
     } catch (e) {
       print('Error getting inventory request by ID: $e');
       return null;
+    }
+  }
+
+  // ===== Additional Inventory Management Methods =====
+
+  /// Create a new inventory item (Admin only)
+  Future<Map<String, dynamic>> createInventoryItem(Map<String, dynamic> itemData) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await post(
+        '/inventory/items',
+        headers: _authHeaders(token),
+        body: jsonEncode(itemData),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to create inventory item: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error creating inventory item: $e');
+      rethrow;
+    }
+  }
+
+  /// Update inventory item details (Admin only)
+  Future<Map<String, dynamic>> updateInventoryItem(String itemId, Map<String, dynamic> updateData) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await put(
+        '/inventory/items/$itemId',
+        headers: _authHeaders(token),
+        body: jsonEncode(updateData),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to update inventory item: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error updating inventory item: $e');
+      rethrow;
+    }
+  }
+
+  /// Patch inventory item (e.g., deduct stock)
+  Future<Map<String, dynamic>> patchInventoryItem(String itemId, Map<String, dynamic> updateData) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await patch(
+        '/inventory/items/$itemId',
+        headers: _authHeaders(token),
+        body: jsonEncode(updateData),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to patch inventory item: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error patching inventory item: $e');
+      rethrow;
+    }
+  }
+
+  /// Deactivate inventory item (Admin only)
+  Future<Map<String, dynamic>> deactivateInventoryItem(String itemId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await delete(
+        '/inventory/items/$itemId',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to deactivate inventory item: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error deactivating inventory item: $e');
+      rethrow;
+    }
+  }
+
+  /// Get all inventory items for a building
+  Future<Map<String, dynamic>> getBuildingInventory(String buildingId, {bool includeInactive = false}) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final queryParams = includeInactive ? '?include_inactive=true' : '';
+      final response = await get(
+        '/inventory/buildings/$buildingId/items$queryParams',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          return {
+            'success': true,
+            'data': data['data'],
+            'message': data['message'] ?? 'Inventory loaded successfully'
+          };
+        }
+        return data;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get building inventory: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting building inventory: $e');
+      rethrow;
+    }
+  }
+
+  /// Get inventory items by department
+  Future<List<Map<String, dynamic>>> getDepartmentInventory(String buildingId, String department) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await get(
+        '/inventory/buildings/$buildingId/departments/$department/items',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+        return [];
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get department inventory: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting department inventory: $e');
+      rethrow;
+    }
+  }
+
+  /// Search inventory items
+  Future<List<Map<String, dynamic>>> searchInventory(String buildingId, String searchTerm) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await get(
+        '/inventory/buildings/$buildingId/search?q=${Uri.encodeComponent(searchTerm)}',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+        return [];
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to search inventory: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error searching inventory: $e');
+      rethrow;
+    }
+  }
+
+  /// Consume stock (automatic deduction)
+  Future<Map<String, dynamic>> consumeStock({
+    required String itemId,
+    required int quantity,
+    String? referenceType,
+    String? referenceId,
+    String? reason,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = <String, dynamic>{
+        'quantity': quantity,
+        if (referenceType != null) 'reference_type': referenceType,
+        if (referenceId != null) 'reference_id': referenceId,
+        if (reason != null) 'reason': reason,
+      };
+
+      final response = await post(
+        '/inventory/items/$itemId/consume',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to consume stock: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error consuming stock: $e');
+      rethrow;
+    }
+  }
+
+  /// Add stock to inventory (Admin only)
+  Future<Map<String, dynamic>> restockItem({
+    required String itemId,
+    required int quantity,
+    double? costPerUnit,
+    String? reason,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = <String, dynamic>{
+        'quantity': quantity,
+        if (costPerUnit != null) 'cost_per_unit': costPerUnit,
+        if (reason != null) 'reason': reason,
+      };
+
+      final response = await post(
+        '/inventory/items/$itemId/restock',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to restock item: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error restocking item: $e');
+      rethrow;
+    }
+  }
+
+  /// Adjust stock to specific quantity (Admin only)
+  Future<Map<String, dynamic>> adjustStock({
+    required String itemId,
+    required int newQuantity,
+    String? reason,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = <String, dynamic>{
+        'new_quantity': newQuantity,
+        if (reason != null) 'reason': reason,
+      };
+
+      final response = await post(
+        '/inventory/items/$itemId/adjust',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to adjust stock: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error adjusting stock: $e');
+      rethrow;
+    }
+  }
+
+  /// Approve an inventory request (Admin only)
+  Future<Map<String, dynamic>> approveInventoryRequest({
+    required String requestId,
+    int? quantityApproved,
+    String? adminNotes,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = <String, dynamic>{
+        if (quantityApproved != null) 'quantity_approved': quantityApproved,
+        if (adminNotes != null) 'admin_notes': adminNotes,
+      };
+
+      final response = await post(
+        '/inventory/requests/$requestId/approve',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to approve inventory request: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error approving inventory request: $e');
+      rethrow;
+    }
+  }
+
+  /// Deny an inventory request (Admin only)
+  Future<Map<String, dynamic>> denyInventoryRequest({
+    required String requestId,
+    required String adminNotes,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = <String, dynamic>{
+        'admin_notes': adminNotes,
+      };
+
+      final response = await post(
+        '/inventory/requests/$requestId/deny',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to deny inventory request: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error denying inventory request: $e');
+      rethrow;
+    }
+  }
+
+  /// Fulfill an approved inventory request
+  Future<Map<String, dynamic>> fulfillInventoryRequest(String requestId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await post(
+        '/inventory/requests/$requestId/fulfill',
+        headers: _authHeaders(token),
+        body: jsonEncode({}),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to fulfill inventory request: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error fulfilling inventory request: $e');
+      rethrow;
+    }
+  }
+
+  /// Update inventory request status and handle stock deduction
+  Future<Map<String, dynamic>> updateInventoryRequest(String requestId, Map<String, dynamic> updateData) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await patch(
+        '/inventory/requests/$requestId',
+        headers: _authHeaders(token),
+        body: jsonEncode(updateData),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to update inventory request: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error updating inventory request: $e');
+      rethrow;
+    }
+  }
+
+  /// Get low stock alerts
+  Future<List<Map<String, dynamic>>> getLowStockAlerts({
+    String? buildingId,
+    String status = 'active',
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final queryParams = <String>[];
+      if (buildingId != null) queryParams.add('building_id=$buildingId');
+      queryParams.add('status=$status');
+
+      final query = queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
+      final response = await get(
+        '/inventory/alerts/low-stock$query',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+        return [];
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get low stock alerts: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting low stock alerts: $e');
+      rethrow;
+    }
+  }
+
+  /// Acknowledge a low stock alert
+  Future<Map<String, dynamic>> acknowledgeLowStockAlert(String alertId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await post(
+        '/inventory/alerts/$alertId/acknowledge',
+        headers: _authHeaders(token),
+        body: jsonEncode({}),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to acknowledge low stock alert: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error acknowledging low stock alert: $e');
+      rethrow;
+    }
+  }
+
+  /// Get inventory transaction history
+  Future<List<Map<String, dynamic>>> getInventoryTransactions({
+    String? inventoryId,
+    String? transactionType,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final queryParams = <String>[];
+      if (inventoryId != null) queryParams.add('inventory_id=$inventoryId');
+      if (transactionType != null) queryParams.add('transaction_type=$transactionType');
+
+      final query = queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
+      final response = await get(
+        '/inventory/transactions$query',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+        return [];
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get inventory transactions: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting inventory transactions: $e');
+      rethrow;
+    }
+  }
+
+  /// Get inventory summary statistics for a building
+  Future<Map<String, dynamic>> getInventorySummary(String buildingId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await get(
+        '/inventory/buildings/$buildingId/summary',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          return data['data'] as Map<String, dynamic>;
+        }
+        return {};
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get inventory summary: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting inventory summary: $e');
+      rethrow;
+    }
+  }
+
+  /// Get usage analytics for inventory items (Admin only)
+  Future<Map<String, dynamic>> getUsageAnalytics(String buildingId, {String periodType = 'monthly'}) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await get(
+        '/inventory/buildings/$buildingId/analytics?period_type=$periodType',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          return data['data'] as Map<String, dynamic>;
+        }
+        return {};
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get usage analytics: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting usage analytics: $e');
+      rethrow;
+    }
+  }
+
+  /// Get all inventory requests linked to a specific maintenance task
+  Future<List<Map<String, dynamic>>> getRequestsByMaintenanceTask(String taskId) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final response = await get(
+        '/inventory/maintenance-task/$taskId/requests',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] is List) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+        return [];
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get requests by maintenance task: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error getting requests by maintenance task: $e');
+      rethrow;
+    }
+  }
+
+  /// Health check for inventory service
+  Future<Map<String, dynamic>> inventoryHealthCheck() async {
+    try {
+      final response = await get('/inventory/health');
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Inventory health check failed: ${response.body}');
+      }
+    } catch (e) {
+      print('Error checking inventory health: $e');
+      rethrow;
     }
   }
 

@@ -1,5 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:facilityfix/staff/announcement.dart';
+import 'package:facilityfix/staff/calendar.dart';
+import 'package:facilityfix/staff/home.dart';
+import 'package:facilityfix/staff/inventory.dart';
+import 'package:facilityfix/staff/workorder.dart';
 import 'package:http/http.dart' as http;
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/services/auth_storage.dart';
@@ -32,6 +37,16 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
   List<Map<String, dynamic>> _inventoryRequests = [];
   Map<String, dynamic> holdMeta = {};
 
+  int _selectedIndex = 2;
+  final List<NavItem> _navItems = const [
+    NavItem(icon: Icons.home),
+    NavItem(icon: Icons.work),
+    NavItem(icon: Icons.build),
+    NavItem(icon: Icons.announcement_rounded),
+    NavItem(icon: Icons.calendar_month),
+    NavItem(icon: Icons.inventory),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -48,47 +63,116 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
   }
 
   Future<void> _loadInventoryRequests() async {
+    final apiService = APIService(roleOverride: AppRole.staff);
+    final taskId = widget.task['id'];
+
+    if (taskId == null || taskId.isEmpty) {
+      print('DEBUG: No task ID available for loading inventory reservations');
+      return;
+    }
+
+    // First, try the staff-visible endpoint for inventory requests tied to the maintenance task.
     try {
-      final apiService = APIService(roleOverride: AppRole.staff);
-      final taskId = widget.task['id'];
-
-      if (taskId == null || taskId.isEmpty) {
-        print('DEBUG: No task ID available for loading inventory requests');
-        return;
-      }
-
       print('DEBUG: Loading inventory requests for task $taskId');
-      final response = await apiService.getInventoryRequestsByMaintenanceTask(taskId);
-
-      if (response['success'] == true && response['data'] != null) {
-        final requests = List<Map<String, dynamic>>.from(response['data']);
-
-        // Enrich with item details and stock information
-        for (var request in requests) {
-          if (request['inventory_id'] != null) {
+      final respRequests = await apiService.getInventoryRequestsByMaintenanceTask(taskId.toString());
+      if (respRequests['success'] == true && respRequests['data'] != null) {
+        final requests = List<Map<String, dynamic>>.from(respRequests['data']);
+        // Enrich with item details
+        for (var r in requests) {
+          if (r['inventory_id'] != null) {
             try {
-              final itemData = await apiService.getInventoryItemById(request['inventory_id']);
+              final itemData = await apiService.getInventoryItemById(r['inventory_id']);
               if (itemData != null) {
-                request['item_name'] = itemData['item_name'];
-                request['item_code'] = itemData['item_code'];
-                // Add stock information
-                request['stock_quantity'] = itemData['quantity'] ?? itemData['stock_quantity'] ?? 'N/A';
-                request['stock_status'] = itemData['status'] ?? itemData['stock_status'] ?? 'Unknown';
+                r['item_name'] = itemData['item_name'] ?? itemData['name'] ?? '';
+                r['item_code'] = itemData['item_code'] ?? itemData['code'] ?? '';
+                r['stock_quantity'] = itemData['available_stock'] ?? itemData['stock'] ?? itemData['current_stock'] ?? itemData['stock_quantity'] ?? 'N/A';
+                r['stock_status'] = itemData['status'] ?? itemData['stock_status'] ?? 'Unknown';
               }
             } catch (e) {
-              print('DEBUG: Error loading item details: $e');
+              print('DEBUG: Error loading item details for request: $e');
             }
           }
         }
 
-        setState(() {
-          _inventoryRequests = requests;
-        });
-
-        print('DEBUG: Loaded ${_inventoryRequests.length} inventory requests');
+        if (requests.isNotEmpty) {
+          // Mark as reservations for maintenance tasks (staff receives them)
+          for (var r in requests) {
+            r['type'] = 'reservation';
+          }
+          setState(() {
+            _inventoryRequests = requests;
+          });
+          print('DEBUG: Loaded ${_inventoryRequests.length} inventory reservations for maintenance');
+          print('DEBUG: First reservation type: ${requests.first['type']}');
+          return; // data found, no need to check reservations
+        }
       }
     } catch (e) {
-      print('DEBUG: Error loading inventory requests: $e');
+      print('DEBUG: Error loading inventory requests for maintenance task: $e');
+      // continue to check reservations below
+    }
+
+    // If no requests found, check if there are admin reservations for this task
+    try {
+      print('DEBUG: Checking for admin inventory reservations for task $taskId');
+      final adminApiService = APIService(roleOverride: AppRole.admin);
+      final response = await adminApiService.getInventoryReservations(maintenanceTaskId: taskId);
+      if (response['success'] == true && response['data'] != null) {
+        final reservations = List<Map<String, dynamic>>.from(response['data']);
+        print('DEBUG: Raw reservation data: ${reservations.first}');
+        // Enrich with item details
+        for (var r in reservations) {
+          if (r['inventory_id'] != null) {
+            try {
+              final itemData = await apiService.getInventoryItemById(r['inventory_id']);
+              if (itemData != null) {
+                r['item_name'] = itemData['item_name'] ?? itemData['name'] ?? '';
+                r['item_code'] = itemData['item_code'] ?? itemData['code'] ?? '';
+                r['stock_quantity'] = itemData['available_stock'] ?? itemData['stock'] ?? itemData['current_stock'] ?? itemData['stock_quantity'] ?? 'N/A';
+                r['stock_status'] = itemData['status'] ?? itemData['stock_status'] ?? 'Unknown';
+              }
+            } catch (e) {
+              print('DEBUG: Error loading item details for reservation: $e');
+            }
+          }
+        }
+        if (reservations.isNotEmpty) {
+          // Mark as reservations
+          for (var r in reservations) {
+            r['type'] = 'reservation';
+          }
+          setState(() {
+            _inventoryRequests = reservations; // Show reservations as requests in UI
+          });
+          print('DEBUG: Loaded ${reservations.length} admin inventory reservations for staff view');
+          print('DEBUG: First reservation type: ${reservations.first['type']}');
+        }
+      }
+    } catch (e) {
+      final msg = e.toString();
+      if (msg.contains('Admin access required') || msg.contains('admin')) {
+        print('DEBUG: Reservations endpoint requires admin access; staff cannot view reservations.');
+        // set a flag visible to the UI so we can show a message if desired
+        holdMeta['reservations_admin_only'] = true;
+      } else {
+        print('DEBUG: Error checking inventory reservations: $e');
+      }
+    }
+  }
+  
+  void _onTabTapped(int index) {
+    final destinations = [
+      const HomePage(),
+      const WorkOrderPage(),
+      const AnnouncementPage(),
+      const CalendarPage(),
+      const InventoryPage(),
+    ];
+    if (index != _selectedIndex) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => destinations[index]),
+      );
     }
   }
   
@@ -376,7 +460,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
 
     // After returning from the assessment form, refresh the task details
     // from the server so the UI reflects the newly created assessment and
-    // updated status (e.g., completed). We also reload inventory requests
+    // updated status (e.g., completed). We also reload inventory reservations
     // and rebuild _checklistItems from the fresh data.
     try {
       final apiService = APIService(roleOverride: AppRole.staff);
@@ -592,6 +676,126 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
     );
   }
 
+  Future<void> _handleInventoryAction(Map<String, dynamic> request, String action) async {
+    final requestId = request['_doc_id'] ?? request['id'] ?? request['_id'] ?? request['request_id'] ?? request['reservation_id'];
+    final itemType = request['type'] ?? 'unknown';
+    
+    print('DEBUG: _handleInventoryAction called with action: $action, type: $itemType, requestId: $requestId');
+    
+    if (requestId == null) {
+      print('DEBUG: Request keys: ${request.keys.toList()}');
+      print('DEBUG: Request map: $request'); // Add debug print
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Request ID not found')),
+      );
+      return;
+    }
+
+    try {
+      final apiService = APIService();
+
+      if (action == 'receive') {
+        if (itemType == 'reservation') {
+          print('DEBUG: Calling markReservationReceived for reservation $requestId');
+          // Mark reservation as received
+          final response = await apiService.markReservationReceived(requestId);
+          
+          if (response['success'] == true) {
+            // Deduct stock from inventory after marking as received
+            final inventoryId = request['inventory_id'];
+            final quantityReceived = request['quantity'] ?? 1; // Default to 1 if not specified
+            
+            print('DEBUG: Deducting stock - inventoryId: $inventoryId, quantity: $quantityReceived');
+            
+            if (inventoryId != null && quantityReceived > 0) {
+              try {
+                // Get current inventory item data
+                final itemResp = await apiService.getInventoryItemById(inventoryId);
+                if (itemResp != null) {
+                  final currentStock = (itemResp['current_stock'] ?? itemResp['quantity_in_stock'] ?? 0) as num;
+                  
+                  // Calculate new stock (deduct the received quantity)
+                  final newStock = (currentStock - quantityReceived).toInt();
+                  
+                  // Update the inventory item with new stock
+                  await apiService.updateInventoryItem(inventoryId, {
+                    'current_stock': newStock,
+                    'quantity_in_stock': newStock,
+                  });
+                  
+                  print('DEBUG: Stock deducted for reservation: $inventoryId, Old: $currentStock, New: $newStock');
+                }
+              } catch (stockError) {
+                print('DEBUG: Error deducting stock for reservation: $stockError');
+                // Reservation was marked as received, but stock deduction failed - log but don't fail the whole operation
+              }
+            }
+            
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Reservation received successfully')),
+            );
+            // Reload inventory requests to reflect changes
+            await _loadInventoryRequests();
+          } else {
+            throw Exception(response['message'] ?? 'Failed to receive reservation');
+          }
+        } else {
+          // For requests, show message that receive is only for reservations
+          print('DEBUG: Receive action called on non-reservation item (type: $itemType)');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Receive is only available for reserved items')),
+          );
+          return; // Don't proceed
+        }
+      } else if (action == 'request') {
+        // Show request sheet to get details
+        final result = await showModalBottomSheet<RequestResult>(
+          context: context,
+          isScrollControlled: true,
+          builder: (ctx) => RequestItem(
+            itemName: request['item_name'] ?? 'Unknown Item',
+            itemId: request['inventory_id'] ?? '',
+            unit: request['unit'] ?? 'pcs',
+            stock: request['stock_quantity']?.toString() ?? '0',
+            maintenanceId: widget.task['id'],
+            staffName: widget.task['assigned_staff_name'] ?? widget.task['assigned_to'] ?? 'Unknown Staff',
+          ),
+        );
+
+        if (result != null) {
+          // Create a new request for the same item
+          final itemId = request['inventory_id'];
+          final quantity = int.tryParse(result.quantity) ?? 1;
+
+          final response = await apiService.createInventoryRequest(
+            inventoryId: itemId,
+            buildingId: 'default_building_id', // TODO: Get actual building ID
+            quantityRequested: quantity,
+            purpose: result.notes ?? 'Additional request for maintenance task ${widget.task['id']}',
+            requestedBy: widget.currentStaffId,
+            maintenanceTaskId: widget.task['id'],
+            status: 'pending', // Additional requests need admin approval
+          );
+
+          if (response['success'] == true) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Additional request submitted')),
+            );
+            // Reload inventory requests
+            await _loadInventoryRequests();
+          } else {
+            throw Exception(response['message'] ?? 'Failed to submit request');
+          }
+        }
+      }
+    } catch (e) {
+      print('Error handling inventory action: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
   Widget _buildInfoRow(String label, String value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -734,6 +938,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
                 isUpdating: _isUpdating,
                 onToggleChecklistItem: _toggleChecklistItem,
                 onInventoryItemTap: _showInventoryItemModal,
+                onInventoryAction: _handleInventoryAction,
                 currentStaffId: widget.currentStaffId,
                 taskCategory: widget.task['category'],
                 
@@ -770,7 +975,9 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
                   widget.task['status'] == 'pending' ||
                   widget.task['status'] == 'in_progress' ||
                   widget.task['status'] == 'scheduled' ||
-                  widget.task['status'] == 'new'))
+                  widget.task['status'] == 'new' ||
+                  widget.task['status'] == 'completed' ||
+                  widget.task['status'] == 'done'))
             SafeArea(
               top: false,
               child: Container(
@@ -779,7 +986,9 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
                   border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
                 ),
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-                child: Row(
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Row(
                   children: [
                     Expanded(
                       child: SizedBox(
@@ -793,196 +1002,29 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: SizedBox(
-                        height: 48,
-                        child: fx.FilledButton(
-                          label: 'Create Assessment',
-                          backgroundColor: const Color(0xFF005CE7),
-                          textColor: Colors.white,
-                          withOuterBorder: false,
-                          onPressed: _createAssessment,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SizedBox(
+                          height: 48,
+                          child: fx.FilledButton(
+                            label: 'Create Assessment',
+                            backgroundColor: const Color(0xFF005CE7),
+                            textColor: Colors.white,
+                            withOuterBorder: false,
+                            onPressed: _createAssessment,
+                          ),
                         ),
                       ),
-                    ),
-                  // Inventory Requests Section (rendered after the details widget)
-                  if (_inventoryRequests.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Header
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: const BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(color: Color(0xFFE5E7EB)),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.inventory_2_outlined,
-                                  size: 20,
-                                  color: Color(0xFF6B7280),
-                                ),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  'Required Materials & Tools',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF1F2937),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Inventory Items
-                          ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: _inventoryRequests.length,
-                            separatorBuilder:
-                                (_, __) => const Divider(
-                                  height: 1,
-                                  thickness: 1,
-                                  color: Color(0xFFE5E7EB),
-                                ),
-                            itemBuilder: (context, index) {
-                              final request = _inventoryRequests[index];
-                              final itemName = request['item_name'] ?? 'Unknown Item';
-                              final quantity =
-                                  request['quantity_requested'] ??
-                                  request['stock_quantity'] ??
-                                  0;
-                              final status = (request['status'] ?? 'pending').toString();
-                              final unit = request['unit'] ?? '';
-                              final category = request['category'] ?? '';
-
-                              // Determine if item is received
-                              bool isReceived =
-                                  status.toLowerCase() == 'fulfilled' ||
-                                  status.toLowerCase() == 'received';
-
-                              return Container(
-                                padding: const EdgeInsets.all(16),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            itemName,
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                              color: Color(0xFF1F2937),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            children: [
-                                              Text(
-                                                'RESERVE $quantity',
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Color(0xFF1F2937),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12),
-                                              // Text(
-                                              //   'STOCK $quantity',
-                                              //   style: const TextStyle(
-                                              //     fontSize: 12,
-                                              //     color: Color(0xFF6B7280),
-                                              //   ),
-                                              // ),
-                                            ],
-                                          ),
-                                          if (category.toString().isNotEmpty) ...[
-                                            const SizedBox(height: 4),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 2,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFF3F4F6),
-                                                borderRadius: BorderRadius.circular(4),
-                                              ),
-                                              child: Text(
-                                                category.toString().toUpperCase(),
-                                                style: const TextStyle(
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Color(0xFF6B7280),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 6,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color:
-                                                isReceived
-                                                    ? const Color(0xFFECFDF5)
-                                                    : Colors.white,
-                                            border: Border.all(
-                                              color:
-                                                  isReceived
-                                                      ? const Color(0xFF059669)
-                                                      : const Color(0xFF005CE7),
-                                            ),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          // child: Text(
-                                          //   isReceived ? 'Received' : 'Request',
-                                          //   style: TextStyle(
-                                          //     fontSize: 12,
-                                          //     fontWeight: FontWeight.w600,
-                                          //     color:
-                                          //         isReceived
-                                          //             ? const Color(0xFF059669)
-                                          //             : const Color(0xFF005CE7),
-                                          //   ),
-                                          // ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
+          NavBar(
+            items: _navItems,
+            currentIndex: _selectedIndex,
+            onTap: _onTabTapped,
+          ),
         ],
       ),
     );

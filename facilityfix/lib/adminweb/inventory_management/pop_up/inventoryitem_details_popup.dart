@@ -54,52 +54,98 @@ class _InventoryItemDetailsContent extends StatefulWidget {
 class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsContent> {
   late Map<String, dynamic> _itemData;
   final ApiService _api = ApiService();
-  final String _buildingId = 'default_building_id';
 
   @override
   void initState() {
     super.initState();
     _itemData = Map<String, dynamic>.from(widget.itemData);
-    // Try to populate reservedStock by querying reserved inventory requests
-    // for this item if backend did not already include it.
-    _maybeLoadReservedStock();
+    // Load full item details from API to ensure accuracy
+    _loadItemDetails();
   }
 
-  Future<void> _maybeLoadReservedStock() async {
+  Future<void> _loadItemDetails() async {
     try {
-      final id = _itemData['id'] ?? _itemData['itemCode'] ?? _itemData['item_code'];
-      if (id == null) return;
+      final id = _itemData['id'] ?? _itemData['itemCode'] ?? _itemData['item_code'] ?? _itemData['_doc_id'];
+      print('[InventoryDetails] Loading full item details for ID: $id');
 
       final token = await AuthStorage.getToken();
       if (token != null && token.isNotEmpty) {
         _api.setAuthToken(token);
       }
 
-      // Fetch ALL inventory requests with status='reserved' for this item
-      // These are requests created by maintenance tasks that allocate inventory
-      final resp = await _api.getInventoryRequests(buildingId: _buildingId, status: 'reserved');
+      final resp = await _api.getInventoryItem(id.toString());
+      if (resp['success'] == true && resp['data'] is Map) {
+        setState(() {
+          _itemData = Map<String, dynamic>.from(resp['data']);
+          // Normalize keys for consistency
+          _itemData['itemName'] = _itemData['item_name'] ?? _itemData['name'] ?? _itemData['itemName'];
+          _itemData['itemCode'] = _itemData['item_code'] ?? _itemData['itemCode'];
+          _itemData['quantityInStock'] = _itemData['current_stock'] ?? _itemData['quantity_in_stock'] ?? _itemData['quantityInStock'];
+          _itemData['currentStock'] = _itemData['quantityInStock'];
+          _itemData['reorderLevel'] = _itemData['reorder_level'] ?? _itemData['reorderLevel'];
+          _itemData['supplierContact'] = _itemData['supplier_contact'] ?? _itemData['supplierContact'];
+          _itemData['supplierEmail'] = _itemData['supplier_email'] ?? _itemData['supplierEmail'];
+        });
+        // Now load reserved stock with updated data
+        await _maybeLoadReservedStock();
+      } else {
+        print('[InventoryDetails] Failed to load item details: ${resp['detail']}');
+        // Still try to load reserved stock with existing data
+        await _maybeLoadReservedStock();
+      }
+    } catch (e) {
+      print('[InventoryDetails] Error loading item details: $e');
+      // Still try to load reserved stock with existing data
+      await _maybeLoadReservedStock();
+    }
+  }
+
+  Future<void> _maybeLoadReservedStock() async {
+    try {
+      final id = _itemData['itemCode'] ?? _itemData['item_code'] ?? _itemData['inventory_id'];
+      print('[InventoryDetails] Looking for reserved stock for item with ID: $id');
+
+      final token = await AuthStorage.getToken();
+      if (token != null && token.isNotEmpty) {
+        _api.setAuthToken(token);
+      }
+
+      // Fetch ALL inventory reservations for this item
+      // Note: Not filtering by building ID since reservations might be stored globally
+      final resp = await _api.getInventoryReservations();
+      print('[InventoryDetails] Fetching inventory reservations for item $id, response: ${resp['success']}');
       if (resp['success'] == true && resp['data'] is List) {
         final List list = resp['data'];
+        print('[InventoryDetails] Found ${list.length} total inventory reservations');
         int reservedTotal = 0;
         List<Map<String, dynamic>> reservedRequests = [];
         
         for (var r in list) {
           try {
             final invId = r['inventory_id'] ?? r['inventoryId'] ?? r['item_id'];
+            final maintenanceTaskId = r['maintenance_task_id'] ?? r['maintenanceTaskId'];
+            final rawQty = r['quantity'];
+            print('[InventoryDetails] Checking reservation: invId=$invId (type: ${invId?.runtimeType}), id=$id (type: ${id.runtimeType}), rawQty=$rawQty (type: ${rawQty?.runtimeType})');
             if (invId != null && invId.toString() == id.toString()) {
-              final qty = (r['quantity_requested'] ?? r['quantity'] ?? 0) as int;
+              final qty = int.tryParse(rawQty?.toString() ?? '0') ?? 0;
+              print('[InventoryDetails] Match found! Adding qty=$qty');
               reservedTotal += qty;
               reservedRequests.add({
-                'requestId': r['_doc_id'] ?? r['id'],
-                'maintenanceTaskId': r['maintenance_task_id'] ?? r['reference_id'],
+                'reservationId': r['_doc_id'] ?? r['id'],
+                'maintenanceTaskId': maintenanceTaskId,
                 'quantity': qty,
-                'date': r['requested_date'],
+                'date': r['created_at'] ?? r['reserved_date'],
               });
+            } else {
+              print('[InventoryDetails] No match: invId=$invId != id=$id');
             }
-          } catch (_) {}
+          } catch (e) {
+            print('[InventoryDetails] Error processing reservation: $e');
+          }
         }
 
         if (reservedTotal > 0 || reservedRequests.isNotEmpty) {
+          print('[InventoryDetails] Found $reservedTotal reserved items for item $id');
           setState(() {
             _itemData['reservedStock'] = reservedTotal;
             _itemData['reserved_stock'] = reservedTotal;
@@ -182,7 +228,7 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
                       width: 220,
                       child: _buildInfoTile(
                         "Current Stock",
-                        "${_itemData['quantityInStock'] ?? 0} ${_itemData['unit'] ?? 'pcs'}",
+                        "${_itemData['quantityInStock'] ?? 0} ${_itemData['unit'] ?? ''}",
                         valueColor: const Color(0xFF2E7D32),
                       ),
                     ),
@@ -196,10 +242,15 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
                     ),
                     SizedBox(
                       width: 220,
-                      child: _buildInfoTile(
-                        "Reserved Stock",
-                        "${_itemData['reservedStock'] ?? 0} ${_itemData['unit'] ?? 'pcs'}",
-                        valueColor: const Color(0xFFEF6C00),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildInfoTile(
+                          "Reserved Stock",
+                          "${_itemData['reservedStock'] ?? 0} ${_itemData['unit'] ?? ''}",
+                          valueColor: const Color(0xFFEF6C00),
+                          ),
+                        ],
                       ),
                     ),
                     SizedBox(
@@ -215,73 +266,6 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
                 const SizedBox(height: 24),
                 Divider(color: Colors.grey[200], thickness: 1, height: 1),
                 const SizedBox(height: 24),
-
-                // Reserved by maintenance tasks (if any)
-                if ((_itemData['reservedRequests'] as List?)?.isNotEmpty == true) ...[
-                  _buildSectionTitle("Reserved by Maintenance Tasks"),
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.orange[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.orange[200]!),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.build_circle_outlined, size: 18, color: Colors.orange[700]),
-                            const SizedBox(width: 8),
-                            Text(
-                              'This item is reserved for scheduled maintenance',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.orange[900],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        ...(_itemData['reservedRequests'] as List).map((req) {
-                          final taskId = req['maintenanceTaskId'] ?? 'Unknown';
-                          final qty = req['quantity'] ?? 0;
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 4,
-                                  height: 4,
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange[700],
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    'Task $taskId: $qty ${_itemData['unit'] ?? 'pcs'}',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey[800],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Divider(color: Colors.grey[200], thickness: 1, height: 1),
-                  const SizedBox(height: 24),
-                ],
 
                 // Supplier details
                 _buildSectionTitle("Supplier Information"),

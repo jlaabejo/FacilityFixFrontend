@@ -969,7 +969,7 @@ class _HomeState extends State<HomePage> {
                           children: [
                             Text.rich(
                               TextSpan(
-                                text: 'Hola, ',
+                                text: 'Hello, ',
                                 style: const TextStyle(
                                   color: Color(0xFF1B1D21),
                                   fontSize: 22,

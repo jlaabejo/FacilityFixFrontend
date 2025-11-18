@@ -300,17 +300,23 @@ class _InventoryFormState extends State<InventoryForm> {
       print('DEBUG: Loaded user data - buildingId: $_buildingId, userId: $_userId');
 
       // Fetch inventory items
-      final response = await _apiService.getInventoryItems(
+      if (_buildingId != null && _buildingId!.isNotEmpty) {
+        final response = await _apiService.getBuildingInventory(_buildingId!);
 
-      );
-
-      if (mounted) {
-        setState(() {
-          if (response['success'] == true && response['data'] is List) {
-            _inventoryItems = List<Map<String, dynamic>>.from(response['data']);
-          }
-          _isLoadingItems = false;
-        });
+        if (mounted) {
+          setState(() {
+            if (response['success'] == true && response['data'] is List) {
+              _inventoryItems = List<Map<String, dynamic>>.from(response['data']);
+            }
+            _isLoadingItems = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isLoadingItems = false;
+          });
+        }
       }
     } catch (e) {
       print('Error loading inventory items: $e');

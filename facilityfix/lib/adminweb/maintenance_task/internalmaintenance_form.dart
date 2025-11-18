@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
@@ -34,6 +35,8 @@ class _InternalMaintenanceFormPageState
       AutovalidateMode.disabled; // turn on after first submit
   final SecondaryAPI.APIService api = SecondaryAPI.APIService();
 
+  String? _createdByName;
+
   // For consistent field heights (match external design)
   static const double _kFieldHeight = 48;
   static const List<String> _monthNames = [
@@ -55,6 +58,7 @@ class _InternalMaintenanceFormPageState
 
 
   List<PlatformFile>? attachments = const [];
+  bool _isAutoAssigning = false;
   // -------------------- CONTROLLERS --------------------
   final _taskTitleController = TextEditingController();
   final _codeIdController =
@@ -66,11 +70,10 @@ class _InternalMaintenanceFormPageState
   final _descriptionController = TextEditingController();
   final _estimatedDurationController = TextEditingController();
   final _remarksController = TextEditingController();
-
+  final _adminNotesController = TextEditingController();
   final _startDateController = TextEditingController(); // read-only
   final _nextDueDateController = TextEditingController(); // read-only
-  final _checklistItemController =
-      TextEditingController(); // For checklist input
+  final _checklistItemController = TextEditingController(); // For checklist input
 
   // -------------------- STATE --------------------
   String? _selectedPriority;
@@ -79,12 +82,10 @@ class _InternalMaintenanceFormPageState
   String? _selectedRecurrence;
   String? _selectedDepartment;
   String? _selectedStaffUserId; // Store the actual staff UID
-  bool _isAutoAssigning = false; // Loading state for auto-assign
 
   DateTime? _dateCreated;
   DateTime? _startDate;
   DateTime? _nextDueDate;
-  String _createdByName = 'Loading...'; // Admin name who created the task
 
   final List<Map<String, dynamic>> _checklistItems = [];
 
@@ -118,30 +119,20 @@ class _InternalMaintenanceFormPageState
     return pathMap[routeKey];
   }
 
-  void _handleLogout(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Logout'),
-          content: const Text('Are you sure you want to logout?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                context.go('/');
-              },
-              child: const Text('Logout'),
-            ),
-          ],
-        );
-      },
-    );
+// Logout functionality
+void _handleLogout(BuildContext context) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (BuildContext context) {
+      return const LogoutPopup();
+    },
+  );
+
+  if (result == true) {
+    context.go('/');
   }
+}
+
 
   // -------------------- HELPERS --------------------
   // TODO: Replace with your auth/current user provider
@@ -215,7 +206,7 @@ class _InternalMaintenanceFormPageState
   Future<void> _loadInventoryItems() async {
     try {
       // TODO: Replace with actual building ID from user session
-      final response = await _mainApiService.getInventoryItems();
+      final response = await _mainApiService.getBuildingInventory('default_building_id');
 
       if (response['success'] == true && response['data'] != null) {
         setState(() {
@@ -308,7 +299,7 @@ class _InternalMaintenanceFormPageState
             onItemSelected: (item, quantity) {
               setState(() {
                 _selectedInventoryItems.add({
-                  'inventory_id': item['id'] ?? item['_doc_id'],
+                  'inventory_id': item['item_code'] ?? item['itemCode'] ?? item['id'] ?? item['_doc_id'],
                   'item_name': item['item_name'],
                   'item_code': item['item_code'],
                   'quantity': quantity,
@@ -379,7 +370,7 @@ class _InternalMaintenanceFormPageState
           setState(() {
             _assignedStaffController.text = staffName;
             _selectedStaffUserId = staffId;
-            _isAutoAssigning = false;
+            // _isAutoAssigning = false;
           });
 
           // Show success message
@@ -399,9 +390,9 @@ class _InternalMaintenanceFormPageState
         }
       } else {
         if (mounted) {
-          setState(() {
-            _isAutoAssigning = false;
-          });
+          // setState(() {
+          //   _isAutoAssigning = false;
+          // });
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -425,9 +416,9 @@ class _InternalMaintenanceFormPageState
     } catch (e) {
       print('[AutoAssign] Error auto-assigning staff: $e');
       if (mounted) {
-        setState(() {
-          _isAutoAssigning = false;
-        });
+        // setState(() {
+        //   _isAutoAssigning = false;
+        // });
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -464,18 +455,18 @@ class _InternalMaintenanceFormPageState
 
     // Add recommended items that aren't already selected
     for (final item in recommendedItems) {
-      final itemId = item['id'] ?? item['_doc_id'];
+      final itemCode = item['item_code'] ?? item['itemCode'];
       final alreadyAdded = _selectedInventoryItems.any(
-        (selected) => selected['inventory_id'] == itemId,
+        (selected) => selected['inventory_id'] == itemCode,
       );
 
       if (!alreadyAdded) {
         setState(() {
           _selectedInventoryItems.add({
-            'inventory_id': itemId,
+            'inventory_id': itemCode,
             'item_name': item['item_name'],
             'item_code': item['item_code'],
-            'quantity': 1, // Default quantity
+            'quantity': '', // Default quantity
             'available_stock': item['current_stock'],
           });
         });
@@ -496,45 +487,42 @@ class _InternalMaintenanceFormPageState
     }
   }
 
-  Future<List<String>> _createInventoryRequests(String taskId) async {
+  Future<List<String>> _createInventoryReservations(String taskId) async {
     if (_selectedInventoryItems.isEmpty) return [];
 
-    final List<String> createdRequestIds = [];
+    final List<String> createdReservationIds = [];
 
     try {
       for (final item in _selectedInventoryItems) {
-        final response = await _mainApiService.createInventoryRequest(
+        final qty = item['quantity'];
+        if (qty == null || qty <= 0) {
+          print('[v0] Skipping reservation for ${item['item_name']} due to invalid quantity: $qty');
+          continue;
+        }
+        final response = await _apiService.createInventoryReservation(
           inventoryId: item['inventory_id'],
-          buildingId: 'default_building_id', // TODO: Use actual building ID
-          quantityRequested: item['quantity'],
-          purpose: 'Maintenance Task: $taskId',
-          requestedBy:
-              _assignedStaffController.text.isNotEmpty
-                  ? _assignedStaffController.text
-                  : 'system',
-          maintenanceTaskId: taskId, // Link to maintenance task
+          quantity: qty,
+          maintenanceTaskId: taskId,
         );
 
-        // Extract the request ID from the response
-        if (response['success'] == true && response['request_id'] != null) {
-          createdRequestIds.add(response['request_id']);
-          print('[v0] Created inventory request: ${response['request_id']}');
+        // Extract the reservation ID from the response
+        if (response['success'] == true && response['reservation_id'] != null) {
+          createdReservationIds.add(response['reservation_id']);
+          print('[v0] Created inventory reservation: ${response['reservation_id']}');
         }
       }
       print(
-        '[v0] Created ${createdRequestIds.length} inventory requests linked to task $taskId',
+        '[v0] Created ${createdReservationIds.length} inventory reservations linked to task $taskId',
       );
-      return createdRequestIds;
+      return createdReservationIds;
     } catch (e) {
-      print('[v0] Error creating inventory requests: $e');
-      throw Exception('Failed to create inventory requests: $e');
+      print('[v0] Error creating inventory reservations: $e');
+      throw Exception('Failed to create inventory reservations: $e');
     }
   }
 
   DateTime _calculateNextDueDate(DateTime base, String frequency) {
     switch (frequency) {
-      case 'Daily':
-        return base.add(const Duration(days: 1));
       case 'Weekly':
         return base.add(const Duration(days: 7));
       case 'Monthly':
@@ -703,6 +691,8 @@ class _InternalMaintenanceFormPageState
   }
 
   void _populateFormFields(Map<String, dynamic> data) {
+    // Debug: print the data received for population
+    print('[Form] Populating form fields from data: $data');
     setState(() {
       // Basic fields
       _taskTitleController.text = data['task_title'] ?? data['taskTitle'] ?? '';
@@ -745,6 +735,18 @@ class _InternalMaintenanceFormPageState
       }
       _remarksController.text = remarksVal ?? '';
 
+      // Admin notes - accept several possible backend keys
+      String? adminNotesVal;
+      for (final k in ['admin_notes', 'admin_notification', 'notes', 'adminNote']) {
+        final v = data[k];
+        if (v != null) {
+          adminNotesVal = v.toString();
+          break;
+        }
+      }
+      _adminNotesController.text = adminNotesVal ?? '';
+      print('[Form] Populated admin notes: "${_adminNotesController.text}"');
+
       // Dropdowns - validate values are in options list
       // Priority: Low, Medium, High
       final priority = data['priority']?.toString();
@@ -784,7 +786,7 @@ class _InternalMaintenanceFormPageState
               return word[0].toUpperCase() + word.substring(1).toLowerCase();
             })
             .join(' ');
-        // Valid recurrence options: Daily, Weekly, Monthly, Quarterly, Annually
+        // Valid recurrence options: Weekly, Monthly, Quarterly, Annually
         final validRecurrences = [
           'Weekly',
           'Monthly',
@@ -872,6 +874,7 @@ class _InternalMaintenanceFormPageState
 
       // Checklist items
       if (data['checklist'] != null && data['checklist'] is List) {
+        print('[Form] Populating checklist from data: ${data['checklist']}');
         _checklistItems.clear();
         for (var item in data['checklist']) {
           _checklistItems.add({
@@ -881,23 +884,26 @@ class _InternalMaintenanceFormPageState
             'completed': item['completed'] ?? false,
           });
         }
+        print('[Form] Populated ${_checklistItems.length} checklist items');
       }
 
       // Inventory items
       if (data['parts_used'] != null && data['parts_used'] is List) {
+        print('[Form] Populating inventory from data: ${data['parts_used']}');
         _selectedInventoryItems.clear();
         for (var item in data['parts_used']) {
           _selectedInventoryItems.add({
+            'inventory_id': item['inventory_id'] ?? item['item_code'] ?? '', 
             'item_name': item['item_name'] ?? item['name'] ?? '',
             'item_code': item['item_code'] ?? item['code'] ?? '',
-            'quantity': item['quantity'] ?? 1,
-            'available_stock': item['available_stock'] ?? item['stock'] ?? 0,
+            'quantity': item['quantity'] ?? '',
+            'available_stock': item['available_stock'] ?? item['stock'] ?? '',
           });
         }
       }
 
-      // Created by
-      _createdByName = data['created_by'] ?? 'Admin User';
+      // Created by - keep as current user, don't override from data
+      // _createdByName = data['created_by'] ?? 'Admin User';
     });
   }
 
@@ -910,6 +916,7 @@ class _InternalMaintenanceFormPageState
     _descriptionController.dispose();
     _estimatedDurationController.dispose();
     _remarksController.dispose();
+    _adminNotesController.dispose();
     _startDateController.dispose();
     _nextDueDateController.dispose();
     _checklistItemController.dispose(); // Dispose new controller
@@ -917,12 +924,6 @@ class _InternalMaintenanceFormPageState
   }
 
   // -------------------- ACTIONS --------------------
-  void _saveDraft() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Draft saved successfully!')));
-  }
-
   void _cancelEdit() {
     // If we're in a local edit session, revert changes and exit edit mode.
     if (_isLocalEdit) {
@@ -992,6 +993,7 @@ class _InternalMaintenanceFormPageState
       'staffNotify':
           '3 months before, 1 month before, 1 week before, 5 days before, 3 days before, 1 day before',
       'remarks': _remarksController.text.trim(),
+      'admin_notes': _adminNotesController.text.trim(),
       'tags': ['High-Turnover', 'Repair-Prone'],
       // Backend-aligned fields
       'task_title': _taskTitleController.text.trim(),
@@ -1016,6 +1018,9 @@ class _InternalMaintenanceFormPageState
       'photos': <String>[],
     };
 
+    // Debug: print the maintenance data being sent
+    print('[Form] Maintenance data to send: $maintenance');
+
     try {
       if (widget.isEditMode && widget.maintenanceData != null) {
         // UPDATE existing task
@@ -1036,7 +1041,7 @@ class _InternalMaintenanceFormPageState
       // upload files to firebase storage 
 
       for (final file in attachments!) {
-          final uploadResponse = await api.uploadMultipartFile(
+          await api.uploadMultipartFile(
             path: '/files/upload',
             file: file,
             fields: {
@@ -1076,16 +1081,16 @@ class _InternalMaintenanceFormPageState
         }
         print('[v0] Using task ID for inventory requests: $actualTaskId');
 
-        // Create inventory requests for selected items with the correct task ID
-        final inventoryRequestIds = await _createInventoryRequests(
+        // Create inventory reservations for selected items with the correct task ID
+        final inventoryReservationIds = await _createInventoryReservations(
           actualTaskId,
         );
 
-        // Update the maintenance task with the inventory request IDs
-        if (inventoryRequestIds.isNotEmpty) {
+        // Update the maintenance task with the inventory reservation IDs
+        if (inventoryReservationIds.isNotEmpty) {
           try {
             final response = await _apiService.updateMaintenanceTask(actualTaskId, {
-              'inventory_request_ids': inventoryRequestIds,
+              'inventory_reservation_ids': inventoryReservationIds,
             });
 
             final result = response;
@@ -1093,7 +1098,7 @@ class _InternalMaintenanceFormPageState
             // upload files to firebase storage
 
       for (final file in attachments!) {
-          final uploadResponse = await api.uploadMultipartFile(
+          await api.uploadMultipartFile(
             path: '/files/upload',
             file: file,
             fields: {
@@ -1106,19 +1111,13 @@ class _InternalMaintenanceFormPageState
 
       }
 
-
-
-
-
-
-
             print(
 
-              '[v0] Updated maintenance task with inventory request IDs: $inventoryRequestIds',
+              '[v0] Updated maintenance task with inventory reservation IDs: $inventoryReservationIds',
             );
           } catch (e) {
             print(
-              '[v0] Warning: Failed to update maintenance task with inventory request IDs: $e',
+              '[v0] Warning: Failed to update maintenance task with inventory reservation IDs: $e',
             );
             // Don't fail the whole operation if this update fails
           }
@@ -1295,53 +1294,32 @@ class _InternalMaintenanceFormPageState
                       Row(
                         children: [
                           // Created By - Fetch from admin profile
-                          Expanded(
+                            Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _fieldLabel('Created By'),
-                                _fieldBox(
-                                  child: FutureBuilder<Map<String, dynamic>?>(
-                                    future: AuthStorage.getProfile(),
-                                    builder: (context, snapshot) {
-                                      String createdBy = 'Loading...';
-                                      if (snapshot.hasData &&
-                                          snapshot.data != null) {
-                                        final firstName =
-                                            snapshot.data!['first_name'] ?? '';
-                                        final lastName =
-                                            snapshot.data!['last_name'] ?? '';
-                                        createdBy =
-                                            '$firstName $lastName'.trim();
-                                        if (createdBy.isEmpty)
-                                          createdBy = 'Admin User';
-                                      } else if (snapshot.hasError) {
-                                        createdBy = 'Admin User';
-                                      }
-                                      return TextFormField(
-                                        initialValue: createdBy,
-                                        enabled: false,
-                                        decoration: _decoration(
-                                          createdBy,
-                                        ).copyWith(
-                                          disabledBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                            borderSide: BorderSide(
-                                              color: Colors.grey[300]!,
-                                            ),
-                                          ),
-                                          filled: true,
-                                          fillColor: Colors.grey[50],
-                                        ),
-                                      );
-                                    },
+                              _fieldLabel('Created By'),
+                              _fieldBox(
+                                child: TextFormField(
+                                initialValue: _createdByName ?? 'Admin User',
+                                enabled: false,
+                                decoration: _decoration(
+                                  _createdByName ?? 'Admin User',
+                                ).copyWith(
+                                  disabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey[300]!,
                                   ),
+                                  ),
+                                  filled: true,
+                                  fillColor: Colors.grey[50],
                                 ),
+                                ),
+                              ),
                               ],
                             ),
-                          ),
+                            ),
                           const SizedBox(width: 24),
 
                           // Date Created
@@ -1519,7 +1497,7 @@ class _InternalMaintenanceFormPageState
                         decoration: _decoration('Enter Description....'),
                       ),
 
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 24),
 
                       // ===== Schedule and Checklist =====
                       _buildSectionHeader(
@@ -1547,7 +1525,6 @@ class _InternalMaintenanceFormPageState
                                     ),
                                     items:
                                         const [
-                                              'Daily',
                                               'Weekly',
                                               'Monthly',
                                               'Quarterly',
@@ -1925,7 +1902,7 @@ class _InternalMaintenanceFormPageState
                                     Expanded(
                                       child: _buildSectionHeader(
                                         "Inventory Items",
-                                        "Request parts or supplies for the task",
+                                        "Reserve parts or supplies for the task",
                                       ),
                                     ),
                                     ElevatedButton.icon(
@@ -1964,7 +1941,7 @@ class _InternalMaintenanceFormPageState
                                       ),
                                     ),
                                     child: Text(
-                                      'No inventory items added yet. Click "Add Item" to request inventory.',
+                                      'No inventory items reserved yet. Click "Add Item" to reserve inventory.',
                                       style: TextStyle(color: Colors.grey[600]),
                                       textAlign: TextAlign.center,
                                     ),
@@ -2232,12 +2209,12 @@ class _InternalMaintenanceFormPageState
 
                       const SizedBox(height: 40),
                     _buildSectionHeader(
-                      "Add Admin Note",
+                      "Admin Note",
                       "Notes for admins and post-task remarks",
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
-                      controller: _remarksController,
+                      controller: _adminNotesController,
                       maxLines: 5,
                       decoration: _decoration('Enter Description....'),
                     ),
@@ -2489,7 +2466,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
 
             // Items list
             Expanded(
-              child:
+                  child:
                   _filteredItems.isEmpty
                       ? Center(
                         child: Text(
@@ -2611,7 +2588,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                       controller: _quantityController,
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(
-                        labelText: 'Quantity Needed',
+                        labelText: 'Reserved Quantity',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -2673,7 +2650,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24,
-                      vertical: 12,
+                                           vertical: 12,
                     ),
                   ),
                 ),

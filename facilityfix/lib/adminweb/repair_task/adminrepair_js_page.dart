@@ -6,7 +6,6 @@ import '../services/api_service.dart';
 import '../widgets/delete_popup.dart';
 import 'pop_up/js_viewdetails_popup.dart';
 import 'pop_up/edit_popup.dart';
-import '../maintenance_task/pop_up/assignstaff_popup.dart';
 
 class RepairJobServicePage extends StatefulWidget {
   const RepairJobServicePage({super.key});
@@ -450,17 +449,6 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   // Handle action selection
   void _handleActionSelection(String action, Map<String, dynamic> task) {
     switch (action) {
-      case 'assign':
-        // Open the Assign dialog and pass the processed task (which includes rawData)
-        AssignScheduleWorkDialog.show(
-          context,
-          task,
-          onAssignmentComplete: () {
-            _loadJobServices();
-          },
-          isMaintenanceTask: false,
-        );
-        break;
       case 'view':
         _viewTask(task);
         break;

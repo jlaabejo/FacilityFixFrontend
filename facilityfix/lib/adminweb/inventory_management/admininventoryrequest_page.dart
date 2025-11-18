@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:facilityfix/adminweb/widgets/tags.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -138,9 +139,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     });
 
     try {
-      final response = await _apiService.getInventoryRequests(
-        buildingId: _buildingId,
-      );
+      final response = await _apiService.getInventoryRequests();
 
       print('[v0] Inventory requests response: $response');
 
@@ -194,31 +193,20 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     return pathMap[routeKey];
   }
 
-  // Logout functionality
-  void _handleLogout(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Logout'),
-          content: const Text('Are you sure you want to logout?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                context.go('/');
-              },
-              child: const Text('Logout'),
-            ),
-          ],
-        );
-      },
-    );
+// Logout functionality
+void _handleLogout(BuildContext context) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (BuildContext context) {
+      return const LogoutPopup();
+    },
+  );
+
+  if (result == true) {
+    context.go('/');
   }
+}
+
 
   // Column widths for table
   final List<double> _colW = <double>[
@@ -420,29 +408,10 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
         throw Exception('Request ID not found');
       }
 
-      // Check if this is a reserved request (from maintenance)
-      final status = (item['status'] ?? 'pending').toString().toLowerCase();
-      final isReserved = status == 'reserved';
-      final maintenanceTaskId = item['maintenance_task_id'] ?? item['reference_id'];
-
       // Get inventory item ID and requested quantity
       final inventoryId = item['inventory_id']?.toString();
       final quantityRequested = (item['quantity_requested'] ?? item['quantity'] ?? 0) as num;
       
-      if (isReserved) {
-        // Reserved items (from maintenance) should NOT be approved via this flow
-        // They are automatically "allocated" when maintenance is scheduled
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Reserved items cannot be approved. They are allocated for maintenance tasks.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-        return;
-      }
-
       // Step 1: Check available stock before approval
       if (inventoryId != null && quantityRequested > 0) {
         try {
@@ -452,17 +421,16 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
             final inventoryData = Map<String, dynamic>.from(itemResp['data']);
             final currentStock = (inventoryData['current_stock'] ?? inventoryData['quantity_in_stock'] ?? 0) as num;
             
-            // Calculate reserved stock from all reserved requests for this item
+            // Calculate reserved stock from all reservations for this item
             int reservedStock = 0;
             try {
-              final reservedResp = await _apiService.getInventoryRequests(
+              final reservedResp = await _apiService.getInventoryReservations(
                 buildingId: _buildingId,
-                status: 'reserved',
               );
               if (reservedResp['success'] == true && reservedResp['data'] is List) {
                 for (var req in reservedResp['data']) {
                   if (req['inventory_id']?.toString() == inventoryId) {
-                    reservedStock += (req['quantity_requested'] ?? req['quantity'] ?? 0) as int;
+                    reservedStock += (req['quantity'] ?? 0) as int;
                   }
                 }
               }
@@ -755,17 +723,16 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
         final inventoryData = Map<String, dynamic>.from(itemResp['data']);
         final currentStock = (inventoryData['current_stock'] ?? inventoryData['quantity_in_stock'] ?? 0) as num;
         
-        // Calculate reserved stock from all reserved requests for this item
+        // Calculate reserved stock from all reservations for this item
         int reservedStock = 0;
         try {
-          final reservedResp = await _apiService.getInventoryRequests(
+          final reservedResp = await _apiService.getInventoryReservations(
             buildingId: _buildingId,
-            status: 'reserved',
           );
           if (reservedResp['success'] == true && reservedResp['data'] is List) {
             for (var req in reservedResp['data']) {
               if (req['inventory_id']?.toString() == inventoryId) {
-                reservedStock += (req['quantity_requested'] ?? req['quantity'] ?? 0) as int;
+                reservedStock += (req['quantity'] ?? 0) as int;
               }
             }
           }

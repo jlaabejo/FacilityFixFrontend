@@ -1,3 +1,4 @@
+import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart'; 
@@ -30,30 +31,20 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
   String? _error;
   Map<String, dynamic>? _taskData;
 
-  void _handleLogout(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Logout'),
-          content: const Text('Are you sure you want to logout?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                context.go('/');
-              },
-              child: const Text('Logout'),
-            ),
-          ],
-        );
-      },
-    );
+// Logout functionality
+void _handleLogout(BuildContext context) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (BuildContext context) {
+      return const LogoutPopup();
+    },
+  );
+
+  if (result == true) {
+    context.go('/');
   }
+}
+
 
   // ------------------------ Edit mode + form state ------------------------
   final _formKey = GlobalKey<FormState>();
@@ -88,15 +79,13 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
   final _adminNotifyCtrl = TextEditingController();
   final _staffNotifyCtrl = TextEditingController();
 
-  // Header chips (view-only)
-  List<String> _tags = const [];
-
   // Attachments sourced from backend/task payload
   final List<Map<String, String?>> _attachments = [];
 
   // Inventory items
   List<Map<String, dynamic>> _selectedInventoryItems = [];
-  List<Map<String, dynamic>> _linkedInventoryRequests = []; // Existing requests from backend
+  // Reserved inventory items for this task
+  List<Map<String, dynamic>> _reservedInventoryItems = []; // Reserved items from backend
 
   // Snapshot used for Cancel
   late Map<String, String> _original;
@@ -129,7 +118,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
       await _loadInventoryItems();
 
       // Load linked inventory requests
-      await _loadLinkedInventoryRequests();
+      await _loadReservedInventoryItems();
 
       // Load staff members for assignment
       await _loadStaffMembers();
@@ -197,24 +186,30 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     }
   }
 
-  Future<void> _loadLinkedInventoryRequests() async {
+  Future<void> _loadReservedInventoryItems() async {
     try {
-      print('[v0] Loading inventory requests for task ${widget.taskId}');
-      final response = await _apiService.getInventoryRequestsByMaintenanceTask(widget.taskId);
+      print('[v0] Loading reserved inventory items for task ${widget.taskId}');
+      final response = await _apiService.getInventoryReservations(maintenanceTaskId: widget.taskId);
 
-      print('[v0] Inventory requests response: $response');
+      print('[v0] Reserved inventory items response: $response');
 
       if (response['success'] == true && response['data'] != null) {
-        final requests = List<Map<String, dynamic>>.from(response['data']);
+        final reservations = List<Map<String, dynamic>>.from(response['data']);
 
-        // Enrich inventory requests with item details
-        for (var request in requests) {
-          if (request['inventory_id'] != null) {
+        // Enrich reserved inventory items with item details
+        for (var reservation in reservations) {
+          if (reservation['inventory_id'] != null) {
             try {
-              final itemData = await _apiService.getInventoryItemById(request['inventory_id']);
+              final itemData = await _apiService.getInventoryItemById(reservation['inventory_id']);
               if (itemData != null) {
-                request['item_name'] = itemData['item_name'];
-                request['item_code'] = itemData['item_code'];
+                reservation['item_details'] = {
+                  'item_name': itemData['item_name'] ?? 'Unknown Item',
+                  'item_code':  itemData['item_code'],
+                  'current_stock': itemData['current_stock'],
+                  'unit': itemData['unit_of_measure'] ?? 'pcs',
+                };
+              } else {
+                print('[v0] Item data not found for inventory_id: ${reservation['inventory_id']}');
               }
             } catch (e) {
               print('[v0] Error loading inventory item details: $e');
@@ -224,21 +219,21 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
         }
 
         setState(() {
-          _linkedInventoryRequests = requests;
+          _reservedInventoryItems = reservations;
         });
-        print('[v0] Loaded ${_linkedInventoryRequests.length} inventory requests for task ${widget.taskId}');
+        print('[v0] Loaded ${_reservedInventoryItems.length} reserved inventory items for task ${widget.taskId}');
       } else {
-        print('[v0] No inventory requests found or invalid response');
+        print('[v0] No reserved inventory items found or invalid response');
       }
     } catch (e) {
-      print('[v0] Error loading linked inventory requests: $e');
-      // Don't fail the whole form if inventory requests fail to load
+      print('[v0] Error loading reserved inventory items: $e');
+      // Don't fail the whole form if inventory items fail to load
     }
   }
 
   Future<void> _loadInventoryItems() async {
     try {
-      final response = await _apiService.getInventoryItems();
+      final response = await _apiService.getBuildingInventory('default_building_id');
       
       if (response['success'] == true && response['data'] != null) {
         // Inventory items loaded successfully but not stored
@@ -253,6 +248,9 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
 
   void _populateFields() {
     final Map<String, dynamic> seed = _taskData ?? {};
+    
+    // Debug: print the task data to see what fields are available
+    print('[InternalView] Populating fields from task data: $seed');
 
     // Safe setter with multiple possible keys
     void setText(TextEditingController c, List<String> keys) {
@@ -269,7 +267,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     // Assign from incoming data with fallback keys
     setText(_titleCtrl, ['task_title', 'taskTitle', 'title']);
     setText(_departmentCtrl, ['department', 'assigneeDept']);
-  setText(_createdByCtrl, ['created_by', 'assigneeName', 'assigned_staff_name', 'createdBy']);
+    setText(_createdByCtrl, ['created_by', 'assigneeName', 'assigned_staff_name', 'createdBy']);
     setText(_estimatedDurationCtrl, ['estimated_duration', 'estimatedDuration']);
     setText(_locationCtrl, ['location']);
     setText(_descriptionCtrl, ['task_description', 'description']);
@@ -279,29 +277,27 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     // Be generous with fallback keys for assignee name & department
     setText(_assigneeNameCtrl, [
       'assigned_staff_name',
-      // 'assigneeName',
-      // 'assigned_to',
-      // 'assignee',
-      // 'assignee_name',
-      // 'created_by'
+      'assignee_name',
+      'assigned_name',
+      'staff_name',
     ]);
     setText(_assigneeDeptCtrl, [
-      'department',
-      // 'assigneeDept',
-      // 'assignee_department',
-      // 'assigned_staff_department',
-      // 'staff_department'
+      'assignee_department',
+      'staff_department',
+      'assigned_dept',
+      'department', // This might be task department
     ]);
-    setText(_adminNotifyCtrl, ['admin_notification']);
+    setText(_adminNotifyCtrl, ['admin_notification', 'admin_notes', 'notes', 'adminNote']);
     // Debug log: show what admin notes were populated for this task (helps trace missing notes)
     try {
-      print('[InternalView] admin notes (populated): ${_adminNotifyCtrl.text}');
+      print('[InternalView] admin notes (populated): "${_adminNotifyCtrl.text}"');
     } catch (_) {}
     setText(_staffNotifyCtrl, ['staff_notification', 'staffNotify']);
 
     // Set selected staff ID if available
     // Try to find the staff member in the staff list
     final assignedTo = seed['assigned_to'];
+    print('[InternalView] assigned_to from task data: $assignedTo');
     if (assignedTo != null && assignedTo.toString().isNotEmpty) {
       final assignedValue = assignedTo.toString();
 
@@ -324,10 +320,17 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
         );
       }
 
+      print('[InternalView] matched staff: $matchedStaff');
+
       // Set the selected staff ID if we found a match
       if (matchedStaff.isNotEmpty) {
         _selectedStaffId = (matchedStaff['user_id'] ?? matchedStaff['id'] ?? '').toString();
-        _selectedStaffName = _assigneeNameCtrl.text;
+        final firstName = matchedStaff['first_name'] ?? '';
+        final lastName = matchedStaff['last_name'] ?? '';
+        _selectedStaffName = '$firstName $lastName'.trim().isNotEmpty ? '$firstName $lastName'.trim() : (matchedStaff['name'] ?? matchedStaff['username'] ?? 'Staff Member').toString();
+        _assigneeNameCtrl.text = _selectedStaffName!;
+        _assigneeDeptCtrl.text = matchedStaff['staff_department'] ?? matchedStaff['department'] ?? '';
+        print('[InternalView] set assignee name: "${_assigneeNameCtrl.text}", dept: "${_assigneeDeptCtrl.text}"');
       }
     }
 
@@ -367,23 +370,32 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     hydrateAttachments(seed['attachments']);
     hydrateAttachments(seed['photos']);
 
-    final checklistData = seed['checklist_completed'] ?? seed['checklistItems'];
+    final checklistData = seed['checklist_completed'] ?? seed['checklistItems'] ?? seed['checklist'] ?? seed['tasks'] ?? seed['task_list'];
+    print('[InternalView] checklist data found: $checklistData');
     if (checklistData != null && checklistData is List) {
       _checklistItems.clear();
       for (var item in checklistData) {
-        _checklistItems.add({
-          'text': item['task'] ?? item['description'] ?? '',
-          'completed': item['completed'] ?? false,
-        });
+        if (item is Map) {
+          _checklistItems.add({
+            'text': item['task'] ?? item['description'] ?? item['text'] ?? item['title'] ?? '',
+            'completed': item['completed'] ?? item['done'] ?? item['finished'] ?? false,
+          });
+        } else if (item is String) {
+          _checklistItems.add({
+            'text': item,
+            'completed': false,
+          });
+        }
       }
+      print('[InternalView] populated ${_checklistItems.length} checklist items');
     }
 
     // Tags - try to get from data or use defaults
-    final dynamic t = seed['tags'];
-    _tags =
-        (t is List && t.isNotEmpty)
-            ? t.map((e) => e.toString()).toList()
-            : <String>['Maintenance', 'Internal'];
+    // final dynamic t = seed['tags'];
+    // _tags =
+    //     (t is List && t.isNotEmpty)
+    //         ? t.map((e) => e.toString()).toList()
+    //         : <String>['Maintenance', 'Internal'];
 
     _original = _takeSnapshot();
     _isEditMode = widget.startInEditMode;
@@ -424,8 +436,6 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     'staffNotify': _staffNotifyCtrl.text,
     'selectedStaffId': _selectedStaffId ?? '',
   };
-
-  void _enterEditMode() => setState(() => _isEditMode = true);
 
   void _cancelEdit() {
     // Revert to snapshot - guard in case snapshot isn't initialized
@@ -480,7 +490,28 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
       // Create inventory requests for selected items first
       final inventoryRequestIds = await _createInventoryRequests();
 
-      // Prepare the update payload for the API
+      // Normalize checklist items into shapes backend may expect
+      final List<Map<String, dynamic>> checklistPayload = _checklistItems.map((item) {
+        final taskText = (item['text'] ?? item['task'] ?? item['title'] ?? '').toString();
+        return {
+          'task': taskText,
+          'text': taskText,
+          'completed': item['completed'] ?? false,
+        };
+      }).toList();
+
+      // Normalize selected inventory items for parts_used payload
+      final List<Map<String, dynamic>> partsUsedPayload = _selectedInventoryItems.map((item) {
+        return {
+          'inventory_id': item['inventory_id'] ?? item['item_code'] ?? item['id'],
+          'item_name': item['item_name'] ?? item['name'] ?? '',
+          'item_code': item['item_code'] ?? item['item_code'] ?? '',
+          'quantity': item['quantity'] ?? item['qty'] ?? item['requested_quantity'] ?? 0,
+          'available_stock': item['available_stock'] ?? item['current_stock'] ?? 0,
+        };
+      }).toList();
+
+      // Prepare the update payload for the API - include multiple key variations for compatibility
       final Map<String, dynamic> apiUpdateData = {
         'task_title': _titleCtrl.text.trim(),
         'department': _departmentCtrl.text.trim(),
@@ -489,9 +520,24 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
         'recurrence_type': _recurrenceCtrl.text.trim(),
         'scheduled_date': _startDateCtrl.text.trim(),
         'estimated_duration': _estimatedDurationCtrl.text.trim(),
+        // Admin notes (provide both keys backend might expect)
+        'admin_notes': _adminNotifyCtrl.text.trim(),
+        'admin_notification': _adminNotifyCtrl.text.trim(),
+        // Checklist: send under multiple keys the backend or other clients may expect
+        'checklist': checklistPayload,
+        'checklist_completed': checklistPayload,
+        'checklistItems': checklistPayload,
+        // Parts / inventory
+        'parts_used': partsUsedPayload,
+        // Provide assignee details (id + name + dept) so UI can repopulate reliably
+        'assigned_to': _selectedStaffId ?? '',
+        'assigned_staff_name': _assigneeNameCtrl.text.trim(),
+        'assignee_name': _assigneeNameCtrl.text.trim(),
+        'assigneeDept': _assigneeDeptCtrl.text.trim(),
+        'assignee_department': _assigneeDeptCtrl.text.trim(),
       };
 
-      // Add assigned_to if a staff member is selected
+      // Add assigned_to if a staff member is selected (override empty above)
       if (_selectedStaffId != null && _selectedStaffId!.isNotEmpty) {
         apiUpdateData['assigned_to'] = _selectedStaffId;
       }
@@ -514,9 +560,9 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
         _original = Map<String, String>.from(updateData); // update baseline
         setState(() => _isEditMode = false);
 
-        // Reload inventory requests to show the newly created ones
+        // Reload reserved inventory items to show the newly created ones
         if (inventoryRequestIds.isNotEmpty) {
-          await _loadLinkedInventoryRequests();
+          await _loadReservedInventoryItems();
         }
 
         // Reload the task data to reflect the changes
@@ -603,7 +649,14 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
         dt = null;
       }
     }
-    return dt != null ? UiDateUtils.fullDate(dt) : value;
+    if (dt != null) {
+      // Convert UTC dates to local time to prevent date shifting
+      if (dt.isUtc) {
+        dt = dt.toLocal();
+      }
+      return UiDateUtils.fullDate(dt);
+    }
+    return value;
   }
 
   // ------------------------ UI ------------------------
@@ -1047,8 +1100,8 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                 }
               }
 
-              if (editData['parts_used'] == null && _linkedInventoryRequests.isNotEmpty) {
-                editData['parts_used'] = _linkedInventoryRequests.map((r) => {
+              if (editData['parts_used'] == null && _reservedInventoryItems.isNotEmpty) {
+                editData['parts_used'] = _reservedInventoryItems.map((r) => {
                       'inventory_id': r['inventory_id'],
                       'item_name': r['item_name'] ?? r['name'] ?? r['item_name'],
                       'item_code': r['item_code'],
@@ -1593,7 +1646,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
               ),
               const SizedBox(width: 12),
               const Text(
-                "Inventory Item",
+                "Inventory Items",
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -1603,7 +1656,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
             ],
           ),
           const SizedBox(height: 24),
-          if (_linkedInventoryRequests.isEmpty)
+          if (_reservedInventoryItems.isEmpty)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
@@ -1613,33 +1666,31 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                 border: Border.all(color: Colors.grey[200]!),
               ),
               child: Text(
-                'No inventory requests linked to this task.',
+                'No inventory items for this task.',
                 style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 textAlign: TextAlign.center,
               ),
             )
           else
             Column(
-              children: _linkedInventoryRequests.map((request) {
-                final status = request['status'] ?? 'pending';
-                final itemName = request['item_name'] ?? 'Unknown Item';
-                final quantity = request['quantity_requested'] ?? 0;
-                final startDate = request['start_date'] ?? request['requested_date'] ?? '';
+              children: _reservedInventoryItems.map((reservation) {
+                final itemDetails = reservation['item_details'] ?? {}; 
+                final status = reservation['status'] ?? '';
+                final itemName = itemDetails['item_name'] ?? 'Unknown Item';
+                final quantity = reservation['quantity'] ?? 0;
+                final currentStock = itemDetails['current_stock'] ??0;
+
                 
                 Color statusColor;
                 IconData statusIcon;
                 switch (status) {
-                  case 'approved':
+                  case 'Reserved':
                     statusColor = Colors.green;
                     statusIcon = Icons.check_circle;
                     break;
-                  case 'fulfilled':
+                  case 'Consumed':
                     statusColor = Colors.blue;
                     statusIcon = Icons.done_all;
-                    break;
-                  case 'denied':
-                    statusColor = Colors.red;
-                    statusIcon = Icons.cancel;
                     break;
                   default:
                     statusColor = Colors.orange;
@@ -1661,37 +1712,43 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                         size: 24,
                       ),
                       const SizedBox(width: 12),
-                      Expanded(
+                        Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              itemName,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87,
-                              ),
+                          Text(
+                            itemName,
+                            style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
                             ),
-                            const SizedBox(height: 4),
+                          ),
+                          const SizedBox(height: 4),
                             Text(
-                              'Quantity: $quantity',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey[600],
-                              ),
+                            'Reserved Quantity: $quantity',
+                            style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
                             ),
-                            if (startDate.isNotEmpty)
-                              Text(
-                                'Requested: ${_formatDateString(startDate)}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[500],
-                                ),
-                              ),
+                            ),
+                            Text(
+                            'Current Stock: $currentStock',
+                            style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blueGrey[600],
+                            ),
+                            ),
+                            Text(
+                            'Unit: ${itemDetails['unit'] ?? ''}',
+                            style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blueGrey[600],
+                            ),
+                            ),
                           ],
                         ),
-                      ),
+                        ),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
@@ -1732,59 +1789,39 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
   }
 
   Widget _buildAdminNotesCard() {
-    // Show the admin notes card only when there is text in view mode.
-    // In edit mode the card is shown so the user can add/edit notes.
     final hasAdminNotes = _adminNotifyCtrl.text.trim().isNotEmpty;
-    if (!hasAdminNotes && !_isEditMode) {
-      // Nothing to show in view mode and not editing -> hide entirely
-      return const SizedBox.shrink();
-    }
 
-    final card = _card(
-      icon: Icons.note,
-      iconBg: Colors.grey[200]!,
-      title: 'Admin Notes',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _isEditMode
-              ? TextFormField(
-                  controller: _adminNotifyCtrl,
-                  minLines: 3,
-                  maxLines: 8,
-                  onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                    hintText: 'Enter admin notes...',
-                  ),
-                )
-              : Text(
-                  _adminNotifyCtrl.text.trim().isNotEmpty
-                      ? _adminNotifyCtrl.text
-                      : 'No admin notes available.',
-                  style: const TextStyle(fontSize: 14, height: 1.5),
-                ),
-        ],
-      ),
-    );
-
-    // If in view mode and there are notes, show an Edit button below the card.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        card,
-        if (!_isEditMode && hasAdminNotes) ...[
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: _enterEditMode,
-              icon: const Icon(Icons.edit, size: 18),
-              label: const Text('Edit Notes'),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              ),
+        // Show card if there are notes or in edit mode
+        if (hasAdminNotes || _isEditMode) ...[
+          _card(
+            icon: Icons.note,
+            iconBg: Colors.grey[200]!,
+            title: 'Admin Notes',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _isEditMode
+                    ? TextFormField(
+                        controller: _adminNotifyCtrl,
+                        minLines: 3,
+                        maxLines: 8,
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                          hintText: 'Enter admin notes...',
+                        ),
+                      )
+                    : Text(
+                        _adminNotifyCtrl.text.trim().isNotEmpty
+                            ? _adminNotifyCtrl.text
+                            : 'No admin notes available.',
+                        style: const TextStyle(fontSize: 14, height: 1.5),
+                      ),
+              ],
             ),
           ),
         ],

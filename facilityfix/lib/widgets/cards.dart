@@ -483,6 +483,7 @@ class InventoryRequestCard extends StatelessWidget {
   final String requestId;
   final String department; // e.g., "Electrical", "Plumbing"
   final String status; // e.g., "Pending", "Approved", "Rejected"
+  final String? maintenanceId; // Maintenance ID if this is a maintenance-related request
   final VoidCallback? onTap;
 
   const InventoryRequestCard({
@@ -491,6 +492,7 @@ class InventoryRequestCard extends StatelessWidget {
     required this.requestId,
     required this.department,
     required this.status,
+    this.maintenanceId,
     this.onTap,
   });
 
@@ -556,6 +558,20 @@ class InventoryRequestCard extends StatelessWidget {
                   height: 1.2,
                 ),
               ),
+
+              if (maintenanceId != null && maintenanceId!.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Maintenance: $maintenanceId',
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    color: _textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    height: 1.2,
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 12),
 

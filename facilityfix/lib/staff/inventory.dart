@@ -1,4 +1,3 @@
-import 'package:facilityfix/staff/form/inventory_form.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/workorder.dart';
@@ -50,7 +49,7 @@ class InventoryItem {
 
     return InventoryItem(
       itemName: json['item_name'] ?? 'Unknown Item',
-      itemId: json['item_code'] ?? json['id'] ?? '',
+      itemId: json['item_code'] ?? json['id'] ?? json['inventory_id'] ?? '',
       department: json['department'] ?? 'Unknown',
       quantity: json['current_stock'] ?? 0,
       status: displayStatus,
@@ -72,6 +71,7 @@ class InventoryRequest {
   final String? purpose;
   final String? requestedBy;
   final DateTime? requestDate;
+  final String? maintenanceId;
 
   const InventoryRequest({
     required this.itemName,
@@ -82,18 +82,20 @@ class InventoryRequest {
     this.purpose,
     this.requestedBy,
     this.requestDate,
+    this.maintenanceId,
   });
 
   factory InventoryRequest.fromJson(Map<String, dynamic> json) {
     return InventoryRequest(
       itemName: json['item_name'] ?? 'Unknown Item',
-      requestId: json['_doc_id'] ?? json['id'] ?? '',
+      requestId: json['_doc_id'] ?? json['id'] ?? json['inventory_id'] ?? '',
       department: json['department'] ?? 'Unknown',
       status: json['status'] ?? 'pending',
       quantityRequested: json['quantity_requested'],
       purpose: json['purpose'],
-      requestedBy: json['requested_by'],
+      requestedBy: json['assigned_staff_name'] ?? json['staff_name'] ?? 'Unknown',
       requestDate: json['created_at'] != null ? DateTime.tryParse(json['created_at']) : null,
+      maintenanceId: json['id'] ?? null,
     );
   }
 }
@@ -111,18 +113,15 @@ class _InventoryPageState extends State<InventoryPage> {
 
   // ----- Loading & Error States -----
   bool _isLoading = true;
-  bool _isLoadingItems = false;
   bool _isLoadingRequests = false;
   String? _errorMessage;
 
   // ----- API Data -----
-  List<InventoryItem> _items = [];
   List<InventoryRequest> _requests = [];
 
   // ----- Tabs -----
-  String selectedTabLabel = "Items";
+  String selectedTabLabel = "Requests";
   final tabs = [
-    TabItem(label: 'Items', count: 1),
     TabItem(label: 'Requests', count: 1),
   ];
 
@@ -180,17 +179,10 @@ class _InventoryPageState extends State<InventoryPage> {
 
   final List<String> _statusOptions = const [
     'All',
-    'In Stock',
-    'Out of Stock',
-    'Critical',
-  ];
-  final List<String> _deptOptions = const [
-    'All',
-    'Plumbing',
-    'Carpentry',
-    'Electrical',
-    'Masonry',
-    'Maintenance',
+    'pending',
+    'approved',
+    'rejected',
+    'received',
   ];
 
   // ----- Demo data -----
@@ -224,11 +216,8 @@ class _InventoryPageState extends State<InventoryPage> {
     });
 
     try {
-      // Load both items and requests directly without building filtering
-      await Future.wait([
-        _loadInventoryItems(),
-        _loadInventoryRequests(),
-      ]);
+      // Load requests only
+      await _loadInventoryRequests();
     } catch (e) {
       setState(() {
         _errorMessage = 'Failed to load inventory data: $e';
@@ -241,42 +230,6 @@ class _InventoryPageState extends State<InventoryPage> {
   }
 
   /// Load inventory items from API (general - not building specific)
-  Future<void> _loadInventoryItems() async {
-    if (_isLoadingItems) return;
-    
-    setState(() {
-      _isLoadingItems = true;
-    });
-
-    try {
-      // Use the new general inventory endpoint
-      final response = await _apiService.getAllInventoryItems(
-        includeInactive: false,
-      );
-
-      if (response['success'] == true && response['data'] is List) {
-        final itemsData = List<Map<String, dynamic>>.from(response['data']);
-        setState(() {
-          _items = itemsData.map((item) => InventoryItem.fromJson(item)).toList();
-          
-          // Update tabs count
-          tabs[0] = TabItem(label: 'Items', count: _items.length);
-        });
-      } else {
-        throw Exception(response['detail'] ?? 'Unknown error');
-      }
-    } catch (e) {
-      print('Error loading inventory items: $e');
-      setState(() {
-        _errorMessage = 'Failed to load inventory items: $e';
-      });
-    } finally {
-      setState(() {
-        _isLoadingItems = false;
-      });
-    }
-  }
-
   /// Load inventory requests from API - includes general requests and maintenance-assigned requests
   Future<void> _loadInventoryRequests() async {
     if (_isLoadingRequests) return;
@@ -326,9 +279,24 @@ class _InventoryPageState extends State<InventoryPage> {
             if (itemData != null) {
               request['item_name'] = itemData['item_name'];
               request['department'] = itemData['department'];
+              request['inventory_id'] = itemData['inventory_id'];
             }
           } catch (e) {
             print('Error loading item details: $e');
+          }
+        }
+      }
+
+      // Enrich with staff names for requested_by UIDs
+      for (var request in allRequestsMap.values) {
+        if (request['requested_by'] != null && request['requested_by'].toString().isNotEmpty) {
+          try {
+            final staffData = await _apiService.getStaffById(request['requested_by']);
+            if (staffData != null && staffData['name'] != null) {
+              request['requested_by_name'] = staffData['name'];
+            }
+          } catch (e) {
+            print('Error loading staff details for ${request['requested_by']}: $e');
           }
         }
       }
@@ -339,7 +307,7 @@ class _InventoryPageState extends State<InventoryPage> {
             .toList();
 
         // Update tabs count
-        tabs[1] = TabItem(label: 'Requests', count: _requests.length);
+        tabs[0] = TabItem(label: 'Requests', count: _requests.length);
       });
 
       print('DEBUG: Loaded ${_requests.length} total inventory requests (general + maintenance)');
@@ -356,37 +324,12 @@ class _InventoryPageState extends State<InventoryPage> {
   }
 
   // ===== Filtering =====
-  bool _statusAllowed(InventoryItem it) {
-    if (_selectedStatus == 'All') return true;
-    return it.status == _selectedStatus;
-  }
-
-  bool _deptAllowed(InventoryItem it) {
-    if (_selectedDepartment == 'All') return true;
-    return it.department == _selectedDepartment;
-  }
-
-  bool _searchMatchesItem(InventoryItem it) {
-    final q = _searchController.text.trim().toLowerCase();
-    if (q.isEmpty) return true;
-    return [
-      it.itemName,
-      it.itemId,
-      it.department,
-      it.status,
-      it.quantity.toString(),
-    ].any((s) => s.toLowerCase().contains(q));
-  }
-
-  List<InventoryItem> get _filteredItems {
-    final list = _items.where(_statusAllowed).where(_deptAllowed).where(_searchMatchesItem).toList();
-    list.sort((a, b) => a.quantity.compareTo(b.quantity)); // sort lower → upper
-    return list;
-  }
-
   List<InventoryRequest> get _filteredRequests {
     final q = _searchController.text.trim().toLowerCase();
     return _requests.where((r) {
+      // Exclude received requests by default unless specifically filtering for them
+      if (_selectedStatus == 'All' && r.status.toLowerCase() == 'received') return false;
+      if (_selectedStatus != 'All' && r.status != _selectedStatus) return false;
       if (q.isEmpty) return true;
       return [
         r.itemName,
@@ -399,35 +342,6 @@ class _InventoryPageState extends State<InventoryPage> {
 
   Widget _buildTabContent() {
     switch (selectedTabLabel.toLowerCase()) {
-      case 'items':
-        final items = _filteredItems;
-        if (items.isEmpty) return const Center(child: Text('No items found.'));
-        return ListView.separated(
-          itemCount: items.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (_, i) {
-            final it = items[i];
-            return InventoryCard(
-              itemName: it.itemName,
-              stockStatus: it.status,
-              itemId: it.itemId,
-              department: it.department,
-              quantityInStock: it.quantity.toString(),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => InventoryDetails(
-                      selectedTabLabel: 'inventory details',
-                      itemId: it.itemId,
-                    ),
-                  ),
-                );
-              },
-            );
-          },
-        );
-
       case 'requests':
         final reqs = _filteredRequests;
         if (reqs.isEmpty) return const Center(child: Text('No requests found.'));
@@ -441,6 +355,7 @@ class _InventoryPageState extends State<InventoryPage> {
               requestId: r.requestId,
               department: r.department,
               status: r.status,
+              maintenanceId: r.maintenanceId,
               onTap: () {
                 Navigator.push(
                   context,
@@ -463,8 +378,6 @@ class _InventoryPageState extends State<InventoryPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isRequestsTab = selectedTabLabel.toLowerCase() == 'requests';
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
@@ -524,12 +437,8 @@ class _InventoryPageState extends State<InventoryPage> {
                       selectedStatus: _selectedStatus,
                       statuses: _statusOptions,
                       selectedClassification: _selectedDepartment,
-                      classifications: _deptOptions,
                       onStatusChanged: (status) {
                         setState(() => _selectedStatus = status.trim().isEmpty ? 'All' : status);
-                      },
-                      onClassificationChanged: (dept) {
-                        setState(() => _selectedDepartment = dept.trim().isEmpty ? 'All' : dept);
                       },
                       onSearchChanged: (_) => setState(() {}),
                     ),
@@ -543,32 +452,13 @@ class _InventoryPageState extends State<InventoryPage> {
                     const SizedBox(height: 24),
 
                     Text(
-                      selectedTabLabel.toLowerCase() == 'items' ? 'Recent Items' : 'Recent Requests',
+                      'Recent Requests',
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 16),
 
                     Expanded(child: _buildTabContent()),
                   ],
-                ),
-              ),
-
-            // ✅ Direct to InventoryForm on Add
-            if (isRequestsTab && !_isLoading)
-              Positioned(
-                bottom: 24,
-                right: 24,
-                child: AddButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const InventoryForm(
-                          requestType: 'Basic Information', // start at Basic Info
-                        ),
-                      ),
-                    );
-                  },
                 ),
               ),
           ],
