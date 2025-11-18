@@ -331,14 +331,16 @@ class ConcernSlipDetails extends StatelessWidget {
 
                 if ((attachments?.isNotEmpty ?? false)) ...[
                   SizedBox(height: 12 * s),
-                  const _SectionTitle('Attachments'),
+                  const _SectionTitle('Tenant Attachments'),
                   SizedBox(height: 8 * s),
 
                   Wrap(
                     spacing: 8 * s,
                     runSpacing: 8 * s,
                     children:
-                        attachments!.map((u) => Image.network(u)).toList(),
+                        attachments!
+                            .map((u) => _thumb(u, h: 80 * s, w: 140 * s))
+                            .toList(),
                   ),
                 ],
               ],
@@ -407,20 +409,10 @@ class ConcernSlipDetails extends StatelessWidget {
                     SizedBox(height: 8 * s),
                   ],
 
-                  // Staff recommendation
-                  if ((staffRecommendation?.trim().isNotEmpty ?? false)) ...[
-                    _SectionCard(
-                      title: 'Recommendation',
-                      content: staffRecommendation!.trim(),
-                      padding: EdgeInsets.all(14 * s),
-                      hideIfEmpty: false,
-                    ),
-                    SizedBox(height: 8 * s),
-                  ],
-
                   // Staff attachments
                   if ((staffAttachments?.isNotEmpty ?? false)) ...[
-                    const _SectionTitle('Attachments'),
+                    SizedBox(height: 12 * s),
+                    const _SectionTitle('Staff Assessment Attachments'),
                     SizedBox(height: 8 * s),
                     Wrap(
                       spacing: 8 * s,
@@ -430,6 +422,18 @@ class ConcernSlipDetails extends StatelessWidget {
                               .map((u) => _thumb(u, h: 80 * s, w: 140 * s))
                               .toList(),
                     ),
+                    SizedBox(height: 8 * s),
+                  ],
+
+                  // Staff recommendation
+                  if ((staffRecommendation?.trim().isNotEmpty ?? false)) ...[
+                    _SectionCard(
+                      title: 'Recommendation',
+                      content: staffRecommendation!.trim(),
+                      padding: EdgeInsets.all(14 * s),
+                      hideIfEmpty: false,
+                    ),
+                    SizedBox(height: 8 * s),
                   ],
                 ],
               ),
@@ -520,6 +524,7 @@ class JobServiceDetails extends StatelessWidget {
 
     // Callbacks
     this.onViewConcernSlip,
+    required bool isStaff,
   });
 
   // Map resolution type to what we DISPLAY as "Request Type".
@@ -2123,43 +2128,80 @@ class _MaintenanceState extends State<MaintenanceDetails> {
           ffDivider(),
           const SizedBox(height: 8),
 
-          // ===== Assigned Staff =====
-          if (hasAssigned) ...[
-            const _SectionTitle('Assigned Staff'),
-            SizedBox(height: 8),
+          // Staff Details
+          if ((widget.assignedStaff ?? '').trim().isNotEmpty ||
+              (widget.assessment ?? '').trim().isNotEmpty ||
+              widget.assessedAt != null ||
+              (widget.staffAttachments ?? const <String>[]).isNotEmpty)
+            _Section(
+              title: "Staff Details",
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Avatar, Name, Department
+                  if ((widget.assignedStaff?.trim().isNotEmpty ?? false))
+                    _AvatarNameBlock(
+                      name: widget.assignedStaff!.trim(),
+                      departmentTag:
+                          (widget.staffDepartment?.trim().isNotEmpty ?? false)
+                              ? widget.staffDepartment!.trim()
+                              : null,
+                      photoUrl:
+                          (widget.staffPhotoUrl?.trim().isNotEmpty ?? false)
+                              ? widget.staffPhotoUrl!.trim()
+                              : null,
+                    ),
 
-            // Show staff avatar/name if available
-            if ((widget.assignedStaff?.trim().isNotEmpty ?? false))
-              _AvatarNameBlock(
-                name: widget.assignedStaff!.trim(),
-                photoUrl:
-                    (widget.staffPhotoUrl?.trim().isNotEmpty ?? false)
-                        ? widget.staffPhotoUrl!.trim()
-                        : null,
+                  // ===== Assessment Section =====
+                  if (widget.assessedAt != null ||
+                      (widget.assessment?.trim().isNotEmpty ?? false)) ...[
+                    const SizedBox(height: 14),
+                    _Section(
+                      title: 'Assessment',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Date Assessed
+                          if (widget.assessedAt != null) ...[
+                            KeyValueRow.text(
+                              label: 'Date Assessed',
+                              valueText: _relativeOrFullDT(widget.assessedAt),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+
+                          // Assessment Notes
+                          if ((widget.assessment ?? '').trim().isNotEmpty) ...[
+                            Text(
+                              widget.assessment!.trim(),
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+
+                  // Attachments
+                  if ((widget.staffAttachments ?? const <String>[])
+                      .isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _Section(
+                      title: "Assessment Attachments",
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children:
+                            (widget.staffAttachments ?? const <String>[])
+                                .map((u) => _thumb(u, h: 80, w: 140))
+                                .toList(),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-
-            // Date Assessed
-            if (widget.assessedAt != null) ...[
-              SizedBox(height: 8),
-              KeyValueRow.text(
-                label: 'Date Assessed',
-                valueText: _relativeOrFullDT(widget.assessedAt),
-              ),
-            ],
-
-            SizedBox(height: 14),
-          ],
-
-          if ((widget.assessment?.trim().isNotEmpty ?? false)) ...[
-            SizedBox(height: 10),
-            _SectionCard(
-              title: 'Assessment',
-              content: widget.assessment!.trim(),
-              padding: EdgeInsets.all(14),
-              hideIfEmpty: false,
             ),
-            SizedBox(height: 14),
-          ],
 
           // Materials used (optional)
           if ((widget.materialsUsed ?? const <String>[]).isNotEmpty)
