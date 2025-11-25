@@ -7,10 +7,9 @@ import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
+import 'package:facilityfix/staff/form/assessment_form.dart';
 import 'package:facilityfix/staff/maintenance_task.dart';
 import 'package:facilityfix/staff/repair_task.dart';
-import 'package:facilityfix/staff/task_management.dart';
-import 'package:facilityfix/staff/form/assessment_form.dart';
 import 'package:facilityfix/staff/view_details/concern_slip.dart';
 import 'package:facilityfix/widgets/view_details.dart';
 import 'package:flutter/material.dart';
@@ -860,7 +859,6 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
 
                           // Callbacks
                           onViewConcernSlip: _viewConcernSlip,
-                          isStaff: true,
                         ),
                       ],
                       if (_jobServiceData!['assessment'] != null ||

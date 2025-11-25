@@ -2,12 +2,11 @@ import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/staff/maintenance_task.dart';
 import 'package:facilityfix/staff/repair_task.dart';
 import 'package:flutter/material.dart';
-import 'package:facilityfix/models/work_orders.dart'; // <-- unified WorkOrderDetails class only
+import 'package:facilityfix/models/work_orders.dart'; 
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
-import 'package:facilityfix/staff/task_management.dart'; // TaskManagementPage (list)
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart' as custom_buttons;
 
@@ -567,7 +566,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       assessedAt: w.assessedAt,
       assessment: w.assessment,
       staffAttachments: w.staffAttachments,
-      isStaff: true,
     );
   }
 
