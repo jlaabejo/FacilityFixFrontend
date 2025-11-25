@@ -5,14 +5,15 @@ import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
-import 'package:facilityfix/staff/workorder.dart';
+import 'package:facilityfix/staff/maintenance_task.dart';
+import 'package:facilityfix/staff/repair_task.dart';
+import 'package:facilityfix/staff/task_management.dart';
 import 'package:facilityfix/widgets/buttons.dart'; // FilledButton
 import 'package:facilityfix/widgets/forms.dart'; // InputField, FileAttachmentPicker
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/modals.dart'; // <-- CustomPopup
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide FilledButton;
-import 'package:facilityfix/services/api_services.dart';
 
 class AssessmentForm extends StatefulWidget {
   /// The concern slip ID to submit assessment for
@@ -46,6 +47,7 @@ class _AssessmentFormState extends State<AssessmentForm> {
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
+    NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
     NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),
@@ -56,7 +58,8 @@ class _AssessmentFormState extends State<AssessmentForm> {
   void _onTabTapped(int index) {
     final destinations = [
       const HomePage(),
-      const WorkOrderPage(),
+      const RepairTaskPage(),
+      const MaintenanceTaskPage(),
       const AnnouncementPage(),
       const CalendarPage(),
       const InventoryPage(),
@@ -135,7 +138,7 @@ class _AssessmentFormState extends State<AssessmentForm> {
           // Navigate to the tasks page. Adjust destination if you have a separate MaintenancePage.
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => const WorkOrderPage()),
+            MaterialPageRoute(builder: (_) => const RepairTaskPage()),
           );
         },
       ),

@@ -4,12 +4,11 @@ import 'package:facilityfix/services/chat_helper.dart';
 import 'package:facilityfix/tenant/announcement.dart';
 import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/notification.dart';
-import 'package:facilityfix/tenant/profile.dart';
+import 'package:facilityfix/tenant/settings/profile.dart';
 import 'package:facilityfix/tenant/request_forms.dart';
 import 'package:facilityfix/tenant/view_details/concern_slip_details.dart';
 import 'package:facilityfix/tenant/view_details/workorder_details.dart';
 import 'package:facilityfix/tenant/view_details/job_service_details.dart';
-import 'package:facilityfix/widgets/view_details.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:facilityfix/widgets/cards.dart';
@@ -17,14 +16,14 @@ import 'package:facilityfix/widgets/helper_models.dart';
 import 'package:facilityfix/widgets/modals.dart';
 import 'package:flutter/material.dart';
 
-class WorkOrderPage extends StatefulWidget {
-  const WorkOrderPage({super.key});
+class RepairManagement extends StatefulWidget {
+  const RepairManagement({super.key});
 
   @override
-  State<WorkOrderPage> createState() => _WorkOrderPageState();
+  State<RepairManagement> createState() => _RepairManagementState();
 }
 
-class _WorkOrderPageState extends State<WorkOrderPage> {
+class _RepairManagementState extends State<RepairManagement> {
   // ─────────────── Tabs (by request type) ───────────────
   String _selectedTabLabel = "All";
 
@@ -193,7 +192,7 @@ class _WorkOrderPageState extends State<WorkOrderPage> {
   void _onTabTapped(int index) {
     final destinations = [
       const HomePage(),
-      const WorkOrderPage(),
+      const RepairManagement(),
       const AnnouncementPage(),
       const ProfilePage(),
     ];

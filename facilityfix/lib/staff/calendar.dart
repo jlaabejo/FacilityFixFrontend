@@ -3,10 +3,10 @@ import 'package:facilityfix/models/cards.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
-import 'package:facilityfix/staff/maintenance.dart';
+import 'package:facilityfix/staff/maintenance_task.dart';
+import 'package:facilityfix/staff/repair_task.dart';
+import 'package:facilityfix/staff/task_management.dart';
 import 'package:facilityfix/staff/notification.dart';
-import 'package:facilityfix/staff/view_details/workorder.dart';
-import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/services/auth_storage.dart';
 import 'package:facilityfix/config/env.dart';
@@ -251,13 +251,13 @@ class _CalendarPageState extends State<CalendarPage> {
       case 1:
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const WorkOrderPage()),
+          MaterialPageRoute(builder: (_) => const RepairTaskPage()),
         );
         break;
       case 2:
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const MaintenancePage()),
+          MaterialPageRoute(builder: (_) => const MaintenanceTaskPage()),
         );
         break;
       case 3:

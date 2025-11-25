@@ -1,10 +1,12 @@
+import 'package:facilityfix/staff/maintenance_task.dart';
+import 'package:facilityfix/staff/repair_task.dart';
 import 'package:flutter/material.dart' hide FilledButton;
 import 'package:flutter/services.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
-import 'package:facilityfix/staff/workorder.dart';
+import 'package:facilityfix/staff/task_management.dart';
 import 'package:facilityfix/widgets/buttons.dart'; // FilledButton
 import 'package:facilityfix/widgets/forms.dart' hide DropdownField;   // InputField + DropdownField
 import 'package:facilityfix/widgets/app&nav_bar.dart';
@@ -34,6 +36,7 @@ class _InventoryFormState extends State<InventoryForm> {
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
+    NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
     NavItem(icon: Icons.calendar_month),
     NavItem(icon: Icons.inventory),
@@ -41,11 +44,12 @@ class _InventoryFormState extends State<InventoryForm> {
 
   void _onTabTapped(int index) {
     final destinations = [
-      const HomePage(),
-      const WorkOrderPage(),
-      const AnnouncementPage(),
-      const CalendarPage(),
-      const InventoryPage(),
+    const HomePage(),
+    const RepairTaskPage(),
+    const MaintenanceTaskPage(),
+    const AnnouncementPage(),
+    const CalendarPage(),
+    const InventoryPage(),
     ];
     if (index != _selectedIndex) {
       Navigator.pushReplacement(

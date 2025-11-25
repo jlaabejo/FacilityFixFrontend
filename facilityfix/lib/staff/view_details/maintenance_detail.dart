@@ -4,7 +4,9 @@ import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
-import 'package:facilityfix/staff/workorder.dart';
+import 'package:facilityfix/staff/maintenance_task.dart';
+import 'package:facilityfix/staff/repair_task.dart';
+import 'package:facilityfix/staff/task_management.dart';
 import 'package:http/http.dart' as http;
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/services/auth_storage.dart';
@@ -15,6 +17,7 @@ import 'package:facilityfix/widgets/view_details.dart';
 import 'package:facilityfix/widgets/modals.dart';
 import 'package:facilityfix/widgets/buttons.dart' as fx;
 import 'package:flutter/material.dart';
+import 'package:facilityfix/utils/inventory_notifier.dart';
 
 // Maintenance Detail Screen using MaintenanceDetails widget
 class MaintenanceDetailPage extends StatefulWidget {
@@ -163,7 +166,8 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
   void _onTabTapped(int index) {
     final destinations = [
       const HomePage(),
-      const WorkOrderPage(),
+      const RepairTaskPage(),
+      const MaintenanceTaskPage(),
       const AnnouncementPage(),
       const CalendarPage(),
       const InventoryPage(),
@@ -679,6 +683,8 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
   Future<void> _handleInventoryAction(Map<String, dynamic> request, String action) async {
     final requestId = request['_doc_id'] ?? request['id'] ?? request['_id'] ?? request['request_id'] ?? request['reservation_id'];
     final itemType = request['type'] ?? 'unknown';
+    final referenceId = request['reference_id'] ?? request['maintenance_task_id'];
+    final isMaintenanceItem = referenceId == widget.task['id'];
     
     print('DEBUG: _handleInventoryAction called with action: $action, type: $itemType, requestId: $requestId');
     
@@ -695,49 +701,78 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
       final apiService = APIService();
 
       if (action == 'receive') {
-        if (itemType == 'reservation') {
-          print('DEBUG: Calling markReservationReceived for reservation $requestId');
-          // Mark reservation as received
-          final response = await apiService.markReservationReceived(requestId);
-          
-          if (response['success'] == true) {
-            // Deduct stock from inventory after marking as received
-            final inventoryId = request['inventory_id'];
-            final quantityReceived = request['quantity'] ?? 1; // Default to 1 if not specified
-            
-            print('DEBUG: Deducting stock - inventoryId: $inventoryId, quantity: $quantityReceived');
-            
-            if (inventoryId != null && quantityReceived > 0) {
-              try {
-                // Get current inventory item data
-                final itemResp = await apiService.getInventoryItemById(inventoryId);
-                if (itemResp != null) {
-                  final currentStock = (itemResp['current_stock'] ?? itemResp['quantity_in_stock'] ?? 0) as num;
-                  
-                  // Calculate new stock (deduct the received quantity)
-                  final newStock = (currentStock - quantityReceived).toInt();
-                  
-                  // Update the inventory item with new stock
-                  await apiService.updateInventoryItem(inventoryId, {
-                    'current_stock': newStock,
-                    'quantity_in_stock': newStock,
-                  });
-                  
-                  print('DEBUG: Stock deducted for reservation: $inventoryId, Old: $currentStock, New: $newStock');
+        // Treat maintenance items as reservations too
+        if (itemType == 'reservation' || isMaintenanceItem) {
+          if (_isUpdating) return;
+          setState(() => _isUpdating = true);
+          try {
+            print('DEBUG: Calling markReservationReceived for reservation $requestId');
+            final response = await apiService.markReservationReceived(requestId);
+
+            if (response['success'] == true) {
+              print('DEBUG: Reservation marked as received successfully');
+
+              // Update local UI state for the request
+              setState(() {
+                final newList = List<Map<String, dynamic>>.from(_inventoryRequests);
+                final index = newList.indexWhere((r) =>
+                    (r['_doc_id'] ?? r['id'] ?? r['request_id'] ?? r['reservation_id']) == requestId);
+                if (index != -1) {
+                  newList[index]['status'] = 'received';
+                  newList[index]['received'] = true;
                 }
-              } catch (stockError) {
-                print('DEBUG: Error deducting stock for reservation: $stockError');
-                // Reservation was marked as received, but stock deduction failed - log but don't fail the whole operation
+                _inventoryRequests = newList;
+              });
+
+              // Show success message without reloading immediately to keep UI updated
+
+              // Try to refresh the inventory item to show updated stock (backend should have deducted)
+              final inventoryId = request['inventory_id'];
+              if (inventoryId != null) {
+                try {
+                  final itemResp = await apiService.getInventoryItemById(inventoryId);
+                  if (itemResp != null) {
+                    final newStock = itemResp['current_stock'] ?? itemResp['quantity_in_stock'] ?? itemResp['stock'] ?? null;
+                    if (newStock != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Reservation received — current stock: $newStock')),
+                      );
+                    }
+                  }
+                } catch (e) {
+                  print('DEBUG: Failed to refresh inventory item after receive: $e');
+                }
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Reservation received successfully')),
+                );
+              }
+            } else {
+              final errorMessage = (response['message'] ?? '');
+              if (errorMessage.toString().toLowerCase().contains('already received') || errorMessage.toString().toLowerCase().contains('already marked')) {
+                print('DEBUG: Reservation was already received, updating UI');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Item was already received')),
+                );
+
+                setState(() {
+                  final newList = List<Map<String, dynamic>>.from(_inventoryRequests);
+                  final index = newList.indexWhere((r) =>
+                      (r['_doc_id'] ?? r['id'] ?? r['request_id'] ?? r['reservation_id']) == requestId);
+                  if (index != -1) {
+                    newList[index]['status'] = 'received';
+                    newList[index]['received'] = true;
+                  }
+                  _inventoryRequests = newList;
+                });
+
+                // Show message without reloading
+              } else {
+                throw Exception((response['message'] ?? 'Failed to receive reservation'));
               }
             }
-            
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Reservation received successfully')),
-            );
-            // Reload inventory requests to reflect changes
-            await _loadInventoryRequests();
-          } else {
-            throw Exception(response['message'] ?? 'Failed to receive reservation');
+          } finally {
+            if (mounted) setState(() => _isUpdating = false);
           }
         } else {
           // For requests, show message that receive is only for reservations
@@ -783,6 +818,13 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
             );
             // Reload inventory requests
             await _loadInventoryRequests();
+            // Notify listeners (admin UI or other staff views) that a new request was created
+            try {
+              final notifier = InventoryUpdateNotifier();
+              notifier.notifyItemUpdated(itemId?.toString() ?? '');
+            } catch (e) {
+              print('DEBUG: Failed to notify inventory update: $e');
+            }
           } else {
             throw Exception(response['message'] ?? 'Failed to submit request');
           }

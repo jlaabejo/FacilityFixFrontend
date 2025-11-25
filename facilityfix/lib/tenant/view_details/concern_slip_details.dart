@@ -1,7 +1,7 @@
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/tenant/announcement.dart';
 import 'package:facilityfix/tenant/home.dart';
-import 'package:facilityfix/tenant/profile.dart';
+import 'package:facilityfix/tenant/settings/profile.dart';
 import 'package:facilityfix/tenant/request_forms.dart';
 import 'package:facilityfix/tenant/repair_management.dart';
 import 'package:facilityfix/widgets/view_details.dart';
@@ -153,7 +153,7 @@ class _TenantConcernSlipDetailPageState
   void _onTabTapped(int index) {
     final destinations = [
       const HomePage(),
-      const WorkOrderPage(),
+      const RepairManagement(),
       const AnnouncementPage(),
       const ProfilePage(),
     ];
@@ -277,7 +277,7 @@ class _TenantConcernSlipDetailPageState
         );
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const WorkOrderPage()),
+          MaterialPageRoute(builder: (_) => const RepairManagement()),
         );
       }
     } catch (e) {

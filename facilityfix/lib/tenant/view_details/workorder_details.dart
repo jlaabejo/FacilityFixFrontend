@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:facilityfix/models/work_orders.dart';
 import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/announcement.dart';
-import 'package:facilityfix/tenant/profile.dart';
+import 'package:facilityfix/tenant/settings/profile.dart';
 import 'package:facilityfix/tenant/view_details/concern_slip_details.dart';
 import 'package:facilityfix/tenant/view_details/job_service_details.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
@@ -100,7 +100,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       context,
       MaterialPageRoute(
         builder:
-            (_) => EditWorkOrderPage(
+            (_) => EditRepairManagement(
               workOrderId: w.id,
               requestType: requestType,
               workOrderData: w,
@@ -185,7 +185,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
         );
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const WorkOrderPage()),
+          MaterialPageRoute(builder: (_) => const RepairManagement()),
         );
       }
     } catch (e) {
@@ -456,7 +456,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
   void _onTabTapped(int index) {
     final destinations = [
       const HomePage(),
-      const WorkOrderPage(),
+      const RepairManagement(),
       const AnnouncementPage(),
       const ProfilePage(),
     ];
@@ -511,12 +511,12 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
 }
 
 // Edit Work Order Page
-class EditWorkOrderPage extends StatefulWidget {
+class EditRepairManagement extends StatefulWidget {
   final String workOrderId;
   final String requestType;
   final WorkOrderDetails workOrderData;
 
-  const EditWorkOrderPage({
+  const EditRepairManagement({
     super.key,
     required this.workOrderId,
     required this.requestType,
@@ -524,10 +524,10 @@ class EditWorkOrderPage extends StatefulWidget {
   });
 
   @override
-  State<EditWorkOrderPage> createState() => _EditWorkOrderPageState();
+  State<EditRepairManagement> createState() => _EditRepairManagementState();
 }
 
-class _EditWorkOrderPageState extends State<EditWorkOrderPage> {
+class _EditRepairManagementState extends State<EditRepairManagement> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _availabilityController;
   late TextEditingController _permitIdController;

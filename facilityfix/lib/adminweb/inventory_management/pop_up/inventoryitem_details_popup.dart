@@ -4,6 +4,7 @@ import 'inventoryrestock_popup.dart';
 import '../../widgets/tags.dart';
 import '../../services/api_service.dart';
 import '../../../services/auth_storage.dart';
+import '../../../utils/inventory_notifier.dart';
 
 class InventoryItemDetailsDialog {
   static Future<Map<String, dynamic>?> show(
@@ -54,12 +55,26 @@ class _InventoryItemDetailsContent extends StatefulWidget {
 class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsContent> {
   late Map<String, dynamic> _itemData;
   final ApiService _api = ApiService();
+  late final InventoryUpdateNotifier _notifier;
 
   @override
   void initState() {
     super.initState();
     _itemData = Map<String, dynamic>.from(widget.itemData);
+    _notifier = InventoryUpdateNotifier();
+    _notifier.addListener(_onInventoryUpdate);
     // Load full item details from API to ensure accuracy
+    _loadItemDetails();
+  }
+
+  @override
+  void dispose() {
+    _notifier.removeListener(_onInventoryUpdate);
+    super.dispose();
+  }
+
+  void _onInventoryUpdate() {
+    // Refresh item data when inventory is updated
     _loadItemDetails();
   }
 
@@ -123,21 +138,25 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
         for (var r in list) {
           try {
             final invId = r['inventory_id'] ?? r['inventoryId'] ?? r['item_id'];
+            final status = r['status'] ?? 'pending';
             final maintenanceTaskId = r['maintenance_task_id'] ?? r['maintenanceTaskId'];
             final rawQty = r['quantity'];
-            print('[InventoryDetails] Checking reservation: invId=$invId (type: ${invId?.runtimeType}), id=$id (type: ${id.runtimeType}), rawQty=$rawQty (type: ${rawQty?.runtimeType})');
-            if (invId != null && invId.toString() == id.toString()) {
+            print('[InventoryDetails] Checking reservation: invId=$invId, status=$status, id=$id');
+            // Only count as reserved if not received or consumed
+            if (invId != null && invId.toString() == id.toString() && 
+                status != 'received' && status != 'consumed') {
               final qty = int.tryParse(rawQty?.toString() ?? '0') ?? 0;
-              print('[InventoryDetails] Match found! Adding qty=$qty');
+              print('[InventoryDetails] Match found! Adding qty=$qty for status=$status');
               reservedTotal += qty;
               reservedRequests.add({
                 'reservationId': r['_doc_id'] ?? r['id'],
                 'maintenanceTaskId': maintenanceTaskId,
                 'quantity': qty,
                 'date': r['created_at'] ?? r['reserved_date'],
+                'status': status,
               });
             } else {
-              print('[InventoryDetails] No match: invId=$invId != id=$id');
+              print('[InventoryDetails] Skipping: invId=$invId, status=$status (not reserved)');
             }
           } catch (e) {
             print('[InventoryDetails] Error processing reservation: $e');

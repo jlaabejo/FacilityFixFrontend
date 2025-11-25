@@ -1076,6 +1076,7 @@ class MaintenanceCard extends StatelessWidget {
   // Actions
   final VoidCallback? onTap;
   final VoidCallback? onChatTap;
+  final VoidCallback? onReceiveTap;
 
   const MaintenanceCard({
     super.key,
@@ -1093,6 +1094,7 @@ class MaintenanceCard extends StatelessWidget {
     this.staffPhotoUrl,
     this.onTap,
     this.onChatTap,
+    this.onReceiveTap,
   });
 
   @override
@@ -1275,11 +1277,16 @@ class MaintenanceCard extends StatelessWidget {
                 const Divider(height: 1, color: Color(0xFFE6E7EA)),
                 const SizedBox(height: 12),
 
-                // Footer (no chat button for maintenance cards)
+                // Footer with receive button
                 Row(
                   children: [
                     leftCluster,
                     const Spacer(),
+                    if (onReceiveTap != null)
+                      IconPill(
+                        icon: Icons.download_rounded,
+                        onTap: onReceiveTap,
+                      ),
                   ],
                 ),
               ],

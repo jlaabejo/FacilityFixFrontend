@@ -985,7 +985,7 @@ class ApiService {
 
       final headers = await _getAuthHeaders();
       final response = await http.post(
-        Uri.parse('$baseUrl/maintenance/'),
+        Uri.parse('$baseUrl/maintenance'),
         headers: headers,
         body: json.encode(taskData),
       );
@@ -1161,6 +1161,165 @@ class ApiService {
       }
     } catch (e) {
       print('[v0] Error assigning staff to checklist item: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================
+  // ADMIN MAINTENANCE ENDPOINTS
+  // ============================================
+
+  /// Get all maintenance tasks for admin (view)
+  Future<Map<String, dynamic>> getAdminMaintenanceTasks({
+    String? buildingId,
+    String? status,
+    String? assignedTo,
+    String? category,
+    DateTime? dateFrom,
+    DateTime? dateTo,
+  }) async {
+    try {
+      final queryParams = <String, String>{
+        if (buildingId != null) 'building_id': buildingId,
+        if (status != null) 'status': status,
+        if (assignedTo != null) 'assigned_to': assignedTo,
+        if (category != null) 'category': category,
+        if (dateFrom != null) 'date_from': dateFrom.toIso8601String(),
+        if (dateTo != null) 'date_to': dateTo.toIso8601String(),
+      };
+
+      final baseUri = Uri.parse('$baseUrl/admin/maintenance/');
+      final uri = queryParams.isEmpty
+          ? baseUri
+          : baseUri.replace(queryParameters: queryParams);
+
+      final headers = await _getAuthHeaders();
+      final response = await http.get(uri, headers: headers);
+
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        if (decoded is List) {
+          return {
+            'success': true,
+            'tasks': decoded,
+            'count': decoded.length,
+          };
+        }
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+        throw Exception('Unexpected admin maintenance tasks response format');
+      } else {
+        throw Exception(
+          'Failed to load admin maintenance tasks: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error fetching admin maintenance tasks: $e');
+      rethrow;
+    }
+  }
+
+  /// Get a specific maintenance task by ID for admin (view)
+  Future<Map<String, dynamic>> getAdminMaintenanceTaskById(String taskId) async {
+    try {
+      print('[v0] Fetching admin maintenance task: $taskId');
+
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/maintenance/$taskId'),
+        headers: headers,
+      );
+
+      print('[v0] Response status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to load admin maintenance task: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error fetching admin maintenance task by ID: $e');
+      rethrow;
+    }
+  }
+
+  /// Create a new maintenance task for admin (create)
+  Future<Map<String, dynamic>> createAdminMaintenanceTask(
+    Map<String, dynamic> taskData,
+  ) async {
+    try {
+      print('[v0] Creating admin maintenance task: ${json.encode(taskData)}');
+
+      final headers = await _getAuthHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/maintenance'),
+        headers: headers,
+        body: json.encode(taskData),
+      );
+
+      print('[v0] Response status: ${response.statusCode}');
+      print('[v0] Response body: ${response.body}');
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to create admin maintenance task: ${response.statusCode} ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error creating admin maintenance task: $e');
+      rethrow;
+    }
+  }
+
+  /// Update a maintenance task for admin (update)
+  Future<Map<String, dynamic>> updateAdminMaintenanceTask(
+    String taskId,
+    Map<String, dynamic> updateData,
+  ) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.put(
+        Uri.parse('$baseUrl/maintenance/$taskId'),
+        headers: headers,
+        body: json.encode(updateData),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to update admin maintenance task: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error updating admin maintenance task: $e');
+      rethrow;
+    }
+  }
+
+  /// Delete a maintenance task for admin (delete)
+  Future<Map<String, dynamic>> deleteAdminMaintenanceTask(String taskId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.delete(
+        Uri.parse('$baseUrl/maintenance/$taskId'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception(
+          'Failed to delete admin maintenance task: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[v0] Error deleting admin maintenance task: $e');
       rethrow;
     }
   }

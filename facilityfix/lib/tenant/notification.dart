@@ -1,6 +1,6 @@
 import 'package:facilityfix/tenant/announcement.dart';
 import 'package:facilityfix/tenant/home.dart';
-import 'package:facilityfix/tenant/profile.dart';
+import 'package:facilityfix/tenant/settings/profile.dart';
 import 'package:facilityfix/tenant/repair_management.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/models/notification_models.dart';
@@ -71,7 +71,7 @@ class _NotificationPageState extends State<NotificationPage> {
   void _onTabTapped(int index) {
     final destinations = [
       const HomePage(),
-      const WorkOrderPage(),
+      const RepairManagement(),
       const AnnouncementPage(),
       const ProfilePage(),
     ];
@@ -338,7 +338,7 @@ class _NotificationPageState extends State<NotificationPage> {
                             } else {
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(builder: (_) => const WorkOrderPage()),
+                                MaterialPageRoute(builder: (_) => const RepairManagement()),
                               );
                             }
                           },

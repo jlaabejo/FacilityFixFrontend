@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:facilityfix/tenant/home.dart';
 import 'package:facilityfix/tenant/notification.dart';
-import 'package:facilityfix/tenant/profile.dart';
+import 'package:facilityfix/tenant/settings/profile.dart';
 import 'package:facilityfix/tenant/view_details/annnouncement_details.dart';
 import 'package:facilityfix/tenant/repair_management.dart';
 import 'package:facilityfix/widgets/buttons.dart';
@@ -81,7 +81,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
   void _onTabTapped(int index) {
     final destinations = [
       const HomePage(),
-      const WorkOrderPage(),
+      const RepairManagement(),
       const AnnouncementPage(),
       const ProfilePage(),
     ];

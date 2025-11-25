@@ -47,6 +47,7 @@ class _ExternalMaintenanceFormPageState
   final TextEditingController _assessmentController = TextEditingController();
   final TextEditingController _recommendationController =
       TextEditingController();
+  final TextEditingController _loggedByController = TextEditingController();
   final TextEditingController _otherLocationController =
       TextEditingController();
   final TextEditingController _otherServiceCategoryController =
@@ -69,7 +70,6 @@ class _ExternalMaintenanceFormPageState
   DateTime? _serviceDateActual;
   DateTime? _loggedDate;
   String? _selectedAssessmentReceived;
-  String? _selectedLoggedBy = 'Auto-filled';
   String? _selectedAdminNotifications;
   bool _isOtherLocation = false;
   bool _isOtherServiceCategory = false;
@@ -119,11 +119,6 @@ class _ExternalMaintenanceFormPageState
     'Other',
   ];
   final List<String> _assessmentOptions = ['Yes', 'No', 'Pending'];
-  final List<String> _loggedByOptions = [
-    'Auto-filled',
-    'Manual Entry',
-    'System Generated',
-  ];
 
   DateTime _calculateNextDueDate(DateTime base, String frequency) {
     switch (frequency) {
@@ -350,24 +345,24 @@ class _ExternalMaintenanceFormPageState
     return pathMap[routeKey];
   }
 
-// Logout functionality
-void _handleLogout(BuildContext context) async {
-  final result = await showDialog<bool>(
-    context: context,
-    builder: (BuildContext context) {
-      return const LogoutPopup();
-    },
-  );
+  // Logout functionality
+  void _handleLogout(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return const LogoutPopup();
+      },
+    );
 
-  if (result == true) {
-    context.go('/');
+    if (result == true) {
+      context.go('/');
+    }
   }
-}
-
 
   // ---------- Init: auto-fill automated fields ----------
   final ApiService _apiService = ApiService();
   bool _isLoadingCode = false;
+  bool _isLoadingData = false;
   // main API service for inventory
   final _mainApiService = main_api.APIService();
   List<Map<String, dynamic>> _availableInventoryItems = [];
@@ -378,13 +373,20 @@ void _handleLogout(BuildContext context) async {
     _dateCreated = DateTime.now(); // prefill but user can change
     _selectedAssessmentReceived = 'No'; // Auto-set to "No" when task is created
 
+    // Add listener for other location text changes
+    _otherLocationController.addListener(() {
+      if (_isOtherLocation) {
+        _autoPopulateInventoryForLocation(_otherLocationController.text.trim());
+      }
+    });
+
     _initAutoFields();
     // load inventory items in background
     _loadInventoryItems();
 
-    // If in edit mode, populate fields with existing data
-    if (widget.isEditMode && widget.maintenanceData != null) {
-      _populateFormFields(widget.maintenanceData!);
+    // If in edit mode, fetch the full task data
+    if (widget.isEditMode) {
+      _fetchTaskData();
     }
   }
 
@@ -396,9 +398,7 @@ void _handleLogout(BuildContext context) async {
           data['task_code'] ?? data['id']?.toString() ?? '';
       _descriptionController.text =
           data['task_description'] ?? data['description'] ?? '';
-      _estimatedDurationController.text = data['estimated_duration'] is int 
-          ? _formatMinutesToDuration(data['estimated_duration']) 
-          : (data['estimated_duration'] ?? '');
+      _estimatedDurationController.text = data['estimated_duration'] ?? '';
 
       // Contractor information
       _contractorNameController.text =
@@ -469,11 +469,9 @@ void _handleLogout(BuildContext context) async {
               ? assessmentReceived
               : 'No';
 
-      final loggedBy = data['logged_by'];
-      _selectedLoggedBy =
-          _loggedByOptions.contains(loggedBy) ? loggedBy : 'Auto-filled';
-
       _selectedAdminNotifications = data['admin_notification'];
+
+      _loggedByController.text = data['logged_by'] ?? _loggedByController.text;
 
       // Dates
       if (data['created_at'] != null) {
@@ -622,34 +620,72 @@ void _handleLogout(BuildContext context) async {
     }
   }
 
+  Future<List<String>> _createInventoryReservations(String taskId) async {
+    if (_selectedInventoryItems.isEmpty) return [];
+
+    final List<String> createdReservationIds = [];
+
+    try {
+      for (final item in _selectedInventoryItems) {
+        final qty = item['quantity'];
+        if (qty == null || qty <= 0) {
+          print('[v0] Skipping reservation for ${item['item_name']} due to invalid quantity: $qty');
+          continue;
+        }
+        final response = await _apiService.createInventoryReservation(
+          inventoryId: item['inventory_id'],
+          quantity: qty,
+          maintenanceTaskId: taskId,
+        );
+
+        // Extract the reservation ID from the response
+        if (response['success'] == true && response['reservation_id'] != null) {
+          createdReservationIds.add(response['reservation_id']);
+          print('[v0] Created inventory reservation: ${response['reservation_id']}');
+        }
+      }
+      print(
+        '[v0] Created ${createdReservationIds.length} inventory reservations linked to task $taskId',
+      );
+      return createdReservationIds;
+    } catch (e) {
+      print('[v0] Error creating inventory reservations: $e');
+      throw Exception('Failed to create inventory reservations: $e');
+    }
+  }
+
   // Auto-populate recommended inventory items for selected location
   void _autoPopulateInventoryForLocation(String? location) {
     if (location == null || location.isEmpty) return;
     if (_availableInventoryItems.isEmpty) return;
 
     // Find items recommended for this location
-    final recommendedItems = _availableInventoryItems.where((item) {
-      final locations = item['recommended_locations'];
-      if (locations is List) {
-        return locations.any((loc) => loc.toString().toLowerCase() == location.toLowerCase());
-      }
-      return false;
-    }).toList();
+    final recommendedItems =
+        _availableInventoryItems.where((item) {
+          final recommendedOn = item['recommended_on'];
+          if (recommendedOn == null) return false;
+          if (recommendedOn is List) {
+            return recommendedOn.contains(location);
+          }
+          return false;
+        }).toList();
 
     // Add recommended items that aren't already selected
     for (final item in recommendedItems) {
-      final itemId = item['id'] ?? item['_doc_id'];
+      final itemCode = item['item_code'] ?? item['itemCode'];
       final alreadyAdded = _selectedInventoryItems.any(
-        (selected) => (selected['inventory_id'] ?? selected['id']) == itemId,
+        (selected) => selected['inventory_id'] == itemCode,
       );
 
       if (!alreadyAdded) {
         setState(() {
           _selectedInventoryItems.add({
-            'inventory_id': itemId,
-            'itemName': item['itemName'] ?? item['name'] ?? 'Unknown',
-            'quantity': 1, // Default quantity
-            'unit': item['unit'] ?? 'pcs',
+            'inventory_id': itemCode,
+            'item_name': item['item_name'],
+            'item_code': item['item_code'],
+            'quantity': 0, // Default quantity
+            'available_stock': item['current_stock'],
+            'unit': item['unit'] ?? '',
           });
         });
       }
@@ -660,9 +696,10 @@ void _handleLogout(BuildContext context) async {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Added ${recommendedItems.length} recommended inventory item(s) for $location',
+            'Added ${recommendedItems.length} recommended item(s) for $location',
           ),
-          duration: const Duration(seconds: 3),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
         ),
       );
     }
@@ -678,16 +715,58 @@ void _handleLogout(BuildContext context) async {
       final profile = await AuthStorage.getProfile();
       if (profile != null && profile['full_name'] != null) {
         _createdByController.text = profile['full_name'];
+        // Don't set logged by for new tasks - only for post-service logging
+        // _loggedByController.text = profile['full_name'];
       } else {
         _createdByController.text = 'Admin User';
+        // Don't set logged by for new tasks
+        // _loggedByController.text = 'Admin User';
       }
+      
+      // Don't set logged date for new tasks - only when logging completed service
+      // _loggedDate = DateTime.now();
     } catch (e) {
       print('[v0] Error initializing auto fields: $e');
       _taskCodeController.text =
           'EPM-${DateTime.now().year}-${DateTime.now().millisecondsSinceEpoch % 100000}';
       _createdByController.text = 'Admin User';
+      // Don't set logged by for new tasks even on error
+      // _loggedByController.text = 'Admin User';
+      // Don't set logged date for new tasks
+      // _loggedDate = DateTime.now();
     } finally {
       setState(() => _isLoadingCode = false);
+    }
+  }
+
+  Future<void> _fetchTaskData() async {
+    if (widget.maintenanceData == null) return;
+
+    setState(() => _isLoadingData = true);
+
+    try {
+      final taskId = widget.maintenanceData!['id']?.toString() ??
+                     widget.maintenanceData!['task_code']?.toString() ??
+                     widget.maintenanceData!['taskCode']?.toString();
+      if (taskId == null) {
+        print('[v0] No task ID found in maintenanceData');
+        return;
+      }
+
+      final taskData = await _apiService.getMaintenanceTaskById(taskId);
+      if (taskData['success'] == true && taskData['data'] != null) {
+        _populateFormFields(taskData['data']);
+      } else {
+        print('[v0] Failed to fetch task data: ${taskData['message'] ?? 'Unknown error'}');
+        // Fallback to passed data
+        _populateFormFields(widget.maintenanceData!);
+      }
+    } catch (e) {
+      print('[v0] Error fetching task data: $e');
+      // Fallback to passed data
+      _populateFormFields(widget.maintenanceData!);
+    } finally {
+      setState(() => _isLoadingData = false);
     }
   }
 
@@ -737,42 +816,6 @@ void _handleLogout(BuildContext context) async {
     return 'Enter a valid duration (e.g. 3 hrs 30 mins) or time';
   }
 
-  int? _parseDurationToMinutes(String? durationText) {
-    if (durationText == null || durationText.trim().isEmpty) return null;
-
-    final s = durationText.trim();
-    int totalMinutes = 0;
-
-    // Match hours
-    final hourMatch = RegExp(r'(\d+)\s*(hrs?|hours?)', caseSensitive: false).firstMatch(s);
-    if (hourMatch != null) {
-      totalMinutes += int.parse(hourMatch.group(1)!) * 60;
-    }
-
-    // Match minutes
-    final minuteMatch = RegExp(r'(\d+)\s*mins?', caseSensitive: false).firstMatch(s);
-    if (minuteMatch != null) {
-      totalMinutes += int.parse(minuteMatch.group(1)!);
-    }
-
-    return totalMinutes > 0 ? totalMinutes : null;
-  }
-
-  String _formatMinutesToDuration(int? minutes) {
-    if (minutes == null || minutes <= 0) return '';
-
-    final hours = minutes ~/ 60;
-    final mins = minutes % 60;
-
-    if (hours > 0 && mins > 0) {
-      return '$hours hrs $mins mins';
-    } else if (hours > 0) {
-      return '$hours hrs';
-    } else {
-      return '$mins mins';
-    }
-  }
-
   // ---------- UI ----------
   @override
   Widget build(BuildContext context) {
@@ -786,7 +829,9 @@ void _handleLogout(BuildContext context) async {
           _handleLogout(context);
         }
       },
-      body: Padding(
+      body: _isLoadingData
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -976,9 +1021,9 @@ void _handleLogout(BuildContext context) async {
                                   _isOtherLocation = (v == 'Other');
                                   if (!_isOtherLocation) {
                                     _otherLocationController.clear();
+                                    _autoPopulateInventoryForLocation(v);
                                   }
                                 });
-                                _autoPopulateInventoryForLocation(v);
                               },
                               validator: (v) => v == null ? 'Required' : null,
                             ),
@@ -1655,17 +1700,6 @@ void _handleLogout(BuildContext context) async {
                       Row(
                         children: [
                           Expanded(
-                            child: _buildDateField(
-                              label: "Assessment Date",
-                              selectedDate: _serviceDateActual,
-                              placeholder: "Auto-generated",
-                              onDateSelected:
-                                  (d) => setState(() => _serviceDateActual = d),
-                              enabled: false, // automated
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          Expanded(
                             child: _buildDropdownField(
                               label: "Assessment Received",
                               value: _selectedAssessmentReceived,
@@ -1675,8 +1709,11 @@ void _handleLogout(BuildContext context) async {
                                   (v) => setState(
                                     () => _selectedAssessmentReceived = v,
                                   ),
+                              enabled: widget.isEditMode,
                             ),
                           ),
+                          const SizedBox(width: 24),
+                          const Expanded(child: SizedBox()), // Left spacer
                         ],
                       ),
                       const SizedBox(height: 24),
@@ -1684,13 +1721,11 @@ void _handleLogout(BuildContext context) async {
                       Row(
                         children: [
                           Expanded(
-                            child: _buildDropdownField(
+                            child: _buildTextField(
                               label: "Logged By",
-                              value: _selectedLoggedBy,
+                              controller: _loggedByController,
                               placeholder: "Auto-filled",
-                              options: _loggedByOptions,
-                              onChanged: (_) {}, // disabled visually below
-                              enabled: false, // automated
+                              readOnly: true,
                             ),
                           ),
                           const SizedBox(width: 24),
@@ -1701,7 +1736,7 @@ void _handleLogout(BuildContext context) async {
                               placeholder: "Auto-generated",
                               onDateSelected:
                                   (d) => setState(() => _loggedDate = d),
-                              enabled: false, // automated
+                              enabled: widget.isEditMode,
                             ),
                           ),
                         ],
@@ -1715,6 +1750,7 @@ void _handleLogout(BuildContext context) async {
                               label: "Assessment",
                               controller: _assessmentController,
                               placeholder: "Enter Assessment...",
+                              readOnly: !widget.isEditMode,
                             ),
                           ),
                           const SizedBox(width: 24),
@@ -1723,6 +1759,7 @@ void _handleLogout(BuildContext context) async {
                               label: "Recommendation",
                               controller: _recommendationController,
                               placeholder: "Enter Recommendation...",
+                              readOnly: !widget.isEditMode,
                             ),
                           ),
                         ],
@@ -1798,6 +1835,26 @@ void _handleLogout(BuildContext context) async {
     context.go('/work/maintenance');
   }
 
+  int? _parseDuration(String duration) {
+    final trimmed = duration.trim();
+    if (trimmed.isEmpty) return null;
+
+    final reg = RegExp(r'(\d+)\s*(hrs?|hours?|mins?|minutes?)', caseSensitive: false);
+    final match = reg.firstMatch(trimmed);
+    if (match != null) {
+      final num = int.tryParse(match.group(1)!);
+      if (num != null) {
+        final unit = match.group(2)!.toLowerCase();
+        if (unit.startsWith('h')) {
+          return num * 60; // convert hours to minutes
+        } else {
+          return num; // minutes
+        }
+      }
+    }
+    return null;
+  }
+
   Future<void> _onNext() async {
     setState(() => _autoValidateMode = AutovalidateMode.onUserInteraction);
 
@@ -1860,6 +1917,18 @@ void _handleLogout(BuildContext context) async {
 
     final scheduledDateIso = _startDate!.toUtc().toIso8601String();
 
+    // Parse estimated duration to minutes
+    final estimatedDurationMinutes = _parseDuration(_estimatedDurationController.text.trim());
+    if (estimatedDurationMinutes == null && _estimatedDurationController.text.trim().isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid estimated duration (e.g., 3 hrs or 45 mins)'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     final taskData = {
       'task_code': _taskCodeController.text.trim(),
       'task_title': _taskTitleController.text.trim(),
@@ -1882,11 +1951,11 @@ void _handleLogout(BuildContext context) async {
       'start_date': formatDate(_startDate!),
       'scheduled_date': scheduledDateIso,
       'next_due_date': _nextDueDate != null ? formatDate(_nextDueDate!) : null,
-      'estimated_duration': _parseDurationToMinutes(_estimatedDurationController.text.trim()),
+      'estimated_duration': estimatedDurationMinutes,
 
       // Assessment and Tracking
       'assessment_received': _selectedAssessmentReceived,
-      'logged_by': _selectedLoggedBy,
+      'logged_by': _loggedByController.text.isNotEmpty ? _loggedByController.text : null,
       'logged_date': _loggedDate != null ? formatDate(_loggedDate!) : null,
       'assessment': _assessmentController.text.trim(),
       'recommendation': _recommendationController.text.trim(),
@@ -1956,11 +2025,10 @@ void _handleLogout(BuildContext context) async {
         // Create inventory reservations for selected items
         if (createdId != null && _selectedInventoryItems.isNotEmpty) {
           try {
-            final inventoryReservationIds = await _createInventoryReservations(createdId.toString());
-            print('[v0] Created ${inventoryReservationIds.length} inventory reservations for external task $createdId');
+            await _createInventoryReservations(createdId.toString());
           } catch (e) {
-            print('[v0] Error creating inventory reservations for external task: $e');
-            // Don't fail the whole operation if inventory reservations fail
+            print('[v0] Warning: Failed to create inventory reservations: $e');
+            // Don't fail the whole task creation if reservations fail
           }
         }
 
@@ -2226,6 +2294,7 @@ void _handleLogout(BuildContext context) async {
     required TextEditingController controller,
     required String placeholder,
     String? Function(String?)? validator,
+    bool readOnly = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2235,38 +2304,14 @@ void _handleLogout(BuildContext context) async {
           controller: controller,
           validator: validator,
           maxLines: 5,
+          readOnly: readOnly,
           decoration: _decoration(placeholder),
         ),
       ],
     );
   }
 
-  Future<List<String>> _createInventoryReservations(String taskId) async {
-    if (_selectedInventoryItems.isEmpty) return [];
-
-    final List<String> createdReservationIds = [];
-
-    try {
-      for (final item in _selectedInventoryItems) {
-        final response = await _apiService.createInventoryReservation(
-          inventoryId: item['id'] ?? item['_doc_id'] ?? item['inventory_id'],
-          quantity: item['quantity'] ?? 1,
-          maintenanceTaskId: taskId,
-        );
-        if (response['success'] == true) {
-          final reservationId = response['reservation_id'] ?? response['data']?['_doc_id'] ?? response['data']?['id'];
-          if (reservationId != null) {
-            createdReservationIds.add(reservationId.toString());
-          }
-        }
-      }
-      print('[v0] Created ${createdReservationIds.length} inventory reservations for external task ${taskId}');
-      return createdReservationIds;
-    } catch (e) {
-      print('[v0] Error creating inventory reservations: $e');
-      throw Exception('Failed to create inventory reservations: $e');
-    }
-  }
+  // ---------- Dispose ----------
   @override
   void dispose() {
     _taskTitleController.dispose();
@@ -2279,6 +2324,7 @@ void _handleLogout(BuildContext context) async {
     _emailController.dispose();
     _assessmentController.dispose();
     _recommendationController.dispose();
+    _loggedByController.dispose();
     _otherLocationController.dispose();
     _otherServiceCategoryController.dispose();
     _estimatedDurationController.dispose();

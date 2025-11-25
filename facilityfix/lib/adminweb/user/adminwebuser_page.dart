@@ -1,3 +1,4 @@
+import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
@@ -26,7 +27,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
   String? _errorMessage;
 
   List<Map<String, dynamic>> _allUsers = [];
-  
+
   // Pagination - Max 10 items per page
   int _currentPage = 1;
   final int _itemsPerPage = 10;
@@ -52,12 +53,13 @@ class _AdminUserPageState extends State<AdminUserPage> {
           _selectedRoleFilter == 'All Roles' ||
           user['role'] == _selectedRoleFilter;
 
-    // Department filter
-    bool matchesDepartment =
-      _selectedDepartmentFilter == 'All Departments' ||
-      (user['department'] ?? '').toString().toLowerCase() == _selectedDepartmentFilter.toLowerCase();
+      // Department filter
+      bool matchesDepartment =
+          _selectedDepartmentFilter == 'All Departments' ||
+          (user['department'] ?? '').toString().toLowerCase() ==
+              _selectedDepartmentFilter.toLowerCase();
 
-    return matchesSearch && matchesRole && matchesDepartment;
+      return matchesSearch && matchesRole && matchesDepartment;
     }).toList();
   }
 
@@ -80,59 +82,73 @@ class _AdminUserPageState extends State<AdminUserPage> {
       print('[AdminUserPage] Received ${users.length} users from backend');
 
       // Map backend response to frontend format
-      final mappedUsers = users.map((user) {
-        try {
-          // Determine status display text
-          String statusDisplay = _mapStatus(user['status'] ?? 'active');
+      final mappedUsers =
+          users.map((user) {
+            try {
+              // Determine status display text
+              String statusDisplay = _mapStatus(user['status'] ?? 'active');
 
-          // Build full name
-          String fullName = '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'.trim();
-          if (fullName.isEmpty) {
-            fullName = user['email'] ?? user['user_id'] ?? 'Unknown User';
-          }
+              // Build full name
+              String fullName =
+                  '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'
+                      .trim();
+              if (fullName.isEmpty) {
+                fullName = user['email'] ?? user['user_id'] ?? 'Unknown User';
+              }
 
-          // Determine role display text
-          String roleDisplay = _capitalizeRole(user['role'] ?? 'tenant');
+              // Determine role display text
+              String roleDisplay = _capitalizeRole(user['role'] ?? 'tenant');
 
-          // Get department with better fallback handling
-          String department = user['department'] ?? 
-                             user['staff_department'] ?? 
-                             user['building_unit'] ?? '';
-          
-          // If no department but has departments list, use first one
-          if (department.isEmpty) {
-            final departments = user['departments'] ?? user['staff_departments'];
-            if (departments is List && departments.isNotEmpty) {
-              department = departments[0].toString();
+              // Get department with better fallback handling
+              String department =
+                  user['department'] ??
+                  user['staff_department'] ??
+                  user['building_unit'] ??
+                  '';
+
+              // If no department but has departments list, use first one
+              if (department.isEmpty) {
+                final departments =
+                    user['departments'] ?? user['staff_departments'];
+                if (departments is List && departments.isNotEmpty) {
+                  department = departments[0].toString();
+                }
+              }
+
+              return {
+                'id':
+                    user['user_id'] ??
+                    user['id'] ??
+                    'unknown-${DateTime.now().millisecondsSinceEpoch}',
+                'name': fullName,
+                'role': roleDisplay,
+                'department': department,
+                'status': statusDisplay,
+                'email': user['email'] ?? '',
+                'lastActive': _formatLastActive(user['updated_at']),
+                // Store original data for detail view
+                '_raw': user,
+              };
+            } catch (e) {
+              print(
+                '[AdminUserPage] Error mapping user ${user['id'] ?? 'unknown'}: $e',
+              );
+              // Return a minimal user object to prevent crashes
+              return {
+                'id':
+                    user['user_id'] ??
+                    user['id'] ??
+                    'error-${DateTime.now().millisecondsSinceEpoch}',
+                'name': user['email'] ?? 'Error Loading User',
+                'role': 'Tenant',
+                'department': '',
+                'status': 'Offline',
+                'email': user['email'] ?? '',
+                'lastActive': 'Unknown',
+                '_raw': user,
+              };
             }
-          }
-
-          return {
-            'id': user['user_id'] ?? user['id'] ?? 'unknown-${DateTime.now().millisecondsSinceEpoch}',
-            'name': fullName,
-            'role': roleDisplay,
-            'department': department,
-            'status': statusDisplay,
-            'email': user['email'] ?? '',
-            'lastActive': _formatLastActive(user['updated_at']),
-            // Store original data for detail view
-            '_raw': user,
-          };
-        } catch (e) {
-          print('[AdminUserPage] Error mapping user ${user['id'] ?? 'unknown'}: $e');
-          // Return a minimal user object to prevent crashes
-          return {
-            'id': user['user_id'] ?? user['id'] ?? 'error-${DateTime.now().millisecondsSinceEpoch}',
-            'name': user['email'] ?? 'Error Loading User',
-            'role': 'Tenant',
-            'department': '',
-            'status': 'Offline',
-            'email': user['email'] ?? '',
-            'lastActive': 'Unknown',
-            '_raw': user,
-          };
-        }
-      }).toList();
+          }).toList();
 
       setState(() {
         _allUsers = mappedUsers;
@@ -141,7 +157,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
       });
 
       print('[AdminUserPage] Successfully loaded ${_allUsers.length} users');
-      
+
       // Show success feedback for user
       if (mounted && _allUsers.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -158,7 +174,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
         _errorMessage = _getDetailedErrorMessage(e);
         _isLoading = false;
       });
-      
+
       // Show error feedback to user
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -281,30 +297,18 @@ class _AdminUserPageState extends State<AdminUserPage> {
     return pathMap[routeKey];
   }
 
-  // ---- Logout Dialog ----
-  void _handleLogout(BuildContext context) {
-    showDialog(
+  // Logout functionality
+  void _handleLogout(BuildContext context) async {
+    final result = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Logout'),
-          content: const Text('Are you sure you want to logout?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                context.go('/');
-              },
-              child: const Text('Logout'),
-            ),
-          ],
-        );
+        return const LogoutPopup();
       },
     );
+
+    if (result == true) {
+      context.go('/');
+    }
   }
 
   // ---- Filter Dropdown Builder ----
@@ -486,7 +490,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
         return UserProfileDialog(user: user);
       },
     );
-    
+
     // If user was updated or deleted, refresh the list
     if (result != null) {
       if (result['deleted'] == true) {
@@ -510,7 +514,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
         return UserProfileDialog(user: user);
       },
     );
-    
+
     // If user was updated or deleted, refresh the list
     if (result != null) {
       if (result['deleted'] == true) {
@@ -533,7 +537,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
   ) async {
     final userId = user['id'];
     final originalStatus = user['status'];
-    
+
     try {
       print('[AdminUserPage] Updating user $userId status to $backendStatus');
 
@@ -573,7 +577,9 @@ class _AdminUserPageState extends State<AdminUserPage> {
                 const Icon(Icons.check_circle, color: Colors.white, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text("${user['name']} status updated to $displayStatus"),
+                  child: Text(
+                    "${user['name']} status updated to $displayStatus",
+                  ),
                 ),
               ],
             ),
@@ -584,13 +590,13 @@ class _AdminUserPageState extends State<AdminUserPage> {
       }
     } catch (e) {
       print('[AdminUserPage] Error updating user status: $e');
-      
+
       // Revert the optimistic update
       if (mounted) {
         setState(() {
           user['status'] = originalStatus; // Revert to original status
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -598,7 +604,9 @@ class _AdminUserPageState extends State<AdminUserPage> {
                 const Icon(Icons.error, color: Colors.white, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text("Failed to update user status: ${_getSimpleErrorMessage(e)}"),
+                  child: Text(
+                    "Failed to update user status: ${_getSimpleErrorMessage(e)}",
+                  ),
                 ),
               ],
             ),
@@ -607,7 +615,8 @@ class _AdminUserPageState extends State<AdminUserPage> {
             action: SnackBarAction(
               label: 'Retry',
               textColor: Colors.white,
-              onPressed: () => _updateUserStatus(user, backendStatus, displayStatus),
+              onPressed:
+                  () => _updateUserStatus(user, backendStatus, displayStatus),
             ),
           ),
         );
@@ -635,9 +644,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(),
-        ),
+        builder: (context) => const Center(child: CircularProgressIndicator()),
       );
 
       await _apiService.deleteUser(userId, permanent: false);
@@ -673,7 +680,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
       if (Navigator.canPop(context)) {
         Navigator.of(context).pop();
       }
-      
+
       print('[AdminUserPage] Error deleting user: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -694,12 +701,12 @@ class _AdminUserPageState extends State<AdminUserPage> {
 
   // Column widths for fixed table layout
   final List<double> _colW = <double>[
-    50,  // CHECKBOX
+    50, // CHECKBOX
     100, // USER ID
     250, // USER NAME
     120, // ROLE
     150, // DEPARTMENT/UNIT
-    80,  // ACTION
+    80, // ACTION
   ];
 
   Widget _fixedCell(
@@ -725,10 +732,10 @@ class _AdminUserPageState extends State<AdminUserPage> {
   List<Map<String, dynamic>> _getPaginatedUsers() {
     final startIndex = (_currentPage - 1) * _itemsPerPage;
     final endIndex = startIndex + _itemsPerPage;
-    
+
     final filteredUsers = _filteredUsers;
     if (startIndex >= filteredUsers.length) return [];
-    
+
     return filteredUsers.sublist(
       startIndex,
       endIndex > filteredUsers.length ? filteredUsers.length : endIndex,
@@ -737,7 +744,9 @@ class _AdminUserPageState extends State<AdminUserPage> {
 
   int get _totalPages {
     final filteredUsers = _filteredUsers;
-    return filteredUsers.isEmpty ? 1 : (filteredUsers.length / _itemsPerPage).ceil();
+    return filteredUsers.isEmpty
+        ? 1
+        : (filteredUsers.length / _itemsPerPage).ceil();
   }
 
   void _goToPage(int page) {
@@ -754,7 +763,9 @@ class _AdminUserPageState extends State<AdminUserPage> {
     final paginatedUsers = _getPaginatedUsers();
     for (int i = 0; i < paginatedUsers.length; i++) {
       final globalIndex = _filteredUsers.indexOf(paginatedUsers[i]);
-      if (globalIndex != -1 && globalIndex < _selectedRows.length && _selectedRows[globalIndex]) {
+      if (globalIndex != -1 &&
+          globalIndex < _selectedRows.length &&
+          _selectedRows[globalIndex]) {
         selectedUsers.add(paginatedUsers[i]);
       }
     }
@@ -778,7 +789,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
   // Bulk delete selected users
   Future<void> _bulkDeleteUsers() async {
     final selectedUsers = _getSelectedUsers();
-    
+
     if (selectedUsers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -804,21 +815,22 @@ class _AdminUserPageState extends State<AdminUserPage> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(
-          child: Card(
-            child: Padding(
-              padding: EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Deleting users...'),
-                ],
+        builder:
+            (context) => const Center(
+              child: Card(
+                child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('Deleting users...'),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
       );
     }
 
@@ -903,23 +915,23 @@ class _AdminUserPageState extends State<AdminUserPage> {
 
   List<Widget> _buildPageNumbers() {
     List<Widget> pageButtons = [];
-    
+
     // Show max 5 page numbers at a time
     int startPage = _currentPage - 2;
     int endPage = _currentPage + 2;
-    
+
     if (startPage < 1) {
       startPage = 1;
       endPage = 5;
     }
-    
+
     if (endPage > _totalPages) {
       endPage = _totalPages;
       startPage = _totalPages - 4;
     }
-    
+
     if (startPage < 1) startPage = 1;
-    
+
     for (int i = startPage; i <= endPage; i++) {
       pageButtons.add(
         GestureDetector(
@@ -929,7 +941,10 @@ class _AdminUserPageState extends State<AdminUserPage> {
             height: 32,
             margin: const EdgeInsets.symmetric(horizontal: 2),
             decoration: BoxDecoration(
-              color: i == _currentPage ? const Color(0xFF1976D2) : Colors.grey[100],
+              color:
+                  i == _currentPage
+                      ? const Color(0xFF1976D2)
+                      : Colors.grey[100],
               borderRadius: BorderRadius.circular(6),
             ),
             child: Center(
@@ -946,7 +961,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
         ),
       );
     }
-    
+
     return pageButtons;
   }
 
@@ -1042,7 +1057,10 @@ class _AdminUserPageState extends State<AdminUserPage> {
                           size: 20,
                         ),
                         hintText: "Search by name, email, or user ID",
-                        hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
+                        hintStyle: TextStyle(
+                          color: Colors.grey[500],
+                          fontSize: 14,
+                        ),
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 12,
@@ -1067,7 +1085,14 @@ class _AdminUserPageState extends State<AdminUserPage> {
                 _buildFilterDropdown(
                   'Department',
                   _selectedDepartmentFilter,
-                  ['All Departments', 'Plumbing', 'Electrical', 'Masonry', 'Carpentry', 'House Keeping'],
+                  [
+                    'All Departments',
+                    'Plumbing',
+                    'Electrical',
+                    'Masonry',
+                    'Carpentry',
+                    'House Keeping',
+                  ],
                   (value) => setState(() => _selectedDepartmentFilter = value),
                 ),
                 const SizedBox(width: 16),
@@ -1075,26 +1100,21 @@ class _AdminUserPageState extends State<AdminUserPage> {
                 // Refresh Button
                 Container(
                   height: 40,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
                     border: Border.all(color: Colors.grey[300]!),
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.white,
                   ),
                   child: InkWell(
                     onTap: _fetchUsers,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.refresh_rounded, size: 20, color: Colors.blue[600]),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Refresh',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.blue[600],
-                            fontWeight: FontWeight.w500,
-                          ),
+                        Icon(
+                          Icons.refresh_rounded,
+                          size: 20,
+                          color: Colors.blue[600],
                         ),
                       ],
                     ),
@@ -1117,7 +1137,11 @@ class _AdminUserPageState extends State<AdminUserPage> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.delete_outline, size: 20, color: Colors.red[600]),
+                          Icon(
+                            Icons.delete_outline,
+                            size: 20,
+                            color: Colors.red[600],
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'Delete Selected (${_getSelectedUsers().length})',
@@ -1165,6 +1189,71 @@ class _AdminUserPageState extends State<AdminUserPage> {
                             color: Colors.black87,
                           ),
                         ),
+                        // Export button
+                        Container(
+                          height: 40,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            border: Border.all(color: Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: PopupMenuButton<String>(
+                            onSelected: (value) {
+                              // TODO: Implement export functionality
+                              if (value == 'pdf') {
+                                // Export to PDF
+                              } else if (value == 'word') {
+                                // Export to Word
+                              }
+                            },
+                            itemBuilder:
+                                (context) => [
+                                  PopupMenuItem(
+                                    value: 'pdf',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.picture_as_pdf,
+                                          color: Colors.red,
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text('PDF'),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'word',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.description,
+                                          color: Colors.blue,
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text('Word'),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.download, size: 20, color: Colors.blue[600]),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Export',
+                                  style: TextStyle(
+                                    color: Colors.grey[700],
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -1172,220 +1261,253 @@ class _AdminUserPageState extends State<AdminUserPage> {
 
                   // Data Table
                   Expanded(
-                    child: _isLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : _errorMessage != null
+                    child:
+                        _isLoading
+                            ? const Center(child: CircularProgressIndicator())
+                            : _errorMessage != null
                             ? Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.error_outline,
-                                      size: 48,
-                                      color: Colors.red[300],
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.error_outline,
+                                    size: 48,
+                                    color: Colors.red[300],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    _errorMessage!,
+                                    style: TextStyle(
+                                      color: Colors.red[600],
+                                      fontSize: 16,
                                     ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      _errorMessage!,
-                                      style: TextStyle(
-                                        color: Colors.red[600],
-                                        fontSize: 16,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    ElevatedButton(
-                                      onPressed: _fetchUsers,
-                                      child: const Text('Retry'),
-                                    ),
-                                  ],
-                                ),
-                              )
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton(
+                                    onPressed: _fetchUsers,
+                                    child: const Text('Retry'),
+                                  ),
+                                ],
+                              ),
+                            )
                             : _filteredUsers.isEmpty
-                                ? Center(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.people_outline,
-                                          size: 64,
-                                          color: Colors.grey[400],
-                                        ),
-                                        const SizedBox(height: 16),
-                                        Text(
-                                          'No Users Found',
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            color: Colors.grey[600],
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          'There are currently no users to display.',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.grey[500],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                : ClipRRect(
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: SingleChildScrollView(
-                                      scrollDirection: Axis.horizontal,
-                                      child: DataTable(
-                                        columnSpacing: 70,
-                                        headingRowHeight: 56,
-                                        dataRowHeight: 64,
-                                        headingRowColor: WidgetStateProperty.all(
-                                          Colors.grey[50],
-                                        ),
-                                        headingTextStyle: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.grey[600],
-                                          letterSpacing: 0.5,
-                                        ),
-                                        dataTextStyle: const TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.black87,
-                                        ),
-                                        columns: [
-                                          DataColumn(
-                                            label: _fixedCell(
-                                              0,
-                                              Checkbox(
-                                                value: _selectAll,
-                                                onChanged: _toggleSelectAll,
-                                              ),
-                                            ),
-                                          ),
-                                          DataColumn(
-                                            label: _fixedCell(1, const Text("USER ID")),
-                                          ),
-                                          DataColumn(
-                                            label: _fixedCell(2, const Text("USER NAME")),
-                                          ),
-                                          DataColumn(
-                                            label: _fixedCell(3, const Text("ROLE")),
-                                          ),
-                                          DataColumn(
-                                            label: _fixedCell(4, const Text("DEPARTMENT/UNIT")),
-                                          ),
-                                          DataColumn(
-                                            label: _fixedCell(5, const Text("")),
-                                          ),
-                                        ],
-                                        rows: _getPaginatedUsers().map((user) {
-                                          final index = _filteredUsers.indexOf(user);
-                                          return DataRow(
-                                            cells: [
-                                              // Checkbox
-                                              DataCell(
-                                                _fixedCell(
-                                                  0,
-                                                  Checkbox(
-                                                    value: index < _selectedRows.length
-                                                        ? _selectedRows[index]
-                                                        : false,
-                                                    onChanged: (bool? value) {
-                                                      setState(() {
-                                                        if (index < _selectedRows.length) {
-                                                          _selectedRows[index] = value ?? false;
-                                                        }
-                                                      });
-                                                    },
-                                                  ),
-                                                ),
-                                              ),
-                                              // User ID
-                                              DataCell(
-                                                _fixedCell(
-                                                  1,
-                                                  _ellipsis(
-                                                    user['id'],
-                                                    style: TextStyle(
-                                                      fontSize: 13,
-                                                      color: Colors.grey[700],
-                                                      fontFamily: 'monospace',
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              // User Name
-                                              DataCell(
-                                                _fixedCell(
-                                                  2,
-                                                  Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    mainAxisAlignment: MainAxisAlignment.center,
-                                                    children: [
-                                                      _ellipsis(
-                                                        user['name'],
-                                                        style: const TextStyle(
-                                                          fontWeight: FontWeight.w500,
-                                                          fontSize: 14,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(height: 2),
-                                                      _ellipsis(
-                                                        user['email'],
-                                                        style: TextStyle(
-                                                          color: Colors.grey[600],
-                                                          fontSize: 12,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ),
-                                              // Role
-                                              DataCell(
-                                                _fixedCell(
-                                                  3,
-                                                  RoleTag(role: user['role']),
-                                                ),
-                                              ),
-                                              // Department
-                                              DataCell(
-                                                _fixedCell(
-                                                  4,
-                                                  user['department'].isEmpty
-                                                      ? const Text('-')
-                                                      : DepartmentTag(user['department']),
-                                                ),
-                                              ),
-                                              // Action
-                                              DataCell(
-                                                _fixedCell(
-                                                  5,
-                                                  Builder(
-                                                    builder: (context) {
-                                                      return IconButton(
-                                                        onPressed: () {
-                                                          final rbx = context.findRenderObject() as RenderBox;
-                                                          final position = rbx.localToGlobal(Offset.zero);
-                                                          _showActionMenu(context, user, position);
-                                                        },
-                                                        icon: Icon(
-                                                          Icons.more_vert,
-                                                          color: Colors.grey[400],
-                                                          size: 20,
-                                                        ),
-                                                      );
-                                                    },
-                                                  ),
-                                                  align: Alignment.centerLeft,
-                                                ),
-                                              ),
-                                            ],
-                                          );
-                                        }).toList(),
-                                      ),
+                            ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.people_outline,
+                                    size: 64,
+                                    color: Colors.grey[400],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No Users Found',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      color: Colors.grey[600],
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'There are currently no users to display.',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[500],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                            : ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: DataTable(
+                                  columnSpacing: 70,
+                                  headingRowHeight: 56,
+                                  dataRowHeight: 64,
+                                  headingRowColor: WidgetStateProperty.all(
+                                    Colors.grey[50],
+                                  ),
+                                  headingTextStyle: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey[600],
+                                    letterSpacing: 0.5,
+                                  ),
+                                  dataTextStyle: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.black87,
+                                  ),
+                                  columns: [
+                                    DataColumn(
+                                      label: _fixedCell(
+                                        0,
+                                        Checkbox(
+                                          value: _selectAll,
+                                          onChanged: _toggleSelectAll,
+                                        ),
+                                      ),
+                                    ),
+                                    DataColumn(
+                                      label: _fixedCell(
+                                        1,
+                                        const Text("USER ID"),
+                                      ),
+                                    ),
+                                    DataColumn(
+                                      label: _fixedCell(
+                                        2,
+                                        const Text("USER NAME"),
+                                      ),
+                                    ),
+                                    DataColumn(
+                                      label: _fixedCell(3, const Text("ROLE")),
+                                    ),
+                                    DataColumn(
+                                      label: _fixedCell(
+                                        4,
+                                        const Text("DEPARTMENT/UNIT"),
+                                      ),
+                                    ),
+                                    DataColumn(
+                                      label: _fixedCell(5, const Text("")),
+                                    ),
+                                  ],
+                                  rows:
+                                      _getPaginatedUsers().map((user) {
+                                        final index = _filteredUsers.indexOf(
+                                          user,
+                                        );
+                                        return DataRow(
+                                          cells: [
+                                            // Checkbox
+                                            DataCell(
+                                              _fixedCell(
+                                                0,
+                                                Checkbox(
+                                                  value:
+                                                      index <
+                                                              _selectedRows
+                                                                  .length
+                                                          ? _selectedRows[index]
+                                                          : false,
+                                                  onChanged: (bool? value) {
+                                                    setState(() {
+                                                      if (index <
+                                                          _selectedRows
+                                                              .length) {
+                                                        _selectedRows[index] =
+                                                            value ?? false;
+                                                      }
+                                                    });
+                                                  },
+                                                ),
+                                              ),
+                                            ),
+                                            // User ID
+                                            DataCell(
+                                              _fixedCell(
+                                                1,
+                                                _ellipsis(
+                                                  user['id'],
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    color: Colors.grey[700],
+                                                    fontFamily: 'monospace',
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            // User Name
+                                            DataCell(
+                                              _fixedCell(
+                                                2,
+                                                Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    _ellipsis(
+                                                      user['name'],
+                                                      style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                        fontSize: 14,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 2),
+                                                    _ellipsis(
+                                                      user['email'],
+                                                      style: TextStyle(
+                                                        color: Colors.grey[600],
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                            // Role
+                                            DataCell(
+                                              _fixedCell(
+                                                3,
+                                                RoleTag(role: user['role']),
+                                              ),
+                                            ),
+                                            // Department
+                                            DataCell(
+                                              _fixedCell(
+                                                4,
+                                                user['department'].isEmpty
+                                                    ? const Text('-')
+                                                    : DepartmentTag(
+                                                      user['department'],
+                                                    ),
+                                              ),
+                                            ),
+                                            // Action
+                                            DataCell(
+                                              _fixedCell(
+                                                5,
+                                                Builder(
+                                                  builder: (context) {
+                                                    return IconButton(
+                                                      onPressed: () {
+                                                        final rbx =
+                                                            context.findRenderObject()
+                                                                as RenderBox;
+                                                        final position = rbx
+                                                            .localToGlobal(
+                                                              Offset.zero,
+                                                            );
+                                                        _showActionMenu(
+                                                          context,
+                                                          user,
+                                                          position,
+                                                        );
+                                                      },
+                                                      icon: Icon(
+                                                        Icons.more_vert,
+                                                        color: Colors.grey[400],
+                                                        size: 20,
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                                align: Alignment.centerLeft,
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      }).toList(),
+                                ),
+                              ),
+                            ),
                   ),
                   Divider(height: 1, thickness: 1, color: Colors.grey[400]),
 
@@ -1399,23 +1521,34 @@ class _AdminUserPageState extends State<AdminUserPage> {
                           _filteredUsers.isEmpty
                               ? "No entries found"
                               : "Showing ${(_currentPage - 1) * _itemsPerPage + 1} to ${(_currentPage * _itemsPerPage) > _filteredUsers.length ? _filteredUsers.length : _currentPage * _itemsPerPage} of ${_filteredUsers.length} entries",
-                          style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                          ),
                         ),
                         Row(
                           children: [
                             IconButton(
-                              onPressed: _currentPage > 1 ? _previousPage : null,
+                              onPressed:
+                                  _currentPage > 1 ? _previousPage : null,
                               icon: Icon(
                                 Icons.chevron_left,
-                                color: _currentPage > 1 ? Colors.grey[600] : Colors.grey[400],
+                                color:
+                                    _currentPage > 1
+                                        ? Colors.grey[600]
+                                        : Colors.grey[400],
                               ),
                             ),
                             ..._buildPageNumbers(),
                             IconButton(
-                              onPressed: _currentPage < _totalPages ? _nextPage : null,
+                              onPressed:
+                                  _currentPage < _totalPages ? _nextPage : null,
                               icon: Icon(
                                 Icons.chevron_right,
-                                color: _currentPage < _totalPages ? Colors.grey[600] : Colors.grey[400],
+                                color:
+                                    _currentPage < _totalPages
+                                        ? Colors.grey[600]
+                                        : Colors.grey[400],
                               ),
                             ),
                           ],

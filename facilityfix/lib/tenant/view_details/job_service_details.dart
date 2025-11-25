@@ -7,9 +7,10 @@ import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
-import 'package:facilityfix/staff/workorder.dart';
+import 'package:facilityfix/staff/repair_task.dart';
 import 'package:facilityfix/staff/form/assessment_form.dart';
 import 'package:facilityfix/staff/view_details/concern_slip.dart';
+import 'package:facilityfix/tenant/repair_management.dart';
 import 'package:facilityfix/widgets/view_details.dart';
 import 'package:facilityfix/utils/ui_format.dart';
 import 'package:flutter/material.dart';
@@ -362,7 +363,7 @@ class _TenantJobServiceDetailPageState extends State<TenantJobServiceDetailPage>
   void _onTabTapped(int index) {
     final destinations = [
       const HomePage(),
-      const WorkOrderPage(),
+      const RepairManagement(),
       const AnnouncementPage(),
       const CalendarPage(),
       const InventoryPage(),

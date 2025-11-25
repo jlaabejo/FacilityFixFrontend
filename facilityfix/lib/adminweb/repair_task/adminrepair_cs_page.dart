@@ -933,11 +933,11 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
           // Refresh Button
           Container(
             height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               color: Colors.white,
               border: Border.all(color: Colors.grey[300]!),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: InkWell(
               onTap: _loadConcernSlips,
@@ -949,14 +949,64 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                     size: 20,
                     color: Colors.blue[600],
                   ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Export button
+          Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: PopupMenuButton<String>(
+              onSelected: (value) {
+                // TODO: Implement export functionality
+                if (value == 'pdf') {
+                  // Export to PDF
+                } else if (value == 'word') {
+                  // Export to Word
+                }
+              },
+              itemBuilder:
+                  (context) => [
+                    PopupMenuItem(
+                      value: 'pdf',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.picture_as_pdf,
+                            color: Colors.red,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Text('PDF'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'word',
+                      child: Row(
+                        children: [
+                          Icon(Icons.description, color: Colors.blue, size: 18),
+                          const SizedBox(width: 8),
+                          Text('Word'),
+                        ],
+                      ),
+                    ),
+                  ],
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.download, size: 20, color: Colors.blue[600]),
                   const SizedBox(width: 8),
                   Text(
-                    'Refresh',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.blue[600],
-                      fontWeight: FontWeight.w500,
-                    ),
+                    'Export',
+                    style: TextStyle(color: Colors.grey[700], fontSize: 14),
                   ),
                 ],
               ),

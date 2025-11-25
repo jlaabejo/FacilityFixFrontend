@@ -7,6 +7,11 @@ import '../../utils/ui_format.dart';
 import 'internalmaintenance_form.dart';
 import '../widgets/tags.dart';
 
+// Helper function
+String _toTitleCase(String text) {
+  if (text.isEmpty) return text;
+  return text.split(' ').map((word) => word.isNotEmpty ? word[0].toUpperCase() + word.substring(1).toLowerCase() : word).join(' ');
+}
 
 class InternalTaskViewPage extends StatefulWidget {
   /// Deep-linkable view with optional edit mode.
@@ -79,6 +84,9 @@ void _handleLogout(BuildContext context) async {
   final _adminNotifyCtrl = TextEditingController();
   final _staffNotifyCtrl = TextEditingController();
 
+  // Staff Assessment controller
+  final _staffAssessmentCtrl = TextEditingController();
+
   // Attachments sourced from backend/task payload
   final List<Map<String, String?>> _attachments = [];
 
@@ -86,6 +94,8 @@ void _handleLogout(BuildContext context) async {
   List<Map<String, dynamic>> _selectedInventoryItems = [];
   // Reserved inventory items for this task
   List<Map<String, dynamic>> _reservedInventoryItems = []; // Reserved items from backend
+  // Available inventory items for fallback
+  List<Map<String, dynamic>> _availableInventoryItems = [];
 
   // Snapshot used for Cancel
   late Map<String, String> _original;
@@ -143,29 +153,7 @@ void _handleLogout(BuildContext context) async {
     });
 
     try {
-      String? taskCategory = _taskData?['category']?.toString().toLowerCase();
-      String? department;
-
-      // Map category to department
-      switch (taskCategory) {
-        case 'electrical':
-          department = 'electrical';
-          break;
-        case 'plumbing':
-          department = 'plumbing';
-          break;
-        case 'carpentry':
-          department = 'carpentry';
-          break;
-        case 'masonry':
-          department = 'masonry';
-          break;
-        case 'house keeping':
-          department = 'house keeping';
-          break;
-        default:
-          department = null;
-      }
+      String? department = _taskData?['department']?.toString().toLowerCase();
 
       final staffData = await _apiService.getStaffMembers(
         department: department,
@@ -213,7 +201,27 @@ void _handleLogout(BuildContext context) async {
               }
             } catch (e) {
               print('[v0] Error loading inventory item details: $e');
-              // Continue without item details
+              // Fallback: try to find in available inventory items
+              final fallbackItem = _availableInventoryItems.firstWhere(
+                (item) => item['item_code'] == reservation['inventory_id'] || item['id'] == reservation['inventory_id'] || item['_doc_id'] == reservation['inventory_id'],
+                orElse: () => <String, dynamic>{},
+              );
+              if (fallbackItem.isNotEmpty) {
+                reservation['item_details'] = {
+                  'item_name': fallbackItem['item_name'] ?? 'Unknown Item',
+                  'item_code': fallbackItem['item_code'],
+                  'current_stock': fallbackItem['current_stock'] ?? 0,
+                  'unit': fallbackItem['unit_of_measure'] ?? fallbackItem['unit'] ?? 'pcs',
+                };
+              } else {
+                // Set default item details to prevent UI errors
+                reservation['item_details'] = {
+                  'item_name': reservation['item_name'] ?? 'Unknown Item',
+                  'item_code': reservation['item_code'] ?? '',
+                  'current_stock': 0,
+                  'unit': 'pcs',
+                };
+              }
             }
           }
         }
@@ -236,9 +244,10 @@ void _handleLogout(BuildContext context) async {
       final response = await _apiService.getBuildingInventory('default_building_id');
       
       if (response['success'] == true && response['data'] != null) {
-        // Inventory items loaded successfully but not stored
-        // as _availableInventoryItems field was removed
-        print('[v0] Loaded ${(response['data'] as List).length} inventory items');
+        setState(() {
+          _availableInventoryItems = List<Map<String, dynamic>>.from(response['data']);
+        });
+        print('[v0] Loaded ${_availableInventoryItems.length} inventory items');
       }
     } catch (e) {
       print('[v0] Error loading inventory items: $e');
@@ -266,7 +275,8 @@ void _handleLogout(BuildContext context) async {
 
     // Assign from incoming data with fallback keys
     setText(_titleCtrl, ['task_title', 'taskTitle', 'title']);
-    setText(_departmentCtrl, ['department', 'assigneeDept']);
+    setText(_departmentCtrl, ['department']);
+    _departmentCtrl.text = _toTitleCase(_departmentCtrl.text);
     setText(_createdByCtrl, ['created_by', 'assigneeName', 'assigned_staff_name', 'createdBy']);
     setText(_estimatedDurationCtrl, ['estimated_duration', 'estimatedDuration']);
     setText(_locationCtrl, ['location']);
@@ -288,6 +298,7 @@ void _handleLogout(BuildContext context) async {
       'department', // This might be task department
     ]);
     setText(_adminNotifyCtrl, ['admin_notification', 'admin_notes', 'notes', 'adminNote']);
+    setText(_staffAssessmentCtrl, ['staff_assessment', 'assessment', 'staff_assessment_notes']);
     // Debug log: show what admin notes were populated for this task (helps trace missing notes)
     try {
       print('[InternalView] admin notes (populated): "${_adminNotifyCtrl.text}"');
@@ -416,6 +427,7 @@ void _handleLogout(BuildContext context) async {
     _assigneeDeptCtrl.dispose();
     _adminNotifyCtrl.dispose();
     _staffNotifyCtrl.dispose();
+    _staffAssessmentCtrl.dispose();
     super.dispose();
   }
 
@@ -434,6 +446,7 @@ void _handleLogout(BuildContext context) async {
     'assigneeDept': _assigneeDeptCtrl.text,
     'adminNotify': _adminNotifyCtrl.text,
     'staffNotify': _staffNotifyCtrl.text,
+    'staffAssessment': _staffAssessmentCtrl.text,
     'selectedStaffId': _selectedStaffId ?? '',
   };
 
@@ -453,6 +466,7 @@ void _handleLogout(BuildContext context) async {
       _assigneeDeptCtrl.text = _original['assigneeDept']!;
       _adminNotifyCtrl.text = _original['adminNotify']!;
       _staffNotifyCtrl.text = _original['staffNotify']!;
+      _staffAssessmentCtrl.text = _original['staffAssessment']!;
       _selectedStaffId = _original['selectedStaffId']!.isNotEmpty ? _original['selectedStaffId'] : null;
     } catch (e) {
       // If snapshot is missing or keys are absent, clear editing state instead of throwing
@@ -470,6 +484,7 @@ void _handleLogout(BuildContext context) async {
       _assigneeDeptCtrl.text = '';
       _adminNotifyCtrl.text = '';
       _staffNotifyCtrl.text = '';
+      _staffAssessmentCtrl.text = '';
       _selectedStaffId = null;
     }
     setState(() => _isEditMode = false);
@@ -534,6 +549,7 @@ void _handleLogout(BuildContext context) async {
         'assigned_staff_name': _assigneeNameCtrl.text.trim(),
         'assignee_name': _assigneeNameCtrl.text.trim(),
         'assigneeDept': _assigneeDeptCtrl.text.trim(),
+        'staff_assessment': _staffAssessmentCtrl.text.trim(),
         'assignee_department': _assigneeDeptCtrl.text.trim(),
       };
 
@@ -835,6 +851,8 @@ void _handleLogout(BuildContext context) async {
                               _buildScheduleCard(),
                               const SizedBox(height: 24),
                               _buildAssignmentCard(),
+                              const SizedBox(height: 24),
+                              _buildStaffAssessmentCard(),
                               const SizedBox(height: 16),
                             ],
                           ),
@@ -1167,8 +1185,6 @@ void _handleLogout(BuildContext context) async {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _editableRow('Department', _departmentCtrl, validator: _req),
-
           _editableRow('Location / Area', _locationCtrl, validator: _req),
           const SizedBox(height: 16),
           Text(
@@ -1733,7 +1749,7 @@ void _handleLogout(BuildContext context) async {
                             ),
                             ),
                             Text(
-                            'Current Stock: $currentStock',
+                            'Stock: $currentStock',
                             style: TextStyle(
                             fontSize: 12,
                             color: Colors.blueGrey[600],
@@ -1821,6 +1837,47 @@ void _handleLogout(BuildContext context) async {
                             : 'No admin notes available.',
                         style: const TextStyle(fontSize: 14, height: 1.5),
                       ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+
+  Widget _buildStaffAssessmentCard() {
+    final hasStaffAssessment = _staffAssessmentCtrl.text.trim().isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Show card only if there are assessment notes
+        if (hasStaffAssessment) ...[
+          _card(
+            icon: Icons.assignment_turned_in,
+            iconBg: Colors.green[200]!,
+            title: 'Staff Assessment',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[200]!),
+                  ),
+                  child: Text(
+                    _staffAssessmentCtrl.text,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.black87,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

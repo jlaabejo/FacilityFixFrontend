@@ -2,11 +2,12 @@ import 'dart:async';
 
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
-import 'package:facilityfix/staff/maintenance.dart';
+import 'package:facilityfix/staff/maintenance_task.dart';
+import 'package:facilityfix/staff/repair_task.dart';
+import 'package:facilityfix/staff/task_management.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/notification.dart';
 import 'package:facilityfix/staff/view_details/announcement_details.dart';
-import 'package:facilityfix/staff/workorder.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
@@ -86,13 +87,13 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
       case 1:
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const WorkOrderPage()),
+          MaterialPageRoute(builder: (_) => const RepairTaskPage()),
         );
         break;
       case 2:
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const MaintenancePage()),
+          MaterialPageRoute(builder: (_) => const MaintenanceTaskPage()),
         );
         break;
       case 4:

@@ -10,6 +10,7 @@ import '../widgets/delete_popup.dart';
 import '../services/api_service.dart';
 import 'pop_up/inventory_requestdetails_popup.dart';
 import '../../services/api_services.dart' as api_services;
+import 'package:facilityfix/utils/inventory_notifier.dart';
 
 class InventoryRequestPage extends StatefulWidget {
   const InventoryRequestPage({super.key});
@@ -28,12 +29,17 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
   // Pagination
   int _currentPage = 1;
   int _itemsPerPage = 10;
-  
+
   // Search and filter
   final TextEditingController _searchController = TextEditingController();
-  String _selectedFilter = 'All';
-  final List<String> _filterOptions = ['All', 'Pending', 'Approved', 'Rejected'];
-  
+  String _selectedFilter = 'All Status';
+  final List<String> _filterOptions = [
+    'All Status',
+    'Pending',
+    'Approved',
+    'Rejected',
+  ];
+
   // Sorting
   String _sortColumn = 'requested_date';
   bool _sortAscending = false; // Default to descending (newest first)
@@ -47,7 +53,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     _loadInventoryItems();
     _loadInventoryRequests();
   }
-  
+
   Future<void> _loadInventoryItems() async {
     try {
       // Fetch ALL inventory items (not filtered by building)
@@ -74,7 +80,8 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
           final Map<String, String> itemNames = {};
           for (var item in items) {
             final id = item['id']?.toString() ?? item['_doc_id']?.toString();
-            final name = item['item_name']?.toString() ?? item['name']?.toString();
+            final name =
+                item['item_name']?.toString() ?? item['name']?.toString();
             if (id != null && name != null) {
               itemNames[id] = name;
               print('[v0] Cached: $id -> $name');
@@ -99,7 +106,8 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     // Find all inventory IDs that aren't cached
     for (var request in _requestItems) {
       final inventoryId = request['inventory_id']?.toString();
-      if (inventoryId != null && !_inventoryItemNames.containsKey(inventoryId)) {
+      if (inventoryId != null &&
+          !_inventoryItemNames.containsKey(inventoryId)) {
         missingIds.add(inventoryId);
       }
     }
@@ -116,9 +124,10 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
         final response = await _apiService.getInventoryItem(inventoryId);
         if (response['success'] == true && response['data'] != null) {
           final itemData = response['data'];
-          final itemName = itemData['item_name']?.toString() ??
-                          itemData['name']?.toString() ??
-                          'Unknown Item';
+          final itemName =
+              itemData['item_name']?.toString() ??
+              itemData['name']?.toString() ??
+              'Unknown Item';
 
           setState(() {
             _inventoryItemNames[inventoryId] = itemName;
@@ -153,8 +162,21 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
           print('[v0] First item keys: ${(rawData[0] as Map).keys.toList()}');
         }
 
+        // Filter out reservations (items linked to maintenance tasks) - only show standalone requests
+        final filteredData =
+            rawData.where((item) {
+              final maintenanceTaskId =
+                  item['maintenance_task_id'] ?? item['reference_id'];
+              return maintenanceTaskId == null ||
+                  maintenanceTaskId.toString().isEmpty;
+            }).toList();
+
+        print(
+          '[v0] Filtered to ${filteredData.length} standalone requests (excluded ${rawData.length - filteredData.length} reservations)',
+        );
+
         setState(() {
-          _requestItems = List<Map<String, dynamic>>.from(rawData);
+          _requestItems = List<Map<String, dynamic>>.from(filteredData);
           _isLoading = false;
         });
 
@@ -193,20 +215,19 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     return pathMap[routeKey];
   }
 
-// Logout functionality
-void _handleLogout(BuildContext context) async {
-  final result = await showDialog<bool>(
-    context: context,
-    builder: (BuildContext context) {
-      return const LogoutPopup();
-    },
-  );
+  // Logout functionality
+  void _handleLogout(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return const LogoutPopup();
+      },
+    );
 
-  if (result == true) {
-    context.go('/');
+    if (result == true) {
+      context.go('/');
+    }
   }
-}
-
 
   // Column widths for table
   final List<double> _colW = <double>[
@@ -274,7 +295,8 @@ void _handleLogout(BuildContext context) async {
           ),
         ),
         // Show approve/reject options only for pending requests
-        if (item['status'] == 'pending' || _normalizeStatus(item['status']) == 'pending') ...[
+        if (item['status'] == 'pending' ||
+            _normalizeStatus(item['status']) == 'pending') ...[
           PopupMenuItem(
             value: 'approve',
             child: Row(
@@ -350,22 +372,23 @@ void _handleLogout(BuildContext context) async {
   // View request method
   Future<void> _viewRequest(Map<String, dynamic> item) async {
     final requestId = item['_doc_id'] ?? item['id'] ?? 'N/A';
-    
+
     // Get item name from cached inventory items
     String itemName = 'Unknown Item';
     final inventoryId = item['inventory_id']?.toString();
-    
+
     if (inventoryId != null && _inventoryItemNames.containsKey(inventoryId)) {
       // Found in cached inventory items
       itemName = _inventoryItemNames[inventoryId]!;
-    } else if (item['item_name'] != null && item['item_name'].toString().isNotEmpty) {
+    } else if (item['item_name'] != null &&
+        item['item_name'].toString().isNotEmpty) {
       // Fallback to direct field
       itemName = item['item_name'].toString();
     } else if (inventoryId != null) {
       // Show ID if we have it but no name
       itemName = 'Item $inventoryId';
     }
-    
+
     // Prepare request data for the popup
     final requestData = {
       'requestId': requestId,
@@ -385,13 +408,16 @@ void _handleLogout(BuildContext context) async {
     };
 
     // Show the details popup and get result
-    final result = await InventoryRequestDetailsDialog.show(context, requestData);
-    
+    final result = await InventoryRequestDetailsDialog.show(
+      context,
+      requestData,
+    );
+
     // Handle the action if user clicked approve or reject
     if (result != null && result['action'] != null) {
       final action = result['action'];
       final originalItem = result['requestData']['_originalItem'];
-      
+
       if (action == 'approve') {
         await _approveRequest(originalItem);
       } else if (action == 'reject') {
@@ -410,8 +436,9 @@ void _handleLogout(BuildContext context) async {
 
       // Get inventory item ID and requested quantity
       final inventoryId = item['inventory_id']?.toString();
-      final quantityRequested = (item['quantity_requested'] ?? item['quantity'] ?? 0) as num;
-      
+      final quantityRequested =
+          (item['quantity_requested'] ?? item['quantity'] ?? 0) as num;
+
       // Step 1: Check available stock before approval
       if (inventoryId != null && quantityRequested > 0) {
         try {
@@ -419,15 +446,20 @@ void _handleLogout(BuildContext context) async {
           final itemResp = await _apiService.getInventoryItem(inventoryId);
           if (itemResp['success'] == true && itemResp['data'] is Map) {
             final inventoryData = Map<String, dynamic>.from(itemResp['data']);
-            final currentStock = (inventoryData['current_stock'] ?? inventoryData['quantity_in_stock'] ?? 0) as num;
-            
+            final currentStock =
+                (inventoryData['current_stock'] ??
+                        inventoryData['quantity_in_stock'] ??
+                        0)
+                    as num;
+
             // Calculate reserved stock from all reservations for this item
             int reservedStock = 0;
             try {
               final reservedResp = await _apiService.getInventoryReservations(
                 buildingId: _buildingId,
               );
-              if (reservedResp['success'] == true && reservedResp['data'] is List) {
+              if (reservedResp['success'] == true &&
+                  reservedResp['data'] is List) {
                 for (var req in reservedResp['data']) {
                   if (req['inventory_id']?.toString() == inventoryId) {
                     reservedStock += (req['quantity'] ?? 0) as int;
@@ -438,39 +470,45 @@ void _handleLogout(BuildContext context) async {
 
             // Calculate available stock (current - reserved)
             final availableStock = currentStock - reservedStock;
-            
+
             // Check if we have enough stock
             if (availableStock < quantityRequested) {
               if (mounted) {
                 // Show error dialog with stock details
                 await showDialog(
                   context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Insufficient Stock'),
-                    content: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Cannot approve request. Insufficient stock available.'),
-                        const SizedBox(height: 16),
-                        Text('Current Stock: $currentStock'),
-                        Text('Reserved Stock: $reservedStock'),
-                        Text('Available Stock: $availableStock'),
-                        Text('Requested Quantity: $quantityRequested'),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Need ${quantityRequested - availableStock} more units.',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                  builder:
+                      (context) => AlertDialog(
+                        title: const Text('Insufficient Stock'),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Cannot approve request. Insufficient stock available.',
+                            ),
+                            const SizedBox(height: 16),
+                            Text('Current Stock: $currentStock'),
+                            Text('Reserved Stock: $reservedStock'),
+                            Text('Available Stock: $availableStock'),
+                            Text('Requested Quantity: $quantityRequested'),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Need ${quantityRequested - availableStock} more units.',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('OK'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('OK'),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
                 );
               }
               return; // Block approval
@@ -482,7 +520,9 @@ void _handleLogout(BuildContext context) async {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Error checking stock availability: $stockCheckError'),
+                content: Text(
+                  'Error checking stock availability: $stockCheckError',
+                ),
                 backgroundColor: Colors.red,
               ),
             );
@@ -490,7 +530,7 @@ void _handleLogout(BuildContext context) async {
           return;
         }
       }
-      
+
       // Step 2: Approve the request in the backend
       await _apiService.approveInventoryRequest(requestId);
 
@@ -501,8 +541,12 @@ void _handleLogout(BuildContext context) async {
           final itemResp = await _apiService.getInventoryItem(inventoryId);
           if (itemResp['success'] == true && itemResp['data'] is Map) {
             final inventoryData = Map<String, dynamic>.from(itemResp['data']);
-            final currentStock = (inventoryData['current_stock'] ?? inventoryData['quantity_in_stock'] ?? 0) as num;
-            
+            final currentStock =
+                (inventoryData['current_stock'] ??
+                        inventoryData['quantity_in_stock'] ??
+                        0)
+                    as num;
+
             // Calculate new stock (deduct the approved quantity)
             final newStock = (currentStock - quantityRequested).toInt();
 
@@ -511,8 +555,10 @@ void _handleLogout(BuildContext context) async {
               'current_stock': newStock,
               'quantity_in_stock': newStock,
             });
-            
-            print('[v0] Stock deducted: $inventoryId, Old: $currentStock, New: $newStock');
+
+            print(
+              '[v0] Stock deducted: $inventoryId, Old: $currentStock, New: $newStock',
+            );
           }
         } catch (stockError) {
           print('[v0] Error deducting stock: $stockError');
@@ -522,6 +568,14 @@ void _handleLogout(BuildContext context) async {
 
       // Reload the list
       _loadInventoryRequests();
+      // Notify staff views that this request was approved so they can refresh
+      try {
+        final notifier = InventoryUpdateNotifier();
+        final inventoryId = item['inventory_id']?.toString() ?? '';
+        notifier.notifyItemUpdated(inventoryId);
+      } catch (e) {
+        print('[v0] Failed to notify inventory update after approve: $e');
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -546,7 +600,7 @@ void _handleLogout(BuildContext context) async {
   void _rejectRequest(Map<String, dynamic> item) {
     // Use _doc_id as the primary ID from Firestore
     final requestId = item['_doc_id'] ?? item['id'];
-    
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -581,7 +635,7 @@ void _handleLogout(BuildContext context) async {
                   if (requestId == null) {
                     throw Exception('Request ID not found');
                   }
-                  
+
                   await _apiService.denyInventoryRequest(
                     requestId,
                     reasonController.text.isEmpty
@@ -596,6 +650,16 @@ void _handleLogout(BuildContext context) async {
                         content: Text('Request $requestId rejected'),
                         backgroundColor: Colors.orange,
                       ),
+                    );
+                  }
+                  // Notify staff views that request was rejected
+                  try {
+                    final notifier = InventoryUpdateNotifier();
+                    final inventoryId = item['inventory_id']?.toString() ?? '';
+                    notifier.notifyItemUpdated(inventoryId);
+                  } catch (e) {
+                    print(
+                      '[v0] Failed to notify inventory update after reject: $e',
                     );
                   }
                 } catch (e) {
@@ -625,7 +689,8 @@ void _handleLogout(BuildContext context) async {
     showDeleteDialog(
       context,
       itemName: 'Request ${requestId ?? ''}',
-      description: 'Are you sure you want to delete request ${requestId ?? ''}? This will deny the request and cannot be undone.',
+      description:
+          'Are you sure you want to delete request ${requestId ?? ''}? This will deny the request and cannot be undone.',
     ).then((confirmed) async {
       if (confirmed != true) return;
 
@@ -688,21 +753,20 @@ void _handleLogout(BuildContext context) async {
       return 'N/A';
     }
   }
-  
+
   // Normalize status to only pending, approved, rejected
   String _normalizeStatus(String? status) {
     if (status == null) return 'pending';
-    
+
     final normalized = status.toLowerCase().trim();
-    
+
     // Map various status values to the three allowed statuses
     switch (normalized) {
       case 'approved':
         return 'approved';
       case 'denied':
-        return 'denied';
-      case 'reserved':
-        return 'reserved';
+      case 'rejected':
+        return 'rejected';
       case 'pending':
       default:
         return 'pending';
@@ -713,16 +777,21 @@ void _handleLogout(BuildContext context) async {
   Future<bool> _hasInsufficientStock(Map<String, dynamic> item) async {
     try {
       final inventoryId = item['inventory_id']?.toString();
-      final quantityRequested = (item['quantity_requested'] ?? item['quantity'] ?? 0) as num;
-      
+      final quantityRequested =
+          (item['quantity_requested'] ?? item['quantity'] ?? 0) as num;
+
       if (inventoryId == null || quantityRequested <= 0) return false;
 
       // Get current inventory item data
       final itemResp = await _apiService.getInventoryItem(inventoryId);
       if (itemResp['success'] == true && itemResp['data'] is Map) {
         final inventoryData = Map<String, dynamic>.from(itemResp['data']);
-        final currentStock = (inventoryData['current_stock'] ?? inventoryData['quantity_in_stock'] ?? 0) as num;
-        
+        final currentStock =
+            (inventoryData['current_stock'] ??
+                    inventoryData['quantity_in_stock'] ??
+                    0)
+                as num;
+
         // Calculate reserved stock from all reservations for this item
         int reservedStock = 0;
         try {
@@ -740,7 +809,7 @@ void _handleLogout(BuildContext context) async {
 
         // Calculate available stock (current - reserved)
         final availableStock = currentStock - reservedStock;
-        
+
         // Return true if insufficient stock
         return availableStock < quantityRequested;
       }
@@ -749,80 +818,99 @@ void _handleLogout(BuildContext context) async {
     }
     return false;
   }
-  
+
   // Format ID with prefix
   String _formatId(dynamic id, String prefix) {
     if (id == null || id.toString().isEmpty) return 'N/A';
     final idStr = id.toString();
-    
+
     // If already has the full format (e.g., REQ-2025-00001 or MT-2025-00001), return as is
     if (idStr.contains('-') && idStr.split('-').length == 3) {
       return idStr;
     }
-    
+
     // Extract numeric part from the ID
     final numericId = idStr.replaceAll(RegExp(r'[^0-9]'), '');
     if (numericId.isEmpty) return 'N/A';
-    
+
     // Pad with leading zeros to make it 5 digits
     final sequenceNumber = numericId.padLeft(5, '0');
     final year = DateTime.now().year;
-    
+
     // Format as PREFIX-YEAR-XXXXX
     return '$prefix-$year-$sequenceNumber';
   }
-  
+
   // Filtered requests based on search and filter
   List<Map<String, dynamic>> get _filteredRequests {
     var filtered = List<Map<String, dynamic>>.from(_requestItems);
-    
+
     // Apply search filter
     if (_searchController.text.isNotEmpty) {
       final searchLower = _searchController.text.toLowerCase();
-      filtered = filtered.where((item) {
-        // Match against displayed/formatted IDs as well as raw fields
-        final rawRequestId = (item['_doc_id'] ?? item['id'] ?? '').toString().toLowerCase();
-        final rawMaintenanceId = (item['maintenance_task_id'] ?? item['reference_id'] ?? '').toString().toLowerCase();
-        final formattedRequestId = _formatId(item['_doc_id'] ?? item['id'], 'REQ').toString().toLowerCase();
-        final formattedMaintenanceId = _formatId(item['maintenance_task_id'] ?? item['reference_id'], 'MT').toString().toLowerCase();
-        final itemName = (item['item_name'] ?? '').toString().toLowerCase();
-        final quantity = (item['quantity_requested'] ?? '').toString().toLowerCase();
+      filtered =
+          filtered.where((item) {
+            // Match against displayed/formatted IDs as well as raw fields
+            final rawRequestId =
+                (item['_doc_id'] ?? item['id'] ?? '').toString().toLowerCase();
+            final rawMaintenanceId =
+                (item['maintenance_task_id'] ?? item['reference_id'] ?? '')
+                    .toString()
+                    .toLowerCase();
+            final formattedRequestId =
+                _formatId(
+                  item['_doc_id'] ?? item['id'],
+                  'REQ',
+                ).toString().toLowerCase();
+            final formattedMaintenanceId =
+                _formatId(
+                  item['maintenance_task_id'] ?? item['reference_id'],
+                  'MT',
+                ).toString().toLowerCase();
+            final itemName = (item['item_name'] ?? '').toString().toLowerCase();
+            final quantity =
+                (item['quantity_requested'] ?? '').toString().toLowerCase();
 
-        return rawRequestId.contains(searchLower) ||
-               formattedRequestId.contains(searchLower) ||
-               rawMaintenanceId.contains(searchLower) ||
-               formattedMaintenanceId.contains(searchLower) ||
-               itemName.contains(searchLower) ||
-               quantity.contains(searchLower);
-      }).toList();
+            return rawRequestId.contains(searchLower) ||
+                formattedRequestId.contains(searchLower) ||
+                rawMaintenanceId.contains(searchLower) ||
+                formattedMaintenanceId.contains(searchLower) ||
+                itemName.contains(searchLower) ||
+                quantity.contains(searchLower);
+          }).toList();
     }
-    
+
     // Apply status filter
-    if (_selectedFilter != 'All') {
+    if (_selectedFilter != 'All Status') {
       final filterStatus = _selectedFilter.toLowerCase();
-      filtered = filtered.where((item) {
-        final status = _normalizeStatus(item['status']).toLowerCase();
-        return status == filterStatus;
-      }).toList();
+      filtered =
+          filtered.where((item) {
+            final status = _normalizeStatus(item['status']).toLowerCase();
+            return status == filterStatus;
+          }).toList();
     }
-    
+
     // Apply sorting
     filtered.sort((a, b) {
       int comparison;
-      
+
       switch (_sortColumn) {
         case 'requested_date':
         default:
           // Parse dates for proper comparison
-          DateTime dateA = DateTime.tryParse(a['requested_date']?.toString() ?? '') ?? DateTime(1970);
-          DateTime dateB = DateTime.tryParse(b['requested_date']?.toString() ?? '') ?? DateTime(1970);
+          DateTime dateA =
+              DateTime.tryParse(a['requested_date']?.toString() ?? '') ??
+              DateTime(1970);
+          DateTime dateB =
+              DateTime.tryParse(b['requested_date']?.toString() ?? '') ??
+              DateTime(1970);
           comparison = dateA.compareTo(dateB);
           break;
       }
-      
+
       return _sortAscending ? comparison : -comparison;
     });
-    
+
     return filtered;
   }
 
@@ -830,10 +918,10 @@ void _handleLogout(BuildContext context) async {
   List<Map<String, dynamic>> _getPaginatedRequests() {
     final startIndex = (_currentPage - 1) * _itemsPerPage;
     final endIndex = startIndex + _itemsPerPage;
-    
+
     final filtered = _filteredRequests;
     if (startIndex >= filtered.length) return [];
-    
+
     return filtered.sublist(
       startIndex,
       endIndex > filtered.length ? filtered.length : endIndex,
@@ -871,23 +959,23 @@ void _handleLogout(BuildContext context) async {
 
   List<Widget> _buildPageNumbers() {
     List<Widget> pageButtons = [];
-    
+
     // Show max 5 page numbers at a time
     int startPage = _currentPage - 2;
     int endPage = _currentPage + 2;
-    
+
     if (startPage < 1) {
       startPage = 1;
       endPage = 5;
     }
-    
+
     if (endPage > _totalPages) {
       endPage = _totalPages;
       startPage = _totalPages - 4;
     }
-    
+
     if (startPage < 1) startPage = 1;
-    
+
     for (int i = startPage; i <= endPage; i++) {
       pageButtons.add(
         GestureDetector(
@@ -897,7 +985,10 @@ void _handleLogout(BuildContext context) async {
             height: 32,
             margin: const EdgeInsets.symmetric(horizontal: 2),
             decoration: BoxDecoration(
-              color: i == _currentPage ? const Color(0xFF1976D2) : Colors.grey[100],
+              color:
+                  i == _currentPage
+                      ? const Color(0xFF1976D2)
+                      : Colors.grey[100],
               borderRadius: BorderRadius.circular(6),
             ),
             child: Center(
@@ -914,10 +1005,10 @@ void _handleLogout(BuildContext context) async {
         ),
       );
     }
-    
+
     return pageButtons;
   }
-  
+
   // Search functionality
   void _onSearchChanged(String value) {
     setState(() {
@@ -925,14 +1016,6 @@ void _handleLogout(BuildContext context) async {
     });
   }
 
-  // Filter functionality
-  void _onFilterChanged(String filter) {
-    setState(() {
-      _selectedFilter = filter;
-      _currentPage = 1; // Reset to first page on filter change
-    });
-  }
-  
   // Sorting functionality
   void _onSort(String column) {
     setState(() {
@@ -945,7 +1028,7 @@ void _handleLogout(BuildContext context) async {
       _currentPage = 1; // Reset to first page on sort
     });
   }
-  
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -1030,6 +1113,125 @@ void _handleLogout(BuildContext context) async {
             ),
             const SizedBox(height: 32),
 
+            // Search and Filter section
+            Row(
+              children: [
+                // Search Field with white background
+                SizedBox(
+                  width: 400,
+                  child: Container(
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: Colors.grey[300]!),
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.02),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (value) => setState(() {}),
+                      decoration: InputDecoration(
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: Colors.grey[500],
+                          size: 20,
+                        ),
+                        hintText:
+                            "Search",
+                        hintStyle: TextStyle(
+                          color: Colors.grey[500],
+                          fontSize: 14,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Status Filter Dropdown
+                IntrinsicWidth(
+                  child: Container(
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: Colors.grey[300]!),
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedFilter,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        items: _filterOptions.map((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(
+                              value,
+                              style: TextStyle(
+                                color: Colors.grey[700],
+                                fontSize: 14,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          if (newValue != null) {
+                            setState(() {
+                              _selectedFilter = newValue;
+                              _currentPage = 1; // Reset to first page on filter change
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Refresh Button
+                Container(
+                  height: 40,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: InkWell(
+                    onTap: _loadInventoryRequests,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.refresh_rounded,
+                          size: 20,
+                          color: Colors.blue[600],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
             // Main Content Container
             Container(
               decoration: BoxDecoration(
@@ -1045,7 +1247,7 @@ void _handleLogout(BuildContext context) async {
               ),
               child: Column(
                 children: [
-                  // Table header with search and filter
+                  // Table header with title only
                   Padding(
                     padding: const EdgeInsets.all(20.0),
                     child: Row(
@@ -1059,102 +1261,76 @@ void _handleLogout(BuildContext context) async {
                             color: Colors.black87,
                           ),
                         ),
-                        // Search and Filter section
-                        Row(
-                          children: [
-                            // Search field
-                            Container(
-                              width: 240,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: TextField(
-                                controller: _searchController,
-                                onChanged: _onSearchChanged,
-                                decoration: InputDecoration(
-                                  suffixIcon: Icon(
-                                    Icons.search,
-                                    color: Colors.grey[500],
-                                    size: 20,
+                        // Export button
+                        Container(
+                          height: 40,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            border: Border.all(color: Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: PopupMenuButton<String>(
+                            onSelected: (value) {
+                              // TODO: Implement export functionality
+                              if (value == 'pdf') {
+                                // Export to PDF
+                              } else if (value == 'word') {
+                                // Export to Word
+                              }
+                            },
+                            itemBuilder:
+                                (context) => [
+                                  PopupMenuItem(
+                                    value: 'pdf',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.picture_as_pdf,
+                                          color: Colors.red,
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text('PDF'),
+                                      ],
+                                    ),
                                   ),
-                                  hintText: "Search",
-                                  hintStyle: TextStyle(
-                                    color: Colors.grey[500],
+                                  PopupMenuItem(
+                                    value: 'word',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.description,
+                                          color: Colors.blue,
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text('Word'),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.download,
+                                  size: 20,
+                                  color: Colors.blue[600],
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Export',
+                                  style: TextStyle(
+                                    color: Colors.grey[700],
                                     fontSize: 14,
                                   ),
-                                  border: InputBorder.none,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 7,
-                                  ),
                                 ),
-                              ),
+                              ],
                             ),
-                            const SizedBox(width: 12),
-                            // Refresh Button
-                            Container(
-                              height: 40,
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                border: Border.all(color: Colors.grey[300]!),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: InkWell(
-                                onTap: _loadInventoryRequests,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.refresh_rounded, size: 20, color: Colors.blue[600]),
-                                    const SizedBox(width: 8),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            // Filter button
-                            PopupMenuButton<String>(
-                              initialValue: _selectedFilter,
-                              onSelected: _onFilterChanged,
-                              itemBuilder: (context) => _filterOptions.map((filter) {
-                                return PopupMenuItem(
-                                  value: filter,
-                                  child: Text(filter),
-                                );
-                              }).toList(),
-                              child: Container(
-                                height: 40,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey[300]!),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.tune,
-                                      color: Colors.grey[600],
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      "Filter",
-                                      style: TextStyle(
-                                        color: Colors.grey[700],
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ],
                     ),
@@ -1267,28 +1443,36 @@ void _handleLogout(BuildContext context) async {
                         rows:
                             _getPaginatedRequests().map((item) {
                               // Use _doc_id as the primary ID from Firestore
-                              final requestId = _formatId(item['_doc_id'] ?? item['id'], 'REQ');
+                              final requestId = _formatId(
+                                item['_doc_id'] ?? item['id'],
+                                'REQ',
+                              );
                               final maintenanceId = _formatId(
-                                item['maintenance_task_id'] ?? item['reference_id'],
+                                item['maintenance_task_id'] ??
+                                    item['reference_id'],
                                 'MT',
                               );
-                              
+
                               // Get item name from cached inventory items
                               String itemName = 'Unknown Item';
-                              final inventoryId = item['inventory_id']?.toString();
+                              final inventoryId =
+                                  item['inventory_id']?.toString();
 
-                              if (inventoryId != null && _inventoryItemNames.containsKey(inventoryId)) {
+                              if (inventoryId != null &&
+                                  _inventoryItemNames.containsKey(
+                                    inventoryId,
+                                  )) {
                                 // Found in cached inventory items
                                 itemName = _inventoryItemNames[inventoryId]!;
-                              } else if (item['item_name'] != null && item['item_name'].toString().isNotEmpty) {
+                              } else if (item['item_name'] != null &&
+                                  item['item_name'].toString().isNotEmpty) {
                                 // Fallback to direct field
                                 itemName = item['item_name'].toString();
                               } else if (inventoryId != null) {
                                 // Show ID if we have it but no name
                                 itemName = 'Item $inventoryId';
                               }
-               
-                              
+
                               final quantity =
                                   (item['quantity_requested'] ?? 0).toString();
                               final date = _formatDate(item['requested_date']);
@@ -1326,26 +1510,36 @@ void _handleLogout(BuildContext context) async {
                                       3,
                                       // Show warning icon if insufficient stock for pending requests
                                       FutureBuilder<bool>(
-                                        future: (status == 'pending' || status == 'reserved') 
-                                            ? _hasInsufficientStock(item)
-                                            : Future.value(false),
+                                        future:
+                                            (status == 'pending' ||
+                                                    status == 'reserved')
+                                                ? _hasInsufficientStock(item)
+                                                : Future.value(false),
                                         builder: (context, snapshot) {
-                                          final hasWarning = snapshot.data == true;
+                                          final hasWarning =
+                                              snapshot.data == true;
                                           return Row(
                                             children: [
                                               if (hasWarning)
                                                 Padding(
-                                                  padding: const EdgeInsets.only(right: 4),
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                        right: 4,
+                                                      ),
                                                   child: Tooltip(
-                                                    message: 'Insufficient stock available',
+                                                    message:
+                                                        'Insufficient stock available',
                                                     child: Icon(
-                                                      Icons.warning_amber_rounded,
+                                                      Icons
+                                                          .warning_amber_rounded,
                                                       color: Colors.orange,
                                                       size: 16,
                                                     ),
                                                   ),
                                                 ),
-                                              Flexible(child: _ellipsis(quantity)),
+                                              Flexible(
+                                                child: _ellipsis(quantity),
+                                              ),
                                             ],
                                           );
                                         },
@@ -1353,9 +1547,7 @@ void _handleLogout(BuildContext context) async {
                                     ),
                                   ),
                                   DataCell(_fixedCell(4, _ellipsis(date))),
-                                  DataCell(
-                                    _fixedCell(5, StatusTag(status)),
-                                  ),
+                                  DataCell(_fixedCell(5, StatusTag(status))),
                                   DataCell(
                                     _fixedCell(
                                       6,
@@ -1363,10 +1555,18 @@ void _handleLogout(BuildContext context) async {
                                         builder: (context) {
                                           return IconButton(
                                             onPressed: () {
-                                              final rbx = context.findRenderObject() as RenderBox;
-                                              final position = rbx.localToGlobal(Offset.zero);
+                                              final rbx =
+                                                  context.findRenderObject()
+                                                      as RenderBox;
+                                              final position = rbx
+                                                  .localToGlobal(Offset.zero);
                                               // Anchor menu below the icon so it doesn't overlap
-                                              final Offset menuPosition = position + Offset(0, rbx.size.height + 6);
+                                              final Offset menuPosition =
+                                                  position +
+                                                  Offset(
+                                                    0,
+                                                    rbx.size.height + 6,
+                                                  );
                                               _showActionMenu(
                                                 context,
                                                 item,
@@ -1409,18 +1609,26 @@ void _handleLogout(BuildContext context) async {
                         Row(
                           children: [
                             IconButton(
-                              onPressed: _currentPage > 1 ? _previousPage : null,
+                              onPressed:
+                                  _currentPage > 1 ? _previousPage : null,
                               icon: Icon(
                                 Icons.chevron_left,
-                                color: _currentPage > 1 ? Colors.grey[600] : Colors.grey[400],
+                                color:
+                                    _currentPage > 1
+                                        ? Colors.grey[600]
+                                        : Colors.grey[400],
                               ),
                             ),
                             ..._buildPageNumbers(),
                             IconButton(
-                              onPressed: _currentPage < _totalPages ? _nextPage : null,
+                              onPressed:
+                                  _currentPage < _totalPages ? _nextPage : null,
                               icon: Icon(
                                 Icons.chevron_right,
-                                color: _currentPage < _totalPages ? Colors.grey[600] : Colors.grey[400],
+                                color:
+                                    _currentPage < _totalPages
+                                        ? Colors.grey[600]
+                                        : Colors.grey[400],
                               ),
                             ),
                           ],
@@ -1437,4 +1645,3 @@ void _handleLogout(BuildContext context) async {
     );
   }
 }
-  

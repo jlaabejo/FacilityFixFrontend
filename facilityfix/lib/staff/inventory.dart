@@ -1,7 +1,8 @@
+import 'package:facilityfix/staff/maintenance_task.dart';
+import 'package:facilityfix/staff/repair_task.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/staff/home.dart';
-import 'package:facilityfix/staff/workorder.dart';
-import 'package:facilityfix/staff/maintenance.dart';
+import 'package:facilityfix/staff/task_management.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/view_details/invetory_details.dart';
@@ -148,13 +149,13 @@ class _InventoryPageState extends State<InventoryPage> {
       case 1:
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const WorkOrderPage()),
+          MaterialPageRoute(builder: (_) => const RepairTaskPage()),
         );
         break;
       case 2:
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const MaintenancePage()),
+          MaterialPageRoute(builder: (_) => const MaintenanceTaskPage()),
         );
         break;
       case 3:

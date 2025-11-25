@@ -1487,6 +1487,7 @@ class APIService {
     String? buildingId,
     String? status,
     String? category,
+    String? staffId,
   }) async {
     try {
       await _refreshRoleLabelFromToken();
@@ -1497,6 +1498,7 @@ class APIService {
       if (buildingId != null) queryParams['building_id'] = buildingId;
       if (status != null) queryParams['status'] = status;
       if (category != null) queryParams['category'] = category;
+      if (staffId != null) queryParams['staff_id'] = staffId;
 
       final queryString =
           queryParams.isEmpty

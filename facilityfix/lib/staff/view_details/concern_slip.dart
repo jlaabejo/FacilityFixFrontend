@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:facilityfix/staff/maintenance_task.dart';
+import 'package:facilityfix/staff/repair_task.dart';
 import 'package:http/http.dart' as http;
 import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/services/api_services.dart';
@@ -7,7 +9,7 @@ import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
-import 'package:facilityfix/staff/workorder.dart';
+import 'package:facilityfix/staff/task_management.dart';
 import 'package:facilityfix/staff/form/assessment_form.dart';
 import 'package:facilityfix/widgets/view_details.dart';
 import 'package:facilityfix/widgets/modals.dart';
@@ -124,7 +126,8 @@ class _StaffConcernSlipDetailPageState
   void _onTabTapped(int index) {
     final destinations = [
       const HomePage(),
-      const WorkOrderPage(),
+      const RepairTaskPage(),
+      const MaintenanceTaskPage(),
       const AnnouncementPage(),
       const CalendarPage(),
       const InventoryPage(),
@@ -367,7 +370,7 @@ class _StaffConcernSlipDetailPageState
         );
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const WorkOrderPage()),
+          MaterialPageRoute(builder: (_) => const RepairTaskPage()),
         );
       }
     } catch (e) {

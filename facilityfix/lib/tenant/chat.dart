@@ -1,4 +1,5 @@
 
+import 'package:facilityfix/tenant/repair_management.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:facilityfix/services/firebase_chat_service.dart';
@@ -10,7 +11,7 @@ import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
-import 'package:facilityfix/staff/workorder.dart';
+import 'package:facilityfix/staff/repair_task.dart';
 import 'package:facilityfix/widgets/chat.dart' as chat_widget;
 
 class TenantChatPage extends StatefulWidget {
@@ -119,7 +120,7 @@ class _TenantChatPageState extends State<TenantChatPage> {
   void _onTabTapped(int index) {
     final destinations = [
       const HomePage(),
-      const WorkOrderPage(),
+      const RepairManagement(),
       const AnnouncementPage(),
       const CalendarPage(),
       const InventoryPage(),

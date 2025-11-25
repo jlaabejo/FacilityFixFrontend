@@ -9,6 +9,7 @@ import '../../services/auth_storage.dart';
 import '../../services/api_services.dart' as main_api;
 import 'package:file_picker/file_picker.dart';
 import 'package:facilityfix/services/api_services.dart' as SecondaryAPI;
+
 class InternalMaintenanceFormPage extends StatefulWidget {
   final Map<String, dynamic>? maintenanceData;
   final bool isEditMode;
@@ -90,6 +91,13 @@ class _InternalMaintenanceFormPageState
   final List<Map<String, dynamic>> _checklistItems = [];
 
   List<Map<String, dynamic>> _staffMembers = [];
+  List<Map<String, dynamic>> get _filteredStaffMembers {
+    if (_selectedDepartment == null || _selectedDepartment!.isEmpty) return _staffMembers;
+    return _staffMembers.where((staff) {
+      final staffDept = (staff['staff_department'] ?? staff['department'])?.toString().toLowerCase();
+      return staffDept == _selectedDepartment!.toLowerCase();
+    }).toList();
+  }
   List<Map<String, dynamic>> _availableInventoryItems = [];
   List<Map<String, dynamic>> _selectedInventoryItems = [];
   final _apiService = ApiService();
@@ -304,6 +312,7 @@ void _handleLogout(BuildContext context) async {
                   'item_code': item['item_code'],
                   'quantity': quantity,
                   'available_stock': item['current_stock'],
+                  'unit': item['unit'] ?? '',
                 });
               });
             },
@@ -466,8 +475,9 @@ void _handleLogout(BuildContext context) async {
             'inventory_id': itemCode,
             'item_name': item['item_name'],
             'item_code': item['item_code'],
-            'quantity': '', // Default quantity
+            'quantity': 0, // Default quantity
             'available_stock': item['current_stock'],
+            'unit': item['unit'] ?? '',
           });
         });
       }
@@ -682,11 +692,87 @@ void _handleLogout(BuildContext context) async {
   @override
   void initState() {
     super.initState();
-    _initAutoFields();
+    _initialize();
+  }
 
-    // If in edit mode, populate fields with existing data
+  Future<void> _initialize() async {
+    await _initAutoFields();
     if (widget.isEditMode && widget.maintenanceData != null) {
+      await _fetchAndPopulateMaintenanceData();
+      await _loadReservedInventoryItems();
+    }
+  }
+
+  Future<void> _fetchAndPopulateMaintenanceData() async {
+    try {
+      final id = widget.maintenanceData!['id']?.toString();
+      if (id != null) {
+        final response = await _apiService.getAdminMaintenanceTaskById(id);
+        if (response['success'] == true && response['data'] != null) {
+          _populateFormFields(response['data']);
+        } else {
+          // Fallback to passed data if fetch fails
+          _populateFormFields(widget.maintenanceData!);
+        }
+      } else {
+        // Fallback to passed data
+        _populateFormFields(widget.maintenanceData!);
+      }
+    } catch (e) {
+      print('[Form] Error fetching maintenance data: $e');
+      // Fallback to passed data
       _populateFormFields(widget.maintenanceData!);
+    }
+  }
+
+  Future<void> _loadReservedInventoryItems() async {
+    try {
+      final taskId = widget.maintenanceData!['id']?.toString();
+      if (taskId != null) {
+        final response = await _apiService.getInventoryReservations(maintenanceTaskId: taskId);
+        if (response['success'] == true && response['data'] != null) {
+          final reservations = List<Map<String, dynamic>>.from(response['data']);
+          
+          // Fetch details for each reserved item
+          final List<Map<String, dynamic>> itemsWithDetails = [];
+          for (final res in reservations) {
+            final inventoryId = res['inventory_id'] ?? res['item_id'];
+            if (inventoryId != null) {
+              try {
+                final itemResponse = await _apiService.getInventoryItem(inventoryId);
+                if (itemResponse['success'] == true && itemResponse['data'] != null) {
+                  final item = itemResponse['data'];
+                  itemsWithDetails.add({
+                    'inventory_id': inventoryId,
+                    'item_name': item['item_name'] ?? item['name'] ?? '',
+                    'item_code': item['item_code'] ?? item['code'] ?? '',
+                    'quantity': res['quantity'] ?? 0,
+                    'available_stock': item['current_stock'] ?? item['stock'] ?? '',
+                    'unit': item['unit'] ?? '',
+                  });
+                }
+              } catch (e) {
+                print('Error fetching details for inventory $inventoryId: $e');
+                // Add with limited info if fetch fails
+                itemsWithDetails.add({
+                  'inventory_id': inventoryId,
+                  'item_name': res['item_name'] ?? '',
+                  'item_code': res['item_code'] ?? inventoryId,
+                  'quantity': res['quantity'] ?? 0,
+                  'available_stock': '',
+                  'unit': '',
+                });
+              }
+            }
+          }
+          
+          setState(() {
+            _selectedInventoryItems = itemsWithDetails;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading reserved inventory: $e');
     }
   }
 
@@ -802,16 +888,19 @@ void _handleLogout(BuildContext context) async {
       // Department: validate against department options
       final department = data['department'];
       final validDepartments = [
-        'Maintenance',
-        'Housekeeping',
-        'Security',
-        'Engineering',
+        'Carpentry',
+        'Electrical',
+        'Masonry',
+        'Plumbing',
       ];
-      _selectedDepartment =
-          (department != null &&
-                  validDepartments.contains(department.toString()))
-              ? department.toString()
-              : null;
+      final deptStr = department?.toString();
+      try {
+        _selectedDepartment = validDepartments.firstWhere(
+          (d) => d.toLowerCase() == deptStr?.toLowerCase(),
+        );
+      } catch (_) {
+        _selectedDepartment = null;
+      }
 
       // Staff assignment (coerce id to String, name to String)
       if (data['assigned_to'] != null) {
@@ -873,16 +962,24 @@ void _handleLogout(BuildContext context) async {
       }
 
       // Checklist items
-      if (data['checklist'] != null && data['checklist'] is List) {
-        print('[Form] Populating checklist from data: ${data['checklist']}');
+      final checklistData = data['checklist_completed'] ?? data['checklistItems'] ?? data['checklist'] ?? data['tasks'] ?? data['task_list'];
+      if (checklistData != null && checklistData is List) {
+        print('[Form] Populating checklist from data: $checklistData');
         _checklistItems.clear();
-        for (var item in data['checklist']) {
-          _checklistItems.add({
-            'id':
-                item['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
-            'task': item['task'] ?? item['description'] ?? '',
-            'completed': item['completed'] ?? false,
-          });
+        for (var item in checklistData) {
+          if (item is Map) {
+            _checklistItems.add({
+              'id': item['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              'task': item['task'] ?? item['description'] ?? '',
+              'completed': item['completed'] ?? false,
+            });
+          } else if (item is String) {
+            _checklistItems.add({
+              'id': DateTime.now().millisecondsSinceEpoch.toString(),
+              'task': item,
+              'completed': false,
+            });
+          }
         }
         print('[Form] Populated ${_checklistItems.length} checklist items');
       }
@@ -896,8 +993,9 @@ void _handleLogout(BuildContext context) async {
             'inventory_id': item['inventory_id'] ?? item['item_code'] ?? '', 
             'item_name': item['item_name'] ?? item['name'] ?? '',
             'item_code': item['item_code'] ?? item['code'] ?? '',
-            'quantity': item['quantity'] ?? '',
+            'quantity': item['quantity'] ?? 0,
             'available_stock': item['available_stock'] ?? item['stock'] ?? '',
+            'unit': item['unit'] ?? '',
           });
         }
       }
@@ -1064,12 +1162,12 @@ void _handleLogout(BuildContext context) async {
               content: Text('Maintenance task updated successfully!'),
             ),
           );
-          context.go('/work/maintenance');
+          Navigator.of(context).pop();
         }
       } else {
         // CREATE new task
         print('[v0] Saving maintenance task to backend...');
-        final result = await _apiService.createMaintenanceTask(maintenance);
+        final result = await _apiService.createAdminMaintenanceTask(maintenance);
         print('[v0] Maintenance task saved successfully');
         print('[v0] Backend response: $result');
 
@@ -1810,9 +1908,19 @@ void _handleLogout(BuildContext context) async {
                                             )
                                             .toList(),
                                     onChanged: (v) {
-                                      setState(() => _selectedDepartment = v);
-                                      // Automatically attempt to assign staff for the selected department
-                                      _handleAutoAssignStaff();
+                                      setState(() {
+                                        _selectedDepartment = v;
+                                        // Check if current staff is in the new department
+                                        if (_selectedStaffUserId != null) {
+                                          final inDept = _filteredStaffMembers.any((s) => (s['user_id'] ?? s['id']) == _selectedStaffUserId);
+                                          if (!inDept) {
+                                            _selectedStaffUserId = null;
+                                            _assignedStaffController.clear();
+                                          }
+                                        }
+                                        // Automatically attempt to assign staff for the selected department
+                                        _handleAutoAssignStaff();
+                                      });
                                     },
                                   ),
                                 ),
@@ -1829,21 +1937,26 @@ void _handleLogout(BuildContext context) async {
                               children: [
                                 _fieldLabel('Assign Staff'),
                                 _fieldBox(
-                                  child: TextFormField(
-                                    controller: _assignedStaffController,
-                                    enabled: false,
+                                  child: DropdownButtonFormField<String>(
+                                    value: _selectedStaffUserId,
                                     decoration: _decoration(
-                                      'Staff Name',
-                                    ).copyWith(
-                                      disabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                        borderSide: BorderSide(
-                                          color: Colors.grey[300]!,
-                                        ),
-                                      ),
-                                      filled: true,
-                                      fillColor: Colors.grey[50],
+                                      'Select Staff...',
                                     ),
+                                    items: _filteredStaffMembers.map((staff) {
+                                      final id = staff['user_id'] ?? staff['id'];
+                                      final name = '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'.trim();
+                                      return DropdownMenuItem<String>(
+                                        value: id,
+                                        child: Text(name),
+                                      );
+                                    }).toList(),
+                                    onChanged: (v) {
+                                      setState(() {
+                                        _selectedStaffUserId = v;
+                                        final staff = _staffMembers.firstWhere((s) => (s['user_id'] ?? s['id']) == v, orElse: () => {});
+                                        _assignedStaffController.text = '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'.trim();
+                                      });
+                                    },
                                   ),
                                 ),
                               ],
@@ -1872,7 +1985,7 @@ void _handleLogout(BuildContext context) async {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Select a department to automatically assign the next available staff member using round-robin. The assigned staff will appear on the right.',
+                                'Select a department to automatically assign staff.',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.blue[900],
@@ -1993,37 +2106,37 @@ void _handleLogout(BuildContext context) async {
                                               ),
                                               const SizedBox(width: 12),
 
-                                              // Item details
-                                              Expanded(
+                                                // Item details
+                                                Expanded(
                                                 child: Column(
                                                   crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
+                                                    CrossAxisAlignment.start,
                                                   children: [
-                                                    Text(
-                                                      item['item_name'] ??
-                                                          'Unknown Item',
-                                                      style: const TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        fontSize: 14,
-                                                      ),
+                                                  Text(
+                                                    item['item_name'] ??
+                                                      'Unknown Item',
+                                                    style: const TextStyle(
+                                                    fontWeight:
+                                                      FontWeight.w600,
+                                                    fontSize: 14,
                                                     ),
-                                                    const SizedBox(height: 4),
-                                                    Text(
-                                                      'Code: ${item['item_code'] ?? 'N/A'}',
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: Colors.grey[600],
-                                                      ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    '${item['item_code'] ?? 'N/A'}',
+                                                    style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey[600],
                                                     ),
-                                                    const SizedBox(height: 4),
-                                                    Text(
-                                                      'Available: ${item['available_stock']}',
-                                                      style: TextStyle(
-                                                        fontSize: 11,
-                                                        color: Colors.grey[600],
-                                                      ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    'Stock: ${item['available_stock']} ${item['unit'] ?? ''}',
+                                                    style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.grey[600],
                                                     ),
+                                                  ),
                                                   ],
                                                 ),
                                               ),
@@ -2363,7 +2476,7 @@ class _InventorySelectionDialog extends StatefulWidget {
 
 class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
   Map<String, dynamic>? _selectedItem;
-  final _quantityController = TextEditingController(text: '1');
+  final _quantityController = TextEditingController(text: '0');
   String _searchQuery = '';
 
   @override
@@ -2518,50 +2631,27 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                                 children: [
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Code: ${item['item_code'] ?? 'N/A'}',
+                                    'ID: ${item['item_code'] ?? 'N/A'}',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey[600],
                                     ),
                                   ),
                                   Text(
-                                    'Department: ${item['department'] ?? 'N/A'}',
+                                    'Stock Available: $currentStock',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey[600],
                                     ),
                                   ),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color:
-                                              isLowStock
-                                                  ? Colors.orange[100]
-                                                  : Colors.green[100],
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          'Stock: $currentStock',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w500,
-                                            color:
-                                                isLowStock
-                                                    ? Colors.orange[900]
-                                                    : Colors.green[900],
-                                          ),
-                                        ),
+                                  if (item['unit'] != null && item['unit'].toString().isNotEmpty)
+                                    Text(
+                                      'Unit: ${item['unit']}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
                                       ),
-                                    ],
-                                  ),
+                                    ),
                                 ],
                               ),
                               trailing:
@@ -2601,7 +2691,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                   ),
                   const SizedBox(width: 16),
                   Text(
-                    'Available: ${_selectedItem!['current_stock'] ?? 0}',
+                    'Stock: ${_selectedItem!['current_stock'] ?? 0}',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[700],

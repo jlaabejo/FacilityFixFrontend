@@ -1,5 +1,4 @@
 import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
-import 'package:facilityfix/adminweb/widgets/tags.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
@@ -25,15 +24,15 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
   List<Map<String, dynamic>> _filteredTasks = [];
   bool _isLoading = true;
   String? _error;
-  
+
   // Search and filter state
   final TextEditingController _searchController = TextEditingController();
   String? _selectedStatusFilter;
-  
+
   // Pagination state
   int _currentPage = 0;
   final int _itemsPerPage = 10;
-  
+
   // Sorting state
   bool _sortAscending = false;
 
@@ -50,7 +49,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     _initializeAndFetchData();
     _searchController.addListener(_applyFilters);
   }
-  
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -96,7 +95,8 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
         final response = await _apiService.getSpecialMaintenanceTasksSummary();
         if (response['success'] == true && mounted) {
           setState(() {
-            _specialTasksSummary = response['summaries'] as Map<String, dynamic>;
+            _specialTasksSummary =
+                response['summaries'] as Map<String, dynamic>;
           });
         }
       } catch (initError) {
@@ -138,66 +138,84 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
   // Apply search and filter
   void _applyFilters() {
     setState(() {
-      _filteredTasks = _tasks.where((task) {
-        // Search filter
-        final searchQuery = _searchController.text.toLowerCase();
-        if (searchQuery.isNotEmpty) {
-          final id = (task['id'] ?? '').toString().toLowerCase();
-          final location = _getTaskField(task, ['location', 'area'], '').toLowerCase();
-          final title = _getTaskField(task, ['task_title', 'taskTitle', 'title'], '').toLowerCase();
-          
-          if (!id.contains(searchQuery) && 
-              !location.contains(searchQuery) && 
-              !title.contains(searchQuery)) {
-            return false;
-          }
-        }
-        
-        // Status filter
-        if (_selectedStatusFilter != null && _selectedStatusFilter != 'All') {
-          final status = _getTaskField(task, ['status', 'statusTag'], '').toLowerCase();
-          if (!status.contains(_selectedStatusFilter!.toLowerCase())) {
-            return false;
-          }
-        }
-        
-        return true;
-      }).toList();
-      
+      _filteredTasks =
+          _tasks.where((task) {
+            // Search filter
+            final searchQuery = _searchController.text.toLowerCase();
+            if (searchQuery.isNotEmpty) {
+              final id = (task['id'] ?? '').toString().toLowerCase();
+              final location =
+                  _getTaskField(task, ['location', 'area'], '').toLowerCase();
+              final title =
+                  _getTaskField(task, [
+                    'task_title',
+                    'taskTitle',
+                    'title',
+                  ], '').toLowerCase();
+
+              if (!id.contains(searchQuery) &&
+                  !location.contains(searchQuery) &&
+                  !title.contains(searchQuery)) {
+                return false;
+              }
+            }
+
+            // Status filter
+            if (_selectedStatusFilter != null &&
+                _selectedStatusFilter != 'All') {
+              final status =
+                  _getTaskField(task, [
+                    'status',
+                    'statusTag',
+                  ], '').toLowerCase();
+              if (!status.contains(_selectedStatusFilter!.toLowerCase())) {
+                return false;
+              }
+            }
+
+            return true;
+          }).toList();
+
       // Sort by status first (scheduled first), then by date
       _sortTasks();
-      
+
       // Reset to first page when filters change
       _currentPage = 0;
     });
   }
-  
+
   // Sort tasks by status (scheduled first) and then by date
   void _sortTasks() {
     _filteredTasks.sort((a, b) {
       // Get status for both tasks
-      final statusA = _getTaskField(a, ['status', 'statusTag'], '').toLowerCase();
-      final statusB = _getTaskField(b, ['status', 'statusTag'], '').toLowerCase();
-      
+      final statusA =
+          _getTaskField(a, ['status', 'statusTag'], '').toLowerCase();
+      final statusB =
+          _getTaskField(b, ['status', 'statusTag'], '').toLowerCase();
+
       // Priority: scheduled first, then others
       final isScheduledA = statusA.contains('scheduled');
       final isScheduledB = statusB.contains('scheduled');
-      
+
       if (isScheduledA && !isScheduledB) return -1;
       if (!isScheduledA && isScheduledB) return 1;
-      
+
       // Within same status priority, sort by date
-      final dateA = _parseDate(a['scheduled_date'] ?? a['created_at'] ?? a['dateCreated']);
-      final dateB = _parseDate(b['scheduled_date'] ?? b['created_at'] ?? b['dateCreated']);
-      
+      final dateA = _parseDate(
+        a['scheduled_date'] ?? a['created_at'] ?? a['dateCreated'],
+      );
+      final dateB = _parseDate(
+        b['scheduled_date'] ?? b['created_at'] ?? b['dateCreated'],
+      );
+
       if (dateA == null && dateB == null) return 0;
       if (dateA == null) return 1;
       if (dateB == null) return -1;
-      
+
       return _sortAscending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
     });
   }
-  
+
   DateTime? _parseDate(dynamic date) {
     if (date == null) return null;
     try {
@@ -212,7 +230,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     }
     return null;
   }
-  
+
   // Toggle sort order
   void _toggleSortOrder() {
     setState(() {
@@ -220,51 +238,57 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
       _sortTasks();
     });
   }
-  
+
   // Get paginated tasks
   List<Map<String, dynamic>> get _paginatedTasks {
     final startIndex = _currentPage * _itemsPerPage;
-    final endIndex = (startIndex + _itemsPerPage).clamp(0, _filteredTasks.length);
-    
+    final endIndex = (startIndex + _itemsPerPage).clamp(
+      0,
+      _filteredTasks.length,
+    );
+
     if (startIndex >= _filteredTasks.length) {
       return [];
     }
-    
+
     return _filteredTasks.sublist(startIndex, endIndex);
   }
-  
+
   // Get total pages
   int get _totalPages {
     return (_filteredTasks.length / _itemsPerPage).ceil();
   }
-  
+
   // Convert status to title case
   String _toTitleCase(String text) {
     if (text.isEmpty) return text;
-    return text.split('_').map((word) {
-      if (word.isEmpty) return word;
-      return word[0].toUpperCase() + word.substring(1).toLowerCase();
-    }).join(' ');
+    return text
+        .split('_')
+        .map((word) {
+          if (word.isEmpty) return word;
+          return word[0].toUpperCase() + word.substring(1).toLowerCase();
+        })
+        .join(' ');
   }
 
   // Format maintenance ID with MT-2025-XXXXX pattern
   String _formatMaintenanceId(dynamic id) {
     if (id == null) return 'N/A';
-    
+
     final idStr = id.toString();
-    
+
     // If already formatted with MT-2025 prefix, return as is
     if (idStr.startsWith('MT-2025-') || idStr.startsWith('SPECIAL-')) {
       return idStr;
     }
-    
+
     // Extract numeric ID and pad to 5 digits
     final numericId = int.tryParse(idStr);
     if (numericId != null) {
       final paddedId = numericId.toString().padLeft(5, '0');
       return 'MT-2025-$paddedId';
     }
-    
+
     // If can't parse, return original
     return idStr;
   }
@@ -287,20 +311,19 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     return pathMap[routeKey];
   }
 
-// Logout functionality
-void _handleLogout(BuildContext context) async {
-  final result = await showDialog<bool>(
-    context: context,
-    builder: (BuildContext context) {
-      return const LogoutPopup();
-    },
-  );
+  // Logout functionality
+  void _handleLogout(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return const LogoutPopup();
+      },
+    );
 
-  if (result == true) {
-    context.go('/');
+    if (result == true) {
+      context.go('/');
+    }
   }
-}
-
 
   final List<double> _colW = <double>[
     160, // MAINTENANCE ID
@@ -333,7 +356,11 @@ void _handleLogout(BuildContext context) async {
   );
 
   // Helper to safely extract field values with multiple possible keys
-  String _getTaskField(Map<String, dynamic> task, List<String> keys, String defaultValue) {
+  String _getTaskField(
+    Map<String, dynamic> task,
+    List<String> keys,
+    String defaultValue,
+  ) {
     for (final key in keys) {
       final value = task[key];
       if (value != null && value.toString().isNotEmpty) {
@@ -544,20 +571,22 @@ void _handleLogout(BuildContext context) async {
       // Navigate to internal form with edit mode
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (context) => InternalMaintenanceFormPage(
-            maintenanceData: maintenance,
-            isEditMode: true,
-          ),
+          builder:
+              (context) => InternalMaintenanceFormPage(
+                maintenanceData: maintenance,
+                isEditMode: true,
+              ),
         ),
       );
     } else if (typeSlug.contains('external')) {
       // Navigate to external form with edit mode
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (context) => ExternalMaintenanceFormPage(
-            maintenanceData: maintenance,
-            isEditMode: true,
-          ),
+          builder:
+              (context) => ExternalMaintenanceFormPage(
+                maintenanceData: maintenance,
+                isEditMode: true,
+              ),
         ),
       );
     } else {
@@ -569,10 +598,9 @@ void _handleLogout(BuildContext context) async {
 
   void _deleteMaintenance(Map<String, dynamic> maintenance) async {
     // Extract the actual ID from the maintenance object
-    final maintenanceId = maintenance['id'] ?? 
-                         maintenance['_doc_id'] ?? 
-                         maintenance['task_id'];
-    
+    final maintenanceId =
+        maintenance['id'] ?? maintenance['_doc_id'] ?? maintenance['task_id'];
+
     if (maintenanceId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -582,13 +610,14 @@ void _handleLogout(BuildContext context) async {
       );
       return;
     }
-    
+
     // Use the reusable app dialog to confirm destructive action
     final confirmed = await showAppDialog<bool>(
       context,
       config: DialogConfig.destructive(
         title: 'Delete Maintenance',
-        description: 'Are you sure you want to delete maintenance task ${_formatMaintenanceId(maintenanceId)}? This action cannot be undone.',
+        description:
+            'Are you sure you want to delete maintenance task ${_formatMaintenanceId(maintenanceId)}? This action cannot be undone.',
         primaryButtonLabel: 'Delete',
         primaryAction: () {}, // actual deletion happens after confirmation
         secondaryButtonLabel: 'Cancel',
@@ -620,22 +649,32 @@ void _handleLogout(BuildContext context) async {
       );
 
       try {
-        final response = await _apiService.deleteMaintenanceTask(maintenanceId.toString());
+        final response = await _apiService.deleteMaintenanceTask(
+          maintenanceId.toString(),
+        );
 
-        if (response['success'] == true || response['message']?.toString().toLowerCase().contains('deleted') == true) {
+        if (response['success'] == true ||
+            response['message']?.toString().toLowerCase().contains('deleted') ==
+                true) {
           await _fetchMaintenanceTasks(); // Refresh the list
 
           if (mounted) {
             ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Maintenance task ${_formatMaintenanceId(maintenanceId)} deleted successfully'),
+                content: Text(
+                  'Maintenance task ${_formatMaintenanceId(maintenanceId)} deleted successfully',
+                ),
                 backgroundColor: Colors.green,
               ),
             );
           }
         } else {
-          throw Exception(response['error'] ?? response['message'] ?? 'Failed to delete maintenance task');
+          throw Exception(
+            response['error'] ??
+                response['message'] ??
+                'Failed to delete maintenance task',
+          );
         }
       } catch (e) {
         print('[v0] Error deleting maintenance: $e');
@@ -797,6 +836,142 @@ void _handleLogout(BuildContext context) async {
             ),
             const SizedBox(height: 32),
 
+            // Search and refresh controls
+            Row(
+              children: [
+                // Search Field with white background
+                SizedBox(
+                  width: 400,
+                  child: Container(
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: Colors.grey[300]!),
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.02),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (value) => _applyFilters(),
+                      decoration: InputDecoration(
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: Colors.grey[500],
+                          size: 20,
+                        ),
+                        hintText: "Search",
+                        hintStyle: TextStyle(
+                          color: Colors.grey[500],
+                          fontSize: 14,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Filter button with dropdown
+                PopupMenuButton<String>(
+                  initialValue: _selectedStatusFilter,
+                  onSelected: (value) {
+                    setState(() {
+                      _selectedStatusFilter = value == 'All' ? null : value;
+                      _applyFilters();
+                    });
+                  },
+                  itemBuilder:
+                      (context) => [
+                        const PopupMenuItem(
+                          value: 'All',
+                          child: Text('All Status'),
+                        ),
+                        const PopupMenuItem(value: 'New', child: Text('New')),
+                        const PopupMenuItem(
+                          value: 'Scheduled',
+                          child: Text('Scheduled'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'In Progress',
+                          child: Text('In Progress'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'Completed',
+                          child: Text('Completed'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'Assigned',
+                          child: Text('Assigned'),
+                        ),
+                      ],
+                  child: Container(
+                    height: 40,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: Colors.grey[300]!),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.filter_list,
+                          size: 20,
+                          color: Colors.grey[700],
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _selectedStatusFilter ?? 'Filter',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Refresh Button
+                Container(
+                  height: 40,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.white,
+                  ),
+                  child: InkWell(
+                    onTap: _fetchMaintenanceTasks,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.refresh_rounded,
+                          size: 20,
+                          color: Colors.blue[600],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -827,118 +1002,72 @@ void _handleLogout(BuildContext context) async {
                         ),
                         Row(
                           children: [
-                            // Search field
-                            Container(
-                              width: 240,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: TextField(
-                                controller: _searchController,
-                                decoration: InputDecoration(
-                                  suffixIcon: Icon(
-                                    Icons.search,
-                                    color: Colors.grey[500],
-                                    size: 20,
-                                  ),
-                                  hintText: "Search",
-                                  hintStyle: TextStyle(
-                                    color: Colors.grey[500],
-                                    fontSize: 14,
-                                  ),
-                                  border: InputBorder.none,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 7,
-                                  ),
-                                ),
-                              ),
-                            ),
                             const SizedBox(width: 12),
-                            // Refresh Button (copied from announcements page style)
-                            Container(
-                              height: 40,
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
-                                borderRadius: BorderRadius.circular(8),
-                                color: Colors.white,
-                              ),
-                              child: InkWell(
-                                onTap: _fetchMaintenanceTasks,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.refresh_rounded, size: 20, color: Colors.blue[600]),
-                                    const SizedBox(width: 8),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-
                             // Filter button with dropdown
-                            PopupMenuButton<String>(
-                              initialValue: _selectedStatusFilter,
-                              onSelected: (value) {
-                                setState(() {
-                                  _selectedStatusFilter = value == 'All' ? null : value;
-                                  _applyFilters();
-                                });
-                              },
-                              itemBuilder: (context) => [
-                                const PopupMenuItem(
-                                  value: 'All',
-                                  child: Text('All Status'),
-                                ),
-                                const PopupMenuItem(
-                                  value: 'New',
-                                  child: Text('New'),
-                                ),
-                                const PopupMenuItem(
-                                  value: 'Scheduled',
-                                  child: Text('Scheduled'),
-                                ),
-                                const PopupMenuItem(
-                                  value: 'In Progress',
-                                  child: Text('In Progress'),
-                                ),
-                                const PopupMenuItem(
-                                  value: 'Completed',
-                                  child: Text('Completed'),
-                                ),
-                                const PopupMenuItem(
-                                  value: 'Assigned',
-                                  child: Text('Assigned'),
-                                ),
-                              ],
-                              child: Container(
-                                height: 40,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  border: Border.all(color: Colors.grey[300]!),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
+                            Container(
+                              height: 40,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                border: Border.all(color: Colors.grey[300]!),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: PopupMenuButton<String>(
+                                onSelected: (value) {
+                                  // TODO: Implement export functionality
+                                  if (value == 'pdf') {
+                                    // Export to PDF
+                                  } else if (value == 'word') {
+                                    // Export to Word
+                                  }
+                                },
+                                itemBuilder:
+                                    (context) => [
+                                      PopupMenuItem(
+                                        value: 'pdf',
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.picture_as_pdf,
+                                              color: Colors.red,
+                                              size: 18,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text('PDF'),
+                                          ],
+                                        ),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'word',
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.description,
+                                              color: Colors.blue,
+                                              size: 18,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text('Word'),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(
-                                      Icons.filter_list,
+                                      Icons.download,
                                       size: 20,
-                                      color: Colors.grey[700],
+                                      color: Colors.blue[600],
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
-                                      _selectedStatusFilter ?? 'Filter',
+                                      'Export',
                                       style: TextStyle(
-                                        fontSize: 14,
                                         color: Colors.grey[700],
+                                        fontSize: 14,
                                       ),
                                     ),
                                   ],
@@ -1009,127 +1138,163 @@ void _handleLogout(BuildContext context) async {
                           color: Colors.black87,
                         ),
                         columns: [
-                          DataColumn(label: _fixedCell(0, const Text("MAINTENANCE ID"))),
+                          DataColumn(
+                            label: _fixedCell(0, const Text("MAINTENANCE ID")),
+                          ),
                           DataColumn(
                             label: _fixedCell(1, const Text("TASK TITLE")),
                           ),
                           DataColumn(
                             label: _fixedCell(2, const Text("LOCATION")),
                           ),
-                          DataColumn(
-                            label: _fixedCell(3, const Text("TYPE")),
-                          ),
+                          DataColumn(label: _fixedCell(3, const Text("TYPE"))),
                           DataColumn(
                             label: _fixedCell(4, const Text("STATUS")),
                           ),
                           DataColumn(
-                            label: _fixedCell(5, InkWell(
-                              onTap: _toggleSortOrder,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Text("SCHEDULE DATE"),
-                                  const SizedBox(width: 4),
-                                  Icon(
-                                    _sortAscending 
-                                      ? Icons.arrow_upward 
-                                      : Icons.arrow_downward,
-                                    size: 14,
-                                    color: Colors.grey[600],
-                                  ),
-                                ],
+                            label: _fixedCell(
+                              5,
+                              InkWell(
+                                onTap: _toggleSortOrder,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text("SCHEDULE DATE"),
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      _sortAscending
+                                          ? Icons.arrow_upward
+                                          : Icons.arrow_downward,
+                                      size: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ],
+                                ),
                               ),
-                            )),
+                            ),
                           ),
                           DataColumn(
                             label: _fixedCell(6, const Text("RECURRENCE")),
                           ),
                           DataColumn(label: _fixedCell(7, const Text(""))),
                         ],
-                        rows: _paginatedTasks.map((maintenance) {
-                          final rawId = _getTaskField(maintenance, ['id', 'formatted_id'], 'N/A');
-                          final id = _formatMaintenanceId(rawId);
-                          final title = _getTaskField(maintenance, ['task_title', 'taskTitle', 'title'], 'N/A');
-                          final location = _getTaskField(maintenance, ['location', 'area'], 'N/A');
-                          final typeSlug = _resolveMaintenanceType(maintenance);
-                          final type = typeSlug.contains('internal') ? 'Internal' :
-                                typeSlug.contains('external') ? 'External' : 'N/A';
-                          final rawStatus = _getTaskField(maintenance, ['status', 'statusTag'], 'N/A');
+                        rows:
+                            _paginatedTasks.map((maintenance) {
+                              final rawId = _getTaskField(maintenance, [
+                                'id',
+                                'formatted_id',
+                              ], 'N/A');
+                              final id = _formatMaintenanceId(rawId);
+                              final title = _getTaskField(maintenance, [
+                                'task_title',
+                                'taskTitle',
+                                'title',
+                              ], 'N/A');
+                              final location = _getTaskField(maintenance, [
+                                'location',
+                                'area',
+                              ], 'N/A');
+                              final typeSlug = _resolveMaintenanceType(
+                                maintenance,
+                              );
+                              final type =
+                                  typeSlug.contains('internal')
+                                      ? 'Internal'
+                                      : typeSlug.contains('external')
+                                      ? 'External'
+                                      : 'N/A';
+                              final rawStatus = _getTaskField(maintenance, [
+                                'status',
+                                'statusTag',
+                              ], 'N/A');
 
-                          // Simple inline tag widget for the TYPE column (replaces MaintenanceTypeTag usage)
-                          final Widget typeTag = Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[100],
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              type,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                            ),
-                          );
+                              // Simple inline tag widget for the TYPE column (replaces MaintenanceTypeTag usage)
+                              final Widget typeTag = Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  type,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              );
 
-                          final status = _toTitleCase(rawStatus);
-                          final scheduledDate = maintenance['scheduled_date'] ?? 
-                                               maintenance['dateCreated'] ?? 
-                                               maintenance['created_at'];
-                          final date = _formatDate(scheduledDate);
-                          final recurrence = _getTaskField(
-                            maintenance,
-                            ['recurrence', 'recurrence_type', 'recurrenceType'], 
-                            'None'
-                          );
+                              final status = _toTitleCase(rawStatus);
+                              final scheduledDate =
+                                  maintenance['scheduled_date'] ??
+                                  maintenance['dateCreated'] ??
+                                  maintenance['created_at'];
+                              final date = _formatDate(scheduledDate);
+                              final recurrence = _getTaskField(maintenance, [
+                                'recurrence',
+                                'recurrence_type',
+                                'recurrenceType',
+                              ], 'None');
 
-                          return DataRow(
-                            cells: [
-                              DataCell(_fixedCell(0, _ellipsis(id))),
-                              DataCell(_fixedCell(1, _ellipsis(title))),
-                              DataCell(_fixedCell(2, _ellipsis(location))),
-                              DataCell(_fixedCell(3, typeTag)),
-                              DataCell(
-                                _fixedCell(4, _buildStatusChip(status)),
-                              ),
-                              DataCell(_fixedCell(5, _ellipsis(date))),
-                              DataCell(_fixedCell(6, _ellipsis(recurrence))),
-                              DataCell(
-                                _fixedCell(
-                                  7,
-                                  Builder(
-                                    builder: (context) {
-                                      return IconButton(
-                                        icon: const Icon(
-                                          Icons.more_vert,
-                                          size: 20,
-                                        ),
-                                        onPressed: () {
-                                          final RenderBox button = context
-                                              .findRenderObject() as RenderBox;
-                                          final RenderBox overlay = Navigator.of(
-                                            context,
-                                          ).overlay!.context.findRenderObject()
-                                              as RenderBox;
-                                          final position = button.localToGlobal(
-                                            Offset.zero,
-                                            ancestor: overlay,
-                                          );
+                              return DataRow(
+                                cells: [
+                                  DataCell(_fixedCell(0, _ellipsis(id))),
+                                  DataCell(_fixedCell(1, _ellipsis(title))),
+                                  DataCell(_fixedCell(2, _ellipsis(location))),
+                                  DataCell(_fixedCell(3, typeTag)),
+                                  DataCell(
+                                    _fixedCell(4, _buildStatusChip(status)),
+                                  ),
+                                  DataCell(_fixedCell(5, _ellipsis(date))),
+                                  DataCell(
+                                    _fixedCell(6, _ellipsis(recurrence)),
+                                  ),
+                                  DataCell(
+                                    _fixedCell(
+                                      7,
+                                      Builder(
+                                        builder: (context) {
+                                          return IconButton(
+                                            icon: const Icon(
+                                              Icons.more_vert,
+                                              size: 20,
+                                            ),
+                                            onPressed: () {
+                                              final RenderBox button =
+                                                  context.findRenderObject()
+                                                      as RenderBox;
+                                              final RenderBox overlay =
+                                                  Navigator.of(context)
+                                                          .overlay!
+                                                          .context
+                                                          .findRenderObject()
+                                                      as RenderBox;
+                                              final position = button
+                                                  .localToGlobal(
+                                                    Offset.zero,
+                                                    ancestor: overlay,
+                                                  );
 
-                                          _showActionMenu(
-                                            context,
-                                            maintenance,
-                                            position,
+                                              _showActionMenu(
+                                                context,
+                                                maintenance,
+                                                position,
+                                              );
+                                            },
                                           );
                                         },
-                                      );
-                                    },
+                                      ),
+                                      align: Alignment.center,
+                                    ),
                                   ),
-                                  align: Alignment.center,
-                                ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
+                                ],
+                              );
+                            }).toList(),
                       ),
                     ),
                   Divider(height: 1, thickness: 1, color: Colors.grey[400]),
@@ -1151,82 +1316,84 @@ void _handleLogout(BuildContext context) async {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.chevron_left),
-                              onPressed: _currentPage > 0
-                                  ? () {
-                                      setState(() {
-                                        _currentPage--;
-                                      });
-                                    }
-                                  : null,
+                              onPressed:
+                                  _currentPage > 0
+                                      ? () {
+                                        setState(() {
+                                          _currentPage--;
+                                        });
+                                      }
+                                      : null,
                               color: Colors.grey[700],
                             ),
-                            ...List.generate(
-                              _totalPages.clamp(0, 5),
-                              (index) {
-                                // Show first 2, current page ± 1, and last 2
-                                int pageNumber;
-                                if (_totalPages <= 5) {
-                                  pageNumber = index;
-                                } else if (_currentPage < 2) {
-                                  pageNumber = index;
-                                } else if (_currentPage > _totalPages - 3) {
-                                  pageNumber = _totalPages - 5 + index;
-                                } else {
-                                  pageNumber = _currentPage - 2 + index;
-                                }
+                            ...List.generate(_totalPages.clamp(0, 5), (index) {
+                              // Show first 2, current page ± 1, and last 2
+                              int pageNumber;
+                              if (_totalPages <= 5) {
+                                pageNumber = index;
+                              } else if (_currentPage < 2) {
+                                pageNumber = index;
+                              } else if (_currentPage > _totalPages - 3) {
+                                pageNumber = _totalPages - 5 + index;
+                              } else {
+                                pageNumber = _currentPage - 2 + index;
+                              }
 
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                  ),
-                                  child: InkWell(
-                                    onTap: () {
-                                      setState(() {
-                                        _currentPage = pageNumber;
-                                      });
-                                    },
-                                    child: Container(
-                                      width: 36,
-                                      height: 36,
-                                      decoration: BoxDecoration(
-                                        color: _currentPage == pageNumber
-                                            ? const Color(0xFF1976D2)
-                                            : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(
-                                          color: _currentPage == pageNumber
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
+                                child: InkWell(
+                                  onTap: () {
+                                    setState(() {
+                                      _currentPage = pageNumber;
+                                    });
+                                  },
+                                  child: Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          _currentPage == pageNumber
                                               ? const Color(0xFF1976D2)
-                                              : Colors.grey[300]!,
-                                        ),
+                                              : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                        color:
+                                            _currentPage == pageNumber
+                                                ? const Color(0xFF1976D2)
+                                                : Colors.grey[300]!,
                                       ),
-                                      child: Center(
-                                        child: Text(
-                                          '${pageNumber + 1}',
-                                          style: TextStyle(
-                                            color: _currentPage == pageNumber
-                                                ? Colors.white
-                                                : Colors.grey[700],
-                                            fontWeight:
-                                                _currentPage == pageNumber
-                                                    ? FontWeight.w600
-                                                    : FontWeight.normal,
-                                          ),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        '${pageNumber + 1}',
+                                        style: TextStyle(
+                                          color:
+                                              _currentPage == pageNumber
+                                                  ? Colors.white
+                                                  : Colors.grey[700],
+                                          fontWeight:
+                                              _currentPage == pageNumber
+                                                  ? FontWeight.w600
+                                                  : FontWeight.normal,
                                         ),
                                       ),
                                     ),
                                   ),
-                                );
-                              },
-                            ),
+                                ),
+                              );
+                            }),
                             IconButton(
                               icon: const Icon(Icons.chevron_right),
-                              onPressed: _currentPage < _totalPages - 1
-                                  ? () {
-                                      setState(() {
-                                        _currentPage++;
-                                      });
-                                    }
-                                  : null,
+                              onPressed:
+                                  _currentPage < _totalPages - 1
+                                      ? () {
+                                        setState(() {
+                                          _currentPage++;
+                                        });
+                                      }
+                                      : null,
                               color: Colors.grey[700],
                             ),
                           ],

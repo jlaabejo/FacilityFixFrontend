@@ -1,3 +1,4 @@
+import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
@@ -31,30 +32,18 @@ class _AdminWebSettingsPageState extends State<AdminWebSettingsPage> {
     return pathMap[routeKey];
   }
 
-  // Logout functionality 
-  void _handleLogout(BuildContext context) {
-    showDialog(
+  // Logout functionality
+  void _handleLogout(BuildContext context) async {
+    final result = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Logout'),
-          content: const Text('Are you sure you want to logout?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                context.go('/');
-              },
-              child: const Text('Logout'),
-            ),
-          ],
-        );
+        return const LogoutPopup();
       },
     );
+
+    if (result == true) {
+      context.go('/');
+    }
   }
 
   // Settings form controllers - for backend integration
@@ -294,27 +283,6 @@ class _AdminWebSettingsPageState extends State<AdminWebSettingsPage> {
               title: "System Configuration",
               icon: Icons.settings,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildTextField(
-                        controller: _maintenanceIntervalController,
-                        label: "Default Maintenance Interval (days)",
-                        hint: "30",
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildTextField(
-                        controller: _sessionTimeoutController,
-                        label: "Session Timeout (minutes)",
-                        hint: "60",
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
-                  ],
-                ),
                 Row(
                   children: [
                     Expanded(

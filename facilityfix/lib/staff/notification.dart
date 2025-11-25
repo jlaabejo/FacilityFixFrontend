@@ -2,7 +2,8 @@ import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
-import 'package:facilityfix/staff/workorder.dart';
+import 'package:facilityfix/staff/repair_task.dart';
+import 'package:facilityfix/staff/task_management.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/models/notification_models.dart';
@@ -41,6 +42,15 @@ class _NotificationPageState extends State<NotificationPage> {
   void initState() {
     super.initState();
     _loadNotifications();
+    // Auto-refresh every 10 seconds to keep notifications up-to-date
+    Future.delayed(const Duration(seconds: 10), () {
+      if (mounted) _loadNotifications();
+    });
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 
   Future<void> _loadNotifications() async {
@@ -52,35 +62,46 @@ class _NotificationPageState extends State<NotificationPage> {
         limit: 50,
       );
       print('[Staff Notifications] Received ${notificationsJson.length} notifications');
+      print('[Staff Notifications] Raw data: $notificationsJson');
       
       final notifications = notificationsJson
-          .map((json) => EnhancedNotificationItem.fromJson(json))
+          .map((json) {
+            try {
+              return EnhancedNotificationItem.fromJson(json);
+            } catch (e) {
+              print('[Staff Notifications] Error parsing notification: $e');
+              rethrow;
+            }
+          })
           .toList();
       
-      setState(() {
-        _notifications = notifications;
-      });
+      if (mounted) {
+        setState(() {
+          _notifications = notifications;
+          _isLoading = false;
+        });
+      }
       print('[Staff Notifications] Successfully loaded ${notifications.length} notifications');
     } catch (e) {
       print('[Staff Notifications] Error loading notifications: $e');
       if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to load notifications: $e')),
         );
       }
-    } finally {
-      setState(() => _isLoading = false);
     }
   }
 
   Future<void> _onRefresh() async {
+    print('[Staff Notifications] Manual refresh triggered');
     await _loadNotifications();
   }
 
   void _onTabTapped(int index) {
     final destinations = [
       const HomePage(),
-      const WorkOrderPage(),
+      const RepairTaskPage(),
       const AnnouncementPage(),
       const CalendarPage(),
       const InventoryPage(),
@@ -135,7 +156,15 @@ class _NotificationPageState extends State<NotificationPage> {
     }
 
     if (entries.isEmpty) {
-      entries.add(ListHeader(_filter == NotifFilter.unread ? 'No unread notifications' : 'No notifications'));
+      String emptyMessage;
+      if (_filter == NotifFilter.unread) {
+        emptyMessage = _notifications.isEmpty 
+            ? 'No notifications yet' 
+            : 'No unread notifications';
+      } else {
+        emptyMessage = 'No notifications yet';
+      }
+      entries.add(ListHeader(emptyMessage));
     }
 
     return entries;
@@ -286,6 +315,34 @@ class _NotificationPageState extends State<NotificationPage> {
                   child: CircularProgressIndicator(),
                 ),
               )
+            else if (_notifications.isEmpty && _filter == NotifFilter.all)
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.notifications_none, size: 64, color: Colors.grey[300]),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No notifications yet',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Pull to refresh',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
             else
               Expanded(
                 child: RefreshIndicator(
@@ -348,7 +405,7 @@ class _NotificationPageState extends State<NotificationPage> {
                             } else {
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(builder: (_) => const WorkOrderPage()),
+                                MaterialPageRoute(builder: (_) => const RepairTaskPage()),
                               );
                             }
                           },

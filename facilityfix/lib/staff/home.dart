@@ -2,13 +2,13 @@ import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/staff/view_details/concern_slip.dart';
 import 'package:facilityfix/staff/view_details/job_service_detail.dart';
-import 'package:facilityfix/staff/workorder.dart';
-import 'package:facilityfix/staff/maintenance.dart';
+import 'package:facilityfix/staff/repair_task.dart';
+import 'package:facilityfix/staff/maintenance_task.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/staff/notification.dart';
-import 'package:facilityfix/staff/profile.dart';
+import 'package:facilityfix/staff/settings/profile.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/modals.dart';
@@ -347,13 +347,13 @@ class _HomeState extends State<HomePage> {
       case 1:
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const WorkOrderPage()),
+          MaterialPageRoute(builder: (_) => const RepairTaskPage()),
         );
         break;
       case 2:
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const MaintenancePage()),
+          MaterialPageRoute(builder: (_) => const MaintenanceTaskPage()),
         );
         break;
       case 3:
@@ -1034,7 +1034,7 @@ class _HomeState extends State<HomePage> {
                           onActionTap:
                               () => Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (_) => const WorkOrderPage(),
+                                  builder: (_) => const RepairTaskPage(),
                                 ),
                               ),
                         ),

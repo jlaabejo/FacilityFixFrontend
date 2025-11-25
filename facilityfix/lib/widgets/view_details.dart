@@ -7,6 +7,7 @@ import 'package:facilityfix/config/env.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/tag.dart'; // StatusTag, PriorityTag, requestTypeTagTag, DepartmentTag
 import 'package:facilityfix/staff/view_details/invetory_details.dart';
+import 'package:facilityfix/utils/inventory_notifier.dart';
 
 // Schedule formatting is centralized in UiDateUtils.formatScheduleRange
 
@@ -1583,15 +1584,26 @@ class MaintenanceDetails extends StatefulWidget {
 class _MaintenanceState extends State<MaintenanceDetails> {
   late final List<Map<String, dynamic>> _checklistState;
   List<Map<String, dynamic>> _inventoryRequests = [];
+  final Set<String> _loadingItems = {}; // Track which items are being processed
+  late final InventoryUpdateNotifier _notifier;
 
   @override
   void initState() {
     super.initState();
+    _notifier = InventoryUpdateNotifier();
+    // Listen for inventory updates (admin approvals, stock changes)
+    _notifier.addListener(_onInventoryUpdate);
     _checklistState =
         (widget.checklist ?? const <String>[])
             .map((item) => {"text": item, "checked": false})
             .toList();
     _loadInventoryRequests();
+  }
+
+  void _onInventoryUpdate() async {
+    // When notified, reload requests so UI reflects approvals/stock changes
+    await _loadInventoryRequests();
+    if (mounted) setState(() {});
   }
 
   // Format DateTime? as "Aug 23, 2025"
@@ -1715,6 +1727,9 @@ class _MaintenanceState extends State<MaintenanceDetails> {
       return;
     }
 
+    // Add to loading set
+    setState(() => _loadingItems.add(requestId));
+
     try {
       final apiService = APIService();
 
@@ -1726,7 +1741,40 @@ class _MaintenanceState extends State<MaintenanceDetails> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Reservation marked as received successfully')),
             );
-            await _loadInventoryRequests();
+            // Optimistically update local request state so UI updates immediately
+            setState(() {
+              final index = _inventoryRequests.indexWhere((r) =>
+                  (r['_doc_id'] ?? r['id'] ?? r['request_id'] ?? r['reservation_id']) == requestId);
+              if (index != -1) {
+                _inventoryRequests[index]['status'] = 'received';
+                _inventoryRequests[index]['received'] = true;
+              }
+            });
+
+            // Refresh inventory item to get authoritative current stock and reserved quantity
+            final inventoryId = request['inventory_id'];
+            if (inventoryId != null) {
+              try {
+                final itemResp = await apiService.getInventoryItemById(inventoryId);
+                if (itemResp != null) {
+                  final newStock = itemResp['current_stock'] ?? itemResp['quantity_in_stock'] ?? itemResp['stock'];
+                  final reservedQty = itemResp['reserved_quantity'] ?? itemResp['reserved'] ?? 0;
+                  setState(() {
+                    final index = _inventoryRequests.indexWhere((r) =>
+                        (r['_doc_id'] ?? r['id'] ?? r['request_id'] ?? r['reservation_id']) == requestId);
+                    if (index != -1) {
+                      if (newStock != null) _inventoryRequests[index]['stock_quantity'] = newStock;
+                      _inventoryRequests[index]['reserved_quantity'] = reservedQty;
+                    }
+                  });
+                }
+              } catch (e) {
+                print('DEBUG: Failed to refresh inventory item after receiving reservation: $e');
+              }
+            }
+
+            // Notify listeners that inventory was updated
+            _notifier.notifyReservationReceived(requestId, inventoryId ?? '');
           } else {
             throw Exception(response['message'] ?? 'Failed to mark reservation as received');
           }
@@ -1742,8 +1790,39 @@ class _MaintenanceState extends State<MaintenanceDetails> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Item received successfully')),
             );
-            // Reload inventory requests to reflect changes
-            await _loadInventoryRequests();
+            // Optimistically update local state and refresh item stock/reserved
+            setState(() {
+              final index = _inventoryRequests.indexWhere((r) =>
+                  (r['_doc_id'] ?? r['id'] ?? r['request_id'] ?? r['reservation_id']) == requestId);
+              if (index != -1) {
+                _inventoryRequests[index]['status'] = 'received';
+                _inventoryRequests[index]['received'] = true;
+              }
+            });
+
+            final inventoryId = request['inventory_id'];
+            if (inventoryId != null) {
+              try {
+                final itemResp = await apiService.getInventoryItemById(inventoryId);
+                if (itemResp != null) {
+                  final newStock = itemResp['current_stock'] ?? itemResp['quantity_in_stock'] ?? itemResp['stock'];
+                  final reservedQty = itemResp['reserved_quantity'] ?? itemResp['reserved'] ?? 0;
+                  setState(() {
+                    final index = _inventoryRequests.indexWhere((r) =>
+                        (r['_doc_id'] ?? r['id'] ?? r['request_id'] ?? r['reservation_id']) == requestId);
+                    if (index != -1) {
+                      if (newStock != null) _inventoryRequests[index]['stock_quantity'] = newStock;
+                      _inventoryRequests[index]['reserved_quantity'] = reservedQty;
+                    }
+                  });
+                }
+              } catch (e) {
+                print('DEBUG: Failed to refresh inventory item after receiving request: $e');
+              }
+            }
+
+            // Notify listeners that inventory was updated
+            _notifier.notifyItemUpdated(inventoryId ?? '');
           } else {
             throw Exception(response['message'] ?? 'Failed to receive item');
           }
@@ -1804,7 +1883,16 @@ class _MaintenanceState extends State<MaintenanceDetails> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
+    } finally {
+      // Remove from loading set
+      setState(() => _loadingItems.remove(requestId));
     }
+  }
+
+  @override
+  void dispose() {
+    _notifier.removeListener(_onInventoryUpdate);
+    super.dispose();
   }
 
   @override
@@ -2123,14 +2211,19 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                           request['quantity'] ??
                           0;
                       final stockQuantity = request['stock_quantity'] ?? request['available_stock'] ?? 0;
-                      final status = request['status'] ?? 'pending';
+                      final status = (request['status'] ?? 'pending').toString();
+                      final itemType = (request['type'] ?? 'request').toString().toLowerCase();
+                      // Only allow receiving when admin has approved the request, or when it's a reservation
+                      final isApproved = status.toLowerCase() == 'approved' || status.toLowerCase() == 'reserved';
                       final unit = request['unit'] ?? '';
                       final category = request['category'] ?? '';
+                      final requestId = request['_doc_id'] ?? request['id'] ?? request['_id'] ?? request['request_id'] ?? request['reservation_id'];
 
                       // Determine if item is received
                       bool isReceived =
                           status.toLowerCase() == 'fulfilled' ||
-                          status.toLowerCase() == 'received';
+                          status.toLowerCase() == 'received' ||
+                          request['received'] == true;
 
                       return Container(
                         padding: const EdgeInsets.all(16),
@@ -2170,68 +2263,80 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                                     ],
                                   ),
                                   const SizedBox(height: 8),
-                                  if (!isReceived) ...[
-                                    SizedBox(
-                                      width: double.infinity,
-                                      child: Row(
-                                        children: [
-                                          OutlinedButton(
-                                            onPressed: () => widget.onInventoryAction?.call(request, 'receive'),
-                                            style: OutlinedButton.styleFrom(
-                                              side: const BorderSide(color: Color(0xFF059669)),
-                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                            ),
-                                            child: const Text(
-                                              'Receive',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: Color(0xFF059669),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: Row(
+                                      children: [
+                                        if (!isReceived) ...[
+                                          Tooltip(
+                                            message: (itemType == 'reservation' || isApproved) ? 'Receive' : 'Waiting for admin approval',
+                                            child: OutlinedButton(
+                                              onPressed: (_loadingItems.contains(requestId) || !(itemType == 'reservation' || isApproved)) ? null : () => _handleInventoryAction(request, 'receive'),
+                                              style: OutlinedButton.styleFrom(
+                                                side: const BorderSide(color: Color(0xFF059669)),
+                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                               ),
+                                              child: _loadingItems.contains(requestId)
+                                                  ? const SizedBox(
+                                                      width: 16,
+                                                      height: 16,
+                                                      child: CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF059669)),
+                                                      ),
+                                                    )
+                                                  : const Text(
+                                                      'Receive',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: Color(0xFF059669),
+                                                      ),
+                                                    ),
                                             ),
                                           ),
-                                          const SizedBox(width: 8),
-                                          ElevatedButton(
-                                            onPressed: () => widget.onInventoryAction?.call(request, 'request'),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(0xFF005CE7),
-                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                            ),
-                                            child: const Text(
-                                              'Request',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.white,
+                                        ] else ...[
+                                          Expanded(
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 8,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF059669),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: const Text(
+                                                'Received',
+                                                textAlign: TextAlign.center,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.white,
+                                                ),
                                               ),
                                             ),
                                           ),
                                         ],
-                                      ),
-                                    ),
-                                  ] else ...[
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFECFDF5),
-                                        border: Border.all(
-                                          color: const Color(0xFF059669),
+                                        const SizedBox(width: 8),
+                                        ElevatedButton(
+                                          onPressed: () => widget.onInventoryAction?.call(request, 'request'),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF005CE7),
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                          ),
+                                          child: const Text(
+                                            'Request',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.white,
+                                            ),
+                                          ),
                                         ),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: const Text(
-                                        'Received',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF059669),
-                                        ),
-                                      ),
+                                      ],
                                     ),
-                                  ],
+                                  ),
                                   if (category.isNotEmpty) ...[
                                     const SizedBox(height: 4),
                                     Container(
@@ -2695,6 +2800,10 @@ class InventoryDetailsScreen extends StatelessWidget {
   // Notes
   final String? notes;
 
+  // Additional fields
+  final String? maintenanceId;
+  final String? staffNotes;
+
   const InventoryDetailsScreen({
     super.key,
 
@@ -2732,6 +2841,10 @@ class InventoryDetailsScreen extends StatelessWidget {
 
     // notes
     this.notes,
+
+    // additional
+    this.maintenanceId,
+    this.staffNotes,
   });
 
   @override
@@ -2856,11 +2969,10 @@ class InventoryDetailsScreen extends StatelessWidget {
 
     // ===== Request Item Details =====
     final bool showRequestItem = _any([
-      requestId,
+      itemId,
       requestQuantity,
-      dateNeeded,
-      reqLocation,
       requestUnit,
+      dateNeeded,
     ]);
     if (showRequestItem) {
       sections.add(
@@ -2868,8 +2980,8 @@ class InventoryDetailsScreen extends StatelessWidget {
           title: 'Request Item Details',
           child: Column(
             children: [
-                if (_isNotEmpty(itemId))
-                KeyValueRow(label: 'Inventory ID', value: _kvText(itemId)),
+              if (_isNotEmpty(itemId))
+                KeyValueRow(label: 'Item ID', value: _kvText(itemId)),
               if (_isNotEmpty(requestQuantity)) const SizedBox(height: 8),
               if (_isNotEmpty(requestQuantity))
                 KeyValueRow(
@@ -2893,7 +3005,7 @@ class InventoryDetailsScreen extends StatelessWidget {
     if (showRequestor) {
       sections.add(
         _Section(
-          title: 'Requestor Details',
+          title: 'Requester Details',
           child: Column(
             children: [
               if (_isNotEmpty(staffName))
@@ -2916,6 +3028,18 @@ class InventoryDetailsScreen extends StatelessWidget {
         _SectionCard(
           title: 'Notes / Purpose',
           content: notes!,
+          padding: const EdgeInsets.all(14),
+          hideIfEmpty: false,
+        ),
+      );
+    }
+
+    // ===== Staff Notes =====
+    if (_isNotEmpty(staffNotes)) {
+      sections.add(
+        _SectionCard(
+          title: 'Staff Notes',
+          content: staffNotes!,
           padding: const EdgeInsets.all(14),
           hideIfEmpty: false,
         ),
@@ -2946,7 +3070,12 @@ class InventoryDetailsScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          Text(headerId, style: idStyle),
+          if (_isNotEmpty(requestId))
+            Text('Req ID: $requestId', style: idStyle),
+          if (_isNotEmpty(maintenanceId)) ...[
+            const SizedBox(height: 4),
+            Text('Maintenance ID: $maintenanceId', style: idStyle),
+          ],
           _divider(),
           // Body
           ...interspersed,

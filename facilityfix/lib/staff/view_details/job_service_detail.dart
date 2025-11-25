@@ -7,7 +7,9 @@ import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
-import 'package:facilityfix/staff/workorder.dart';
+import 'package:facilityfix/staff/maintenance_task.dart';
+import 'package:facilityfix/staff/repair_task.dart';
+import 'package:facilityfix/staff/task_management.dart';
 import 'package:facilityfix/staff/form/assessment_form.dart';
 import 'package:facilityfix/staff/view_details/concern_slip.dart';
 import 'package:facilityfix/widgets/view_details.dart';
@@ -194,7 +196,8 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
   void _onTabTapped(int index) {
     final destinations = [
       const HomePage(),
-      const WorkOrderPage(),
+      const RepairTaskPage(),
+      const MaintenanceTaskPage(),
       const AnnouncementPage(),
       const CalendarPage(),
       const InventoryPage(),

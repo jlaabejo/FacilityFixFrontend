@@ -88,12 +88,8 @@ void _handleLogout(BuildContext context) async {
   final _assessmentNotesCtrl = TextEditingController();
   final _recommendationsCtrl = TextEditingController();
 
-  // Admin Notes
-  final _adminNotifyCtrl = TextEditingController();
-
   // Contractor
   final _contractorNameCtrl = TextEditingController();
-  final _contractorDeptCtrl = TextEditingController();
   final _contractPhoneCtrl = TextEditingController();
   final _contractEmailCtrl = TextEditingController();
 
@@ -108,6 +104,8 @@ void _handleLogout(BuildContext context) async {
 
   // Reserved inventory items for this task
   List<Map<String, dynamic>> _reservedInventoryItems = [];
+  // Available inventory items for fallback
+  List<Map<String, dynamic>> _availableInventoryItems = [];
 
   final ApiService _apiService = ApiService();
   bool _isLoading = false;
@@ -143,6 +141,12 @@ void _handleLogout(BuildContext context) async {
       
       // Ensure assigned contractor/staff details are loaded (if assigned_to is an id)
       await _ensureAssignedStaffLoaded();
+      
+      // Ensure logged by details are loaded
+      await _ensureLoggedByLoaded();
+      
+      // Load available inventory items
+      await _loadInventoryItems();
       
       // Load reserved inventory items
       await _loadReservedInventoryItems();
@@ -220,16 +224,21 @@ void _handleLogout(BuildContext context) async {
     // Assessment Tracking - set default to 'No' if not specified
   _serviceDateActualCtrl.text = _formatDateFull(taskData['service_date_actual'] ?? taskData['serviceDateActual']);
     
-    final assessmentValue = taskData['assessment_received']?.toString() ??
-                            taskData['assessmentReceived']?.toString();
-    _assessmentReceived = (assessmentValue == 'Yes' || assessmentValue == 'No') 
-        ? (assessmentValue ?? 'No')
-        : 'No';
+    final status = taskData['status']?.toString() ?? '';
+    if (status == 'new' || status == 'scheduled') {
+      _assessmentReceived = 'Pending';
+    } else {
+      final assessmentValue = taskData['assessment_received']?.toString() ??
+                              taskData['assessmentReceived']?.toString();
+      _assessmentReceived = (assessmentValue == 'Yes' || assessmentValue == 'No' || assessmentValue == 'Pending') 
+          ? (assessmentValue ?? 'No')
+          : 'No';
+    }
     
     _loggedByCtrl.text = 
         taskData['logged_by']?.toString() ??
         taskData['loggedBy']?.toString() ?? 
-        'Auto-filled';
+        '';
   _loggedDateCtrl.text = _formatDateFull(taskData['logged_date'] ?? taskData['loggedDate']);
 
     // Contractor Information
@@ -243,8 +252,8 @@ void _handleLogout(BuildContext context) async {
     _contractEmailCtrl.text = 
         taskData['email']?.toString() ??
         taskData['contractEmail']?.toString() ?? '';
+
   // Contractor department / assigned department
-  _contractorDeptCtrl.text =
     taskData['contractor_department']?.toString() ??
     taskData['assigned_department']?.toString() ??
     taskData['department']?.toString() ?? '';
@@ -258,28 +267,12 @@ void _handleLogout(BuildContext context) async {
         taskData['recommendation']?.toString() ??
         taskData['recommendations']?.toString() ?? '';
 
-    // Admin Notes - try multiple possible field names
-    _adminNotifyCtrl.text = 
-        taskData['admin_notification']?.toString() ??
-        taskData['admin_notes']?.toString() ??
-        taskData['remarks']?.toString() ??
-        taskData['additional_notes']?.toString() ??
-        taskData['notes']?.toString() ??
-        taskData['comments']?.toString() ??
-        '';
-    // Debug log: show what admin notes were populated for this task (helps trace missing notes)
-    try {
-      print('[ExternalView] admin notes (populated): "${_adminNotifyCtrl.text}"');
-      print('[ExternalView] admin notes field found: ${taskData.keys.where((k) => k.toLowerCase().contains('note') || k.toLowerCase().contains('remark') || k.toLowerCase().contains('comment')).toList()}');
-    } catch (_) {}
   }
 
   // Ensure we have assigned contractor/staff details when needed (fallback fetch)
   Future<void> _ensureAssignedStaffLoaded() async {
     final assignedId = _currentTaskData['assigned_to']?.toString() ?? _currentTaskData['assignedTo']?.toString();
     if (assignedId == null || assignedId.isEmpty) return;
-    // If we already have a contractor name and department populated, skip
-    if (_contractorNameCtrl.text.isNotEmpty && _contractorDeptCtrl.text.isNotEmpty) return;
 
     setState(() => _isLoadingStaff = true);
     try {
@@ -298,11 +291,60 @@ void _handleLogout(BuildContext context) async {
           final last = (s['last_name'] ?? s['lastName'] ?? '').toString();
           final name = ('$first $last').trim().isNotEmpty ? ('$first $last').trim() : (s['name'] ?? s['username'] ?? '').toString();
           if (name.isNotEmpty) _contractorNameCtrl.text = name;
-          _contractorDeptCtrl.text = (s['staff_department'] ?? s['department'] ?? s['dept'] ?? '').toString();
         });
       }
     } finally {
       if (mounted) setState(() => _isLoadingStaff = false);
+    }
+  }
+
+  // Ensure we have logged by details when needed (fallback fetch)
+  Future<void> _ensureLoggedByLoaded() async {
+    final loggedById = _currentTaskData['logged_by']?.toString() ?? _currentTaskData['loggedBy']?.toString();
+    if (loggedById == null || loggedById.isEmpty) return;
+
+    try {
+      Map<String, dynamic>? user;
+      // Prefer the main API's getUserById which reliably finds user/profile data
+      try {
+        user = await main_api.APIService().getUserById(loggedById);
+      } catch (_) {
+        user = null;
+      }
+
+      if (user != null && user.isNotEmpty) {
+        final u = user;
+        final first = (u['first_name'] ?? u['firstName'] ?? '').toString();
+        final last = (u['last_name'] ?? u['lastName'] ?? '').toString();
+        final name = ('$first $last').trim().isNotEmpty ? ('$first $last').trim() : (u['name'] ?? u['username'] ?? '').toString();
+        if (name.isNotEmpty) {
+          setState(() {
+            _loggedByCtrl.text = name;
+          });
+        }
+      } else {
+        setState(() {
+          _loggedByCtrl.text = 'Admin User';
+        });
+      }
+    } catch (e) {
+      print('[ExternalView] Error fetching logged by name: $e');
+    }
+  }
+
+  Future<void> _loadInventoryItems() async {
+    try {
+      final response = await main_api.APIService().getBuildingInventory('default_building_id');
+      
+      if (response['success'] == true && response['data'] != null) {
+        setState(() {
+          _availableInventoryItems = List<Map<String, dynamic>>.from(response['data']);
+        });
+        print('[v0] Loaded ${_availableInventoryItems.length} inventory items');
+      }
+    } catch (e) {
+      print('[v0] Error loading inventory items: $e');
+      // Don't fail the whole form if inventory loading fails
     }
   }
 
@@ -320,14 +362,41 @@ void _handleLogout(BuildContext context) async {
         for (var reservation in reservations) {
           if (reservation['inventory_id'] != null) {
             try {
-              final itemData = await _apiService.getInventoryItem(reservation['inventory_id']);
-              if (itemData != null) {
-                reservation['item_name'] = itemData['item_name'];
-                reservation['item_code'] = itemData['item_code'];
+              final itemData = await main_api.APIService().getInventoryItemById(reservation['inventory_id']);
+              if (itemData != null && itemData['success'] == true && itemData['data'] != null) {
+                final data = itemData['data'];
+                reservation['item_details'] = {
+                  'item_name': data['item_name'] ?? data['name'] ?? 'Unknown Item',
+                  'item_code': data['item_code'] ?? data['code'],
+                  'current_stock': data['available_stock'] ?? data['stock'] ?? data['current_stock'] ?? data['stock_quantity'] ?? 0,
+                  'unit': data['unit_of_measure'] ?? data['unit'] ?? 'pcs',
+                };
+              } else {
+                print('[v0] Item data not found for inventory_id: ${reservation['inventory_id']}');
               }
             } catch (e) {
               print('[v0] Error loading inventory item details: $e');
-              // Continue without item details
+              // Fallback: try to find in available inventory items
+              final fallbackItem = _availableInventoryItems.firstWhere(
+                (item) => item['item_code'] == reservation['inventory_id'] || item['id'] == reservation['inventory_id'] || item['_doc_id'] == reservation['inventory_id'],
+                orElse: () => <String, dynamic>{},
+              );
+              if (fallbackItem.isNotEmpty) {
+                reservation['item_details'] = {
+                  'item_name': fallbackItem['item_name'] ?? 'Unknown Item',
+                  'item_code': fallbackItem['item_code'],
+                  'current_stock': fallbackItem['current_stock'] ?? 0,
+                  'unit': fallbackItem['unit_of_measure'] ?? fallbackItem['unit'] ?? 'pcs',
+                };
+              } else {
+                // Set default item details to prevent UI errors
+                reservation['item_details'] = {
+                  'item_name': reservation['item_name'] ?? 'Unknown Item',
+                  'item_code': reservation['item_code'] ?? '',
+                  'current_stock': 0,
+                  'unit': 'pcs',
+                };
+              }
             }
           }
         }
@@ -394,13 +463,11 @@ void _handleLogout(BuildContext context) async {
     _loggedDateCtrl.dispose();
 
     _contractorNameCtrl.dispose();
-  _contractorDeptCtrl.dispose();
     _contractPhoneCtrl.dispose();
     _contractEmailCtrl.dispose();
 
     _assessmentNotesCtrl.dispose();
     _recommendationsCtrl.dispose();
-    _adminNotifyCtrl.dispose();
     super.dispose();
   }
 
@@ -425,7 +492,6 @@ void _handleLogout(BuildContext context) async {
     'email': _contractEmailCtrl.text,
     'assessment_notes': _assessmentNotesCtrl.text,
     'recommendations': _recommendationsCtrl.text,
-    'admin_notification': _adminNotifyCtrl.text,
   };
 
   void _cancelEdit() {
@@ -456,7 +522,6 @@ void _handleLogout(BuildContext context) async {
 
       _assessmentNotesCtrl.text = s['assessment_notes']!;
       _recommendationsCtrl.text = s['recommendations']!;
-      _adminNotifyCtrl.text = s['admin_notification']!;
     } catch (e) {
       print('[ExternalView] _cancelEdit: snapshot unavailable, clearing edits: $e');
       _maintenanceTypeCtrl.text = '';
@@ -483,7 +548,6 @@ void _handleLogout(BuildContext context) async {
 
       _assessmentNotesCtrl.text = '';
       _recommendationsCtrl.text = '';
-      _adminNotifyCtrl.text = '';
     }
     setState(() => _isEditMode = false);
   }
@@ -525,8 +589,6 @@ void _handleLogout(BuildContext context) async {
       }
     }
   }
-
-  void _enterEditMode() => setState(() => _isEditMode = true);
 
   // ---------------- Validators ----------------
   String? _req(String? v) =>
@@ -664,8 +726,6 @@ void _handleLogout(BuildContext context) async {
                                     _buildContractorInformationCard(),
                                     const SizedBox(height: 24),
                                     _buildInventoryRequestsCard(),
-                                    const SizedBox(height: 24),
-                                    _buildAdminNotesCard(),
                                   ],
                                 ),
                               ),
@@ -930,13 +990,6 @@ void _handleLogout(BuildContext context) async {
           title: "Assessment Tracking",
           child: Column(
             children: [
-              // Service Date (Actual)
-              _editableInfoRow(
-                "Service Date (Actual)",
-                _serviceDateActualCtrl,
-                validator: _dateValidator,
-              ),
-
               // Assessment Received
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
@@ -983,6 +1036,10 @@ void _handleLogout(BuildContext context) async {
                                       DropdownMenuItem(
                                         value: "No",
                                         child: Text("No"),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: "Pending",
+                                        child: Text("Pending"),
                                       ),
                                     ],
                                     onChanged:
@@ -1154,62 +1211,6 @@ void _handleLogout(BuildContext context) async {
             _contractEmailCtrl,
             validator: _emailValidator,
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAdminNotesCard() {
-    return _buildCard(
-      icon: Icons.note,
-      iconColor: Colors.grey[600]!,
-      title: 'Admin Notes',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _isEditMode
-              ? TextFormField(
-                  controller: _adminNotifyCtrl,
-                  minLines: 3,
-                  maxLines: 8,
-                  onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                    hintText: 'Enter admin notes...',
-                  ),
-                )
-              : Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey[200]!),
-                  ),
-                  child: _adminNotifyCtrl.text.trim().isNotEmpty
-                      ? Text(
-                          _adminNotifyCtrl.text,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
-                            height: 1.4,
-                          ),
-                        )
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            TextButton.icon(
-                              onPressed: _enterEditMode,
-                              icon: const Icon(Icons.add, size: 18),
-                              label: const Text('Add Notes'),
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                              ),
-                            ),
-                          ],
-                        ),
-                ),
         ],
       ),
     );
@@ -1497,47 +1498,6 @@ void _handleLogout(BuildContext context) async {
     );
   }
 
-  String _formatDateString(String raw) {
-    final value = raw.trim();
-    if (value.isEmpty) return '';
-    DateTime? dt = DateTime.tryParse(value);
-    if (dt == null) {
-      try {
-        dt = UiDateUtils.parse(value);
-      } catch (_) {
-        dt = null;
-      }
-    }
-    return dt != null ? UiDateUtils.fullDate(dt) : value;
-  }
-
-  Future<void> _receiveInventoryItem(String requestId) async {
-    try {
-      setState(() => _isLoading = true);
-      
-      final response = await _apiService.fulfillInventoryRequest(requestId);
-      
-      if (response['success'] == true) {
-        // Refresh the inventory items
-        await _loadReservedInventoryItems();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Item marked as received successfully')),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to mark item as received: ${response['message'] ?? 'Unknown error'}')),
-        );
-      }
-    } catch (e) {
-      print('[v0] Error receiving inventory item: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: Failed to mark item as received')),
-      );
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
   Widget _buildInventoryRequestsCard() {
     return Container(
       decoration: BoxDecoration(
@@ -1593,33 +1553,31 @@ void _handleLogout(BuildContext context) async {
                 border: Border.all(color: Colors.grey[200]!),
               ),
               child: Text(
-                'No items reserved for this task.',
+                'No inventory items for this task.',
                 style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 textAlign: TextAlign.center,
               ),
             )
           else
             Column(
-              children: _reservedInventoryItems.map((request) {
-                final status = request['status'] ?? 'pending';
-                final itemName = request['item_name'] ?? 'Unknown Item';
-                final quantity = request['quantity_requested'] ?? 0;
-                final startDate = request['start_date'] ?? request['requested_date'] ?? '';
+              children: _reservedInventoryItems.map((reservation) {
+                final itemDetails = reservation['item_details'] ?? {}; 
+                final status = reservation['status'] ?? '';
+                final itemName = itemDetails['item_name'] ?? 'Unknown Item';
+                final quantity = reservation['quantity'] ?? 0;
+                final currentStock = itemDetails['current_stock'] ??0;
+
                 
                 Color statusColor;
                 IconData statusIcon;
                 switch (status) {
-                  case 'approved':
+                  case 'Reserved':
                     statusColor = Colors.green;
                     statusIcon = Icons.check_circle;
                     break;
-                  case 'fulfilled':
+                  case 'Consumed':
                     statusColor = Colors.blue;
                     statusIcon = Icons.done_all;
-                    break;
-                  case 'denied':
-                    statusColor = Colors.red;
-                    statusIcon = Icons.cancel;
                     break;
                   default:
                     statusColor = Colors.orange;
@@ -1641,45 +1599,43 @@ void _handleLogout(BuildContext context) async {
                         size: 24,
                       ),
                       const SizedBox(width: 12),
-                      Expanded(
+                        Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              itemName,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87,
-                              ),
+                          Text(
+                            itemName,
+                            style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
                             ),
-                            const SizedBox(height: 4),
+                          ),
+                          const SizedBox(height: 4),
                             Text(
-                              'Quantity: $quantity',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey[600],
-                              ),
+                            'Reserved Quantity: $quantity',
+                            style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
                             ),
-                            if (request['current_stock'] != null)
-                              Text(
-                                'Stock: ${request['current_stock']}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.blueGrey[600],
-                                ),
-                              ),
-                            if (startDate.isNotEmpty)
-                              Text(
-                                'Reserved: ${_formatDateString(startDate)}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[500],
-                                ),
-                              ),
+                            ),
+                            Text(
+                            'Stock: $currentStock',
+                            style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blueGrey[600],
+                            ),
+                            ),
+                            Text(
+                            'Unit: ${itemDetails['unit'] ?? ''}',
+                            style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blueGrey[600],
+                            ),
+                            ),
                           ],
                         ),
-                      ),
+                        ),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
@@ -1709,20 +1665,6 @@ void _handleLogout(BuildContext context) async {
                           ],
                         ),
                       ),
-                      // Add receive button for admin when status is approved
-                      if (status == 'approved') ...[
-                        const SizedBox(width: 8),
-                        TextButton.icon(
-                          onPressed: _isLoading ? null : () => _receiveInventoryItem(request['id'] ?? request['request_id']),
-                          icon: const Icon(Icons.check_circle_outline, size: 16),
-                          label: const Text('Receive'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.green,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            textStyle: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 );

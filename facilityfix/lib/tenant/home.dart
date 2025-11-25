@@ -5,7 +5,7 @@ import 'package:facilityfix/widgets/modals.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/tenant/announcement.dart';
 import 'package:facilityfix/tenant/notification.dart';
-import 'package:facilityfix/tenant/profile.dart';
+import 'package:facilityfix/tenant/settings/profile.dart';
 import 'package:facilityfix/tenant/repair_management.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
@@ -235,7 +235,7 @@ class _HomeState extends State<HomePage> {
       case 1:
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const WorkOrderPage()),
+          MaterialPageRoute(builder: (_) => const RepairManagement()),
         );
         break;
       case 2:
@@ -872,7 +872,7 @@ class _HomeState extends State<HomePage> {
                           onActionTap:
                               () => Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (_) => const WorkOrderPage(),
+                                  builder: (_) => const RepairManagement(),
                                 ),
                               ),
                         ),

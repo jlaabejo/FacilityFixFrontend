@@ -1,3 +1,4 @@
+import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -207,30 +208,18 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
     return pathMap[routeKey];
   }
 
-  // Handle logout functionality
-  void _handleLogout(BuildContext context) {
-    showDialog(
+  // Logout functionality
+  void _handleLogout(BuildContext context) async {
+    final result = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Logout'),
-          content: const Text('Are you sure you want to logout?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                context.go('/'); // Go back to login page
-              },
-              child: const Text('Logout'),
-            ),
-          ],
-        );
+        return const LogoutPopup();
       },
     );
+
+    if (result == true) {
+      context.go('/');
+    }
   }
 
   // Column widths for Repair Task table
