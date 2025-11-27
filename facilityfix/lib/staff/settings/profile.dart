@@ -10,6 +10,7 @@ import 'package:facilityfix/staff/notification.dart';
 import 'package:facilityfix/staff/repair_task.dart';
 import 'package:facilityfix/staff/settings/notification_settings.dart';
 import 'package:facilityfix/staff/settings/settings.dart';
+import 'package:facilityfix/staff/settings/privacy.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -50,15 +51,12 @@ class _ProfilePageState extends State<ProfilePage> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController phoneNumberController = TextEditingController();
   final TextEditingController birthDateController = TextEditingController();
-  final TextEditingController staffDepartmentController = TextEditingController();
+  final TextEditingController staffDepartmentController =
+      TextEditingController();
 
   // Tab state
   String _selectedTab = 'Schedule Availability';
-  final List<TabItem> _availabilityTabs = [
-    TabItem(label: 'Schedule Availability', count: 0),
-    TabItem(label: 'Day Off', count: 0),
-    TabItem(label: 'History', count: 0),
-  ];
+  final List<String> _availabilityTabs = ['Schedule Availability', 'Day Off'];
 
   final ImagePicker _picker = ImagePicker();
   File? _profileImageFile;
@@ -128,16 +126,22 @@ class _ProfilePageState extends State<ProfilePage> {
     final email = (_profileMap!['email'] ?? '').toString();
     final phone = (_profileMap!['phone_number'] ?? '').toString();
     final staffDept = (_profileMap!['staff_department'] ?? '').toString();
-    final staffId = (_profileMap!['staff_id'] ?? _profileMap!['id'] ?? '').toString();
-    final birthDate = (_profileMap!['birthdate'] ?? _profileMap!['birth_date'] ?? '').toString();
-    
-    // Construct full name with fallback
-    final fullName = (('$firstName $lastName').trim().isNotEmpty)
-        ? '$firstName $lastName'.trim()
-        : fullNameFromKey.trim();
+    final staffId =
+        (_profileMap!['staff_id'] ?? _profileMap!['id'] ?? '').toString();
+    final birthDate =
+        (_profileMap!['birthdate'] ?? _profileMap!['birth_date'] ?? '')
+            .toString();
 
-    print('Extracted data: fullName=$fullName, email=$email, phone=$phone, '
-          'staff_department=$staffDept, staffId=$staffId, birthDate=$birthDate');
+    // Construct full name with fallback
+    final fullName =
+        (('$firstName $lastName').trim().isNotEmpty)
+            ? '$firstName $lastName'.trim()
+            : fullNameFromKey.trim();
+
+    print(
+      'Extracted data: fullName=$fullName, email=$email, phone=$phone, '
+      'staff_department=$staffDept, staffId=$staffId, birthDate=$birthDate',
+    );
 
     setState(() {
       _fullName = fullName.isNotEmpty ? fullName : 'User';
@@ -293,14 +297,15 @@ class _ProfilePageState extends State<ProfilePage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => EditProfileModal(
-        role: UserRole.staff,
-        initialFullName: _fullName,
-        initialBirthDate: birthDateController.text,
-        initialUserEmail: emailController.text,
-        initialContactNumber: phoneNumberController.text,
-        initialStaffDepartment: staffDepartmentController.text,
-      ),
+      builder:
+          (_) => EditProfileModal(
+            role: UserRole.staff,
+            initialFullName: _fullName,
+            initialBirthDate: birthDateController.text,
+            initialUserEmail: emailController.text,
+            initialContactNumber: phoneNumberController.text,
+            initialStaffDepartment: staffDepartmentController.text,
+          ),
     );
 
     if (updated == null || !mounted) return;
@@ -321,8 +326,12 @@ class _ProfilePageState extends State<ProfilePage> {
       final success = await _profileService.updateCurrentUserProfile(
         firstName: firstName.isNotEmpty ? firstName : null,
         lastName: lastName.isNotEmpty ? lastName : null,
-        phoneNumber: updated.contactNumber.isNotEmpty ? updated.contactNumber : null,
-        birthDate: updated.birthDate.isNotEmpty ? _normalizeBirthDateForSave(updated.birthDate) : null,
+        phoneNumber:
+            updated.contactNumber.isNotEmpty ? updated.contactNumber : null,
+        birthDate:
+            updated.birthDate.isNotEmpty
+                ? _normalizeBirthDateForSave(updated.birthDate)
+                : null,
         staffDepartment: updated.staffDepartment,
       );
 
@@ -337,9 +346,10 @@ class _ProfilePageState extends State<ProfilePage> {
           phoneNumberController.text = updated.contactNumber;
           staffDepartmentController.text =
               updated.staffDepartment ?? staffDepartmentController.text;
-          birthDateController.text = updated.birthDate.isNotEmpty
-              ? _formatBirthDateForDisplay(updated.birthDate)
-              : '';
+          birthDateController.text =
+              updated.birthDate.isNotEmpty
+                  ? _formatBirthDateForDisplay(updated.birthDate)
+                  : '';
         });
 
         _profileMap = {
@@ -348,7 +358,8 @@ class _ProfilePageState extends State<ProfilePage> {
           'last_name': lastName,
           'email': updated.userEmail,
           'phone_number': updated.contactNumber,
-          'staff_department': updated.staffDepartment ?? _profileMap?['staff_department'],
+          'staff_department':
+              updated.staffDepartment ?? _profileMap?['staff_department'],
           'birthdate': _normalizeBirthDateForSave(updated.birthDate),
           'birth_date': _normalizeBirthDateForSave(updated.birthDate),
         };
@@ -400,30 +411,44 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildTabContent() {
     switch (_selectedTab) {
-      case 'Set Availability':
-        return const ScheduleAvailabilityWidget();
-      case 'Day Off':
-        return Container(
-          height: 200,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey[200]!),
-          ),
-          child: const Center(
-            child: Text('Day Off Content'),
+      case 'Schedule Availability':
+        return SectionCard(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: const ScheduleAvailabilityWidget(),
           ),
         );
-      case 'History':
-        return Container(
-          height: 200,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey[200]!),
-          ),
-          child: const Center(
-            child: Text('History Content'),
+      case 'Day Off':
+        return SectionCard(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(
+              children: [
+              const DayOffRequestsWidget(),
+              const SizedBox(height: 16),
+              const DayOffRequestCard(
+                date: '2023-10-15',
+                timeAgo: '2 days ago',
+                status: DayOffStatus.approved,
+                reason: 'Family emergency',
+              ),
+              const SizedBox(height: 8),
+              const DayOffRequestCard(
+                date: '2023-10-20',
+                timeAgo: '1 week ago',
+                status: DayOffStatus.pending,
+                reason: 'Medical appointment',
+              ),
+              const SizedBox(height: 8),
+              const DayOffRequestCard(
+                date: '2023-11-05',
+                timeAgo: '3 weeks ago',
+                status: DayOffStatus.rejected,
+                reason: 'Vacation',
+                adminNote: 'Insufficient staffing for the requested date.',
+              ),
+              ],
+            ),
           ),
         );
       default:
@@ -441,8 +466,8 @@ class _ProfilePageState extends State<ProfilePage> {
         notificationCount: _unreadNotifCount,
         onNotificationTap: () async {
           await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const NotificationPage()),
+            context,
+            MaterialPageRoute(builder: (_) => const NotificationPage()),
           );
           _loadUnreadNotifCount();
         },
@@ -457,14 +482,20 @@ class _ProfilePageState extends State<ProfilePage> {
                 profileImage: _profileImageProvider,
                 fullName: _fullName,
                 staffId:
-                    _staffId.isNotEmpty ? 'Staff ID: #$_staffId' : 'Staff ID: —',
+                    _staffId.isNotEmpty
+                        ? 'Staff ID: #$_staffId'
+                        : 'Staff ID: —',
                 onTap: () => _openPhotoPickerSheet(context),
               ),
               const SizedBox(height: 24),
               SectionCard(
                 title: 'Personal Details',
                 trailing: IconButton(
-                  icon: const Icon(Icons.edit, size: 20, color: Colors.blueGrey),
+                  icon: const Icon(
+                    Icons.edit,
+                    size: 20,
+                    color: Colors.blueGrey,
+                  ),
                   tooltip: 'Edit personal details',
                   onPressed: _openEditAllDetailsSheet,
                 ),
@@ -472,30 +503,34 @@ class _ProfilePageState extends State<ProfilePage> {
                   children: [
                     DetailRow(
                       label: 'Birth Date',
-                      value: birthDateController.text.isNotEmpty
-                          ? birthDateController.text
-                          : '—',
+                      value:
+                          birthDateController.text.isNotEmpty
+                              ? birthDateController.text
+                              : '—',
                     ),
                     const SizedBox(height: 10),
                     DetailRow(
                       label: 'Staff Department',
-                      value: staffDepartmentController.text.isNotEmpty
-                          ? staffDepartmentController.text
-                          : '—',
+                      value:
+                          staffDepartmentController.text.isNotEmpty
+                              ? staffDepartmentController.text
+                              : '—',
                     ),
                     const SizedBox(height: 10),
                     DetailRow(
                       label: 'Email',
-                      value: emailController.text.isNotEmpty
-                          ? emailController.text
-                          : '—',
+                      value:
+                          emailController.text.isNotEmpty
+                              ? emailController.text
+                              : '—',
                     ),
                     const SizedBox(height: 10),
                     DetailRow(
                       label: 'Contact Number',
-                      value: phoneNumberController.text.isNotEmpty
-                          ? phoneNumberController.text
-                          : '—',
+                      value:
+                          phoneNumberController.text.isNotEmpty
+                              ? phoneNumberController.text
+                              : '—',
                     ),
                     const SizedBox(height: 8),
                     Align(
@@ -518,7 +553,7 @@ class _ProfilePageState extends State<ProfilePage> {
               const SizedBox(height: 18),
 
               // Availability Tabs
-              custom_buttons.StatusTabSelector(
+              AvailabilityTabWidget(
                 tabs: _availabilityTabs,
                 selectedLabel: _selectedTab,
                 onTabSelected: (label) {
@@ -540,25 +575,32 @@ class _ProfilePageState extends State<ProfilePage> {
                     SettingsOption(
                       text: 'Notifications',
                       icon: Icons.notifications,
-                      onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => NotificationSettingsPage()),
-                      ),
+                      onTap:
+                          () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => NotificationSettingsPage(),
+                            ),
+                          ),
                     ),
                     const SizedBox(height: 8),
                     SettingsOption(
                       text: 'Settings',
                       icon: Icons.settings,
-                      onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => SettingsPage()),
-                      ),
+                      onTap:
+                          () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => SettingsPage()),
+                          ),
                     ),
                     const SizedBox(height: 8),
                     SettingsOption(
                       text: 'Privacy & Security',
                       icon: Icons.lock,
-                      onTap: () {},
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()),
+                      ),
                     ),
                   ],
                 ),
@@ -568,24 +610,25 @@ class _ProfilePageState extends State<ProfilePage> {
                 onPressed: () {
                   showDialog(
                     context: context,
-                    builder: (_) => CustomPopup(
-                      title: 'Confirm Logout',
-                      message: 'Are you sure you want to logout?',
-                      primaryText: 'Yes',
-                      onPrimaryPressed: () async {
-                        Navigator.of(context).pop();
-                        await AuthStorage.clear();
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const SplashScreen()),
-                          (route) => false,
-                        );
-                      },
-                      secondaryText: 'No',
-                      onSecondaryPressed: () =>
-                          Navigator.of(context).pop(),
-                    ),
+                    builder:
+                        (_) => CustomPopup(
+                          title: 'Confirm Logout',
+                          message: 'Are you sure you want to logout?',
+                          primaryText: 'Yes',
+                          onPrimaryPressed: () async {
+                            Navigator.of(context).pop();
+                            await AuthStorage.clear();
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const SplashScreen(),
+                              ),
+                              (route) => false,
+                            );
+                          },
+                          secondaryText: 'No',
+                          onSecondaryPressed: () => Navigator.of(context).pop(),
+                        ),
                   );
                 },
               ),

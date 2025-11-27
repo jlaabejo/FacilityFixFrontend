@@ -761,13 +761,11 @@ class _InventoryDetailsState extends State<InventoryDetails> {
   return Scaffold(
     backgroundColor: Colors.white,
     appBar: CustomAppBar(
-    title: 'View Details',
+    title: 'Inventory Details',
     leading: const Padding(
       padding: EdgeInsets.only(right: 8),
       child: BackButton(),
     ),
-    showMore: true,
-    showHistory: true,
     ),
     body: SafeArea(
     child: SingleChildScrollView(

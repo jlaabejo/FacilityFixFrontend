@@ -6,6 +6,7 @@ import 'package:facilityfix/adminweb/pages/adminwebcalendar_page.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_core/firebase_core.dart';
+// import 'adminweb/inventory_management/adminequipmentregistry_page.dart';
 import 'adminweb/inventory_management/admininventoryitems_page.dart';
 import 'adminweb/inventory_management/admininventoryrequest_page.dart';
 import 'adminweb/pages/adminwebanalytics_page.dart';
@@ -15,6 +16,7 @@ import 'adminweb/pages/login_page.dart';
 import 'adminweb/pages/adminwebdash_page.dart';
 import 'adminweb/user/adminwebuser_page.dart';
 import 'adminweb/pages/adminrole_page.dart';
+import 'adminweb/user/webavailabilityscheduling_page.dart';
 import 'adminweb/maintenance_task/adminmaintenance_page.dart';
 import 'adminweb/repair_task/adminrepair_cs_page.dart';
 import 'adminweb/repair_task/adminrepair_js_page.dart';
@@ -118,9 +120,9 @@ class _MyAppState extends State<MyApp> {
           builder: (context, state) => const AdminUserPage(),
         ),
         GoRoute(
-          path: '/user/roles',
-          name: 'user_roles',
-          builder: (context, state) => const AdminRolePage(),
+          path: '/user/scheduling',
+          name: 'user_scheduling',
+          builder: (context, state) => const StaffSchedulingPage(),
         ),
         GoRoute(
           path: '/work/maintenance',
@@ -236,6 +238,11 @@ class _MyAppState extends State<MyApp> {
         builder: (context, state) => const AdminWebCalendarPage(),
       ),
       // Inventory Management routes
+      // GoRoute(
+      //   path: '/inventory/equipment',
+      //   name: 'inventory_equipment',
+      //   builder: (context, state) => const EquipmentRegistryPage(),
+      // ),
       GoRoute(
         path: '/inventory/items',
         name: 'inventory_items',
@@ -349,14 +356,16 @@ class PlaceholderPage extends StatelessWidget {
     final Map<String, String> routeMap = {
       'dashboard': 'dashboard',
       'user_users': 'user_users',
-      'user_roles': 'user_roles',
-      'work_maintenance': '/work/maintenance',
-      'work_repair': '/work/repair',
+      // 'user_roles': 'user_roles',
+      'user_scheduling': 'user_scheduling',
+      'work_maintenance': 'work_maintenance',
+      'work_repair': 'work_repair',
       'calendar': 'calendar',
+      'inventory_equipment': 'inventory_equipment',
       'inventory_items': 'inventory_items',
       'inventory_request': 'inventory_request',
       'analytics': 'analytics',
-      'notice': 'notice',
+      'announcement': '/announcement',
       'settings': 'settings',
       'logout': 'logout',
     };
@@ -364,18 +373,20 @@ class PlaceholderPage extends StatelessWidget {
   }
   
   // Helper function to convert routeKey to actual route path
-  static String? _getRoutePath(String routeKey) {
+static String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
       'dashboard': '/dashboard',
       'user_users': '/user/users',
-      'user_roles': '/user/roles',
+      // 'user_roles': '/user/roles',
+      'user_scheduling': '/user/scheduling',
       'work_maintenance': '/work/maintenance',
       'work_repair': '/work/repair',
       'calendar': '/calendar',
+      'inventory_equipment': '/inventory/equipment',
       'inventory_items': '/inventory/items',
       'inventory_request': '/inventory/request',
       'analytics': '/analytics',
-      'notice': '/notice',
+      'announcement': '/announcement',
       'settings': '/settings',
       'logout': '/logout',
     };

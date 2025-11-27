@@ -728,7 +728,6 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
       appBar: CustomAppBar(
         leading: const BackButton(),
         title: 'Job Service Details',
-        showMore: true,
         showDelete:
             _jobServiceData != null &&
             _isDeletableStatus(_jobServiceData!['status']),

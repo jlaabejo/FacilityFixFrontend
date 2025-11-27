@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 // Status Tab Selector
 class TabItem {
   final String label;
-  final int count;
+  final int? count;
 
-  TabItem({required this.label, required this.count});
+  TabItem({required this.label, this.count});
 }
 
 class StatusTabSelector extends StatelessWidget {
@@ -68,24 +68,26 @@ class StatusTabSelector extends StatelessWidget {
                         fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? const Color(0xFF3B82F6)
-                            : const Color(0xFFE5E7EB),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '${tab.count}',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: isSelected ? Colors.white : const Color(0xFF6B7280),
+                    if (tab.count != null) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF3B82F6)
+                              : const Color(0xFFE5E7EB),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${tab.count}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected ? Colors.white : const Color(0xFF6B7280),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),

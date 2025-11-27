@@ -620,6 +620,749 @@ class _RequestItemState extends State<RequestItem> {
   }
 }
 
+class ReturnResult {
+  final String quantity;
+  final String unit; // always provided by details
+  final DateTime? dateReturned;
+  final String? notes;
+  final String stock; // automated stock snapshot
+
+  const ReturnResult({
+    required this.quantity,
+    required this.unit,
+    this.dateReturned,
+    this.notes,
+    required this.stock,
+  });
+}
+
+class ReturnItem extends StatefulWidget {
+  final String itemName;
+  final String itemId;
+  final String unit; // ⬅️ auto from details
+  final String stock; // ⬅️ automated stock value (e.g. "24 pcs" or "24")
+  final String maintenanceId;
+  final String staffName;
+
+  const ReturnItem({
+    super.key,
+    required this.itemName,
+    required this.itemId,
+    required this.unit,
+    required this.stock,
+    required this.maintenanceId,
+    required this.staffName,
+  });
+
+  @override
+  State<ReturnItem> createState() => _ReturnItemState();
+}
+
+class _ReturnItemState extends State<ReturnItem> {
+  final TextEditingController _qtyCtrl = TextEditingController();
+  final TextEditingController _notesCtrl = TextEditingController();
+
+  DateTime? _dateReturned;
+
+  bool get _isValid {
+    final q = _qtyCtrl.text.trim();
+    final asNum = double.tryParse(q);
+    return q.isNotEmpty && asNum != null && asNum > 0;
+  }
+
+  String? get _quantityError {
+    final q = _qtyCtrl.text.trim();
+    if (q.isEmpty) return null;
+    
+    final asNum = double.tryParse(q);
+    if (asNum == null) return 'Please enter a valid number';
+    if (asNum <= 0) return 'Quantity must be greater than 0';
+    
+    return null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _qtyCtrl.addListener(_refresh);
+  }
+
+  @override
+  void dispose() {
+    _qtyCtrl.removeListener(_refresh);
+    _qtyCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  void _refresh() => setState(() {});
+
+  Future<void> _pickDateTime() async {
+    final now = DateTime.now();
+    final base = _dateReturned ?? now;
+
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: base,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 3),
+      builder: (ctx, child) => _ThemedPicker(child: child),
+    );
+    if (pickedDate == null) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(base),
+      builder: (ctx, child) => _ThemedPicker(child: child),
+    );
+
+    setState(() {
+      _dateReturned = DateTime(
+        pickedDate.year,
+        pickedDate.month,
+        pickedDate.day,
+        pickedTime?.hour ?? base.hour,
+        pickedTime?.minute ?? base.minute,
+      );
+    });
+  }
+
+  void _clearDateTime() {
+    setState(() => _dateReturned = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: SafeArea(
+        top: false,
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          child: Material(
+            color: Colors.white,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Grabber
+                const SizedBox(height: 8),
+                Container(
+                  width: 44,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Automated Title + id
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Return — ${widget.itemName}', // automated title
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.1,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.itemId,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF6B7280),
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Scrollable content
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Date Returned (moved to top)
+                        const Text(
+                          'Date returned',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFF6B7280),
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        _ResumePickerRow(
+                          valueText: _dateReturned == null ? 'Not set' : formatDateTime(_dateReturned!),
+                          onPick: _pickDateTime,
+                          onClear: _dateReturned == null ? null : _clearDateTime,
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // Quantity + Unit pill
+                        const Text(
+                          'Quantity',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFF6B7280),
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _qtyCtrl,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(decimal: true),
+                                decoration: InputDecoration(
+                                  hintText: 'e.g., 50',
+                                  errorText: _quantityError,
+                                  isDense: true,
+                                  filled: true,
+                                  fillColor: const Color(0xFFF9FAFB),
+                                  contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  enabledBorder: const OutlineInputBorder(
+                                    borderSide: BorderSide(color: Color(0xFFD1D5DB)), // default gray
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: Color(0xFF005CE7),
+                                      width: 1.6,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEEF4FF),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFD1D5DB)),
+                              ),
+                              child: Text(
+                                widget.unit, // auto unit from details
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                  color: Color(0xFF344054),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // Stock (automated, read-only)
+                        const Text(
+                          'Stock',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFF6B7280),
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFCFCFD),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.inventory_2_outlined, size: 18, color: Color(0xFF475467)),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  widget.stock,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                    color: Color(0xFF111827),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // Additional notes
+                        const Text(
+                          'Additional notes (optional)',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFF6B7280),
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        _NoteField(controller: _notesCtrl),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // ===== Bottom actions =====
+                Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            fixedSize: const Size.fromHeight(48),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            side: const BorderSide(color: Color(0xFFD0D5DD)),
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF005CE7),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: AnimatedOpacity(
+                            duration: const Duration(milliseconds: 150),
+                            curve: Curves.easeOut,
+                            opacity: _isValid ? 1.0 : 0.5,
+                            child: IgnorePointer(
+                              ignoring: !_isValid, // block taps when "disabled"
+                              child: custom_buttons.FilledButton(
+                                label: 'Return',
+                                backgroundColor: const Color(0xFF005CE7),
+                                textColor: Colors.white,
+                                withOuterBorder: false,
+                                onPressed: () {
+                                  Navigator.pop(
+                                    context,
+                                    ReturnResult(
+                                      quantity: _qtyCtrl.text.trim(),
+                                      unit: widget.unit, // auto unit
+                                      dateReturned: _dateReturned,
+                                      notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+                                      stock: widget.stock,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoTile(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Color(0xFF6B7280),
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF111827),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class DayOffResult {
+  final List<DateTime> selectedDates;
+  final String reason;
+  final String? notes;
+
+  const DayOffResult({
+    required this.selectedDates,
+    required this.reason,
+    this.notes,
+  });
+}
+
+class DayOffRequest extends StatefulWidget {
+  const DayOffRequest({super.key});
+
+  @override
+  State<DayOffRequest> createState() => _DayOffRequestState();
+}
+
+class _DayOffRequestState extends State<DayOffRequest> {
+  final List<DateTime> _selectedDates = [];
+  String _selectedReason = 'Personal';
+  final TextEditingController _notesCtrl = TextEditingController();
+  final TextEditingController _otherReasonCtrl = TextEditingController();
+
+  final List<String> _reasons = [
+    'Personal',
+    'Sick',
+    'Vacation',
+    'Family emergency',
+    'Other',
+  ];
+
+  bool get _isValid => _selectedDates.isNotEmpty;
+
+  @override
+  void dispose() {
+    _notesCtrl.dispose();
+    _otherReasonCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    // Use a centered dialog-based picker (popup) instead of the platform full-screen picker.
+    // Restrict the size so it behaves like a monthly popup (shows one month) while still letting the user select a range.
+    final DateTimeRange? initialRange = _selectedDates.isEmpty
+      ? null
+      : DateTimeRange(start: _selectedDates.first, end: _selectedDates.last);
+
+    final pickedRange = await showDialog<DateTimeRange?>(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420, maxHeight: 480, minWidth: 300, minHeight: 320),
+          child: _ThemedPicker(
+            child: DateRangePickerDialog(
+              initialDateRange: initialRange,
+              firstDate: now,
+              lastDate: DateTime(now.year + 1),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (pickedRange != null) {
+      // Enforce monthly range: start and end must be in the same month and year
+      if (pickedRange.start.month == pickedRange.end.month && pickedRange.start.year == pickedRange.end.year) {
+        final start = pickedRange.start;
+        final end = pickedRange.end;
+        final dates = <DateTime>[];
+        for (var d = start; d.isBefore(end.add(const Duration(days: 1))); d = d.add(const Duration(days: 1))) {
+          dates.add(d);
+        }
+        setState(() => _selectedDates.addAll(dates.where((d) => !_selectedDates.contains(d))));
+      } else {
+        // Show a brief message if range spans more than one month
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select a date range within the same month.')),
+        );
+      }
+    }
+  }
+
+  // Removed per-date deletion. Individual date chips are no longer shown.
+
+  String _formatSelectedDates() {
+    if (_selectedDates.isEmpty) return 'Select date range';
+    if (_selectedDates.length == 1) {
+      return formatDateTime(_selectedDates.first).split(' ').first;
+    }
+    // Assuming dates are sorted and consecutive (enforced by picker)
+    _selectedDates.sort();
+    final start = _selectedDates.first;
+    final end = _selectedDates.last;
+    final month = _getMonthAbbrev(start.month);
+    final year = start.year;
+    return '$month ${start.day}-${end.day}, $year';
+  }
+
+  String _getMonthAbbrev(int month) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[month - 1];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: SafeArea(
+        top: false,
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          child: Material(
+            color: Colors.white,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Grabber
+                const SizedBox(height: 8),
+                Container(
+                  width: 44,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Title
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Request Day Off',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.1,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                // Scrollable content
+                Flexible(
+                    child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                      // Select dates
+                      const Text(
+                        'Select dates',
+                        style: TextStyle(
+                        fontSize: 12.5,
+                        color: Color(0xFF6B7280),
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: .2,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _ResumePickerRow(
+                        valueText: _formatSelectedDates(),
+                        onPick: _pickDateRange,
+                        onClear: _selectedDates.isEmpty ? null : () => setState(() => _selectedDates.clear()),
+                      ),
+                      // Previously we displayed a chip per selected date.
+                      // We prefer a compact date range display, so we no longer show individual date chips.
+
+                        const SizedBox(height: 16),
+
+                        // Reason
+                        const Text(
+                          'Reason',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFF6B7280),
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<String>(
+                          value: _selectedReason,
+                          items: _reasons.map((reason) {
+                            return DropdownMenuItem<String>(
+                              value: reason,
+                              child: Text(reason),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() => _selectedReason = value);
+                            }
+                          },
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: const Color(0xFFF9FAFB),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            enabledBorder: const OutlineInputBorder(
+                              borderSide: BorderSide(color: Color(0xFFD1D5DB)),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF005CE7),
+                                width: 1.6,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // 'Other' reason input appears when user selects 'Other' from the reasons dropdown
+                        if (_selectedReason == 'Other') ...[
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _otherReasonCtrl,
+                            decoration: InputDecoration(
+                              hintText: 'Specify reason',
+                              isDense: true,
+                              filled: true,
+                              fillColor: const Color(0xFFF9FAFB),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+
+                        // Additional notes
+                        const Text(
+                          'Additional notes (optional)',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFF6B7280),
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        _NoteField(controller: _notesCtrl),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Bottom actions
+                Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            fixedSize: const Size.fromHeight(48),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            side: const BorderSide(color: Color(0xFFD0D5DD)),
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF005CE7),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: AnimatedOpacity(
+                            duration: const Duration(milliseconds: 150),
+                            curve: Curves.easeOut,
+                            opacity: _isValid ? 1.0 : 0.5,
+                            child: IgnorePointer(
+                              ignoring: !_isValid,
+                              child: custom_buttons.FilledButton(
+                                label: 'Submit request',
+                                backgroundColor: const Color(0xFF005CE7),
+                                textColor: Colors.white,
+                                withOuterBorder: false,
+                                onPressed: () {
+                                  Navigator.pop(
+                                    context,
+                                        DayOffResult(
+                                          selectedDates: _selectedDates,
+                                          reason: _selectedReason == 'Other' && _otherReasonCtrl.text.trim().isNotEmpty
+                                              ? _otherReasonCtrl.text.trim()
+                                              : _selectedReason,
+                                          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+                                        ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 
 // BOTTOM SHEET: PUT REQUEST ON HOLD (refined UI)
 class HoldBottomSheet extends StatefulWidget {

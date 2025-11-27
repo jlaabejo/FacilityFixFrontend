@@ -6,6 +6,25 @@ import 'package:facilityfix/services/auth_storage.dart';
 import 'package:file_picker/file_picker.dart';
 
 class APIService {
+    /// Mark inventory reservation as returned (staff returns the items)
+    Future<Map<String, dynamic>> returnInventoryReservation(String reservationId) async {
+      try {
+        await _refreshRoleLabelFromToken();
+        final token = await _requireToken();
+        final response = await patch(
+          '/inventory/reservations/$reservationId/return',
+          headers: _authHeaders(token),
+        );
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          return jsonDecode(response.body) as Map<String, dynamic>;
+        } else {
+          throw Exception('Failed to return reservation: \\${response.statusCode} \\${response.body}');
+        }
+      } catch (e) {
+        print('Error returning inventory reservation: $e');
+        rethrow;
+      }
+    }
   /// The app-configured role used to pick a default base URL at construction.
   final AppRole role;
 
