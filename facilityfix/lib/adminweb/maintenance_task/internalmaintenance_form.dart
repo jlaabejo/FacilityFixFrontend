@@ -21,10 +21,7 @@ class InternalMaintenanceFormPage extends StatefulWidget {
     super.key,
     this.maintenanceData,
     this.isEditMode = false,
-    
   });
-
-  
 
   @override
   State<InternalMaintenanceFormPage> createState() =>
@@ -58,9 +55,6 @@ class _InternalMaintenanceFormPageState
     'Dec',
   ];
 
-
-
-
   List<PlatformFile>? attachments = const [];
   bool _isAutoAssigning = false;
   // -------------------- CONTROLLERS --------------------
@@ -77,7 +71,8 @@ class _InternalMaintenanceFormPageState
   final _adminNotesController = TextEditingController();
   final _startDateController = TextEditingController(); // read-only
   final _nextDueDateController = TextEditingController(); // read-only
-  final _checklistItemController = TextEditingController(); // For checklist input
+  final _checklistItemController =
+      TextEditingController(); // For checklist input
 
   // -------------------- STATE --------------------
   String? _selectedPriority;
@@ -95,12 +90,17 @@ class _InternalMaintenanceFormPageState
 
   List<Map<String, dynamic>> _staffMembers = [];
   List<Map<String, dynamic>> get _filteredStaffMembers {
-    if (_selectedDepartment == null || _selectedDepartment!.isEmpty) return _staffMembers;
+    if (_selectedDepartment == null || _selectedDepartment!.isEmpty)
+      return _staffMembers;
     return _staffMembers.where((staff) {
-      final staffDept = (staff['staff_department'] ?? staff['department'])?.toString().toLowerCase();
+      final staffDept =
+          (staff['staff_department'] ?? staff['department'])
+              ?.toString()
+              .toLowerCase();
       return staffDept == _selectedDepartment!.toLowerCase();
     }).toList();
   }
+
   List<Map<String, dynamic>> _availableInventoryItems = [];
   List<Map<String, dynamic>> _selectedInventoryItems = [];
   String? _selectedTemplateKey;
@@ -135,20 +135,19 @@ class _InternalMaintenanceFormPageState
       return pathMap[routeKey];
     }
 
-// Logout functionality
-void _handleLogout(BuildContext context) async {
-  final result = await showDialog<bool>(
-    context: context,
-    builder: (BuildContext context) {
-      return const LogoutPopup();
-    },
-  );
+  // Logout functionality
+  void _handleLogout(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return const LogoutPopup();
+      },
+    );
 
-  if (result == true) {
-    context.go('/');
+    if (result == true) {
+      context.go('/');
+    }
   }
-}
-
 
   // -------------------- HELPERS --------------------
   // TODO: Replace with your auth/current user provider
@@ -482,6 +481,7 @@ void _handleLogout(BuildContext context) async {
           departmentKey = 'general_maintenance';
       }
 
+      // Fix: Pass departmentKey as a positional argument to getNextStaffForDepartment
       final nextStaff = await _roundRobinService.getNextStaffForDepartment(
         departmentKey,
       );
@@ -629,7 +629,9 @@ void _handleLogout(BuildContext context) async {
         }
         final qty = item['quantity'];
         if (qty == null || qty <= 0) {
-          print('[v0] Skipping reservation for ${item['item_name']} due to invalid quantity: $qty');
+          print(
+            '[v0] Skipping reservation for ${item['item_name']} due to invalid quantity: $qty',
+          );
           continue;
         }
         // Resolve inventoryId if it's a SKU or not resolved yet
@@ -893,25 +895,33 @@ void _handleLogout(BuildContext context) async {
     try {
       final taskId = widget.maintenanceData!['id']?.toString();
       if (taskId != null) {
-        final response = await _apiService.getInventoryReservations(maintenanceTaskId: taskId);
+        final response = await _apiService.getInventoryReservations(
+          maintenanceTaskId: taskId,
+        );
         if (response['success'] == true && response['data'] != null) {
-          final reservations = List<Map<String, dynamic>>.from(response['data']);
-          
+          final reservations = List<Map<String, dynamic>>.from(
+            response['data'],
+          );
+
           // Fetch details for each reserved item
           final List<Map<String, dynamic>> itemsWithDetails = [];
           for (final res in reservations) {
             final inventoryId = res['inventory_id'] ?? res['item_id'];
             if (inventoryId != null) {
               try {
-                final itemResponse = await _apiService.getInventoryItem(inventoryId);
-                if (itemResponse['success'] == true && itemResponse['data'] != null) {
+                final itemResponse = await _apiService.getInventoryItem(
+                  inventoryId,
+                );
+                if (itemResponse['success'] == true &&
+                    itemResponse['data'] != null) {
                   final item = itemResponse['data'];
                   itemsWithDetails.add({
                     'inventory_id': inventoryId,
                     'item_name': item['item_name'] ?? item['name'] ?? '',
                     'item_code': item['item_code'] ?? item['code'] ?? '',
                     'quantity': res['quantity'] ?? 0,
-                    'available_stock': item['current_stock'] ?? item['stock'] ?? '',
+                    'available_stock':
+                        item['current_stock'] ?? item['stock'] ?? '',
                     'unit': item['unit'] ?? '',
                   });
                 }
@@ -929,7 +939,7 @@ void _handleLogout(BuildContext context) async {
               }
             }
           }
-          
+
           setState(() {
             _selectedInventoryItems = itemsWithDetails;
           });
@@ -976,7 +986,14 @@ void _handleLogout(BuildContext context) async {
 
       // Remarks / Additional notes - accept several possible backend keys
       String? remarksVal;
-      for (final k in ['remarks', 'additional_notes', 'additional_note', 'additional_comments', 'notes', 'admin_notification']) {
+      for (final k in [
+        'remarks',
+        'additional_notes',
+        'additional_note',
+        'additional_comments',
+        'notes',
+        'admin_notification',
+      ]) {
         final v = data[k];
         if (v != null) {
           remarksVal = v.toString();
@@ -987,7 +1004,12 @@ void _handleLogout(BuildContext context) async {
 
       // Admin notes - accept several possible backend keys
       String? adminNotesVal;
-      for (final k in ['admin_notes', 'admin_notification', 'notes', 'adminNote']) {
+      for (final k in [
+        'admin_notes',
+        'admin_notification',
+        'notes',
+        'adminNote',
+      ]) {
         final v = data[k];
         if (v != null) {
           adminNotesVal = v.toString();
@@ -1003,8 +1025,8 @@ void _handleLogout(BuildContext context) async {
       final validPriorities = ['Low', 'Medium', 'High'];
       _selectedPriority = validPriorities.contains(priority) ? priority : null;
 
-  // Status: coerce to string if present
-  _selectedStatus = data['status']?.toString();
+      // Status: coerce to string if present
+      _selectedStatus = data['status']?.toString();
 
       // Location: validate against location options
       final location = data['location'] ?? data['area'];
@@ -1037,12 +1059,7 @@ void _handleLogout(BuildContext context) async {
             })
             .join(' ');
         // Valid recurrence options: Weekly, Monthly, Quarterly, Annually
-        final validRecurrences = [
-          'Weekly',
-          'Monthly',
-          'Quarterly',
-          'Annually',
-        ];
+        final validRecurrences = ['Weekly', 'Monthly', 'Quarterly', 'Annually'];
         _selectedRecurrence =
             validRecurrences.contains(recurrenceCapitalized)
                 ? recurrenceCapitalized
@@ -1122,27 +1139,38 @@ void _handleLogout(BuildContext context) async {
         _dateCreatedController.text = _fmtDate(_dateCreated!);
       }
 
-      final startAt = parseFlexibleDate(data['start_date'] ?? data['scheduled_date']);
+      final startAt = parseFlexibleDate(
+        data['start_date'] ?? data['scheduled_date'],
+      );
       if (startAt != null) {
         _startDate = startAt;
         _startDateController.text = _fmtDate(_startDate!);
       }
 
-      final nextAt = parseFlexibleDate(data['next_due_date'] ?? data['next_due'] ?? data['next_occurrence']);
+      final nextAt = parseFlexibleDate(
+        data['next_due_date'] ?? data['next_due'] ?? data['next_occurrence'],
+      );
       if (nextAt != null) {
         _nextDueDate = nextAt;
         _nextDueDateController.text = _fmtDate(_nextDueDate!);
       }
 
       // Checklist items
-      final checklistData = data['checklist_completed'] ?? data['checklistItems'] ?? data['checklist'] ?? data['tasks'] ?? data['task_list'];
+      final checklistData =
+          data['checklist_completed'] ??
+          data['checklistItems'] ??
+          data['checklist'] ??
+          data['tasks'] ??
+          data['task_list'];
       if (checklistData != null && checklistData is List) {
         print('[Form] Populating checklist from data: $checklistData');
         _checklistItems.clear();
         for (var item in checklistData) {
           if (item is Map) {
             _checklistItems.add({
-              'id': item['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              'id':
+                  item['id'] ??
+                  DateTime.now().millisecondsSinceEpoch.toString(),
               'task': item['task'] ?? item['description'] ?? '',
               'completed': item['completed'] ?? false,
             });
@@ -1163,7 +1191,7 @@ void _handleLogout(BuildContext context) async {
         _selectedInventoryItems.clear();
         for (var item in data['parts_used']) {
           _selectedInventoryItems.add({
-            'inventory_id': item['inventory_id'] ?? item['item_code'] ?? '', 
+            'inventory_id': item['inventory_id'] ?? item['item_code'] ?? '',
             'item_name': item['item_name'] ?? item['name'] ?? '',
             'item_code': item['item_code'] ?? item['code'] ?? '',
             'quantity': item['quantity'] ?? 0,
@@ -1307,13 +1335,9 @@ void _handleLogout(BuildContext context) async {
         print('[v0] Maintenance task updated successfully');
         print('[v0] Backend response: $result');
 
+        // upload files to firebase storage
 
-  
-
-
-      // upload files to firebase storage 
-
-      for (final file in attachments!) {
+        for (final file in attachments!) {
           await api.uploadMultipartFile(
             path: '/files/upload',
             file: file,
@@ -1324,11 +1348,7 @@ void _handleLogout(BuildContext context) async {
               'description': 'Attachment for maintenance task ${result['id']}',
             },
           );
-
-      }
-
-
-
+        }
 
         // Navigate back to maintenance list
         if (mounted) {
@@ -1342,7 +1362,9 @@ void _handleLogout(BuildContext context) async {
       } else {
         // CREATE new task
         print('[v0] Saving maintenance task to backend...');
-        final result = await _apiService.createAdminMaintenanceTask(maintenance);
+        final result = await _apiService.createAdminMaintenanceTask(
+          maintenance,
+        );
         print('[v0] Maintenance task saved successfully');
         print('[v0] Backend response: $result');
 
@@ -1362,30 +1384,30 @@ void _handleLogout(BuildContext context) async {
         // Update the maintenance task with the inventory reservation IDs
         if (inventoryReservationIds.isNotEmpty) {
           try {
-            final response = await _apiService.updateMaintenanceTask(actualTaskId, {
-              'inventory_reservation_ids': inventoryReservationIds,
-            });
+            final response = await _apiService.updateMaintenanceTask(
+              actualTaskId,
+              {'inventory_reservation_ids': inventoryReservationIds},
+            );
 
             final result = response;
 
             // upload files to firebase storage
 
-      for (final file in attachments!) {
-          await api.uploadMultipartFile(
-            path: '/files/upload',
-            file: file,
-            fields: {
-              'entity_type': 'Internal Maintenance Attachments',
-              'entity_id': actualTaskId,
-              'file_type': 'any',
-              'description': 'Attachment for maintenance task ${result['id']}',
-            },
-          );
-
-      }
+            for (final file in attachments!) {
+              await api.uploadMultipartFile(
+                path: '/files/upload',
+                file: file,
+                fields: {
+                  'entity_type': 'Internal Maintenance Attachments',
+                  'entity_id': actualTaskId,
+                  'file_type': 'any',
+                  'description':
+                      'Attachment for maintenance task ${result['id']}',
+                },
+              );
+            }
 
             print(
-
               '[v0] Updated maintenance task with inventory reservation IDs: $inventoryReservationIds',
             );
           } catch (e) {
@@ -1600,32 +1622,33 @@ void _handleLogout(BuildContext context) async {
                       Row(
                         children: [
                           // Created By - Fetch from admin profile
-                            Expanded(
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                              _fieldLabel('Created By'),
-                              _fieldBox(
-                                child: TextFormField(
-                                initialValue: _createdByName ?? 'Admin User',
-                                enabled: false,
-                                decoration: _decoration(
-                                  _createdByName ?? 'Admin User',
-                                ).copyWith(
-                                  disabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(
-                                    color: Colors.grey[300]!,
+                                _fieldLabel('Created By'),
+                                _fieldBox(
+                                  child: TextFormField(
+                                    initialValue:
+                                        _createdByName ?? 'Admin User',
+                                    enabled: false,
+                                    decoration: _decoration(
+                                      _createdByName ?? 'Admin User',
+                                    ).copyWith(
+                                      disabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color: Colors.grey[300]!,
+                                        ),
+                                      ),
+                                      filled: true,
+                                      fillColor: Colors.grey[50],
+                                    ),
                                   ),
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.grey[50],
                                 ),
-                                ),
-                              ),
                               ],
                             ),
-                            ),
+                          ),
                           const SizedBox(width: 24),
 
                           // Date Created
@@ -1692,11 +1715,7 @@ void _handleLogout(BuildContext context) async {
                                       'Select Priority...',
                                     ),
                                     items:
-                                        const [
-                                              'Low',
-                                              'Medium',
-                                              'High',
-                                            ]
+                                        const ['Low', 'Medium', 'High']
                                             .map(
                                               (v) => DropdownMenuItem(
                                                 value: v,
@@ -1852,47 +1871,51 @@ void _handleLogout(BuildContext context) async {
                           const SizedBox(width: 24),
 
                           // Estimated Duration
-                            Expanded(
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                              _fieldLabel('Estimated Duration'),
-                              _fieldBox(
-                                child: TextFormField(
-                                controller: _estimatedDurationController,
-                                validator: _durationValidator,
-                                decoration: _decoration(
-                                  'e.g., 3 hrs / 45 mins',
-                                ).copyWith(
-                                  suffixIcon: IconButton(
-                                  icon: const Icon(Icons.access_time),
-                                  tooltip: 'Pick hours & minutes',
-                                  onPressed: () async {
-                                    final picked = await showTimePicker(
-                                    context: context,
-                                    // Use a neutral initial time for duration selection
-                                    initialTime: TimeOfDay(hour: 0, minute: 30),
-                                    );
-                                    if (picked != null) {
-                                    final h = picked.hour;
-                                    final m = picked.minute;
-                                    String formatted;
-                                    if (h > 0 && m > 0) {
-                                      formatted = '$h hrs $m mins';
-                                    } else if (h > 0) {
-                                      formatted = '$h hrs';
-                                    } else {
-                                      formatted = '$m mins';
-                                    }
-                                    setState(() {
-                                      _estimatedDurationController.text = formatted;
-                                    });
-                                    }
-                                  },
+                                _fieldLabel('Estimated Duration'),
+                                _fieldBox(
+                                  child: TextFormField(
+                                    controller: _estimatedDurationController,
+                                    validator: _durationValidator,
+                                    decoration: _decoration(
+                                      'e.g., 3 hrs / 45 mins',
+                                    ).copyWith(
+                                      suffixIcon: IconButton(
+                                        icon: const Icon(Icons.access_time),
+                                        tooltip: 'Pick hours & minutes',
+                                        onPressed: () async {
+                                          final picked = await showTimePicker(
+                                            context: context,
+                                            // Use a neutral initial time for duration selection
+                                            initialTime: TimeOfDay(
+                                              hour: 0,
+                                              minute: 30,
+                                            ),
+                                          );
+                                          if (picked != null) {
+                                            final h = picked.hour;
+                                            final m = picked.minute;
+                                            String formatted;
+                                            if (h > 0 && m > 0) {
+                                              formatted = '$h hrs $m mins';
+                                            } else if (h > 0) {
+                                              formatted = '$h hrs';
+                                            } else {
+                                              formatted = '$m mins';
+                                            }
+                                            setState(() {
+                                              _estimatedDurationController
+                                                  .text = formatted;
+                                            });
+                                          }
+                                        },
+                                      ),
+                                    ),
                                   ),
                                 ),
-                                ),
-                              ),
                               ],
                             ),
                           ),
@@ -2120,7 +2143,12 @@ void _handleLogout(BuildContext context) async {
                                         _selectedDepartment = v;
                                         // Check if current staff is in the new department
                                         if (_selectedStaffUserId != null) {
-                                          final inDept = _filteredStaffMembers.any((s) => (s['user_id'] ?? s['id']) == _selectedStaffUserId);
+                                          final inDept = _filteredStaffMembers
+                                              .any(
+                                                (s) =>
+                                                    (s['user_id'] ?? s['id']) ==
+                                                    _selectedStaffUserId,
+                                              );
                                           if (!inDept) {
                                             _selectedStaffUserId = null;
                                             _assignedStaffController.clear();
@@ -2147,22 +2175,29 @@ void _handleLogout(BuildContext context) async {
                                 _fieldBox(
                                   child: DropdownButtonFormField<String>(
                                     value: _selectedStaffUserId,
-                                    decoration: _decoration(
-                                      'Select Staff...',
-                                    ),
-                                    items: _filteredStaffMembers.map((staff) {
-                                      final id = staff['user_id'] ?? staff['id'];
-                                      final name = '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'.trim();
-                                      return DropdownMenuItem<String>(
-                                        value: id,
-                                        child: Text(name),
-                                      );
-                                    }).toList(),
+                                    decoration: _decoration('Select Staff...'),
+                                    items:
+                                        _filteredStaffMembers.map((staff) {
+                                          final id =
+                                              staff['user_id'] ?? staff['id'];
+                                          final name =
+                                              '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'
+                                                  .trim();
+                                          return DropdownMenuItem<String>(
+                                            value: id,
+                                            child: Text(name),
+                                          );
+                                        }).toList(),
                                     onChanged: (v) {
                                       setState(() {
                                         _selectedStaffUserId = v;
-                                        final staff = _staffMembers.firstWhere((s) => (s['user_id'] ?? s['id']) == v, orElse: () => {});
-                                        _assignedStaffController.text = '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'.trim();
+                                        final staff = _staffMembers.firstWhere(
+                                          (s) => (s['user_id'] ?? s['id']) == v,
+                                          orElse: () => {},
+                                        );
+                                        _assignedStaffController.text =
+                                            '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'
+                                                .trim();
                                       });
                                     },
                                   ),
@@ -2314,11 +2349,11 @@ void _handleLogout(BuildContext context) async {
                                               ),
                                               const SizedBox(width: 12),
 
-                                                // Item details
-                                                Expanded(
+                                              // Item details
+                                              Expanded(
                                                 child: Column(
                                                   crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
+                                                      CrossAxisAlignment.start,
                                                   children: [
                                                   Row(
                                                     children: [
@@ -2366,162 +2401,176 @@ void _handleLogout(BuildContext context) async {
                                                     fontSize: 11,
                                                     color: Colors.grey[600],
                                                     ),
-                                                  ),
                                                   ],
                                                 ),
                                               ),
 
-                                                // Quantity controls (fixed increment/decrement)
-                                                Container(
+                                              // Quantity controls (fixed increment/decrement)
+                                              Container(
                                                 decoration: BoxDecoration(
                                                   border: Border.all(
-                                                  color: Colors.grey[300]!,
+                                                    color: Colors.grey[300]!,
                                                   ),
                                                   borderRadius:
-                                                    BorderRadius.circular(8),
+                                                      BorderRadius.circular(8),
                                                 ),
                                                 child: Row(
                                                   mainAxisSize:
-                                                    MainAxisSize.min,
+                                                      MainAxisSize.min,
                                                   children: [
-                                                  // Decrement button
-                                                  IconButton(
-                                                    icon: const Icon(
-                                                    Icons.remove,
-                                                    size: 16,
+                                                    // Decrement button
+                                                    IconButton(
+                                                      icon: const Icon(
+                                                        Icons.remove,
+                                                        size: 16,
+                                                      ),
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                            4,
+                                                          ),
+                                                      constraints:
+                                                          const BoxConstraints(
+                                                            minWidth: 32,
+                                                            minHeight: 32,
+                                                          ),
+                                                      onPressed: () {
+                                                        setState(() {
+                                                          final currentQty =
+                                                              int.tryParse(
+                                                                item['quantity']
+                                                                        ?.toString() ??
+                                                                    '0',
+                                                              ) ??
+                                                              0;
+                                                          final availableStock =
+                                                              int.tryParse(
+                                                                item['available_stock']
+                                                                        ?.toString() ??
+                                                                    '0',
+                                                              ) ??
+                                                              0;
+
+                                                          if (currentQty > 1) {
+                                                            _selectedInventoryItems[index]['quantity'] =
+                                                                currentQty - 1;
+                                                          } else {
+                                                            // Optionally notify user they can't go below 1
+                                                            ScaffoldMessenger.of(
+                                                              context,
+                                                            ).showSnackBar(
+                                                              const SnackBar(
+                                                                content: Text(
+                                                                  'Quantity cannot be less than 1',
+                                                                ),
+                                                                duration:
+                                                                    Duration(
+                                                                      seconds:
+                                                                          1,
+                                                                    ),
+                                                              ),
+                                                            );
+                                                          }
+
+                                                          // Ensure consistency if available stock dropped to 0
+                                                          if (availableStock <=
+                                                              0) {
+                                                            _selectedInventoryItems[index]['quantity'] =
+                                                                0;
+                                                          }
+                                                        });
+                                                      },
+                                                      color: Colors.grey[700],
                                                     ),
-                                                    padding:
-                                                      const EdgeInsets.all(4),
-                                                    constraints:
-                                                      const BoxConstraints(
-                                                    minWidth: 32,
-                                                    minHeight: 32,
-                                                    ),
-                                                    onPressed: () {
-                                                    setState(() {
-                                                      final currentQty =
-                                                        int.tryParse(
-                                                          item['quantity']
-                                                            ?.toString() ??
-                                                          '0',
-                                                          ) ??
-                                                          0;
-                                                      final availableStock =
-                                                        int.tryParse(
-                                                          item['available_stock']
-                                                            ?.toString() ??
-                                                          '0',
-                                                          ) ??
-                                                          0;
 
-                                                      if (currentQty > 1) {
-                                                      _selectedInventoryItems[index]
-                                                        ['quantity'] =
-                                                        currentQty - 1;
-                                                      } else {
-                                                      // Optionally notify user they can't go below 1
-                                                      ScaffoldMessenger.of(
-                                                        context,
-                                                      ).showSnackBar(
-                                                        const SnackBar(
-                                                        content: Text(
-                                                          'Quantity cannot be less than 1',
+                                                    // Quantity display (non-editable to ensure consistent updates)
+                                                    SizedBox(
+                                                      width: 50,
+                                                      child: Center(
+                                                        child: Text(
+                                                          '${item['quantity']}',
+                                                          textAlign:
+                                                              TextAlign.center,
+                                                          style:
+                                                              const TextStyle(
+                                                                fontSize: 14,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
                                                         ),
-                                                        duration:
-                                                          Duration(
-                                                          seconds: 1,
-                                                        ),
-                                                        ),
-                                                      );
-                                                      }
-
-                                                      // Ensure consistency if available stock dropped to 0
-                                                      if (availableStock <= 0) {
-                                                      _selectedInventoryItems[index]
-                                                        ['quantity'] = 0;
-                                                      }
-                                                    });
-                                                    },
-                                                    color: Colors.grey[700],
-                                                  ),
-
-                                                  // Quantity display (non-editable to ensure consistent updates)
-                                                  SizedBox(
-                                                    width: 50,
-                                                    child: Center(
-                                                    child: Text(
-                                                      '${item['quantity']}',
-                                                      textAlign: TextAlign.center,
-                                                      style: const TextStyle(
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                        FontWeight.w600,
                                                       ),
                                                     ),
-                                                    ),
-                                                  ),
 
-                                                  // Increment button (robust parsing & clamping)
-                                                  IconButton(
-                                                    icon: const Icon(
-                                                    Icons.add,
-                                                    size: 16,
-                                                    ),
-                                                    padding:
-                                                      const EdgeInsets.all(4),
-                                                    constraints:
-                                                      const BoxConstraints(
-                                                    minWidth: 32,
-                                                    minHeight: 32,
-                                                    ),
-                                                    onPressed: () {
-                                                    setState(() {
-                                                      final currentQty =
-                                                        int.tryParse(
-                                                          item['quantity']
-                                                            ?.toString() ??
-                                                          '0',
-                                                          ) ??
-                                                          0;
-                                                      final availableStock =
-                                                        int.tryParse(
-                                                          item['available_stock']
-                                                            ?.toString() ??
-                                                          '0',
-                                                          ) ??
-                                                          0;
+                                                    // Increment button (robust parsing & clamping)
+                                                    IconButton(
+                                                      icon: const Icon(
+                                                        Icons.add,
+                                                        size: 16,
+                                                      ),
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                            4,
+                                                          ),
+                                                      constraints:
+                                                          const BoxConstraints(
+                                                            minWidth: 32,
+                                                            minHeight: 32,
+                                                          ),
+                                                      onPressed: () {
+                                                        setState(() {
+                                                          final currentQty =
+                                                              int.tryParse(
+                                                                item['quantity']
+                                                                        ?.toString() ??
+                                                                    '0',
+                                                              ) ??
+                                                              0;
+                                                          final availableStock =
+                                                              int.tryParse(
+                                                                item['available_stock']
+                                                                        ?.toString() ??
+                                                                    '0',
+                                                              ) ??
+                                                              0;
 
-                                                      if (availableStock <= 0) {
-                                                      ScaffoldMessenger.of(
-                                                        context,
-                                                      ).showSnackBar(
-                                                        const SnackBar(
-                                                        content:
-                                                          Text('No stock available'),
-                                                        duration:
-                                                          Duration(
-                                                          seconds: 2,
-                                                        ),
-                                                        ),
-                                                      );
-                                                      return;
-                                                      }
+                                                          if (availableStock <=
+                                                              0) {
+                                                            ScaffoldMessenger.of(
+                                                              context,
+                                                            ).showSnackBar(
+                                                              const SnackBar(
+                                                                content: Text(
+                                                                  'No stock available',
+                                                                ),
+                                                                duration:
+                                                                    Duration(
+                                                                      seconds:
+                                                                          2,
+                                                                    ),
+                                                              ),
+                                                            );
+                                                            return;
+                                                          }
 
-                                                      final newQty = (currentQty + 1)
-                                                        .clamp(1, availableStock);
+                                                          final newQty =
+                                                              (currentQty + 1)
+                                                                  .clamp(
+                                                                    1,
+                                                                    availableStock,
+                                                                  );
 
-                                                      _selectedInventoryItems[index]
-                                                        ['quantity'] = newQty;
-                                                    });
-                                                    },
-                                                    color: const Color(
-                                                    0xFF2E7D32,
+                                                          _selectedInventoryItems[index]['quantity'] =
+                                                              newQty;
+                                                        });
+                                                      },
+                                                      color: const Color(
+                                                        0xFF2E7D32,
+                                                      ),
                                                     ),
-                                                  ),
-                                                    ],
-                                                  ),
-                                                  ),
-                                                  const SizedBox(width: 8),
+                                                  ],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
 
                                               // Delete button
                                               IconButton(
@@ -2551,16 +2600,16 @@ void _handleLogout(BuildContext context) async {
                       ),
 
                       const SizedBox(height: 40),
-                    _buildSectionHeader(
-                      "Admin Note",
-                      "Notes for admins and post-task remarks",
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _adminNotesController,
-                      maxLines: 5,
-                      decoration: _decoration('Enter Description....'),
-                    ),
+                      _buildSectionHeader(
+                        "Admin Note",
+                        "Notes for admins and post-task remarks",
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _adminNotesController,
+                        maxLines: 5,
+                        decoration: _decoration('Enter Description....'),
+                      ),
                       const SizedBox(height: 24),
 
                       // ===== Actions =====
@@ -2592,7 +2641,9 @@ void _handleLogout(BuildContext context) async {
                               ),
                             ),
                             child: Text(
-                              _isEditing ? "Save Changes" : "Submit Internal Task",
+                              _isEditing
+                                  ? "Save Changes"
+                                  : "Submit Internal Task",
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
@@ -2810,7 +2861,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
 
             // Items list
             Expanded(
-                  child:
+              child:
                   _filteredItems.isEmpty
                       ? Center(
                         child: Text(
@@ -2875,7 +2926,8 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                                       color: Colors.grey[600],
                                     ),
                                   ),
-                                  if (item['unit'] != null && item['unit'].toString().isNotEmpty)
+                                  if (item['unit'] != null &&
+                                      item['unit'].toString().isNotEmpty)
                                     Text(
                                       'Unit: ${item['unit']}',
                                       style: TextStyle(
@@ -2971,7 +3023,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24,
-                                           vertical: 12,
+                      vertical: 12,
                     ),
                   ),
                 ),

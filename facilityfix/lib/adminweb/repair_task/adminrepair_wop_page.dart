@@ -23,6 +23,9 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   List<Map<String, dynamic>> _filteredTasks = [];
   String _errorMessage = '';
 
+  // Selection state
+  final Set<String> _selectedTaskIds = {};
+
   // Pagination state
   int _currentPage = 0;
   final int _itemsPerPage = 10;
@@ -55,6 +58,16 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   String _selectedStatus = 'All Status';
   String _selectedConcernType = 'Work Order';
 
+  int get _selectedPendingCount {
+    return _selectedTaskIds.where((id) {
+      final task = _filteredTasks.firstWhere(
+        (t) => t['id'] == id,
+        orElse: () => {},
+      );
+      return task['status'] == 'Pending';
+    }).length;
+  }
+
   // Sort by date
   void _sortByDate() {
     setState(() {
@@ -69,6 +82,21 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
         return _sortAscending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
       });
     });
+  }
+
+  // Handle selecting all tasks
+  void _onSelectAll(bool? selected) {
+    if (selected == true) {
+      setState(() {
+        _selectedTaskIds.addAll(
+          _filteredTasks.map((task) => task['id'].toString()),
+        );
+      });
+    } else {
+      setState(() {
+        _selectedTaskIds.clear();
+      });
+    }
   }
 
   // Parse date helper
@@ -202,7 +230,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       for (var permit in permits) {
         Map<String, dynamic> taskData = {
           'serviceId': permit['formatted_id'] ?? permit['id'] ?? 'N/A',
-          'id': permit['concern_slip_id'] ?? 'N/A',
+          'id': permit['id'] ?? 'N/A',
           'permitId': permit['id'] ?? 'N/A', // Add permit ID for actions
           'title': permit['title'] ?? 'Untitled Work Order',
           'buildingUnit': permit['location'] ?? 'N/A',
@@ -242,7 +270,10 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                 concernSlip['category'] ?? taskData['department'];
 
             // If concern slip has a priority field, prefer that as the displayed priority
-            final csPriority = concernSlip['priority'] ?? concernSlip['rawData']?['priority'] ?? concernSlip['priority_level'];
+            final csPriority =
+                concernSlip['priority'] ??
+                concernSlip['rawData']?['priority'] ??
+                concernSlip['priority_level'];
             if (csPriority != null && csPriority.toString().trim().isNotEmpty) {
               taskData['priority'] = csPriority.toString();
               taskData['csPriority'] = csPriority; // keep raw for reference
@@ -375,7 +406,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
 
   String _mapStatus(dynamic status, dynamic workflow) {
     // Custom mapping logic for Work Order
-  final s = (status ?? '').toString().toLowerCase();
+    final s = (status ?? '').toString().toLowerCase();
 
     if (s == 'completed') return 'Completed';
     if (s == 'cancelled') return 'Cancelled';
@@ -535,9 +566,10 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       case 'edit':
         // Open Edit dialog for WOP and refresh on success
         final rawSrc = task['rawData'] ?? task ?? {};
-        final Map<String, dynamic> raw = rawSrc is Map<String, dynamic>
-            ? rawSrc
-            : Map<String, dynamic>.from(rawSrc as Map);
+        final Map<String, dynamic> raw =
+            rawSrc is Map<String, dynamic>
+                ? rawSrc
+                : Map<String, dynamic>.from(rawSrc as Map);
         EditDialog.show(
           context,
           type: EditDialogType.workOrderPermit,
@@ -547,7 +579,9 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
           if (result == true && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Changes saved for: ${task['permitId'] ?? task['id']}'),
+                content: Text(
+                  'Changes saved for: ${task['permitId'] ?? task['id']}',
+                ),
                 backgroundColor: Colors.green,
               ),
             );
@@ -579,7 +613,10 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   }
 
   // Copied/adapted from WorkOrderConcernSlipDialog: show a modal to collect rejection notes
-  Future<void> _showRejectConfirmationForTask(BuildContext context, Map<String, dynamic> task) async {
+  Future<void> _showRejectConfirmationForTask(
+    BuildContext context,
+    Map<String, dynamic> task,
+  ) async {
     final TextEditingController _reasonController = TextEditingController();
 
     final confirmed = await showDialog<bool>(
@@ -591,7 +628,9 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Please provide notes for returning this work order to the tenant.'),
+              const Text(
+                'Please provide notes for returning this work order to the tenant.',
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: _reasonController,
@@ -614,7 +653,9 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                 if (_reasonController.text.trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Please enter notes explaining the return to tenant.'),
+                      content: Text(
+                        'Please enter notes explaining the return to tenant.',
+                      ),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
@@ -639,10 +680,17 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
 
     try {
       final reason = _reasonController.text.trim();
-      final permitId = task['permitId'] ?? task['id'] ?? task['serviceId'] ?? task['workOrderId'];
+      final permitId =
+          task['permitId'] ??
+          task['id'] ??
+          task['serviceId'] ??
+          task['workOrderId'];
       if (permitId == null) throw Exception('Could not determine permit id');
 
-      final resp = await _apiService.rejectWorkOrderPermit(permitId.toString(), reason);
+      final resp = await _apiService.rejectWorkOrderPermit(
+        permitId.toString(),
+        reason,
+      );
 
       // Refresh list and show feedback
       await _fetchWorkOrderPermits();
@@ -672,11 +720,21 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   }
 
   // Copied/adapted from WorkOrderConcernSlipDialog: approval flow using reusable dialog
-  Future<void> _handleApprovalForTask(BuildContext context, Map<String, dynamic> task) async {
-    final permitId = task['permitId'] ?? task['id'] ?? task['serviceId'] ?? task['workOrderId'];
+  Future<void> _handleApprovalForTask(
+    BuildContext context,
+    Map<String, dynamic> task,
+  ) async {
+    final permitId =
+        task['permitId'] ??
+        task['id'] ??
+        task['serviceId'] ??
+        task['workOrderId'];
     if (permitId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not determine permit id'), backgroundColor: Colors.red),
+        const SnackBar(
+          content: Text('Could not determine permit id'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -685,7 +743,8 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       context,
       config: DialogConfig.confirmation(
         title: 'Approve Work Order Permit',
-        description: 'Are you sure you want to approve this work order permit? This will allow the contractor to proceed.',
+        description:
+            'Are you sure you want to approve this work order permit? This will allow the contractor to proceed.',
         primaryButtonLabel: 'Approve',
         primaryAction: () {},
         secondaryButtonLabel: 'Cancel',
@@ -737,30 +796,303 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       context,
       itemName: 'Task',
       description:
-          'Are you sure you want to delete this task ${task['id']}? This action cannot be undone. All associated data will be permanently removed from the system.',
+          'Are you sure you want to delete this task ${task['serviceId']}? This action cannot be undone. All associated data will be permanently removed from the system.',
     );
 
     if (confirmed) {
+      setState(() => _isLoading = true);
+      try {
+        final permitId = task['permitId']?.toString() ?? task['id']?.toString();
+        if (permitId == null) {
+          throw Exception('Could not determine the permit ID to delete.');
+        }
+
+        await _apiService.deleteWorkOrderPermit(permitId);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Task ${task['serviceId']} deleted successfully.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          // Refresh the list after deletion
+          _fetchWorkOrderPermits();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error deleting task: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _bulkApproveWorkOrders() async {
+    if (_selectedTaskIds.isEmpty) return;
+
+    final selectedIds = _selectedTaskIds.toList();
+
+    // Show confirmation dialog
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Approve Work Orders'),
+            content: Text(
+              'Are you sure you want to approve ${selectedIds.length} work order(s)? This will notify the contractors to proceed with the work.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await _processApprovals(selectedIds);
+                },
+                child: const Text('Approve'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Future<void> _bulkRejectWorkOrders() async {
+    if (_selectedTaskIds.isEmpty) return;
+
+    final selectedIds = _selectedTaskIds.toList();
+
+    // Show rejection reason dialog
+    String rejectionReason = '';
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Reject Work Orders'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Are you sure you want to reject ${selectedIds.length} work order(s)?',
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  onChanged: (value) => rejectionReason = value,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: 'Enter rejection reason',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await _processRejections(selectedIds, rejectionReason);
+                },
+                child: const Text('Reject'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Future<void> _processApprovals(List<String> workOrderIds) async {
+    setState(() => _isLoading = true);
+
+    try {
+      final result = await _apiService.bulkApproveWorkOrders(workOrderIds);
+
+      final successCount = result['approved_count'] ?? 0;
+      final failureCount = result['failed_count'] ?? 0;
+      final errors = result['errors'] ?? [];
+
       setState(() {
-        _repairTasks.removeWhere((t) => t['id'] == task['id']);
-        _filteredTasks.removeWhere((t) => t['id'] == task['id']);
+        _isLoading = false;
+        _selectedTaskIds.clear();
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Task ${task['id']} deleted'),
-          backgroundColor: Colors.red,
-        ),
+
+      await _fetchWorkOrderPermits();
+
+      // Show results dialog
+      showDialog(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: const Text('Bulk Approval Complete'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Successfully approved: $successCount',
+                    style: const TextStyle(
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (failureCount > 0) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Failed: $failureCount',
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (errors is List && errors.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 150),
+                        child: SingleChildScrollView(
+                          child: Text(
+                            'Failed tasks:\n${errors.join('\n')}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.red,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
       );
+    } catch (e) {
+      setState(() => _isLoading = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error during bulk approval: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _processRejections(
+    List<String> workOrderIds,
+    String reason,
+  ) async {
+    setState(() => _isLoading = true);
+
+    try {
+      final result = await _apiService.bulkRejectWorkOrders(
+        workOrderIds,
+        reason,
+      );
+
+      final successCount = result['rejected_count'] ?? 0;
+      final failureCount = result['failed_count'] ?? 0;
+      final errors = result['errors'] ?? [];
+
+      setState(() {
+        _isLoading = false;
+        _selectedTaskIds.clear();
+      });
+
+      await _fetchWorkOrderPermits();
+
+      // Show results dialog
+      showDialog(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: const Text('Bulk Rejection Complete'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Successfully rejected: $successCount',
+                    style: const TextStyle(
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (failureCount > 0) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Failed: $failureCount',
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (errors is List && errors.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 150),
+                        child: SingleChildScrollView(
+                          child: Text(
+                            'Failed tasks:\n${errors.join('\n')}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.red,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+      );
+    } catch (e) {
+      setState(() => _isLoading = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error during bulk rejection: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
   final List<double> _colW = <double>[
-    110, // WORK ORDER ID
+    30, // CHECKBOX
+    95, // WORK ORDER ID
     150, // TITLE
-    130, // DATE REQUESTED
+    120, // DATE REQUESTED
     100, // BUILDING & UNIT
     70, // PRIORITY
-    80, // DEPARTMENT  
+    80, // DEPARTMENT
     70, // STATUS
     38, // ACTION
   ];
@@ -770,7 +1102,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     Widget child, {
     Alignment align = Alignment.centerLeft,
   }) {
-    return SizedBox(
+    return Container(
       width: _colW[i],
       child: Align(alignment: align, child: child),
     );
@@ -989,14 +1321,9 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                       <String>[
                         'All Status',
                         'Pending',
-                        'To Inspect',
-                        'In Progress',
-                        'Assessed',
-                        'Sent to Client',
                         'Approved',
                         'Rejected',
                         'Completed',
-                        'Returned to Tenant',
                         'Denied',
                       ].map<DropdownMenuItem<String>>((String value) {
                         return DropdownMenuItem<String>(
@@ -1244,7 +1571,24 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                 ),
                                 columns: [
                                   DataColumn(
-                                    label: _fixedCell(0, const Text("WORK ORDER ID")),
+                                    label: _fixedCell(
+                                      0,
+                                      Checkbox(
+                                        value:
+                                            _selectedTaskIds.length ==
+                                                _filteredTasks.length &&
+                                            _filteredTasks.isNotEmpty,
+                                        onChanged: _onSelectAll,
+                                        activeColor: Colors.blue,
+                                      ),
+                                      align: Alignment.center,
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      0,
+                                      const Text("WORK ORDER ID"),
+                                    ),
                                   ),
                                   DataColumn(
                                     label: _fixedCell(1, const Text("TITLE")),
@@ -1260,7 +1604,9 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                             const Text("DATE REQUESTED"),
                                             const SizedBox(width: 4),
                                             Icon(
-                                              _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                                              _sortAscending
+                                                  ? Icons.arrow_upward
+                                                  : Icons.arrow_downward,
                                               size: 16,
                                               color: Colors.grey[600],
                                             ),
@@ -1270,13 +1616,22 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                     ),
                                   ),
                                   DataColumn(
-                                    label: _fixedCell(3, const Text("BUILDING / UNIT")),
+                                    label: _fixedCell(
+                                      3,
+                                      const Text("BUILDING / UNIT"),
+                                    ),
                                   ),
                                   DataColumn(
-                                    label: _fixedCell(4, const Text("PRIORITY")),
+                                    label: _fixedCell(
+                                      4,
+                                      const Text("PRIORITY"),
+                                    ),
                                   ),
                                   DataColumn(
-                                    label: _fixedCell(5, const Text("DEPARTMENT")),
+                                    label: _fixedCell(
+                                      5,
+                                      const Text("DEPARTMENT"),
+                                    ),
                                   ),
                                   DataColumn(
                                     label: _fixedCell(6, const Text("STATUS")),
@@ -1285,50 +1640,139 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                     label: _fixedCell(7, const Text("")),
                                   ),
                                 ],
-                                rows: _paginatedTasks.map((task) {
-                                  return DataRow(
-                                    cells: [
-                                      // WORK ORDER ID
-                                      DataCell(_fixedCell(0, _ellipsis(task['serviceId'] ?? 'N/A'))),
+                                rows:
+                                    _paginatedTasks.map((task) {
+                                      return DataRow(
+                                        cells: [
+                                          DataCell(
+                                            _fixedCell(
+                                              0,
+                                              Checkbox(
+                                                value: _selectedTaskIds
+                                                    .contains(task['id']),
+                                                onChanged: (selected) {
+                                                  setState(() {
+                                                    if (selected == true) {
+                                                      _selectedTaskIds.add(
+                                                        task['id'],
+                                                      );
+                                                    } else {
+                                                      _selectedTaskIds.remove(
+                                                        task['id'],
+                                                      );
+                                                    }
+                                                  });
+                                                },
+                                                activeColor: Colors.blue,
+                                              ),
+                                              align: Alignment.center,
+                                            ),
+                                          ),
+                                          // WORK ORDER ID
+                                          DataCell(
+                                            _fixedCell(
+                                              0,
+                                              _ellipsis(
+                                                task['serviceId'] ?? 'N/A',
+                                              ),
+                                            ),
+                                          ),
 
-                                      // TITLE
-                                      DataCell(_fixedCell(1, _ellipsis(task['title'] ?? 'Untitled'))),
+                                          // TITLE
+                                          DataCell(
+                                            _fixedCell(
+                                              1,
+                                              _ellipsis(
+                                                task['title'] ?? 'Untitled',
+                                              ),
+                                            ),
+                                          ),
 
-                                      // DATE REQUESTED
-                                      DataCell(_fixedCell(2, _ellipsis(task['dateRequested'] ?? 'N/A'))),
+                                          // DATE REQUESTED
+                                          DataCell(
+                                            _fixedCell(
+                                              2,
+                                              _ellipsis(
+                                                task['dateRequested'] ?? 'N/A',
+                                              ),
+                                            ),
+                                          ),
 
-                                      // BUILDING / UNIT
-                                      DataCell(_fixedCell(3, _ellipsis(task['buildingUnit'] ?? 'N/A'))),
+                                          // BUILDING / UNIT
+                                          DataCell(
+                                            _fixedCell(
+                                              3,
+                                              _ellipsis(
+                                                task['buildingUnit'] ?? 'N/A',
+                                              ),
+                                            ),
+                                          ),
 
-                                      // PRIORITY (chip)
-                                      DataCell(_fixedCell(4, PriorityTag(task['priority'] ?? ''))),
+                                          // PRIORITY (chip)
+                                          DataCell(
+                                            _fixedCell(
+                                              4,
+                                              PriorityTag(
+                                                task['priority'] ?? '',
+                                              ),
+                                            ),
+                                          ),
 
-                                      // DEPARTMENT (chip)
-                                      DataCell(_fixedCell(5, DepartmentTag(task['department'] ?? 'N/A'))),
+                                          // DEPARTMENT (chip)
+                                          DataCell(
+                                            _fixedCell(
+                                              5,
+                                              DepartmentTag(
+                                                task['department'] ?? 'N/A',
+                                              ),
+                                            ),
+                                          ),
 
-                                      // STATUS (chip)
-                                      DataCell(_fixedCell(6, StatusTag(task['status'] ?? 'Pending'))),
+                                          // STATUS (chip)
+                                          DataCell(
+                                            _fixedCell(
+                                              6,
+                                              StatusTag(
+                                                task['status'] ?? 'Pending',
+                                              ),
+                                            ),
+                                          ),
 
-                                      // ACTION (menu)
-                                      DataCell(
-                                        _fixedCell(
-                                          7,
-                                          Builder(builder: (cellContext) {
-                                            return IconButton(
-                                              onPressed: () {
-                                                final RenderBox box = cellContext.findRenderObject() as RenderBox;
-                                                final offset = box.localToGlobal(Offset.zero);
-                                                _showActionMenu(cellContext, task, offset);
-                                              },
-                                              icon: const Icon(Icons.more_vert, size: 20),
-                                            );
-                                          }),
-                                          align: Alignment.center,
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                }).toList(),
+                                          // ACTION (menu)
+                                          DataCell(
+                                            _fixedCell(
+                                              7,
+                                              Builder(
+                                                builder: (cellContext) {
+                                                  return IconButton(
+                                                    onPressed: () {
+                                                      final RenderBox box =
+                                                          cellContext
+                                                                  .findRenderObject()
+                                                              as RenderBox;
+                                                      final offset = box
+                                                          .localToGlobal(
+                                                            Offset.zero,
+                                                          );
+                                                      _showActionMenu(
+                                                        cellContext,
+                                                        task,
+                                                        offset,
+                                                      );
+                                                    },
+                                                    icon: const Icon(
+                                                      Icons.more_vert,
+                                                      size: 20,
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                              align: Alignment.center,
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }).toList(),
                               ),
                             ),
                           ),
@@ -1355,6 +1799,99 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                               ),
                               Row(
                                 children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 12),
+                                    child: Builder(
+                                      builder: (ctx) {
+                                        // Determine if any selected work order is already Approved/Completed
+                                        final bool anySelectedAlreadyApproved =
+                                            _filteredTasks.any((t) {
+                                              try {
+                                                final id = t['id']?.toString();
+                                                if (id == null) return false;
+                                                if (!_selectedTaskIds.contains(
+                                                  id,
+                                                ))
+                                                  return false;
+                                                final mappedStatus =
+                                                    (t['status'] ?? '')
+                                                        .toString()
+                                                        .toLowerCase();
+                                                return mappedStatus.contains(
+                                                      'approved',
+                                                    ) ||
+                                                    mappedStatus.contains(
+                                                      'completed',
+                                                    );
+                                              } catch (e) {
+                                                return false;
+                                              }
+                                            });
+
+                                        final bool canApprove =
+                                            _selectedTaskIds.isNotEmpty &&
+                                            !anySelectedAlreadyApproved;
+
+                                        return ElevatedButton(
+                                          onPressed:
+                                              canApprove
+                                                  ? _bulkApproveWorkOrders
+                                                  : null,
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor:
+                                                canApprove
+                                                    ? Colors.green
+                                                    : Colors.grey[400],
+                                            disabledBackgroundColor:
+                                                Colors.grey[400],
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 24,
+                                              vertical: 12,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'Approve',
+                                            style: TextStyle(
+                                              color:
+                                                  canApprove
+                                                      ? Colors.white
+                                                      : Colors.grey[600],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 24),
+                                    child: ElevatedButton(
+                                      onPressed:
+                                          _selectedTaskIds.isNotEmpty
+                                              ? _bulkRejectWorkOrders
+                                              : null,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor:
+                                            _selectedTaskIds.isNotEmpty
+                                                ? Colors.red[600]
+                                                : Colors.grey[400],
+                                        disabledBackgroundColor:
+                                            Colors.grey[400],
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 24,
+                                          vertical: 12,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'Reject',
+                                        style: TextStyle(
+                                          color:
+                                              _selectedTaskIds.isNotEmpty
+                                                  ? Colors.white
+                                                  : Colors.grey[600],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                   // Previous button
                                   IconButton(
                                     onPressed:
