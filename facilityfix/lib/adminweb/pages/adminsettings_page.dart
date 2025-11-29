@@ -19,7 +19,6 @@ class _AdminWebSettingsPageState extends State<AdminWebSettingsPage> {
       final Map<String, String> pathMap = {
         'dashboard': '/dashboard',
         'user_users': '/user/users',
-        // 'user_roles': '/user/roles',
         'user_scheduling': '/user/scheduling',
         'work_maintenance': '/work/maintenance',
         'work_repair': '/work/repair',
@@ -33,7 +32,7 @@ class _AdminWebSettingsPageState extends State<AdminWebSettingsPage> {
         'logout': '/logout',
       };
       return pathMap[routeKey];
-  }
+    }
 
   // Logout functionality
   void _handleLogout(BuildContext context) async {

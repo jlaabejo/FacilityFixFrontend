@@ -53,6 +53,155 @@ class ApiService {
     }
   }
 
+  // ============================================
+  // EQUIPMENT MANAGEMENT ENDPOINTS
+  // ============================================
+
+  /// Register new equipment (Admin only)
+  Future<Map<String, dynamic>> registerEquipment(Map<String, dynamic> equipmentData) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.post(
+        // Backend equipment router: prefix '/equipment'
+        Uri.parse('$baseUrl/equipment'),
+        headers: headers,
+        body: jsonEncode(equipmentData),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else {
+        String err = response.body;
+        try {
+          final Map<String, dynamic> eBody = json.decode(response.body);
+          if (eBody.containsKey('detail')) err = eBody['detail'].toString();
+          else if (eBody.containsKey('message')) err = eBody['message'].toString();
+        } catch (_) {}
+        throw Exception('Failed to register equipment: $err');
+      }
+    } catch (e) {
+      print('[v0] Error registering equipment: $e');
+      rethrow;
+    }
+  }
+
+  /// Fetch full equipment details (Admin only)
+  Future<Map<String, dynamic>?> getEquipmentDetails(String equipmentId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/equipment/$equipmentId'),
+        headers: headers,
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else {
+        final error = 'Failed to fetch equipment details: ${response.statusCode} ${response.body}';
+        throw Exception(error);
+      }
+    } catch (e) {
+      print('[v0] Error fetching equipment details: $e');
+      rethrow;
+    }
+  }
+
+  /// Update equipment by id (Admin only)
+  Future<Map<String, dynamic>> updateEquipment(String equipmentId, Map<String, dynamic> updateData) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.put(
+        Uri.parse('$baseUrl/equipment/$equipmentId'),
+        headers: headers,
+        body: jsonEncode(updateData),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else {
+        String err = response.body;
+        try { err = json.decode(response.body)['detail'] ?? err; } catch (_) {}
+        throw Exception('Failed to update equipment: $err');
+      }
+    } catch (e) {
+      print('[v0] Error updating equipment: $e');
+      rethrow;
+    }
+  }
+
+  /// Soft-delete / deactivate equipment (Admin only)
+  Future<Map<String, dynamic>> deleteEquipment(String equipmentId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.delete(
+        Uri.parse('$baseUrl/equipment/$equipmentId'),
+        headers: headers,
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else {
+        final error = 'Failed to delete equipment: ${response.statusCode} ${response.body}';
+        throw Exception(error);
+      }
+    } catch (e) {
+      print('[v0] Error deleting equipment: $e');
+      rethrow;
+    }
+  }
+
+  /// List all equipment for a building (Admin only)
+  Future<List<Map<String, dynamic>>> listEquipmentByBuilding(String buildingId, {bool includeInactive = false}) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/equipment/buildings/$buildingId?include_inactive=$includeInactive'),
+        headers: headers,
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = json.decode(response.body);
+        // Backend returns {'success': True, 'data': items, 'count': N}
+        if (decoded is Map && decoded.containsKey('data') && decoded['data'] is List) {
+          return List<Map<String, dynamic>>.from(decoded['data']);
+        }
+        // fallback: assume the response is already a list
+        if (decoded is List) {
+          return List<Map<String, dynamic>>.from(decoded);
+        }
+        return [];
+      } else {
+        final error = 'Failed to list equipment: ${response.statusCode} ${response.body}';
+        throw Exception(error);
+      }
+    } catch (e) {
+      print('[v0] Error listing equipment by building: $e');
+      rethrow;
+    }
+  }
+
+  /// Search equipment for a building
+  Future<List<Map<String, dynamic>>> searchEquipment(String buildingId, String q) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/equipment/buildings/$buildingId/search?q=${Uri.encodeQueryComponent(q)}'),
+        headers: headers,
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = json.decode(response.body);
+        if (decoded is Map && decoded.containsKey('data') && decoded['data'] is List) {
+          return List<Map<String, dynamic>>.from(decoded['data']);
+        }
+        if (decoded is List) {
+          return List<Map<String, dynamic>>.from(decoded);
+        }
+        return [];
+      } else {
+        final error = 'Failed to search equipment: ${response.statusCode} ${response.body}';
+        throw Exception(error);
+      }
+    } catch (e) {
+      print('[v0] Error searching equipment: $e');
+      rethrow;
+    }
+  }
+
   Future<Map<String, dynamic>> getWorkOrderTrends({int days = 7}) async {
     try {
       final headers = await _getAuthHeaders();

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/services/auth_storage.dart';
 import 'package:facilityfix/config/env.dart';
+import 'package:facilityfix/staff/maintenance_task.dart';
 import 'package:facilityfix/staff/view_details/concern_slip.dart';
 import 'package:facilityfix/staff/view_details/job_service_detail.dart';
 import 'package:facilityfix/staff/task_management.dart';
@@ -26,6 +27,7 @@ class RepairTaskPage extends StatefulWidget {
 }
 
 class _RepairTaskPageState extends State<RepairTaskPage> {
+  int _selectedIndex = 1;
   // ─────────────── Tabs (by request type) ───────────────
   String _selectedTabLabel = "All";
 
@@ -174,7 +176,7 @@ class _RepairTaskPageState extends State<RepairTaskPage> {
   ];
 
   void _onTabTapped(int index) {
-    if (index == 1) return; // Already on WorkOrder page
+    if (index == _selectedIndex) return;
 
     switch (index) {
       case 0:
@@ -183,10 +185,16 @@ class _RepairTaskPageState extends State<RepairTaskPage> {
           MaterialPageRoute(builder: (_) => const HomePage()),
         );
         break;
-      case 2:
+      case 1:
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const RepairTaskPage()),
+        );
+        break;
+      case 2:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MaintenanceTaskPage()),
         );
         break;
       case 3:
@@ -196,10 +204,12 @@ class _RepairTaskPageState extends State<RepairTaskPage> {
         );
         break;
       case 4:
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const CalendarPage()),
-        );
+        if (_selectedIndex != 4) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const CalendarPage()),
+          );
+        }
         break;
       case 5:
         Navigator.pushReplacement(
@@ -208,6 +218,8 @@ class _RepairTaskPageState extends State<RepairTaskPage> {
         );
         break;
     }
+
+    setState(() => _selectedIndex = index);
   }
 
   // ===== Chat Navigation =====================================================

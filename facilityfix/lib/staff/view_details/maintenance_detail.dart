@@ -96,6 +96,15 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
               print('DEBUG: Error loading item details for reservation: $e');
             }
           }
+            // Normalize reservation id for downstream usage
+            if ((r['reservation_id'] ?? '').toString().isEmpty) {
+              if ((r['id'] ?? '').toString().isNotEmpty) r['reservation_id'] = r['id'];
+              else if ((r['_id'] ?? '').toString().isNotEmpty) r['reservation_id'] = r['_id'];
+              else if ((r['reservationId'] ?? '').toString().isNotEmpty) r['reservation_id'] = r['reservationId'];
+              else {
+                print('[v0] Warning: reservation for inventory ${r['inventory_id']} missing explicit id fields');
+              }
+            }
         }
         if (reservations.isNotEmpty) {
           // Mark as reservations
@@ -128,20 +137,50 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
   }
   
   void _onTabTapped(int index) {
-    final destinations = [
-      const HomePage(),
-      const RepairTaskPage(),
-      const MaintenanceTaskPage(),
-      const AnnouncementPage(),
-      const CalendarPage(),
-      const InventoryPage(),
-    ];
-    if (index != _selectedIndex) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => destinations[index]),
-      );
+    if (index == _selectedIndex) return;
+
+    switch (index) {
+      case 0:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+        break;
+      case 1:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const RepairTaskPage()),
+        );
+        break;
+      case 2:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MaintenanceTaskPage()),
+        );
+        break;
+      case 3:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AnnouncementPage()),
+        );
+        break;
+      case 4:
+        if (_selectedIndex != 4) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const CalendarPage()),
+          );
+        }
+        break;
+      case 5:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const InventoryPage()),
+        );
+        break;
     }
+
+    setState(() => _selectedIndex = index);
   }
   
   // Computed properties for checklist progress
@@ -689,8 +728,9 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
     if (requestId == null) {
       print('DEBUG: Request keys: ${request.keys.toList()}');
       print('DEBUG: Request map: $request'); // Add debug print
+      final snackMsg = (itemType == 'reservation') ? 'Reservation ID not found' : 'Request ID not found';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Request ID not found')),
+        SnackBar(content: Text(snackMsg)),
       );
       return;
     }
@@ -699,13 +739,18 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
       final apiService = APIService();
 
       if (action == 'receive') {
-        // Treat maintenance items as reservations too
-        if (itemType == 'reservation' || isMaintenanceItem) {
+        final requestStatus = (request['status'] ?? '').toString().toLowerCase();
+        final requestTypeStr = (request['type'] ?? '').toString().toLowerCase();
+        final hasReservationId = (request['reservation_id'] ?? '').toString().isNotEmpty;
+
+        // Treat maintenance items as reservations too, or if reserve-like markers exist
+        if (itemType == 'reservation' || isMaintenanceItem || hasReservationId || requestStatus == 'reserved') {
           if (_isUpdating) return;
           setState(() => _isUpdating = true);
           try {
-            print('DEBUG: Calling markReservationReceived for reservation $requestId');
-            final response = await apiService.markReservationReceived(requestId);
+            final reservationId = request['reservation_id'] ?? requestId;
+            print('DEBUG: Calling markReservationReceived for reservation $reservationId');
+            final response = await apiService.markReservationReceived(reservationId);
 
             if (response['success'] == true) {
               print('DEBUG: Reservation marked as received successfully');

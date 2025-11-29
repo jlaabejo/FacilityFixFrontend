@@ -109,6 +109,7 @@ class InventoryPage extends StatefulWidget {
 }
 
 class _InventoryPageState extends State<InventoryPage> {
+  int _selectedIndex = 5;
   // ----- API Service -----
   late final APIService _apiService;
 
@@ -137,7 +138,7 @@ class _InventoryPageState extends State<InventoryPage> {
   ];
 
   void _onTabTapped(int index) {
-    if (index == 5) return; // Already on Inventory page
+    if (index == _selectedIndex) return;
 
     switch (index) {
       case 0:
@@ -165,12 +166,22 @@ class _InventoryPageState extends State<InventoryPage> {
         );
         break;
       case 4:
+        if (_selectedIndex != 4) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const CalendarPage()),
+          );
+        }
+        break;
+      case 5:
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const CalendarPage()),
+          MaterialPageRoute(builder: (_) => const InventoryPage()),
         );
         break;
     }
+
+    setState(() => _selectedIndex = index);
   }
 
   // ----- Filters -----
