@@ -846,7 +846,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       appBar: CustomAppBar(
         leading: const BackButton(),
         title: 'Work Order Details',
-        showMore: true,
         showDelete:
             ((widget.workOrder ?? _fetchedWorkOrder) != null) &&
             _isDeletableStatus(

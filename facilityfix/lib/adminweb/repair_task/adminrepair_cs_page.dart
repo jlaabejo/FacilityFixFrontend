@@ -430,22 +430,25 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   }
 
   // Helper function to convert routeKey to actual route path
-  String? _getRoutePath(String routeKey) {
-    final Map<String, String> pathMap = {
-      'dashboard': '/dashboard',
-      'user_users': '/user/users',
-      'user_roles': '/user/roles',
-      'work_maintenance': '/work/maintenance',
-      'work_repair': '/work/repair',
-      'calendar': '/calendar',
-      'inventory_items': '/inventory/items',
-      'inventory_request': '/inventory/request',
-      'analytics': '/analytics',
-      'announcement': '/announcement',
-      'settings': '/settings',
-    };
-    return pathMap[routeKey];
-  }
+  static String? _getRoutePath(String routeKey) {
+      final Map<String, String> pathMap = {
+        'dashboard': '/dashboard',
+        'user_users': '/user/users',
+        // 'user_roles': '/user/roles',
+        'user_scheduling': '/user/scheduling',
+        'work_maintenance': '/work/maintenance',
+        'work_repair': '/work/repair',
+        'calendar': '/calendar',
+        'inventory_equipment': '/inventory/equipment',
+        'inventory_items': '/inventory/items',
+        'inventory_request': '/inventory/request',
+        'analytics': '/analytics',
+        'announcement': '/announcement',
+        'settings': '/settings',
+        'logout': '/logout',
+      };
+      return pathMap[routeKey];
+    }
 
   // Handle logout functionality
   void _handleLogout(BuildContext context) {

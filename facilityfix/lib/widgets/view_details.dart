@@ -4,6 +4,7 @@ import 'package:facilityfix/widgets/buttons.dart' as fx;
 import 'package:facilityfix/widgets/modals.dart';
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/config/env.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/tag.dart'; // StatusTag, PriorityTag, requestTypeTagTag, DepartmentTag
 import 'package:facilityfix/staff/view_details/invetory_details.dart';
@@ -1588,6 +1589,8 @@ class _MaintenanceState extends State<MaintenanceDetails> {
   List<Map<String, dynamic>> _inventoryRequests = [];
   final Set<String> _loadingItems = {}; // Track which items are being processed
   late final InventoryUpdateNotifier _notifier;
+  final Set<String> _suppressReturnIds =
+      {}; // Hide return button immediately after receive
 
   @override
   void initState() {
@@ -1839,6 +1842,11 @@ class _MaintenanceState extends State<MaintenanceDetails> {
               }
             }
 
+            // Hide the return button briefly while reloading to avoid flicker
+            setState(() => _suppressReturnIds.add(requestId));
+            Timer(const Duration(seconds: 3), () {
+              if (mounted) setState(() => _suppressReturnIds.remove(requestId));
+            });
             // Notify listeners that inventory was updated
             _notifier.notifyReservationReceived(requestId, inventoryId ?? '');
           } else {
@@ -1847,7 +1855,7 @@ class _MaintenanceState extends State<MaintenanceDetails> {
             );
           }
         } else {
-          // Update request status to 'received' and deduct stock
+          // Update request status to 'received' and deduct stock (for maintenance items or regular requests)
           final response = await apiService.updateInventoryRequestStatus(
             requestId: requestId,
             status: 'received',
@@ -1913,6 +1921,11 @@ class _MaintenanceState extends State<MaintenanceDetails> {
               }
             }
 
+            // Hide the return button briefly while reloading to avoid flicker
+            setState(() => _suppressReturnIds.add(requestId));
+            Timer(const Duration(seconds: 3), () {
+              if (mounted) setState(() => _suppressReturnIds.remove(requestId));
+            });
             // Notify listeners that inventory was updated
             _notifier.notifyItemUpdated(inventoryId ?? '');
           } else {
@@ -1986,6 +1999,71 @@ class _MaintenanceState extends State<MaintenanceDetails> {
     }
   }
 
+  // Handle 'return' action for inventory
+  Future<void> _handleReturnInventory(Map<String, dynamic> request) async {
+    final requestId =
+        request['_doc_id'] ??
+        request['id'] ??
+        request['_id'] ??
+        request['request_id'] ??
+        request['reservation_id'];
+    if (requestId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Request ID not found for return')),
+      );
+      return;
+    }
+    if (_loadingItems.contains(requestId)) return;
+    setState(() => _loadingItems.add(requestId));
+    try {
+      final apiService = APIService();
+      if ((request['type'] ?? '').toString().toLowerCase() == 'reservation') {
+        final response = await apiService.returnInventoryReservation(requestId);
+        if (response['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Item returned successfully')),
+          );
+          await _loadInventoryRequests();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Failed to return item: ${response['message'] ?? 'Unknown error'}',
+              ),
+            ),
+          );
+        }
+      } else {
+        // Fallback for requests: update status to 'returned'. Backend may or may not support this.
+        final response = await apiService.updateInventoryRequestStatus(
+          requestId: requestId,
+          status: 'returned',
+          deductStock: false,
+        );
+        if (response['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Request marked as returned')),
+          );
+          await _loadInventoryRequests();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Failed to return request: ${response['message'] ?? 'Unknown error'}',
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error returning item: $e')));
+    } finally {
+      setState(() => _loadingItems.remove(requestId));
+    }
+  }
+
   @override
   void dispose() {
     _notifier.removeListener(_onInventoryUpdate);
@@ -1999,17 +2077,8 @@ class _MaintenanceState extends State<MaintenanceDetails> {
         (widget.staffDepartment ?? '').trim().isNotEmpty ||
         (widget.scheduleDate ?? '').trim().isNotEmpty;
 
-    final assessedBy = (widget.assignedStaff ?? '').trim();
-    final assessedDept = (widget.staffDepartment ?? '').trim();
-    final assessedAt = widget.assessedAt;
-    final assessedText = (widget.assessment ?? '').trim();
-    final assessedAttachments = widget.staffAttachments ?? const <String>[];
-    final hasAssessmentBlock =
-        assessedBy.isNotEmpty ||
-        assessedDept.isNotEmpty ||
-        assessedAt != null ||
-        assessedText.isNotEmpty ||
-        assessedAttachments.isNotEmpty;
+    // Use widget.assessedAt, widget.assignedStaff, etc. directly where needed.
+    // `hasAssessmentBlock` was used previously; not needed in this widget right now
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -2321,10 +2390,12 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                               .toString()
                               .toLowerCase();
                       // Only allow receiving when admin has approved the request, or when it's a reservation
+
                       final isApproved =
                           status.toLowerCase() == 'approved' ||
                           status.toLowerCase() == 'reserved';
                       final unit = request['unit'] ?? '';
+
                       final category = request['category'] ?? '';
                       final requestId =
                           request['_doc_id'] ??
@@ -2381,7 +2452,30 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                                     width: double.infinity,
                                     child: Row(
                                       children: [
-                                        if (!isReceived) ...[
+                                        // Receive button
+                                        if (isReceived) ...[
+                                          ElevatedButton(
+                                            onPressed: null, // Already received
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: const Color(
+                                                0xFF059669,
+                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 6,
+                                                  ),
+                                            ),
+                                            child: const Text(
+                                              'Received',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ] else ...[
                                           Tooltip(
                                             message:
                                                 (itemType == 'reservation' ||
@@ -2402,6 +2496,7 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                                                             request,
                                                             'receive',
                                                           ),
+
                                               style: OutlinedButton.styleFrom(
                                                 side: const BorderSide(
                                                   color: Color(0xFF059669),
@@ -2444,32 +2539,74 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                                                       ),
                                             ),
                                           ),
-                                        ] else ...[
-                                          Expanded(
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 12,
-                                                    vertical: 8,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFF059669),
-                                                borderRadius:
-                                                    BorderRadius.circular(6),
-                                              ),
-                                              child: const Text(
-                                                'Received',
-                                                textAlign: TextAlign.center,
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Colors.white,
+                                        ],
+                                        const SizedBox(width: 8),
+                                        // Return button (for received items)
+                                        if (isReceived &&
+                                            !_suppressReturnIds.contains(
+                                              requestId,
+                                            )) ...[
+                                          Tooltip(
+                                            message:
+                                                isReceived
+                                                    ? 'Return this item'
+                                                    : 'You can only return after receiving',
+                                            child: OutlinedButton(
+                                              onPressed:
+                                                  (_loadingItems.contains(
+                                                            requestId,
+                                                          ) ||
+                                                          !isReceived)
+                                                      ? null
+                                                      : () =>
+                                                          _handleReturnInventory(
+                                                            request,
+                                                          ),
+                                              style: OutlinedButton.styleFrom(
+                                                side: const BorderSide(
+                                                  color: Color(0xFFDC2626),
                                                 ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 6,
+                                                    ),
                                               ),
+                                              child:
+                                                  _loadingItems.contains(
+                                                        requestId,
+                                                      )
+                                                      ? const SizedBox(
+                                                        width: 16,
+                                                        height: 16,
+                                                        child: CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                          valueColor:
+                                                              AlwaysStoppedAnimation<
+                                                                Color
+                                                              >(
+                                                                Color(
+                                                                  0xFFDC2626,
+                                                                ),
+                                                              ),
+                                                        ),
+                                                      )
+                                                      : const Text(
+                                                        'Return',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: Color(
+                                                            0xFFDC2626,
+                                                          ),
+                                                        ),
+                                                      ),
                                             ),
                                           ),
                                         ],
                                         const SizedBox(width: 8),
+                                        // Request button
                                         ElevatedButton(
                                           onPressed:
                                               () => widget.onInventoryAction
@@ -3027,7 +3164,7 @@ class InventoryDetailsScreen extends StatelessWidget {
     );
 
     // Prefer itemId; if empty, fall back to requestId
-    final String headerId = _firstNonEmpty([itemId, requestId]) ?? '-';
+    // header ID handling not required here
 
     final List<Widget> sections = [];
 
@@ -3253,12 +3390,7 @@ class InventoryDetailsScreen extends StatelessWidget {
     return false;
   }
 
-  static String? _firstNonEmpty(List<String?> vals) {
-    for (final v in vals) {
-      if (_isNotEmpty(v)) return v!.trim();
-    }
-    return null;
-  }
+  // Utility removed: _firstNonEmpty not used now.
 
   static Widget _kvText(String text) => Text(
     text,

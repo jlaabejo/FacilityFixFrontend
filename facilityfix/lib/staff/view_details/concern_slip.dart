@@ -392,7 +392,6 @@ class _StaffConcernSlipDetailPageState
       appBar: CustomAppBar(
         leading: const BackButton(),
         title: 'Concern Slip Details',
-        showMore: true,
         showDelete: _concernSlipData != null && _isDeletableStatus(_concernSlipData!['status']),
         onDeleteTap: _showDeleteDialog,
       ),

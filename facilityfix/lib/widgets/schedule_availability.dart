@@ -1,13 +1,108 @@
+import 'package:facilityfix/widgets/modals.dart';
 import 'package:flutter/material.dart';
 
+class AvailabilityTabWidget extends StatefulWidget {
+  const AvailabilityTabWidget({
+    Key? key,
+    required this.tabs,
+    required this.selectedLabel,
+    required this.onTabSelected,
+  }) : super(key: key);
+
+  final List<String> tabs;
+  final String selectedLabel;
+  final Function(String) onTabSelected;
+
+  @override
+  State<AvailabilityTabWidget> createState() => _AvailabilityTabWidgetState();
+}
+
+class _AvailabilityTabWidgetState extends State<AvailabilityTabWidget> {
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    final tabHeight = isMobile ? 40.0 : 50.0;
+
+    // Build a Figma-style rounded pill tab widget with a pale-blue background.
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: ShapeDecoration(
+        color: const Color(0xFFDBEAFE), // pale-blue background per Figma
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.max,
+        children:
+            widget.tabs.map((tab) {
+              final isSelected = widget.selectedLabel == tab;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => widget.onTabSelected(tab),
+                  child: Container(
+                    height:
+                        tabHeight - 10, // inner height fits the design (approx)
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: ShapeDecoration(
+                      color: isSelected ? Colors.white : Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: BorderSide(
+                          width: 1.26,
+                          color:
+                              isSelected
+                                  ? Colors.transparent
+                                  : Colors
+                                      .transparent, // invisible stroke as per Figma
+                        ),
+                      ),
+                      shadows:
+                          isSelected
+                              ? const [
+                                BoxShadow(
+                                  color: Color(0x0A000000),
+                                  blurRadius: 4,
+                                  offset: Offset(0, 2),
+                                ),
+                              ]
+                              : null,
+                    ),
+                    child: Center(
+                      child: Text(
+                        tab,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: const Color(0xFF0A0A0A),
+                          fontSize: 14,
+                          fontFamily: 'Inter',
+                          fontWeight:
+                              isSelected ? FontWeight.w400 : FontWeight.w400,
+                          height: 1.43,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+      ),
+    );
+  }
+}
+
+// Schedule Availability Card
 class ScheduleAvailabilityWidget extends StatefulWidget {
   const ScheduleAvailabilityWidget({super.key});
 
   @override
-  State<ScheduleAvailabilityWidget> createState() => _ScheduleAvailabilityWidgetState();
+  State<ScheduleAvailabilityWidget> createState() =>
+      _ScheduleAvailabilityWidgetState();
 }
 
-class _ScheduleAvailabilityWidgetState extends State<ScheduleAvailabilityWidget> {
+class _ScheduleAvailabilityWidgetState
+    extends State<ScheduleAvailabilityWidget> {
   // State for day selections - true means available
   Map<String, bool> _dayAvailability = {
     'Mon': true,
@@ -52,25 +147,16 @@ class _ScheduleAvailabilityWidgetState extends State<ScheduleAvailabilityWidget>
     final containerWidth = screenWidth - 32; // Account for padding
     final cardWidth = containerWidth - 32; // Account for internal padding
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+    // Don't embed its own scroll view — parent (ProfilePage) already provides scrolling.
+    return Padding(
+      padding: const EdgeInsets.all(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Main container
           Container(
             width: containerWidth,
-            padding: const EdgeInsets.all(16),
-            decoration: ShapeDecoration(
-              color: Colors.white,
-              shape: RoundedRectangleBorder(
-                side: BorderSide(
-                  width: 1.27,
-                  color: const Color(0xFFE5E6E8),
-                ),
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
+            padding: const EdgeInsets.all(8),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.start,
@@ -97,7 +183,11 @@ class _ScheduleAvailabilityWidgetState extends State<ScheduleAvailabilityWidget>
                                 height: 16,
                                 clipBehavior: Clip.antiAlias,
                                 decoration: BoxDecoration(),
-                                child: Stack(),
+                                child: Icon(
+                                  Icons.calendar_today,
+                                  size: 16,
+                                  color: Color(0xFF005CE7),
+                                ),
                               ),
                               const SizedBox(width: 8),
                               const Text(
@@ -118,7 +208,7 @@ class _ScheduleAvailabilityWidgetState extends State<ScheduleAvailabilityWidget>
                             style: TextStyle(
                               color: Color(0xFF626C70),
                               fontSize: 12,
-                              fontFamily: 'Arimo',
+                              fontFamily: 'Inter',
                               fontWeight: FontWeight.w400,
                               height: 1.50,
                             ),
@@ -146,7 +236,7 @@ class _ScheduleAvailabilityWidgetState extends State<ScheduleAvailabilityWidget>
                           style: TextStyle(
                             color: Color(0xFF626C70),
                             fontSize: 10,
-                            fontFamily: 'Arimo',
+                            fontFamily: 'Inter',
                             fontWeight: FontWeight.w400,
                             height: 1.50,
                           ),
@@ -155,15 +245,13 @@ class _ScheduleAvailabilityWidgetState extends State<ScheduleAvailabilityWidget>
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 // Days list
-                Column(
-                  children: _buildDayCards(cardWidth),
-                ),
+                Column(children: _buildDayCards(cardWidth)),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           // Select buttons
           Row(
             children: [
@@ -172,7 +260,10 @@ class _ScheduleAvailabilityWidgetState extends State<ScheduleAvailabilityWidget>
                   onTap: _selectAllDays,
                   child: Container(
                     height: 36,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     decoration: ShapeDecoration(
                       color: Colors.white,
                       shape: RoundedRectangleBorder(
@@ -189,39 +280,7 @@ class _ScheduleAvailabilityWidgetState extends State<ScheduleAvailabilityWidget>
                         style: TextStyle(
                           color: Color(0xFF0A0A0A),
                           fontSize: 14,
-                          fontFamily: 'Arimo',
-                          fontWeight: FontWeight.w400,
-                          height: 1.43,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: GestureDetector(
-                  onTap: _selectWeekdaysOnly,
-                  child: Container(
-                    height: 36,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: ShapeDecoration(
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        side: BorderSide(
-                          width: 1.27,
-                          color: Colors.black.withValues(alpha: 0.10),
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'Weekdays Only',
-                        style: TextStyle(
-                          color: Color(0xFF0A0A0A),
-                          fontSize: 14,
-                          fontFamily: 'Arimo',
+                          fontFamily: 'Inter',
                           fontWeight: FontWeight.w400,
                           height: 1.43,
                         ),
@@ -240,26 +299,10 @@ class _ScheduleAvailabilityWidgetState extends State<ScheduleAvailabilityWidget>
               width: containerWidth,
               height: 56,
               decoration: ShapeDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment(0.50, 0.00),
-                  end: Alignment(0.50, 1.00),
-                  colors: [Color(0xFF005CE8), Color(0xFF0047B3)],
+                color: const Color(0xFF005CE7),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                shadows: const [
-                  BoxShadow(
-                    color: Color(0x19000000),
-                    blurRadius: 6,
-                    offset: Offset(0, 4),
-                    spreadRadius: -4,
-                  ),
-                  BoxShadow(
-                    color: Color(0x19000000),
-                    blurRadius: 15,
-                    offset: Offset(0, 10),
-                    spreadRadius: -3,
-                  )
-                ],
               ),
               child: const Center(
                 child: Text(
@@ -282,7 +325,14 @@ class _ScheduleAvailabilityWidgetState extends State<ScheduleAvailabilityWidget>
 
   List<Widget> _buildDayCards(double cardWidth) {
     final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    final fullDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    final fullDays = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+    ];
 
     return List.generate(days.length, (index) {
       final day = days[index];
@@ -298,11 +348,17 @@ class _ScheduleAvailabilityWidgetState extends State<ScheduleAvailabilityWidget>
             height: 66.52,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: ShapeDecoration(
-              color: isAvailable ? const Color(0xFFE7F7EF) : const Color(0xFFF5F6F7),
+              color:
+                  isAvailable
+                      ? const Color(0xFFE7F7EF)
+                      : const Color(0xFFF5F6F7),
               shape: RoundedRectangleBorder(
                 side: BorderSide(
                   width: 1.27,
-                  color: isAvailable ? const Color(0xFF0FAF62) : const Color(0xFFE5E6E8),
+                  color:
+                      isAvailable
+                          ? const Color(0xFF0FAF62)
+                          : const Color(0xFFE5E6E8),
                 ),
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -321,7 +377,10 @@ class _ScheduleAvailabilityWidgetState extends State<ScheduleAvailabilityWidget>
                         width: 40,
                         height: 40,
                         decoration: ShapeDecoration(
-                          color: isAvailable ? const Color(0xFF0FAF62) : Colors.white,
+                          color:
+                              isAvailable
+                                  ? const Color(0xFF0FAF62)
+                                  : Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -330,7 +389,10 @@ class _ScheduleAvailabilityWidgetState extends State<ScheduleAvailabilityWidget>
                           child: Text(
                             day,
                             style: TextStyle(
-                              color: isAvailable ? Colors.white : const Color(0xFF959FA3),
+                              color:
+                                  isAvailable
+                                      ? Colors.white
+                                      : const Color(0xFF959FA3),
                               fontSize: 16,
                               fontFamily: 'Inter',
                               fontWeight: FontWeight.w600,
@@ -359,7 +421,7 @@ class _ScheduleAvailabilityWidgetState extends State<ScheduleAvailabilityWidget>
                               style: const TextStyle(
                                 color: Color(0xFF626C70),
                                 fontSize: 12,
-                                fontFamily: 'Arimo',
+                                fontFamily: 'Inter',
                                 fontWeight: FontWeight.w400,
                               ),
                             ),
@@ -369,17 +431,26 @@ class _ScheduleAvailabilityWidgetState extends State<ScheduleAvailabilityWidget>
                     ],
                   ),
                 ),
-                Container(
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
                   width: 32,
                   height: 18,
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
                   decoration: ShapeDecoration(
-                    color: isAvailable ? const Color(0xFF030213) : const Color(0xFFCBCED4),
+                    color:
+                        isAvailable
+                            ? const Color(0xFF005CE7) // Active (blue)
+                            : const Color(0xFFCBCED4), // Inactive (muted gray)
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(9),
                     ),
                   ),
-                  child: Align(
-                    alignment: Alignment.centerRight,
+                  child: AnimatedAlign(
+                    duration: const Duration(milliseconds: 150),
+                    alignment:
+                        isAvailable
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
                     child: Container(
                       width: 14,
                       height: 14,
@@ -399,136 +470,137 @@ class _ScheduleAvailabilityWidgetState extends State<ScheduleAvailabilityWidget>
   }
 }
 
-class DayOffRequestsHeader extends StatelessWidget {
-  final VoidCallback? onNewRequest;
-  final String title;
-  final String description;
-
-  const DayOffRequestsHeader({
-    super.key,
-    this.onNewRequest,
-    this.title = 'Day Off Requests',
-    this.description = 'Request time off and track your submissions',
-  });
+// Day Off Requests Card
+class DayOffRequestsWidget extends StatelessWidget {
+  const DayOffRequestsWidget({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
     return Container(
-      width: 364.74,
-      height: 72.96,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        spacing: 0,
+      width: double.infinity,
+      height: isMobile ? 100 : 120.93,
+      clipBehavior: Clip.antiAlias,
+      decoration: ShapeDecoration(
+        color: const Color(0xFF005CE7),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      child: Stack(
         children: [
-          Container(
-            width: 225.26,
-            height: 72.96,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 3.98,
-              children: [
-                Container(
-                  width: double.infinity,
-                  height: 29.99,
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        left: 0,
-                        top: -2.74,
-                        child: Text(
-                          title,
+          Positioned(
+            left: 0,
+            top: 0,
+            child: Opacity(
+              opacity: 0.30,
+              child: Container(
+                width: MediaQuery.of(context).size.width,
+                height: isMobile ? 100 : 120.93,
+              ),
+            ),
+          ),
+          Positioned(
+            left: isMobile ? 16 : 23.99,
+            top: isMobile ? 16 : 23.99,
+            right: isMobile ? 16 : 0,
+            child: Container(
+              height: isMobile ? 68 : 72.96,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      spacing: 3.98,
+                      children: [
+                        Text(
+                          'Day Off Requests',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 20,
-                            fontFamily: 'Arimo',
-                            fontWeight: FontWeight.w400,
+                            fontSize: isMobile ? 18 : 20,
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w500,
                             height: 1.50,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  width: double.infinity,
-                  height: 38.98,
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        left: 0,
-                        top: -2,
-                        child: SizedBox(
-                          width: 181,
-                          child: Text(
-                            description,
-                            style: TextStyle(
-                              color: const Color(0xCCFFFEFE),
-                              fontSize: 13,
-                              fontFamily: 'Arimo',
-                              fontWeight: FontWeight.w400,
-                              height: 1.50,
-                            ),
+                        Text(
+                          'Request time off and track your submissions',
+                          style: TextStyle(
+                            color: const Color(0xCCFFFEFE),
+                            fontSize: isMobile ? 12 : 13,
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w400,
+                            height: 1.50,
                           ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: onNewRequest,
-            child: Container(
-              width: 139.48,
-              height: 36,
-              decoration: ShapeDecoration(
-                color: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                shadows: [
-                  BoxShadow(
-                    color: Color(0x19000000),
-                    blurRadius: 6,
-                    offset: Offset(0, 4),
-                    spreadRadius: -4,
-                  ),
-                  BoxShadow(
-                    color: Color(0x19000000),
-                    blurRadius: 15,
-                    offset: Offset(0, 10),
-                    spreadRadius: -3,
-                  )
-                ],
-              ),
-              child: Stack(
-                children: [
-                  Positioned(
-                    left: 11.99,
-                    top: 9.99,
-                    child: Container(
-                      width: 16,
-                      height: 16,
-                      clipBehavior: Clip.antiAlias,
-                      decoration: BoxDecoration(),
-                      child: Stack(),
+                      ],
                     ),
                   ),
-                  Positioned(
-                    left: 43.97,
-                    top: 6.01,
-                    child: Text(
-                      'New Request',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: const Color(0xFF005CE7),
-                        fontSize: 14,
-                        fontFamily: 'Arimo',
-                        fontWeight: FontWeight.w400,
-                        height: 1.43,
+                  SizedBox(width: isMobile ? 12 : 16),
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () async {
+                        final DayOffResult? res =
+                            await showModalBottomSheet<DayOffResult>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (ctx) => const DayOffRequest(),
+                            );
+
+                        if (res != null && context.mounted) {
+                          final days = res.selectedDates.length;
+                          final reason = res.reason;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Day off request submitted: $days day(s) — $reason',
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isMobile ? 12 : 16,
+                          vertical: 8,
+                        ),
+                        decoration: ShapeDecoration(
+                          color: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.add,
+                              size: isMobile ? 14 : 16,
+                              color: const Color(0xFF005CE7),
+                            ),
+                            SizedBox(width: isMobile ? 6 : 8),
+                            Text(
+                              'New Request',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: const Color(0xFF005CE7),
+                                fontSize: isMobile ? 12 : 14,
+                                fontFamily: 'Inter',
+                                fontWeight: FontWeight.w500,
+                                height: 1.43,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -542,55 +614,54 @@ class DayOffRequestsHeader extends StatelessWidget {
   }
 }
 
-enum DayOffRequestStatus {
-  pending,
-  approved,
-  rejected,
-}
+// Day Off Card Details
+enum DayOffStatus { pending, approved, rejected }
 
-class DayOffRequestItem extends StatelessWidget {
+class DayOffRequestCard extends StatelessWidget {
   final String date;
   final String timeAgo;
+  final DayOffStatus status;
   final String reason;
-  final DayOffRequestStatus status;
+  final String? adminNote;
 
-  const DayOffRequestItem({
-    super.key,
+  const DayOffRequestCard({
+    Key? key,
     required this.date,
     required this.timeAgo,
-    required this.reason,
     required this.status,
-  });
+    required this.reason,
+    this.adminNote,
+  }) : super(key: key);
 
-  Color _getStatusBackgroundColor() {
+  Color _getStatusColor() {
     switch (status) {
-      case DayOffRequestStatus.pending:
-        return const Color(0xFFFEF3C7);
-      case DayOffRequestStatus.approved:
-        return const Color(0xFFE7F7EF);
-      case DayOffRequestStatus.rejected:
-        return const Color(0xFFFEE2E2);
+      case DayOffStatus.pending:
+        return const Color(0xFFFFFAEB);
+      case DayOffStatus.approved:
+        return const Color(0xFFE8F7F1);
+      case DayOffStatus.rejected:
+        return const Color(0xFFFDEDED);
     }
   }
 
   Color _getStatusTextColor() {
     switch (status) {
-      case DayOffRequestStatus.pending:
-        return const Color(0xFFF59E0B);
-      case DayOffRequestStatus.approved:
-        return const Color(0xFF0FAF62);
-      case DayOffRequestStatus.rejected:
-        return const Color(0xFFEF4444);
+      case DayOffStatus.pending:
+        return const Color(0xFFF79009);
+      case DayOffStatus.approved:
+        return const Color(0xFF19B36E);
+      case DayOffStatus.rejected:
+        return const Color(0xFFE84545);
     }
   }
 
   String _getStatusText() {
     switch (status) {
-      case DayOffRequestStatus.pending:
+      case DayOffStatus.pending:
         return 'Pending';
-      case DayOffRequestStatus.approved:
+      case DayOffStatus.approved:
         return 'Approved';
-      case DayOffRequestStatus.rejected:
+      case DayOffStatus.rejected:
         return 'Rejected';
     }
   }
@@ -598,887 +669,185 @@ class DayOffRequestItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 410.20,
-      height: 150.89,
-      child: Stack(
-        children: [
-          Positioned(
-            left: 19.98,
-            top: 19.98,
-            child: Container(
-              width: 370.24,
-              height: 47.99,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: 32.41,
-                children: [
-                  Container(
-                    width: 257.31,
-                    height: 47.99,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      spacing: 11.99,
-                      children: [
-                        Container(
-                          width: 47.99,
-                          height: 47.99,
-                          padding: const EdgeInsets.only(right: 0.02),
-                          decoration: ShapeDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment(0.00, 0.00),
-                              end: Alignment(1.00, 1.00),
-                              colors: [const Color(0xFFEEF5FE), const Color(0xFFDAEAFE)],
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: 19.98,
-                                height: 19.98,
-                                clipBehavior: Clip.antiAlias,
-                                decoration: BoxDecoration(),
-                                child: Stack(),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          width: 197.33,
-                          height: 44.46,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            spacing: 3.98,
-                            children: [
-                              Container(
-                                width: double.infinity,
-                                height: 22.49,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  mainAxisAlignment: MainAxisAlignment.start,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      date,
-                                      style: TextStyle(
-                                        color: const Color(0xFF191B1C),
-                                        fontSize: 15,
-                                        fontFamily: 'Arimo',
-                                        fontWeight: FontWeight.w400,
-                                        height: 1.50,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                width: double.infinity,
-                                height: 17.98,
-                                child: Stack(
-                                  children: [
-                                    Positioned(
-                                      left: 0,
-                                      top: -0.74,
-                                      child: Text(
-                                        timeAgo,
-                                        style: TextStyle(
-                                          color: const Color(0xFF959FA3),
-                                          fontSize: 12,
-                                          fontFamily: 'Arimo',
-                                          fontWeight: FontWeight.w400,
-                                          height: 1.50,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    width: 80.52,
-                    height: 19.94,
-                    clipBehavior: Clip.antiAlias,
-                    decoration: ShapeDecoration(
-                      color: _getStatusBackgroundColor(),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: Stack(
-                      children: [
-                        Positioned(
-                          left: 7.99,
-                          top: 3.97,
-                          child: Container(
-                            width: 11.99,
-                            height: 11.99,
-                            clipBehavior: Clip.antiAlias,
-                            decoration: BoxDecoration(),
-                            child: Stack(),
-                          ),
-                        ),
-                        Positioned(
-                          left: 27.95,
-                          top: 0.98,
-                          child: Text(
-                            _getStatusText(),
-                            style: TextStyle(
-                              color: _getStatusTextColor(),
-                              fontSize: 12,
-                              fontFamily: 'Arimo',
-                              fontWeight: FontWeight.w400,
-                              height: 1.33,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            left: 79.97,
-            top: 79.97,
-            child: Container(
-              width: 310.25,
-              height: 42.95,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: 3.98,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    height: 17.98,
-                    child: Stack(
-                      children: [
-                        Positioned(
-                          left: 0,
-                          top: -0.74,
-                          child: Text(
-                            'REASON',
-                            style: TextStyle(
-                              color: const Color(0xFF626C70),
-                              fontSize: 12,
-                              fontFamily: 'Arimo',
-                              fontWeight: FontWeight.w400,
-                              height: 1.50,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    width: double.infinity,
-                    height: 20.98,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: 310.25,
-                          child: Text(
-                            reason,
-                            style: TextStyle(
-                              color: const Color(0xFF191B1C),
-                              fontSize: 14,
-                              fontFamily: 'Arimo',
-                              fontWeight: FontWeight.w400,
-                              height: 1.50,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class CurrentWeekStatusWidget extends StatelessWidget {
-  final String title;
-  final String status;
-  final String availability;
-  final String submittedTime;
-
-  const CurrentWeekStatusWidget({
-    super.key,
-    this.title = 'Current Week Status',
-    this.status = 'Active & Approved',
-    this.availability = '5/7 Days',
-    this.submittedTime = '3 days ago',
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 372.80,
-      height: 130.90,
-      child: Stack(
-        children: [
-          // Main content
-          Positioned(
-            left: 0,
-            top: 0,
-            child: Container(
-              width: 372.80,
-              height: 130.90,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: 16,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    height: 45.60,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      spacing: 12,
-                      children: [
-                        Container(
-                          width: 45.60,
-                          height: 45.60,
-                          padding: const EdgeInsets.only(
-                            top: 10.80,
-                            left: 10.80,
-                            right: 10.80,
-                            bottom: 0.80,
-                          ),
-                          decoration: ShapeDecoration(
-                            color: Colors.white.withValues(alpha: 0.25),
-                            shape: RoundedRectangleBorder(
-                              side: BorderSide(
-                                width: 0.80,
-                                color: const Color(0x4CFFFEFE),
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            shadows: [
-                              BoxShadow(
-                                color: Color(0x19000000),
-                                blurRadius: 6,
-                                offset: Offset(0, 4),
-                                spreadRadius: -4,
-                              ),
-                              BoxShadow(
-                                color: Color(0x19000000),
-                                blurRadius: 15,
-                                offset: Offset(0, 10),
-                                spreadRadius: -3,
-                              )
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                width: double.infinity,
-                                height: 24,
-                                clipBehavior: Clip.antiAlias,
-                                decoration: BoxDecoration(),
-                                child: Stack(),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          width: 147.09,
-                          height: 45,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Opacity(
-                                opacity: 0.90,
-                                child: Container(
-                                  width: double.infinity,
-                                  height: 18,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    mainAxisAlignment: MainAxisAlignment.start,
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      SizedBox(
-                                        width: 147.09,
-                                        child: Text(
-                                          title,
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 12,
-                                            fontFamily: 'Poppins',
-                                            fontWeight: FontWeight.w500,
-                                            height: 1.50,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                width: double.infinity,
-                                height: 27,
-                                child: Stack(
-                                  children: [
-                                    Positioned(
-                                      left: 0,
-                                      top: 1.20,
-                                      child: Text(
-                                        status,
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 18,
-                                          fontFamily: 'Inter',
-                                          fontWeight: FontWeight.w700,
-                                          height: 1.50,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    width: double.infinity,
-                    height: 69.30,
-                    decoration: ShapeDecoration(
-                      shape: RoundedRectangleBorder(
-                        side: BorderSide(
-                          width: 0.80,
-                          color: const Color(0x4CFFFEFE),
-                        ),
-                      ),
-                    ),
-                    child: Stack(
-                      children: [
-                        Positioned(
-                          left: 0,
-                          top: 16.80,
-                          child: Container(
-                            width: 178.40,
-                            height: 52.50,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              mainAxisAlignment: MainAxisAlignment.start,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              spacing: 6,
-                              children: [
-                                Opacity(
-                                  opacity: 0.90,
-                                  child: Container(
-                                    width: double.infinity,
-                                    height: 16.50,
-                                    child: Stack(
-                                      children: [
-                                        Positioned(
-                                          left: 0,
-                                          top: -1.20,
-                                          child: Text(
-                                            'AVAILABILITY',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 11,
-                                              fontFamily: 'Arimo',
-                                              fontWeight: FontWeight.w400,
-                                              height: 1.50,
-                                              letterSpacing: 0.28,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                Container(
-                                  width: double.infinity,
-                                  height: 30,
-                                  child: Stack(
-                                    children: [
-                                      Positioned(
-                                        left: 0,
-                                        top: 0.20,
-                                        child: Text(
-                                          availability,
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 20,
-                                            fontFamily: 'Inter',
-                                            fontWeight: FontWeight.w700,
-                                            height: 1.50,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          left: 194.40,
-                          top: 16.80,
-                          child: Container(
-                            width: 178.40,
-                            height: 52.50,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              mainAxisAlignment: MainAxisAlignment.start,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              spacing: 6,
-                              children: [
-                                Opacity(
-                                  opacity: 0.90,
-                                  child: Container(
-                                    width: double.infinity,
-                                    height: 16.50,
-                                    child: Stack(
-                                      children: [
-                                        Positioned(
-                                          left: 0,
-                                          top: -1.20,
-                                          child: Text(
-                                            'SUBMITTED',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 11,
-                                              fontFamily: 'Arimo',
-                                              fontWeight: FontWeight.w400,
-                                              height: 1.50,
-                                              letterSpacing: 0.28,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                Container(
-                                  width: double.infinity,
-                                  height: 30,
-                                  child: Stack(
-                                    children: [
-                                      Positioned(
-                                        left: 0,
-                                        top: 0.20,
-                                        child: Text(
-                                          submittedTime,
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 20,
-                                            fontFamily: 'Inter',
-                                            fontWeight: FontWeight.w700,
-                                            height: 1.50,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Background overlay
-          Positioned(
-            left: 0,
-            top: 0,
-            child: Opacity(
-              opacity: 0.20,
-              child: Container(
-                width: 412.80,
-                height: 170.90,
-                padding: const EdgeInsets.only(top: -64, left: 348.80, right: -64),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      height: 128,
-                      decoration: ShapeDecoration(
-                        color: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(26843500),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-enum ScheduleSubmissionStatus {
-  pending,
-  approved,
-  rejected,
-}
-
-class ScheduleSubmissionHistoryItem extends StatelessWidget {
-  final String dateRange;
-  final String submissionTime;
-  final String availability;
-  final ScheduleSubmissionStatus status;
-
-  const ScheduleSubmissionHistoryItem({
-    super.key,
-    required this.dateRange,
-    required this.submissionTime,
-    required this.availability,
-    required this.status,
-  });
-
-  Color _getStatusColor() {
-    switch (status) {
-      case ScheduleSubmissionStatus.pending:
-        return const Color(0xFFF59E0B);
-      case ScheduleSubmissionStatus.approved:
-        return const Color(0xFF0FAF62);
-      case ScheduleSubmissionStatus.rejected:
-        return const Color(0xFFEF4444);
-    }
-  }
-
-  String _getStatusText() {
-    switch (status) {
-      case ScheduleSubmissionStatus.pending:
-        return 'Pending';
-      case ScheduleSubmissionStatus.approved:
-        return 'Approved';
-      case ScheduleSubmissionStatus.rejected:
-        return 'Rejected';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 416,
-      height: 165.40,
-      padding: const EdgeInsets.only(top: 16, left: 16),
       decoration: ShapeDecoration(
         color: Colors.white,
         shape: RoundedRectangleBorder(
-          side: BorderSide(
-            width: 0.80,
-            color: const Color(0xFFE5E6E8),
-          ),
+          side: const BorderSide(width: 1.26, color: Color(0xFFE5E7E8)),
           borderRadius: BorderRadius.circular(14),
         ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 36,
         children: [
-          Container(
-            width: 382.40,
-            height: 43,
-            child: Row(
+          Padding(
+            padding: const EdgeInsets.all(19.98),
+            child: Column(
               mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: 11.99,
               children: [
-                Expanded(
-                  child: Container(
-                    height: 43,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      spacing: 4,
-                      children: [
-                        Container(
-                          width: double.infinity,
-                          height: 21,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            spacing: 8,
-                            children: [
-                              Container(
-                                width: 149.24,
-                                height: 21,
-                                child: Stack(
-                                  children: [
-                                    Positioned(
-                                      left: 0,
-                                      top: -0.40,
-                                      child: Text(
-                                        dateRange,
-                                        style: TextStyle(
-                                          color: const Color(0xFF191B1C),
-                                          fontSize: 14,
-                                          fontFamily: 'Inter',
-                                          fontWeight: FontWeight.w600,
-                                          height: 1.50,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                // Header with date and status badge
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        spacing: 11.99,
+                        children: [
+                          // Avatar placeholder
+                          Container(
+                            width: 47.99,
+                            height: 47.99,
+                            decoration: ShapeDecoration(
+                              gradient: const LinearGradient(
+                                begin: Alignment(0.00, 0.00),
+                                end: Alignment(1.00, 1.00),
+                                colors: [Color(0xFFEEF5FE), Color(0xFFDAEAFE)],
                               ),
-                              Container(
-                                width: 50.58,
-                                height: 20.60,
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                clipBehavior: Clip.antiAlias,
-                                decoration: ShapeDecoration(
-                                  shape: RoundedRectangleBorder(
-                                    side: BorderSide(
-                                      width: 0.80,
-                                      color: const Color(0xFF005CE7),
-                                    ),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  spacing: 4,
-                                  children: [
-                                    Text(
-                                      'Weekly',
-                                      style: TextStyle(
-                                        color: const Color(0xFF005CE7),
-                                        fontSize: 10,
-                                        fontFamily: 'Arimo',
-                                        fontWeight: FontWeight.w400,
-                                        height: 1.50,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          width: double.infinity,
-                          height: 18,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            spacing: 8,
-                            children: [
-                              Container(
-                                width: 12,
-                                height: 12,
-                                clipBehavior: Clip.antiAlias,
-                                decoration: BoxDecoration(),
-                                child: Stack(),
-                              ),
-                              Container(
-                                width: 129.29,
-                                height: 18,
-                                child: Stack(
-                                  children: [
-                                    Positioned(
-                                      left: 0,
-                                      top: -1.20,
-                                      child: Text(
-                                        submissionTime,
-                                        style: TextStyle(
-                                          color: const Color(0xFF626C70),
-                                          fontSize: 12,
-                                          fontFamily: 'Arimo',
-                                          fontWeight: FontWeight.w400,
-                                          height: 1.50,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Container(
-                  width: 20,
-                  height: 20,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(),
-                  child: Stack(),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            width: 382.40,
-            height: 52.80,
-            decoration: ShapeDecoration(
-              shape: RoundedRectangleBorder(
-                side: BorderSide(
-                  width: 0.80,
-                  color: const Color(0xFFE5E6E8),
-                ),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              spacing: 249.35,
-              children: [
-                Container(
-                  width: 58.24,
-                  height: 40,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    spacing: 4,
-                    children: [
-                      Container(
-                        width: double.infinity,
-                        height: 15,
-                        child: Stack(
-                          children: [
-                            Positioned(
-                              left: 0,
-                              top: -1.20,
-                              child: Text(
-                                'Availability',
-                                style: TextStyle(
-                                  color: const Color(0xFF626C70),
-                                  fontSize: 10,
-                                  fontFamily: 'Arimo',
-                                  fontWeight: FontWeight.w400,
-                                  height: 1.50,
-                                ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        width: double.infinity,
-                        height: 21,
-                        child: Stack(
-                          children: [
-                            Positioned(
-                              left: 0.20,
-                              top: -0.05,
-                              child: SizedBox(
-                                width: 117,
-                                child: Text(
-                                  availability,
-                                  style: TextStyle(
-                                    color: const Color(0xFF191B1C),
-                                    fontSize: 14,
+                            child: const Icon(
+                              Icons.person,
+                              color: Color(0xFF0066CC),
+                              size: 24,
+                            ),
+                          ),
+                          // Date and time info
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              spacing: 3.98,
+                              children: [
+                                Text(
+                                  date,
+                                  style: const TextStyle(
+                                    color: Color(0xFF191B1C),
+                                    fontSize: 15,
                                     fontFamily: 'Inter',
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w400,
                                     height: 1.50,
                                   ),
                                 ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  width: 74.81,
-                  height: 18,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    spacing: 4,
-                    children: [
-                      Container(
-                        width: 16,
-                        height: 16,
-                        clipBehavior: Clip.antiAlias,
-                        decoration: BoxDecoration(),
-                        child: Stack(),
-                      ),
-                      Expanded(
-                        child: Container(
-                          height: 18,
-                          child: Stack(
-                            children: [
-                              Positioned(
-                                left: 0,
-                                top: -0.20,
-                                child: Text(
-                                  _getStatusText(),
-                                  style: TextStyle(
-                                    color: _getStatusColor(),
+                                Text(
+                                  timeAgo,
+                                  style: const TextStyle(
+                                    color: Color(0xFF959FA3),
                                     fontSize: 12,
                                     fontFamily: 'Inter',
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight: FontWeight.w400,
                                     height: 1.50,
                                   ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
+                        ],
+                      ),
+                    ),
+                    // Status badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: ShapeDecoration(
+                        color: _getStatusColor(),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                      ),
+                      child: Text(
+                        _getStatusText(),
+                        style: TextStyle(
+                          color: _getStatusTextColor(),
+                          fontSize: 12,
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: -0.50,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                // Reason section
+                Padding(
+                  padding: const EdgeInsets.only(left: 59.99),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    spacing: 3.98,
+                    children: [
+                      Text(
+                        'REASON',
+                        style: const TextStyle(
+                          color: Color(0xFF626C70),
+                          fontSize: 12,
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w400,
+                          height: 1.50,
+                        ),
+                      ),
+                      Text(
+                        reason,
+                        style: const TextStyle(
+                          color: Color(0xFF191B1C),
+                          fontSize: 14,
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w400,
+                          height: 1.50,
                         ),
                       ),
                     ],
                   ),
                 ),
+                // Admin note for rejected status
+                if (status == DayOffStatus.rejected && adminNote != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 59.99),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(13.25),
+                      decoration: ShapeDecoration(
+                        color: const Color(0xFFFDEDED),
+                        shape: RoundedRectangleBorder(
+                          side: const BorderSide(
+                            width: 1.26,
+                            color: Color(0xFFE84545),
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        spacing: 3.98,
+                        children: [
+                          const Text(
+                            'Rejected by Admin',
+                            style: TextStyle(
+                              color: Color(0xFFE84545),
+                              fontSize: 12,
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.w400,
+                              height: 1.50,
+                            ),
+                          ),
+                          Text(
+                            adminNote!,
+                            style: const TextStyle(
+                              color: Color(0xFF4A5154),
+                              fontSize: 12,
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.w400,
+                              height: 1.50,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
