@@ -321,7 +321,7 @@ class EnhancedNotificationItem {
       case 'system_maintenance':
         return Icons.settings_system_daydream_outlined;
       case 'escalation':
-        return Icons.priority_high_outlined;
+        return Icons.trending_up;
 
       default:
         return Icons.notifications_outlined;
@@ -360,6 +360,7 @@ class EnhancedNotificationItem {
       case 'work_order_canceled':
       case 'permit_rejected':
       case 'inventory_critical_stock':
+      case 'escalation':
         return const Color(0xFFFDECEC);
 
       // Success/Approval - Green variants
@@ -423,6 +424,7 @@ class EnhancedNotificationItem {
       case 'work_order_canceled':
       case 'permit_rejected':
       case 'inventory_critical_stock':
+      case 'escalation':
         return const Color(0xFFE84545);
 
       // Information - Cyan variants

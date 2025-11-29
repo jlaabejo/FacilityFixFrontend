@@ -136,17 +136,16 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
   void _initializeScheduleDate() {
     // Auto-populate inspection schedule from several possible schedule fields
     // Backend and tenants sometimes send schedule under different keys.
-    // Prefer explicit schedule fields (rawData.schedule_availability etc.)
-    // before falling back to generic dateRequested/requested_at.
+    // PRIORITY: Use tenant's preferred schedule_availability over other fields
+    // to ensure admin sees and works with what the tenant requested
     final candidates = [
       widget.task['rawData']?['schedule_availability'],
+      widget.task['schedule_availability'],
       widget.task['rawData']?['schedule'],
       widget.task['rawData']?['availability'],
       widget.task['rawData']?['schedule_availabilities'],
       widget.task['schedule'],
       widget.task['availability'],
-      widget.task['dateRequested'],
-      widget.task['requested_at'],
     ];
 
     // Debug: list all candidate values (stringified)
@@ -1037,14 +1036,15 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
                           )
                           : _formatScheduleDate(
                             (() {
+                              // Prioritize tenant's preferred schedule_availability
+                              // Only fall back to other fields if schedule_availability is not set
                               final candidates = [
-                                widget
-                                    .task['rawData']?['schedule_availability'],
+                                widget.task['rawData']?['schedule_availability'],
+                                widget.task['schedule_availability'],
                                 widget.task['rawData']?['schedule'],
                                 widget.task['rawData']?['availability'],
                                 widget.task['schedule'],
                                 widget.task['availability'],
-                                widget.task['dateRequested'],
                               ];
                               return candidates
                                   .firstWhere(

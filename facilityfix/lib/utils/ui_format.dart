@@ -174,6 +174,36 @@ class UiDateUtils {
     final s = raw.trim();
     if (s.isEmpty) return null;
 
+    // Handle "Month Day Time-Time PM" pattern like "December 8, 2-4 PM" or "December 8 2-4 PM"
+    // This pattern has the hours/minutes in the date part with a dash separator
+    final timeRangeInDate = RegExp(
+      r'^([A-Za-z]+)\s+(\d{1,2})(?:,?\s*(\d{4}))?\s+(\d{1,2})-(\d{1,2})\s*(AM|PM|am|pm)$',
+    );
+    final m1 = timeRangeInDate.firstMatch(s);
+    if (m1 != null) {
+      final monStr = m1.group(1)!.toLowerCase();
+      final day = int.tryParse(m1.group(2) ?? '') ?? 1;
+      final yr = int.tryParse(m1.group(3) ?? '') ?? DateTime.now().year;
+      final mon = _monthIndex[monStr] ?? 12;
+      final startHour = int.tryParse(m1.group(4) ?? '') ?? 0;
+      final endHour = int.tryParse(m1.group(5) ?? '') ?? 0;
+      final meridian = (m1.group(6) ?? '').toLowerCase();
+
+      var sh = startHour;
+      var eh = endHour;
+      if (meridian.contains('pm')) {
+        if (sh < 12) sh += 12;
+        if (eh < 12) eh += 12;
+      } else if (meridian.contains('am')) {
+        if (sh == 12) sh = 0;
+        if (eh == 12) eh = 0;
+      }
+
+      final start = DateTime(yr, mon, day, sh, 0);
+      final end = DateTime(yr, mon, day, eh, 0);
+      return normalizeRange(start, end);
+    }
+
     // Common separators. Note: we look for space-separated variants first.
     final separators = [' - ', ' to ', ' | ', '|', '—', '–'];
     for (final sep in separators) {

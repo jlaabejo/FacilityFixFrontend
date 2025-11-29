@@ -717,8 +717,10 @@ class ApiService {
   Future<List<dynamic>> getAllWorkOrderPermits() async {
     try {
       final headers = await _getAuthHeaders();
+      // Add cache-busting parameter to force fresh data on each request
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
       final response = await http.get(
-        Uri.parse('$baseUrl/work-order-permits/'),
+        Uri.parse('$baseUrl/work-order-permits/?_t=$timestamp'),
         headers: headers,
       );
 
@@ -1116,21 +1118,28 @@ class ApiService {
         if (notes != null && notes.isNotEmpty) 'notes': notes,
       };
 
+      final uri = '$baseUrl/maintenance/tasks/$taskId/assign';
+      print('[AssignMaintenance] POST $uri');
+      print('[AssignMaintenance] Body: ${json.encode(body)}');
+
       final response = await http.post(
-        Uri.parse('$baseUrl/maintenance/$taskId/assign'),
+        Uri.parse(uri),
         headers: headers,
         body: json.encode(body),
       );
+
+      print('[AssignMaintenance] Response status: ${response.statusCode}');
+      print('[AssignMaintenance] Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
         throw Exception(
-          'Failed to assign staff to maintenance task: ${response.statusCode}',
+          'Failed to assign staff to maintenance task: ${response.statusCode} - ${response.body}',
         );
       }
     } catch (e) {
-      print('[v0] Error assigning staff to maintenance task: $e');
+      print('[AssignMaintenance] Error: $e');
       rethrow;
     }
   }
@@ -1146,21 +1155,28 @@ class ApiService {
         'staff_id': staffId,
       };
 
+      final uri = '$baseUrl/maintenance/tasks/$taskId/checklist/$itemId/assign';
+      print('[AssignChecklistItem] POST $uri');
+      print('[AssignChecklistItem] Body: ${json.encode(body)}');
+
       final response = await http.post(
-        Uri.parse('$baseUrl/maintenance/$taskId/checklist/$itemId/assign'),
+        Uri.parse(uri),
         headers: headers,
         body: json.encode(body),
       );
+
+      print('[AssignChecklistItem] Response status: ${response.statusCode}');
+      print('[AssignChecklistItem] Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
         throw Exception(
-          'Failed to assign staff to checklist item: ${response.statusCode}',
+          'Failed to assign staff to checklist item: ${response.statusCode} - ${response.body}',
         );
       }
     } catch (e) {
-      print('[v0] Error assigning staff to checklist item: $e');
+      print('[AssignChecklistItem] Error: $e');
       rethrow;
     }
   }

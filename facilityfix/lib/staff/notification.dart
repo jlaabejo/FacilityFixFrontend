@@ -2,8 +2,8 @@ import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
+import 'package:facilityfix/staff/maintenance_task.dart';
 import 'package:facilityfix/staff/repair_task.dart';
-import 'package:facilityfix/staff/task_management.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/models/notification_models.dart';
@@ -113,6 +113,25 @@ class _NotificationPageState extends State<NotificationPage> {
         MaterialPageRoute(builder: (_) => destinations[index]),
       );
     }
+  }
+
+  /// Extract route path from action_url
+  /// Examples:
+  /// - "http://localhost:3748/#/announcement" → "/announcement"
+  /// - "http://localhost:3748/#/concern-slips/ABC123" → "/concern-slips/ABC123"
+  String? _extractRouteFromUrl(String? actionUrl) {
+    if (actionUrl == null || actionUrl.isEmpty) return null;
+    
+    try {
+      // Find the '#/' part and extract everything after it
+      final hashIndex = actionUrl.indexOf('#/');
+      if (hashIndex != -1) {
+        return '/' + actionUrl.substring(hashIndex + 2);
+      }
+    } catch (e) {
+      print('[Staff Notifications] Error extracting route: $e');
+    }
+    return null;
   }
 
   // ===== Grouping & Formatting =====
@@ -396,17 +415,52 @@ class _NotificationPageState extends State<NotificationPage> {
                             // Mark as read
                             await _markAsRead(item);
 
-                            // Navigate based on notification type
-                            if (item.notificationType.contains('announcement')) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const AnnouncementPage()),
-                              );
+                            // Try to navigate using action_url first
+                            final route = _extractRouteFromUrl(item.actionUrl);
+                            if (route != null) {
+                              // Navigate to the extracted route
+                              // For native mobile, we'll navigate to matching page based on route
+                              if (route.contains('announcement')) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const AnnouncementPage()),
+                                );
+                              } else if (route.contains('maintenance')) {
+                                // Navigate to task management page for maintenance tasks
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const MaintenanceTaskPage()),
+                                );
+                              } else if (route.contains('concern') || route.contains('repair') || route.contains('job') || route.contains('work-order')) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const RepairTaskPage()),
+                                );
+                              } else {
+                                // Default fallback
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const RepairTaskPage()),
+                                );
+                              }
                             } else {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const RepairTaskPage()),
-                              );
+                              // Fallback: Navigate based on notification type
+                              if (item.notificationType.contains('announcement')) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const AnnouncementPage()),
+                                );
+                              } else if (item.notificationType.contains('maintenance')) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const MaintenanceTaskPage()),
+                                );
+                              } else {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const RepairTaskPage()),
+                                );
+                              }
                             }
                           },
                         ),

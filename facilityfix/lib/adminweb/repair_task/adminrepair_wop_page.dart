@@ -193,14 +193,29 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
 
     try {
       final permits = await _apiService.getAllWorkOrderPermits();
+      print('[WOP] Fetched ${permits.length} permits from API');
+      print('[WOP] First permit (raw from API): ${permits.isNotEmpty ? permits[0] : "No permits"}');
 
       // Fetch concern slip data for each permit to get assessment and recommendation
       final tasks = <Map<String, dynamic>>[];
 
       for (var permit in permits) {
+        final rawPriority = permit['priority'] ?? 'low';
+        final permitId = permit['formatted_id'] ?? permit['id'] ?? 'N/A';
+        final permitStatus = permit['status'] ?? 'N/A';
+        
+        print('[WOP DEBUG] Permit $permitId: priority="$rawPriority", status="$permitStatus", workflowField="${permit['workflow'] ?? 'N/A'}');
+        
+        final mappedStatus = _mapStatus(permit['status'], permit['workflow']);
+        print('[WOP DEBUG] Status mapping: raw="${permit['status']}" -> mapped="$mappedStatus"');
+        print('[WOP DEBUG] All permit fields: ${permit.keys.join(", ")}');
+        print('[WOP DEBUG] Full permit data: $permit');
+        
         Map<String, dynamic> taskData = {
           'serviceId': permit['formatted_id'] ?? permit['id'] ?? 'N/A',
-          'id': permit['concern_slip_id'] ?? 'N/A',
+          'id': permit['formatted_id'] ?? permit['id'] ?? 'N/A', // PRIMARY ID for the work order permit (NOT concern slip)
+          'concernSlipId': permit['concern_slip_id'] ?? 'N/A', // Separate field for concern slip link
+          'internalId': permit['_doc_id'] ?? permit['id'] ?? 'N/A',
           'permitId': permit['id'] ?? 'N/A', // Add permit ID for actions
           'title': permit['title'] ?? 'Untitled Work Order',
           'buildingUnit': permit['location'] ?? 'N/A',
@@ -208,11 +223,10 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
             permit['valid_from'],
             permit['valid_to'],
           ),
-          'priority': _mapStatusToPriority(permit['status']),
+          'priority': _mapPriority(rawPriority),
           'status': _mapStatus(permit['status'], permit['workflow']),
           'rawStatus':
               permit['status'] ?? 'pending', // Keep raw status for actions
-          'concernId': permit['concern_slip_id'] ?? 'N/A',
           // Additional task data
           'dateRequested': _formatDate(permit['created_at']),
           'requestedBy': permit['requested_by'] ?? 'N/A',
@@ -223,6 +237,8 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
           'contractors': permit['contractors'] ?? [],
           'attachments': permit['attachments'] ?? [],
         };
+        
+        print('[WOP DEBUG] Mapped $permitId: priority="${taskData['priority']}"');
 
         // Fetch concern slip data if concern_slip_id exists
         final concernSlipId = permit['concern_slip_id'];
@@ -239,12 +255,13 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
             taskData['accountType'] =
                 concernSlip['category'] ?? taskData['department'];
 
-            // If concern slip has a priority field, prefer that as the displayed priority
-            final csPriority = concernSlip['priority'] ?? concernSlip['rawData']?['priority'] ?? concernSlip['priority_level'];
-            if (csPriority != null && csPriority.toString().trim().isNotEmpty) {
-              taskData['priority'] = csPriority.toString();
-              taskData['csPriority'] = csPriority; // keep raw for reference
-            }
+            // NOTE: DO NOT override the permit priority with concern slip priority
+            // The permit's priority field is what gets escalated by the auto-escalation service
+            // The concern slip priority is the original assessment and should not override escalations
+            print('[WOP DEBUG] Concern slip $concernSlipId fetched (assessment and recommendation updated, priority NOT overridden)');
+            print('[WOP DEBUG] Concern slip status: ${concernSlip['status']}');
+            print('[WOP DEBUG] Task status before concern slip fetch: ${taskData['status']}');
+            print('[WOP DEBUG] Task status after concern slip fetch: ${taskData['status']}');
 
             print(
               '[Work Order] Fetched concern slip $concernSlipId: assessment=${concernSlip['staff_assessment']}, recommendation=${concernSlip['staff_recommendation']}',
@@ -271,6 +288,11 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
         _filteredTasks = List.from(tasks);
         _isLoading = false;
       });
+      
+      print('[WOP] Updated UI with ${tasks.length} work order permits');
+      for (final task in tasks) {
+        print('[WOP] - ${task['serviceId']}: priority="${task['priority']}", status="${task['status']}"');
+      }
     } catch (e) {
       setState(() {
         _errorMessage = 'Error fetching work order: $e';
@@ -356,24 +378,24 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     }
   }
 
-  String _mapStatusToPriority(String? status) {
-    switch (status?.toLowerCase()) {
-      case 'pending':
-        return 'Pending';
-      case 'accepted':
-        return 'Accepted';
-      case 'rejected':
-        return 'Rejected';
-      case 'completed':
-        return 'Completed';
+  // Map priority level to display priority
+  String _mapPriority(String? priority) {
+    final p = (priority ?? 'low').toString().toLowerCase().trim();
+    switch (p) {
+      case 'low':
+        return 'Low';
+      case 'medium':
+        return 'Medium';
+      case 'high':
+        return 'High';
       default:
-        return 'Pending';
+        return 'Low';
     }
   }
 
   String _mapStatus(dynamic status, dynamic workflow) {
     // Custom mapping logic for Work Order
-  final s = (status ?? '').toString().toLowerCase();
+    final s = (status ?? '').toString().toLowerCase().trim();
 
     if (s == 'completed') return 'Completed';
     if (s == 'cancelled') return 'Cancelled';
@@ -384,9 +406,12 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     if (s == 'in_progress') return 'In Progress';
     if (s == 'assessed') return 'Assessed';
     if (s == 'sent') return 'Sent to Client';
+    if (s == 'sent to client') return 'Sent to Client';
     if (s == 'approved') return 'Approved';
+    if (s == 'inspected') return 'Completed'; // Map "inspected" to "Completed" for consistency
+    if (s == 'done') return 'Completed';
     // fallback
-    return 'Pending';
+    return s.isNotEmpty ? '${s[0].toUpperCase()}${s.substring(1)}' : 'Pending';
   }
 
   // Map category to department name
@@ -424,7 +449,6 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
         Overlay.of(context).context.findRenderObject() as RenderBox;
 
     final isPending = task['rawStatus']?.toLowerCase() == 'pending';
-    final isApproved = task['rawStatus']?.toLowerCase() == 'approved';
 
     showMenu(
       context: context,
@@ -640,8 +664,9 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       final permitId = task['permitId'] ?? task['id'] ?? task['serviceId'] ?? task['workOrderId'];
       if (permitId == null) throw Exception('Could not determine permit id');
 
-      final resp = await _apiService.rejectWorkOrderPermit(permitId.toString(), reason);
+      await _apiService.rejectWorkOrderPermit(permitId.toString(), reason);
 
+      // Backend automatically sends notification to tenant via notification_manager
       // Refresh list and show feedback
       await _fetchWorkOrderPermits();
 
@@ -698,6 +723,8 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
 
     try {
       await _apiService.approveWorkOrderPermit(permitId.toString());
+
+      // Backend automatically sends notification to tenant via notification_manager
       await _fetchWorkOrderPermits();
 
       if (mounted) {

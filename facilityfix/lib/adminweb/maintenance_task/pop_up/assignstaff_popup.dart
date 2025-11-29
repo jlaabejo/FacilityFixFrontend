@@ -414,7 +414,7 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
                         () {
                           try {
                             final found = _staffList.firstWhere((s) => _getStaffId(s) == selectedStaffId, orElse: () => {});
-                            if (found != null && found is Map && found.isNotEmpty) return (found['staff_department'] ?? found['department'] ?? '').toString();
+                            if (found.isNotEmpty) return (found['staff_department'] ?? found['department'] ?? '').toString();
                           } catch (_) {}
                           return '';
                         }(),

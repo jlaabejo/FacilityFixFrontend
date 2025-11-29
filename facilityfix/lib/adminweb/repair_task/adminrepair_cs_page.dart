@@ -124,32 +124,18 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
         _repairTasks =
             concernSlips
                 .map((slip) {
-                  // Derive canonical status token
-                  final mapped = _mapStatus(
+                  // Get the canonical status directly from backend
+                  // Use the actual backend status via _mapStatus, which respects
+                  // the real status value ('pending', 'assigned', 'inspected', etc.)
+                  final mappedStatus = _mapStatus(
                     slip['status'],
                     slip['workflow'],
                     slip['resolution_type'],
                   );
 
-                  // If staff already provided assessment/recommendation or completion
-                  // information, consider the task 'inspected' even if top-level
-                  // status hasn't been updated by the backend yet.
-                  final hasAssessment =
-                      (slip['staff_assessment'] != null) ||
-                      (slip['staff_recommendation'] != null) ||
-                      (slip['assessed_by'] != null) ||
-                      (slip['assessed_at'] != null) ||
-                      (slip['completed_at'] != null) ||
-                      (slip['dateCompleted'] != null) ||
-                      (slip['status']?.toString().toLowerCase().contains(
-                            'inspected',
-                          ) ==
-                          true);
-
-                  final statusToken = hasAssessment ? 'inspected' : mapped;
-
                   return {
                     'id': slip['formatted_id'] ?? slip['_doc_id'] ?? 'N/A',
+                    'internalId': slip['_doc_id'] ?? slip['id'] ?? 'N/A',
                     'title': slip['title'] ?? 'No Title',
                     'dateRequested': _formatDate(slip['created_at']),
                     'buildingUnit': _getBuildingUnit(slip),
@@ -157,7 +143,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                       slip['priority'] ?? 'medium',
                     ),
                     'department': _getDepartment(slip['category']),
-                    'status': statusToken,
+                    'status': mappedStatus,
                     'location': slip['location'] ?? 'N/A',
                     'description': slip['description'] ?? 'No Description',
                     'category': slip['category'],

@@ -742,7 +742,7 @@ class APIService {
                   'entity_type': 'concern_slips',
                   'entity_id': result['id'],
                   'file_type': 'any',
-                  if (description != null) 'description': description,
+                  if (description.isNotEmpty) 'description': description,
                 },
               );
               print('[API] File uploaded successfully: $uploadResponse');

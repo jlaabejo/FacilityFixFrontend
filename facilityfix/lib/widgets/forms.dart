@@ -69,6 +69,8 @@ class InputField extends StatelessWidget {
             readOnly: readOnly,
             onTap: onTap,
             inputFormatters: inputFormatters, // forwarded if provided
+            showCursor: !readOnly, // Hide cursor when readonly
+            enableInteractiveSelection: !readOnly, // Disable text selection when readonly
             style: const TextStyle(
               fontFamily: 'Inter',
               fontSize: 14,

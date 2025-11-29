@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../services/api_service.dart';
 
 class NotificationDialog extends StatefulWidget {
@@ -77,6 +78,8 @@ class _NotificationDialogState extends State<NotificationDialog> {
           'timestamp': notif['created_at'] ?? DateTime.now().toIso8601String(),
           'isRead': notif['is_read'] ?? false,
           'relatedId': notif['related_entity_id'],
+          'related_entity_type': notif['related_entity_type'],
+          'action_url': notif['action_url'],
           'priority': notif['priority'] ?? 'normal',
           'isUrgent': notif['is_urgent'] ?? false,
           'notificationType': notif['notification_type'] ?? 'system',
@@ -275,6 +278,10 @@ class _NotificationDialogState extends State<NotificationDialog> {
 
   // Individual notification item
   Widget _buildNotificationItem(Map<String, dynamic> notification) {
+    final message = notification['message'] ?? 'No message';
+    // Show more lines for all messages to avoid ellipsis
+    final maxLines = 4; // Increased from 2 to show more content
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
@@ -303,6 +310,7 @@ class _NotificationDialogState extends State<NotificationDialog> {
                   children: [
                     // Title and timestamp row
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Expanded(
                           child: Text(
@@ -323,20 +331,21 @@ class _NotificationDialogState extends State<NotificationDialog> {
                             fontSize: 12,
                             color: Colors.grey[600],
                           ),
+                          textAlign: TextAlign.right,
                         ),
                       ],
                     ),
                     const SizedBox(height: 4),
 
-                    // Notification message
+                    // Notification message - expands for long messages
                     Text(
-                      notification['message'] ?? 'No message',
+                      message,
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.grey[700],
-                        height: 1.3,
+                        height: 1.4,
                       ),
-                      maxLines: 2,
+                      maxLines: maxLines,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
@@ -459,10 +468,16 @@ class _NotificationDialogState extends State<NotificationDialog> {
         iconColor = Colors.red[700]!;
         icon = Icons.priority_high;
         break;
+      case 'escalation':
+      case 'priority_escalated':
+        bgColor = Colors.red[100]!;
+        iconColor = Colors.red[700]!;
+        icon = Icons.trending_up;
+        break;
       default:
-        bgColor = Colors.grey[100]!;
-        iconColor = Colors.grey[700]!;
-        icon = Icons.notifications;
+        bgColor = Colors.cyan[100]!;
+        iconColor = Colors.cyan[700]!;
+        icon = Icons.campaign_outlined;
     }
 
     return Container(
@@ -559,29 +574,99 @@ class _NotificationDialogState extends State<NotificationDialog> {
 
   // Handle notification tap - navigate to relevant screen or show details
   void _handleNotificationTap(Map<String, dynamic> notification) {
-    Navigator.of(context).pop();
+    // Navigate to relevant screen based on notification type
+    final notificationType = notification['type']?.toLowerCase() ?? '';
+    final relatedId = notification['relatedId'] ?? '';
+    final notificationId = notification['id'];
 
-    // Mark as read when tapped
-    _markNotificationAsRead(notification['id']);
+    print('[NOTIF_TAP] notificationType: $notificationType');
+    print('[NOTIF_TAP] Full notification: $notification');
 
-    // TODO: Navigate to relevant screen based on notification type
-    switch (notification['type']?.toLowerCase()) {
+    // Determine the route based on notification type and related entity
+    String? targetRoute;
+    
+    switch (notificationType) {
+      // Concern Slip related notifications
+      case 'concern_slip_submitted':
+      case 'concern_slip_assigned':
+      case 'concern_slip_assessed':
+      case 'concern_slip_evaluated':
+      case 'concern_slip_resolution_set':
+      case 'concern_slip_returned':
+        if (relatedId.isNotEmpty) {
+          targetRoute = '/work/repair';
+        }
+        break;
+      
+      // Job Service notifications
+      case 'job_service_received':
+      case 'job_service_completed':
+        if (relatedId.isNotEmpty) {
+          targetRoute = '/adminweb/pages/adminrepair_js_page';
+        }
+        break;
+      
+      // Work Order notifications
+      case 'work_order_created':
+      case 'work_order_assigned':
+      case 'work_order_completed':
+        if (relatedId.isNotEmpty) {
+          targetRoute = '/adminweb/pages/adminrepair_wop_page';
+        }
+        break;
+      
+      // Priority escalated - check related_entity_type to route to correct page
+      case 'priority_escalated':
+      case 'escalation':
+        final entityType = notification['related_entity_type']?.toString().toLowerCase() ?? '';
+        print('[ESCALATION] Routing based on related_entity_type: $entityType');
+        
+        if (entityType.contains('concern_slip') || entityType == 'concern_slips') {
+          print('[ESCALATION] → Routing to CONCERN SLIP page');
+          targetRoute = '/work/repair';
+        } else if (entityType.contains('job_service') || entityType == 'job_services') {
+          print('[ESCALATION] → Routing to JOB SERVICE page');
+          targetRoute = '/adminweb/pages/adminrepair_js_page';
+        } else if (entityType.contains('work_order') || entityType == 'work_order_permits') {
+          print('[ESCALATION] → Routing to WORK ORDER page');
+          targetRoute = '/adminweb/pages/adminrepair_wop_page';
+        } else {
+          print('[ESCALATION] → Unknown entity type: "$entityType" - going to DASHBOARD');
+          targetRoute = '/dashboard';
+        }
+        break;
+      
+      // Maintenance notifications
       case 'maintenance':
-        // Navigate to maintenance details
-        print('Navigate to maintenance: ${notification['relatedId']}');
+        targetRoute = '/work/maintenance';
         break;
-      case 'repair':
-        // Navigate to repair request details
-        print('Navigate to repair: ${notification['relatedId']}');
-        break;
+      
+      // Announcement notifications
       case 'announcement':
-        // Show announcement details
-        print('Show announcement: ${notification['relatedId']}');
+      case 'announcement_published':
+        print('[ANNOUNCEMENT_TAP] Navigate to announcement: $relatedId');
+        targetRoute = '/announcement';
         break;
+      
       default:
-        // Default action
-        print('Notification tapped: ${notification['id']}');
+        // Default: go to dashboard
+        print('[NOTIF] Type "$notificationType" - going to DASHBOARD');
+        targetRoute = '/dashboard';
     }
+
+    print('[NOTIF_TAP] targetRoute: $targetRoute');
+
+    // Close the popup and navigate
+    Navigator.of(context).pop();
+    
+    if (targetRoute != null) {
+      context.go(targetRoute);
+    }
+
+    // Mark as read AFTER navigation (silent background operation)
+    Future.delayed(const Duration(milliseconds: 100), () {
+      _markNotificationAsRead(notificationId);
+    });
   }
 
   // Handle notification context menu actions
@@ -716,14 +801,11 @@ class _NotificationDialogState extends State<NotificationDialog> {
     }
   }
 
-  // Mark single notification as read
+  // Mark single notification as read (silent operation, no refresh callback)
   void _markNotificationAsRead(String id) async {
     try {
       await ApiService().markNotificationsAsRead([id]);
-
-      if (widget.onRefresh != null) {
-        widget.onRefresh!();
-      }
+      // Silent operation - don't call widget.onRefresh() to avoid setState on disposed widget
     } catch (e) {
       print('[v0] Error marking notification as read: $e');
     }

@@ -102,6 +102,10 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
       // Use staff role for API service
       final apiService = APIService(roleOverride: AppRole.staff);
       final data = await apiService.getJobServiceById(widget.jobServiceId);
+      
+      print('[STAFF JOB SERVICE] Fetched data keys: ${data.keys.toList()}');
+      print('[STAFF JOB SERVICE] schedule_availability from API: ${data['schedule_availability']}');
+      print('[STAFF JOB SERVICE] scheduled_date from API: ${data['scheduled_date']}');
 
       // Enrich data with user names if we have user IDs
       await _enrichWithUserNames(data, apiService);
@@ -350,6 +354,39 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
     if (value == null) return [];
     if (value is List) return value.map((e) => e.toString()).toList();
     return [];
+  }
+
+  /// Build schedule availability from job service data
+  /// Returns a DateTimeRange if both date and time are present, otherwise a string
+  Object? _buildScheduleAvailability(Map<String, dynamic> data) {
+    // Only look for schedule_availability - don't use scheduled_date as fallback
+    final rawSchedule = data['schedule_availability'];
+
+    if (rawSchedule == null) return null;
+
+    // If it's already a string, return it as-is
+    if (rawSchedule is String) {
+      final trimmed = rawSchedule.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+
+    // If it's a DateTime, return it
+    if (rawSchedule is DateTime) {
+      return rawSchedule;
+    }
+
+    // If it's a DateTimeRange, return it
+    if (rawSchedule is DateTimeRange) {
+      return rawSchedule;
+    }
+
+    // Try to convert to string
+    try {
+      final str = rawSchedule.toString().trim();
+      return str.isEmpty ? null : str;
+    } catch (_) {
+      return null;
+    }
   }
 
   bool _isDeletableStatus(dynamic status) {
@@ -819,9 +856,9 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
                               _jobServiceData!['unit_id'] ??
                               '',
                           scheduleAvailability:
-                              _jobServiceData!['schedule_availability'] ??
-                              _jobServiceData!['availability'] ??
-                              _jobServiceData!['scheduled_date'],
+                              _jobServiceData != null
+                                  ? _buildScheduleAvailability(_jobServiceData!)
+                                  : null,
                           additionalNotes:
                               _jobServiceData!['additional_notes'] ??
                               _jobServiceData!['description'] ??
@@ -859,6 +896,7 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
 
                           // Callbacks
                           onViewConcernSlip: _viewConcernSlip,
+                          isStaff: true,
                         ),
                       ],
                       if (_jobServiceData!['assessment'] != null ||

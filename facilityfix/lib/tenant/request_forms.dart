@@ -215,21 +215,37 @@ class _RequestFormState extends State<RequestForm> {
 
   // Date/Time picking for availability range (Mon-Sat, 9am-5pm, only future dates)
   Future<void> _pickAvailabilityRange(TextEditingController controller) async {
+    print('[AVAILABILITY_PICKER] Called! Current value: ${controller.text}');
+    
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
+
+    // Find the first selectable date (next Mon-Sat after today)
+    DateTime nextSelectableDate = today.add(const Duration(days: 1));
+    while (nextSelectableDate.weekday > 6 || nextSelectableDate.weekday < 1) {
+      // Skip Sundays (weekday 7)
+      nextSelectableDate = nextSelectableDate.add(const Duration(days: 1));
+    }
+
+    print('[AVAILABILITY_PICKER] Next selectable date: $nextSelectableDate');
 
     // Only allow picking dates after today (not today), and only Mon-Sat
     final DateTime? pickedDate = await showDatePicker(
       context: context,
-      initialDate: today.add(const Duration(days: 1)),
-      firstDate: today.add(const Duration(days: 1)),
+      initialDate: nextSelectableDate,
+      firstDate: nextSelectableDate,
       lastDate: DateTime(2100),
       selectableDayPredicate: (date) {
         // Only allow Monday (1) to Saturday (6)
         return date.weekday >= 1 && date.weekday <= 6 && date.isAfter(today);
       },
     );
-    if (pickedDate == null) return;
+    if (pickedDate == null) {
+      print('[AVAILABILITY_PICKER] Date picker cancelled');
+      return;
+    }
+
+    print('[AVAILABILITY_PICKER] Date selected: $pickedDate');
 
     // Helper to clamp time to 9:00-17:00
     TimeOfDay _clampToRange(TimeOfDay t) {
@@ -246,8 +262,12 @@ class _RequestFormState extends State<RequestForm> {
       initialTime: const TimeOfDay(hour: 9, minute: 0),
       helpText: 'Select start time (9:00 AM - 5:00 PM)',
     );
-    if (startTimeRaw == null) return;
+    if (startTimeRaw == null) {
+      print('[AVAILABILITY_PICKER] Start time cancelled');
+      return;
+    }
     final startTime = _clampToRange(startTimeRaw);
+    print('[AVAILABILITY_PICKER] Start time: $startTime');
     if (startTime.hour < 9 || startTime.hour > 17) {
       _showSnack('Start time must be between 9:00 AM and 5:00 PM');
       return;
@@ -259,8 +279,12 @@ class _RequestFormState extends State<RequestForm> {
       initialTime: TimeOfDay(hour: (startTime.hour + 2 > 17) ? 17 : startTime.hour + 2, minute: startTime.minute),
       helpText: 'Select end time (9:00 AM - 5:00 PM)',
     );
-    if (endTimeRaw == null) return;
+    if (endTimeRaw == null) {
+      print('[AVAILABILITY_PICKER] End time cancelled');
+      return;
+    }
     final endTime = _clampToRange(endTimeRaw);
+    print('[AVAILABILITY_PICKER] End time: $endTime');
     if (endTime.hour < 9 || endTime.hour > 17) {
       _showSnack('End time must be between 9:00 AM and 5:00 PM');
       return;
@@ -278,12 +302,17 @@ class _RequestFormState extends State<RequestForm> {
     final dateStr = DateFormat('MMM d, yyyy').format(pickedDate);
     final startTimeStr = _formatTimeOfDay(startTime);
     final endTimeStr = _formatTimeOfDay(endTime);
+    final result = '$dateStr $startTimeStr - $endTimeStr';
+
+    print('[AVAILABILITY_PICKER] Final result: $result');
 
     setState(() {
-      controller.text = '$dateStr $startTimeStr - $endTimeStr';
+      controller.text = result;
       // Recompute inline errors after picking a date
       _formKey.currentState?.validate();
     });
+    
+    print('[AVAILABILITY_PICKER] Controller text updated to: ${controller.text}');
   }
 
   // Date/Time picking for single date/time (for other forms)
@@ -1208,6 +1237,7 @@ class _RequestFormState extends State<RequestForm> {
                 controller: availabilityController,
                 hintText: 'Select date and time range (e.g., 9:00 AM - 11:00 AM)',
                 isRequired: true,
+                readOnly: true,
                 onTap: () => _pickAvailabilityRange(availabilityController),
                 prefixIcon: const Padding(
                   padding: EdgeInsets.all(8.0),
@@ -1306,6 +1336,7 @@ class _RequestFormState extends State<RequestForm> {
                 controller: availabilityController,
                 hintText: 'Select date and time range (e.g., 9:00 AM - 11:00 AM)',
                 isRequired: true,
+                readOnly: true,
                 onTap: () => _pickAvailabilityRange(availabilityController),
                 prefixIcon: const Padding(
                   padding: EdgeInsets.all(8.0),

@@ -84,6 +84,25 @@ class _NotificationPageState extends State<NotificationPage> {
     }
   }
 
+  /// Extract route path from action_url
+  /// Examples:
+  /// - "http://localhost:3748/#/announcement" → "/announcement"
+  /// - "http://localhost:3748/#/concern-slips/ABC123" → "/concern-slips/ABC123"
+  String? _extractRouteFromUrl(String? actionUrl) {
+    if (actionUrl == null || actionUrl.isEmpty) return null;
+    
+    try {
+      // Find the '#/' part and extract everything after it
+      final hashIndex = actionUrl.indexOf('#/');
+      if (hashIndex != -1) {
+        return '/' + actionUrl.substring(hashIndex + 2);
+      }
+    } catch (e) {
+      print('[Tenant Notifications] Error extracting route: $e');
+    }
+    return null;
+  }
+
   // ===== Grouping & Formatting =====
 
   bool _isToday(DateTime d) {
@@ -329,17 +348,41 @@ class _NotificationPageState extends State<NotificationPage> {
                             // Mark as read
                             await _markAsRead(item);
 
-                            // Navigate based on notification type
-                            if (item.notificationType.contains('announcement')) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const AnnouncementPage()),
-                              );
+                            // Try to navigate using action_url first
+                            final route = _extractRouteFromUrl(item.actionUrl);
+                            if (route != null) {
+                              // Navigate to the extracted route
+                              // For native mobile, we'll navigate to matching page based on route
+                              if (route.contains('announcement')) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const AnnouncementPage()),
+                                );
+                              } else if (route.contains('concern') || route.contains('repair') || route.contains('job') || route.contains('work-order')) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const RepairManagement()),
+                                );
+                              } else {
+                                // Default fallback
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const RepairManagement()),
+                                );
+                              }
                             } else {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const RepairManagement()),
-                              );
+                              // Fallback: Navigate based on notification type
+                              if (item.notificationType.contains('announcement')) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const AnnouncementPage()),
+                                );
+                              } else {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const RepairManagement()),
+                                );
+                              }
                             }
                           },
                         ),

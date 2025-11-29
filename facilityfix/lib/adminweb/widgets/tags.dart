@@ -202,7 +202,7 @@ class DepartmentTag extends StatelessWidget {
 // Status Tag
 Widget StatusTag(String status) {
   // Normalize input to be tolerant of canonical lowercase tokens or Title-Cased labels
-  final s = (status ?? '').toString().trim().toLowerCase();
+  final s = status.toString().trim().toLowerCase();
 
   Color bgColor;
   Color textColor;

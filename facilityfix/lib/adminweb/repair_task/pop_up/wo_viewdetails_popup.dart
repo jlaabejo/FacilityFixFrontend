@@ -104,7 +104,7 @@ class _WorkOrderConcernSlipDialogState
 
       final id = csId.toString();
       final cs = await _apiService.getConcernSlipById(id);
-      if (cs != null) {
+      if (cs != null || true) {
         try {
           // attach to local task copy
           _taskData ??= Map<String, dynamic>.from(widget.task);

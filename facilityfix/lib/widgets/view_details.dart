@@ -464,7 +464,8 @@ class JobServiceDetails extends StatelessWidget {
   final String requestedBy;
   final String? requestedByName; // Full name of requester
   final String unitId; // or location
-  final Object? scheduleAvailability; // e.g. DateTimeRange or "Aug 12, 1:30 PM"
+  final Object? scheduleAvailability; // e.g. DateTimeRange or "Aug 12, 1:30 PM" (tenant's preferred schedule)
+  final DateTime? scheduledDate; // Backend scheduled_date field (formatted date)
   final String? additionalNotes;
   // Title of the job/service task (displayed prominently)
   final String? title;
@@ -506,6 +507,7 @@ class JobServiceDetails extends StatelessWidget {
     this.requestedByName,
     required this.unitId,
     this.scheduleAvailability,
+    this.scheduledDate,
     this.additionalNotes,
     this.title,
 
@@ -523,7 +525,7 @@ class JobServiceDetails extends StatelessWidget {
     this.staffAttachments,
 
     // Callbacks
-    this.onViewConcernSlip,
+    this.onViewConcernSlip, required bool isStaff,
   });
 
   // Map resolution type to what we DISPLAY as "Request Type".
@@ -578,35 +580,27 @@ class JobServiceDetails extends StatelessWidget {
     String? _fmtSchedAvail(Object? raw) {
       if (raw == null) return null;
 
+      // If it's already a string (like 'December 8, 2-4 PM'), return it as-is
+      if (raw is String) {
+        final s = raw.trim();
+        print('[VIEW_DETAILS] _fmtSchedAvail: Returning string as-is: "$s"');
+        return s.isEmpty ? null : s;
+      }
+
       if (raw is DateTimeRange) {
+        print('[VIEW_DETAILS] _fmtSchedAvail: Formatting DateTimeRange: ${raw.start} to ${raw.end}');
         return UiDateUtils.dateTimeRange(raw.start, raw.end);
       }
 
       if (raw is DateTime) {
+        print('[VIEW_DETAILS] _fmtSchedAvail: Formatting DateTime: $raw');
         return UiDateUtils.dateTimeRange(
           raw,
           raw.add(const Duration(hours: 1)),
         );
       }
 
-      if (raw is String) {
-        final s = raw.trim();
-        if (s.isEmpty) return null;
-
-        final pr = UiDateUtils.parseRange(s);
-        if (pr != null) return UiDateUtils.dateTimeRange(pr.start, pr.end);
-
-        try {
-          final dt = DateTime.tryParse(s) ?? UiDateUtils.parse(s);
-          return UiDateUtils.dateTimeRange(
-            dt,
-            dt.add(const Duration(hours: 1)),
-          );
-        } catch (_) {
-          return null;
-        }
-      }
-
+      print('[VIEW_DETAILS] _fmtSchedAvail: Unknown type: ${raw.runtimeType}');
       return null;
     }
 
@@ -746,6 +740,13 @@ class JobServiceDetails extends StatelessWidget {
                     labelWidth: 120 * s,
                   ),
                 ],
+                if (scheduledDate != null) ...[
+                  SizedBox(height: 6 * s),
+                  KeyValueRow.text(
+                    label: 'Scheduled Date',
+                    valueText: _fmtDate(scheduledDate!),
+                  ),
+                ],
               ],
             ),
           ),
@@ -772,7 +773,7 @@ class JobServiceDetails extends StatelessWidget {
                   scheduleAvailability is DateTime)) ...[
             SizedBox(height: 4 * s),
             KeyValueRow.text(
-              label: 'Schedule Date',
+              label: 'Schedule Availability',
               valueText: _fmtSchedAvail(scheduleAvailability) ?? '—',
             ),
           ],

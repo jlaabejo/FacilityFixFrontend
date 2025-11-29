@@ -157,14 +157,20 @@ class _JobServiceConcernSlipDialogState
   }
 
   void _initializeScheduleDate() {
+    // Only auto-populate selectedDate when on the assignment step (step 2)
+    // For view steps (0,1), we'll use _formatScheduleDate() formatter instead
+    if (_currentStep != 2) return;
+
     // Auto-populate inspection schedule from several possible schedule fields
+    // PRIORITY: schedule_availability > other schedule fields > dateRequested
     final candidates = [
+      task['schedule_availability'],
       task['rawData']?['schedule_availability'],
       task['rawData']?['schedule'],
-      task['rawData']?['availability'],
-      task['rawData']?['schedule_availabilities'],
       task['schedule'],
+      task['rawData']?['availability'],
       task['availability'],
+      task['rawData']?['schedule_availabilities'],
       task['dateRequested'],
       task['requested_at'],
     ];
@@ -468,6 +474,18 @@ class _JobServiceConcernSlipDialogState
     if (dateString == null || dateString.isEmpty) return 'N/A';
     try {
       final s = dateString.trim();
+      
+      // If it looks like an already-formatted schedule availability string, return as-is
+      // Format: "Dec 10 | 11:45 am - 3:00 pm" or "December 10, 2-4 PM"
+      if (s.contains('|') && s.contains(' am') || s.contains('|') && s.contains(' pm')) {
+        print('[SCHEDULE_FORMAT] Returning already-formatted schedule: $s');
+        return s;
+      }
+      if (s.contains(',') && (s.contains(' am') || s.contains(' pm')) && s.contains('-')) {
+        print('[SCHEDULE_FORMAT] Returning already-formatted schedule: $s');
+        return s;
+      }
+      
       if (s.contains(' - ')) {
         final parts = s.split(' - ');
         final left = parts[0].trim();
@@ -1107,7 +1125,7 @@ class _JobServiceConcernSlipDialogState
                 'SCHEDULE DATE',
                 selectedDate != null
                     ? UiDateUtils.dateTimeRange(selectedDate!, selectedEndDate)
-                    : _formatScheduleToDateTimeRange(task['schedule']),
+                    : _formatScheduleDate(task['schedule_availability'] ?? task['rawData']?['schedule_availability']),
               ),
             ),
           ],
@@ -1427,6 +1445,7 @@ class _JobServiceConcernSlipDialogState
               onPressed: () async {
                 setState(() {
                   _currentStep = 2;
+                  _initializeScheduleDate(); // Populate selectedDate for step 2
                 });
                 await _loadStaffMembers();
                 _autoAssignStaff();

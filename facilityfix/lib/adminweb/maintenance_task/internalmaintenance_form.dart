@@ -372,6 +372,7 @@ void _handleLogout(BuildContext context) async {
         final firstName = nextStaff['first_name'] ?? '';
         final lastName = nextStaff['last_name'] ?? '';
         final staffName = '$firstName $lastName'.trim();
+        // Use Firebase UID or staff_id from auto-assigned staff
         final staffId = nextStaff['user_id'] ?? nextStaff['id'];
 
         // Update the text field and selected staff ID

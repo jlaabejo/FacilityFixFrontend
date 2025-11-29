@@ -281,6 +281,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     return {
       'serviceId': serviceId, // Display ID with "JS-" prefix
       'id': jobService['id'] ?? 'N/A', // Store raw UUID for API calls
+      'internalId': jobService['_doc_id'] ?? jobService['id'] ?? 'N/A',
       'buildingUnit': jobService['location'] ?? jobService['unit_id'] ?? 'N/A',
       'schedule': _formatDate(
         jobService['scheduled_date'] ?? jobService['created_at'],
