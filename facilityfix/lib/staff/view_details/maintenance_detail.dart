@@ -6,7 +6,6 @@ import 'package:facilityfix/staff/home.dart';
 import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/staff/maintenance_task.dart';
 import 'package:facilityfix/staff/repair_task.dart';
-import 'package:facilityfix/staff/task_management.dart';
 import 'package:http/http.dart' as http;
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/services/auth_storage.dart';
@@ -74,48 +73,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
       return;
     }
 
-    // First, try the staff-visible endpoint for inventory requests tied to the maintenance task.
-    try {
-      print('DEBUG: Loading inventory requests for task $taskId');
-      final respRequests = await apiService.getInventoryRequestsByMaintenanceTask(taskId.toString());
-      if (respRequests['success'] == true && respRequests['data'] != null) {
-        final requests = List<Map<String, dynamic>>.from(respRequests['data']);
-        // Enrich with item details
-        for (var r in requests) {
-          if (r['inventory_id'] != null) {
-            try {
-              final itemData = await apiService.getInventoryItemById(r['inventory_id']);
-              if (itemData != null) {
-                r['item_name'] = itemData['item_name'] ?? itemData['name'] ?? '';
-                r['item_code'] = itemData['item_code'] ?? itemData['code'] ?? '';
-                r['stock_quantity'] = itemData['available_stock'] ?? itemData['stock'] ?? itemData['current_stock'] ?? itemData['stock_quantity'] ?? 'N/A';
-                r['stock_status'] = itemData['status'] ?? itemData['stock_status'] ?? 'Unknown';
-              }
-            } catch (e) {
-              print('DEBUG: Error loading item details for request: $e');
-            }
-          }
-        }
-
-        if (requests.isNotEmpty) {
-          // Mark as reservations for maintenance tasks (staff receives them)
-          for (var r in requests) {
-            r['type'] = 'reservation';
-          }
-          setState(() {
-            _inventoryRequests = requests;
-          });
-          print('DEBUG: Loaded ${_inventoryRequests.length} inventory reservations for maintenance');
-          print('DEBUG: First reservation type: ${requests.first['type']}');
-          return; // data found, no need to check reservations
-        }
-      }
-    } catch (e) {
-      print('DEBUG: Error loading inventory requests for maintenance task: $e');
-      // continue to check reservations below
-    }
-
-    // If no requests found, check if there are admin reservations for this task
+    // For maintenance tasks, load admin reservations first
     try {
       print('DEBUG: Checking for admin inventory reservations for task $taskId');
       final adminApiService = APIService(roleOverride: AppRole.admin);
@@ -138,6 +96,15 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
               print('DEBUG: Error loading item details for reservation: $e');
             }
           }
+            // Normalize reservation id for downstream usage
+            if ((r['reservation_id'] ?? '').toString().isEmpty) {
+              if ((r['id'] ?? '').toString().isNotEmpty) r['reservation_id'] = r['id'];
+              else if ((r['_id'] ?? '').toString().isNotEmpty) r['reservation_id'] = r['_id'];
+              else if ((r['reservationId'] ?? '').toString().isNotEmpty) r['reservation_id'] = r['reservationId'];
+              else {
+                print('[v0] Warning: reservation for inventory ${r['inventory_id']} missing explicit id fields');
+              }
+            }
         }
         if (reservations.isNotEmpty) {
           // Mark as reservations
@@ -149,6 +116,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
           });
           print('DEBUG: Loaded ${reservations.length} admin inventory reservations for staff view');
           print('DEBUG: First reservation type: ${reservations.first['type']}');
+          return; // data found, no need to check requests
         }
       }
     } catch (e) {
@@ -160,24 +128,59 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
       } else {
         print('DEBUG: Error checking inventory reservations: $e');
       }
+      // continue to check requests below
     }
+
+    // We intentionally DO NOT load staff-made requests here. Only admin-created
+    // reservations should be visible in MaintenanceDetails. Requests are listed
+    // under the Inventory page and can still be created via the Request button.
   }
   
   void _onTabTapped(int index) {
-    final destinations = [
-      const HomePage(),
-      const RepairTaskPage(),
-      const MaintenanceTaskPage(),
-      const AnnouncementPage(),
-      const CalendarPage(),
-      const InventoryPage(),
-    ];
-    if (index != _selectedIndex) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => destinations[index]),
-      );
+    if (index == _selectedIndex) return;
+
+    switch (index) {
+      case 0:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+        break;
+      case 1:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const RepairTaskPage()),
+        );
+        break;
+      case 2:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MaintenanceTaskPage()),
+        );
+        break;
+      case 3:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AnnouncementPage()),
+        );
+        break;
+      case 4:
+        if (_selectedIndex != 4) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const CalendarPage()),
+          );
+        }
+        break;
+      case 5:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const InventoryPage()),
+        );
+        break;
     }
+
+    setState(() => _selectedIndex = index);
   }
   
   // Computed properties for checklist progress
@@ -486,12 +489,46 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
 
           // Reload inventory requests as these may have changed too
           await _loadInventoryRequests();
+
+          // After assessment creation, mark received inventory items as used/consumed
+          await _markInventoryItemsAsUsed();
         }
       }
     } catch (e) {
       print('DEBUG: Failed to refresh task after assessment: $e');
       // Not fatal - inventory and checklist may be slightly out-of-date.
     }
+  }
+
+  Future<void> _markInventoryItemsAsUsed() async {
+    // Check if task now has an assessment (completion notes or photos)
+    final hasAssessment = (widget.task['completion_notes'] != null &&
+                          widget.task['completion_notes'].toString().trim().isNotEmpty) ||
+                         (widget.task['photos'] is List && (widget.task['photos'] as List).isNotEmpty);
+
+    if (!hasAssessment) return; // Only mark as used if assessment was created
+
+    final apiService = APIService(roleOverride: AppRole.staff);
+
+    // Mark all received reservations as consumed
+    for (final request in _inventoryRequests) {
+      final status = (request['status'] ?? '').toString().toLowerCase();
+      final isReceived = status == 'received' || request['received'] == true;
+      final requestId = request['_doc_id'] ?? request['id'] ?? request['_id'] ?? request['request_id'] ?? request['reservation_id'];
+
+      if (isReceived && requestId != null) {
+        try {
+          print('DEBUG: Marking inventory reservation $requestId as consumed after assessment');
+          await apiService.markReservationConsumed(requestId);
+        } catch (e) {
+          print('DEBUG: Failed to mark reservation $requestId as consumed: $e');
+          // Continue with other items even if one fails
+        }
+      }
+    }
+
+    // Reload inventory requests again to reflect the consumed status
+    await _loadInventoryRequests();
   }
 
   void _showInventoryItemModal(Map<String, dynamic> request) {
@@ -691,8 +728,9 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
     if (requestId == null) {
       print('DEBUG: Request keys: ${request.keys.toList()}');
       print('DEBUG: Request map: $request'); // Add debug print
+      final snackMsg = (itemType == 'reservation') ? 'Reservation ID not found' : 'Request ID not found';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Request ID not found')),
+        SnackBar(content: Text(snackMsg)),
       );
       return;
     }
@@ -701,13 +739,18 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
       final apiService = APIService();
 
       if (action == 'receive') {
-        // Treat maintenance items as reservations too
-        if (itemType == 'reservation' || isMaintenanceItem) {
+        final requestStatus = (request['status'] ?? '').toString().toLowerCase();
+        final requestTypeStr = (request['type'] ?? '').toString().toLowerCase();
+        final hasReservationId = (request['reservation_id'] ?? '').toString().isNotEmpty;
+
+        // Treat maintenance items as reservations too, or if reserve-like markers exist
+        if (itemType == 'reservation' || isMaintenanceItem || hasReservationId || requestStatus == 'reserved') {
           if (_isUpdating) return;
           setState(() => _isUpdating = true);
           try {
-            print('DEBUG: Calling markReservationReceived for reservation $requestId');
-            final response = await apiService.markReservationReceived(requestId);
+            final reservationId = request['reservation_id'] ?? requestId;
+            print('DEBUG: Calling markReservationReceived for reservation $reservationId');
+            final response = await apiService.markReservationReceived(reservationId);
 
             if (response['success'] == true) {
               print('DEBUG: Reservation marked as received successfully');

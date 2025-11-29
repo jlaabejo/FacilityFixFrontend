@@ -13,7 +13,9 @@ class ApiService {
   factory ApiService() => _instance;
   ApiService._internal();
 
-  @Deprecated('Use AuthStorage.saveToken() instead. This method now does nothing.')
+  @Deprecated(
+    'Use AuthStorage.saveToken() instead. This method now does nothing.',
+  )
   void setAuthToken(String token) {
     // No-op - kept for backward compatibility
     // Token is now retrieved dynamically from AuthStorage via _getAuthHeaders()
@@ -24,8 +26,8 @@ class ApiService {
 
     return {
       'Content-Type': 'application/json',
-       'Authorization': 'Bearer $token',
-    }; 
+      'Authorization': 'Bearer $token',
+    };
   }
 
   // ============================================
@@ -49,6 +51,155 @@ class ApiService {
       }
     } catch (e) {
       print('[v0] Error fetching dashboard stats: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================
+  // EQUIPMENT MANAGEMENT ENDPOINTS
+  // ============================================
+
+  /// Register new equipment (Admin only)
+  Future<Map<String, dynamic>> registerEquipment(Map<String, dynamic> equipmentData) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.post(
+        // Backend equipment router: prefix '/equipment'
+        Uri.parse('$baseUrl/equipment'),
+        headers: headers,
+        body: jsonEncode(equipmentData),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else {
+        String err = response.body;
+        try {
+          final Map<String, dynamic> eBody = json.decode(response.body);
+          if (eBody.containsKey('detail')) err = eBody['detail'].toString();
+          else if (eBody.containsKey('message')) err = eBody['message'].toString();
+        } catch (_) {}
+        throw Exception('Failed to register equipment: $err');
+      }
+    } catch (e) {
+      print('[v0] Error registering equipment: $e');
+      rethrow;
+    }
+  }
+
+  /// Fetch full equipment details (Admin only)
+  Future<Map<String, dynamic>?> getEquipmentDetails(String equipmentId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/equipment/$equipmentId'),
+        headers: headers,
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else {
+        final error = 'Failed to fetch equipment details: ${response.statusCode} ${response.body}';
+        throw Exception(error);
+      }
+    } catch (e) {
+      print('[v0] Error fetching equipment details: $e');
+      rethrow;
+    }
+  }
+
+  /// Update equipment by id (Admin only)
+  Future<Map<String, dynamic>> updateEquipment(String equipmentId, Map<String, dynamic> updateData) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.put(
+        Uri.parse('$baseUrl/equipment/$equipmentId'),
+        headers: headers,
+        body: jsonEncode(updateData),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else {
+        String err = response.body;
+        try { err = json.decode(response.body)['detail'] ?? err; } catch (_) {}
+        throw Exception('Failed to update equipment: $err');
+      }
+    } catch (e) {
+      print('[v0] Error updating equipment: $e');
+      rethrow;
+    }
+  }
+
+  /// Soft-delete / deactivate equipment (Admin only)
+  Future<Map<String, dynamic>> deleteEquipment(String equipmentId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.delete(
+        Uri.parse('$baseUrl/equipment/$equipmentId'),
+        headers: headers,
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else {
+        final error = 'Failed to delete equipment: ${response.statusCode} ${response.body}';
+        throw Exception(error);
+      }
+    } catch (e) {
+      print('[v0] Error deleting equipment: $e');
+      rethrow;
+    }
+  }
+
+  /// List all equipment for a building (Admin only)
+  Future<List<Map<String, dynamic>>> listEquipmentByBuilding(String buildingId, {bool includeInactive = false}) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/equipment/buildings/$buildingId?include_inactive=$includeInactive'),
+        headers: headers,
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = json.decode(response.body);
+        // Backend returns {'success': True, 'data': items, 'count': N}
+        if (decoded is Map && decoded.containsKey('data') && decoded['data'] is List) {
+          return List<Map<String, dynamic>>.from(decoded['data']);
+        }
+        // fallback: assume the response is already a list
+        if (decoded is List) {
+          return List<Map<String, dynamic>>.from(decoded);
+        }
+        return [];
+      } else {
+        final error = 'Failed to list equipment: ${response.statusCode} ${response.body}';
+        throw Exception(error);
+      }
+    } catch (e) {
+      print('[v0] Error listing equipment by building: $e');
+      rethrow;
+    }
+  }
+
+  /// Search equipment for a building
+  Future<List<Map<String, dynamic>>> searchEquipment(String buildingId, String q) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/equipment/buildings/$buildingId/search?q=${Uri.encodeQueryComponent(q)}'),
+        headers: headers,
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = json.decode(response.body);
+        if (decoded is Map && decoded.containsKey('data') && decoded['data'] is List) {
+          return List<Map<String, dynamic>>.from(decoded['data']);
+        }
+        if (decoded is List) {
+          return List<Map<String, dynamic>>.from(decoded);
+        }
+        return [];
+      } else {
+        final error = 'Failed to search equipment: ${response.statusCode} ${response.body}';
+        throw Exception(error);
+      }
+    } catch (e) {
+      print('[v0] Error searching equipment: $e');
       rethrow;
     }
   }
@@ -373,11 +524,13 @@ class ApiService {
   Future<List<dynamic>> getStaffMembers({
     String? department,
     bool availableOnly = false,
+    String? schedule,
   }) async {
     try {
       final queryParams = <String, String>{};
       if (department != null) queryParams['department'] = department;
       if (availableOnly) queryParams['available_only'] = 'true';
+      if (schedule != null) queryParams['schedule_availability'] = schedule;
 
       final uri = Uri.parse(
         '$baseUrl/users/staff',
@@ -401,12 +554,30 @@ class ApiService {
     String staffUserId,
   ) async {
     try {
+      // Validate inputs
+      if (concernSlipId.isEmpty || staffUserId.isEmpty) {
+        throw Exception(
+          'Invalid parameters: concernSlipId=$concernSlipId, staffUserId=$staffUserId',
+        );
+      }
+
+      print(
+        '[ApiService] Assigning staff to concern slip - ID: $concernSlipId, Staff: $staffUserId',
+      );
+
       final headers = await _getAuthHeaders();
+      final body = json.encode({'assigned_to': staffUserId});
+
+      print('[ApiService] Request body: $body');
+
       final response = await http.patch(
         Uri.parse('$baseUrl/concern-slips/$concernSlipId/assign-staff'),
         headers: headers,
-        body: json.encode({'assigned_to': staffUserId}),
+        body: body,
       );
+
+      print('[ApiService] Response status: ${response.statusCode}');
+      print('[ApiService] Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
@@ -427,12 +598,30 @@ class ApiService {
     String staffUserId,
   ) async {
     try {
+      // Validate inputs
+      if (jobServiceId.isEmpty || staffUserId.isEmpty) {
+        throw Exception(
+          'Invalid parameters: jobServiceId=$jobServiceId, staffUserId=$staffUserId',
+        );
+      }
+
+      print(
+        '[ApiService] Assigning staff to job service - ID: $jobServiceId, Staff: $staffUserId',
+      );
+
       final headers = await _getAuthHeaders();
+      final body = json.encode({'assigned_to': staffUserId});
+
+      print('[ApiService] Request body: $body');
+
       final response = await http.patch(
         Uri.parse('$baseUrl/job-services/$jobServiceId/assign'),
         headers: headers,
-        body: json.encode({'assigned_to': staffUserId}),
+        body: body,
       );
+
+      print('[ApiService] Response status: ${response.statusCode}');
+      print('[ApiService] Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
@@ -454,19 +643,34 @@ class ApiService {
     String? note,
   }) async {
     try {
+      // Validate inputs
+      if (workOrderId.isEmpty || staffUserId.isEmpty) {
+        throw Exception(
+          'Invalid parameters: workOrderId=$workOrderId, staffUserId=$staffUserId',
+        );
+      }
+
+      print(
+        '[ApiService] Assigning staff to work order - ID: $workOrderId, Staff: $staffUserId',
+      );
+
       final headers = await _getAuthHeaders();
-      final body = <String, dynamic>{
-        'assigned_to': staffUserId,
-      };
+      final body = <String, dynamic>{'assigned_to': staffUserId};
       if (note != null && note.isNotEmpty) {
         body['note'] = note;
       }
 
+      final encodedBody = json.encode(body);
+      print('[ApiService] Request body: $encodedBody');
+
       final response = await http.patch(
         Uri.parse('$baseUrl/work-orders/$workOrderId/assign'),
         headers: headers,
-        body: json.encode(body),
+        body: encodedBody,
       );
+
+      print('[ApiService] Response status: ${response.statusCode}');
+      print('[ApiService] Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
@@ -488,9 +692,7 @@ class ApiService {
     String? adminNotes,
   }) async {
     try {
-      final body = <String, dynamic>{
-        'resolution_type': resolutionType,
-      };
+      final body = <String, dynamic>{'resolution_type': resolutionType};
       if (adminNotes != null && adminNotes.isNotEmpty) {
         body['admin_notes'] = adminNotes;
       }
@@ -507,7 +709,8 @@ class ApiService {
       } else {
         final errorBody = json.decode(response.body);
         throw Exception(
-          errorBody['detail'] ?? 'Failed to set resolution type: ${response.statusCode}',
+          errorBody['detail'] ??
+              'Failed to set resolution type: ${response.statusCode}',
         );
       }
     } catch (e) {
@@ -616,7 +819,9 @@ class ApiService {
         }
         return {'success': true};
       } else {
-        throw Exception('Failed to delete concern slip: ${response.statusCode} ${response.body}');
+        throw Exception(
+          'Failed to delete concern slip: ${response.statusCode} ${response.body}',
+        );
       }
     } catch (e) {
       print('[v0] Error deleting concern slip: $e');
@@ -702,7 +907,9 @@ class ApiService {
         }
         return {'success': true};
       } else {
-        throw Exception('Failed to delete job service: ${response.statusCode} ${response.body}');
+        throw Exception(
+          'Failed to delete job service: ${response.statusCode} ${response.body}',
+        );
       }
     } catch (e) {
       print('[v0] Error deleting job service: $e');
@@ -732,7 +939,7 @@ class ApiService {
         );
       }
     } catch (e) {
-      print('[v0] Error fetching work order permits: $e');
+      print('[API] Error fetching work order permits: $e');
       rethrow;
     }
   }
@@ -753,7 +960,7 @@ class ApiService {
         );
       }
     } catch (e) {
-      print('[v0] Error fetching work order permits by status: $e');
+      print('[API] Error fetching work order permits by status: $e');
       rethrow;
     }
   }
@@ -774,7 +981,7 @@ class ApiService {
         );
       }
     } catch (e) {
-      print('[v0] Error fetching pending work order permits: $e');
+      print('[API] Error fetching pending work order permits: $e');
       rethrow;
     }
   }
@@ -795,7 +1002,7 @@ class ApiService {
         );
       }
     } catch (e) {
-      print('[v0] Error fetching work order permit: $e');
+      print('[API] Error fetching work order permit: $e');
       rethrow;
     }
   }
@@ -825,7 +1032,7 @@ class ApiService {
         );
       }
     } catch (e) {
-      print('[v0] Error approving work order permit: $e');
+      print('[API] Error approving work order permit: $e');
       rethrow;
     }
   }
@@ -845,9 +1052,10 @@ class ApiService {
       });
 
       // Use different endpoint when returning to tenant to make intent explicit.
-      final endpoint = returnToTenant
-          ? '$baseUrl/work-order-permits/$permitId/returned'
-          : '$baseUrl/work-order-permits/$permitId/rejected';
+      final endpoint =
+          returnToTenant
+              ? '$baseUrl/work-order-permits/$permitId/returned'
+              : '$baseUrl/work-order-permits/$permitId/rejected';
 
       final response = await http.patch(
         Uri.parse(endpoint),
@@ -863,12 +1071,37 @@ class ApiService {
         );
       }
     } catch (e) {
-      print('[v0] Error rejecting work order permit: $e');
+      print('[API] Error rejecting work order permit: $e');
       rethrow;
     }
   }
 
-  /// Mark a work order permit as completed (Tenant only)
+  /// Delete a work order permit
+  Future<Map<String, dynamic>> deleteWorkOrderPermit(String permitId) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.delete(
+        Uri.parse('$baseUrl/work-order-permits/$permitId'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        if (response.body.isNotEmpty) {
+          return json.decode(response.body);
+        }
+        return {'success': true};
+      } else {
+        throw Exception(
+          'Failed to delete work order permit: ${response.statusCode} ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error deleting work order permit: $e');
+      rethrow;
+    }
+  }
+
+  /// Complete a work order permit (Tenant only)
   Future<Map<String, dynamic>> completeWorkOrderPermit(
     String permitId, {
     String? completionNotes,
@@ -893,11 +1126,76 @@ class ApiService {
         );
       }
     } catch (e) {
-      print('[v0] Error completing work order permit: $e');
+      print('[API] Error completing work order permit: $e');
       rethrow;
     }
   }
 
+  /// Add bulk approve API method
+  Future<Map<String, dynamic>> bulkApproveWorkOrders(
+    List<String> permitIds, {
+    String? conditions,
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final body = json.encode({
+        'permit_ids': permitIds,
+        if (conditions != null && conditions.isNotEmpty)
+          'conditions': conditions,
+      });
+
+      print('[ApiService] Bulk approving ${permitIds.length} work orders');
+      final response = await http.patch(
+        Uri.parse('$baseUrl/work-order-permits/bulk/approve'),
+        headers: headers,
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        final result = json.decode(response.body);
+        print('[ApiService] Bulk approve result: $result');
+        return result;
+      } else {
+        throw Exception(
+          'Failed to bulk approve work orders: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error bulk approving work orders: $e');
+      rethrow;
+    }
+  }
+
+  /// Add bulk reject API method
+  Future<Map<String, dynamic>> bulkRejectWorkOrders(
+    List<String> permitIds,
+    String reason,
+  ) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final body = json.encode({'permit_ids': permitIds, 'reason': reason});
+
+      print('[ApiService] Bulk rejecting ${permitIds.length} work orders');
+      final response = await http.patch(
+        Uri.parse('$baseUrl/work-order-permits/bulk/reject'),
+        headers: headers,
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        final result = json.decode(response.body);
+        print('[ApiService] Bulk reject result: $result');
+        return result;
+      } else {
+        throw Exception(
+          'Failed to bulk reject work orders: ${response.statusCode} ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error bulk rejecting work orders: $e');
+      rethrow;
+    }
+  }
 
   // ============================================
   // MAINTENANCE CALENDAR ENDPOINTS
@@ -922,9 +1220,10 @@ class ApiService {
       };
 
       final baseUri = Uri.parse('$baseUrl/maintenance/');
-      final uri = queryParams.isEmpty
-          ? baseUri
-          : baseUri.replace(queryParameters: queryParams);
+      final uri =
+          queryParams.isEmpty
+              ? baseUri
+              : baseUri.replace(queryParameters: queryParams);
 
       final headers = await _getAuthHeaders();
       final response = await http.get(uri, headers: headers);
@@ -932,11 +1231,7 @@ class ApiService {
       if (response.statusCode == 200) {
         final decoded = json.decode(response.body);
         if (decoded is List) {
-          return {
-            'success': true,
-            'tasks': decoded,
-            'count': decoded.length,
-          };
+          return {'success': true, 'tasks': decoded, 'count': decoded.length};
         }
         if (decoded is Map<String, dynamic>) {
           return decoded;
@@ -956,7 +1251,7 @@ class ApiService {
   /// Get a specific maintenance task by task ID
   Future<Map<String, dynamic>> getMaintenanceTaskById(String taskId) async {
     try {
-      print('[v0] Fetching maintenance task: $taskId');
+      print('[API] Fetching maintenance task: $taskId');
 
       final headers = await _getAuthHeaders();
       final response = await http.get(
@@ -992,8 +1287,8 @@ class ApiService {
         body: json.encode(taskData),
       );
 
-      print('[v0] Response status: ${response.statusCode}');
-      print('[v0] Response body: ${response.body}');
+      print('[API] Response status: ${response.statusCode}');
+      print('[API] Response body: ${response.body}');
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         return json.decode(response.body);
@@ -1003,7 +1298,7 @@ class ApiService {
         );
       }
     } catch (e) {
-      print('[v0] Error creating maintenance task: $e');
+      print('[API] Error creating maintenance task: $e');
       rethrow;
     }
   }
@@ -1028,7 +1323,7 @@ class ApiService {
         );
       }
     } catch (e) {
-      print('[v0] Error updating maintenance task: $e');
+      print('[API] Error updating maintenance task: $e');
       rethrow;
     }
   }
@@ -1069,7 +1364,9 @@ class ApiService {
         }
         return {'success': true};
       } else {
-        throw Exception('Failed to delete work order: ${response.statusCode} ${response.body}');
+        throw Exception(
+          'Failed to delete work order: ${response.statusCode} ${response.body}',
+        );
       }
     } catch (e) {
       print('[v0] Error deleting work order: $e');
@@ -1086,9 +1383,7 @@ class ApiService {
       final response = await http.patch(
         Uri.parse('$baseUrl/maintenance/$taskId/checklist'),
         headers: headers,
-        body: json.encode({
-          'checklist_completed': checklistCompleted,
-        }),
+        body: json.encode({'checklist_completed': checklistCompleted}),
       );
 
       if (response.statusCode == 200) {
@@ -1114,7 +1409,8 @@ class ApiService {
       final headers = await _getAuthHeaders();
       final body = {
         'staff_id': staffId,
-        if (scheduledDate != null) 'scheduled_date': scheduledDate.toIso8601String(),
+        if (scheduledDate != null)
+          'scheduled_date': scheduledDate.toIso8601String(),
         if (notes != null && notes.isNotEmpty) 'notes': notes,
       };
 
@@ -1151,9 +1447,7 @@ class ApiService {
   ) async {
     try {
       final headers = await _getAuthHeaders();
-      final body = {
-        'staff_id': staffId,
-      };
+      final body = {'staff_id': staffId};
 
       final uri = '$baseUrl/maintenance/tasks/$taskId/checklist/$itemId/assign';
       print('[AssignChecklistItem] POST $uri');
@@ -1205,9 +1499,10 @@ class ApiService {
       };
 
       final baseUri = Uri.parse('$baseUrl/admin/maintenance/');
-      final uri = queryParams.isEmpty
-          ? baseUri
-          : baseUri.replace(queryParameters: queryParams);
+      final uri =
+          queryParams.isEmpty
+              ? baseUri
+              : baseUri.replace(queryParameters: queryParams);
 
       final headers = await _getAuthHeaders();
       final response = await http.get(uri, headers: headers);
@@ -1215,11 +1510,7 @@ class ApiService {
       if (response.statusCode == 200) {
         final decoded = json.decode(response.body);
         if (decoded is List) {
-          return {
-            'success': true,
-            'tasks': decoded,
-            'count': decoded.length,
-          };
+          return {'success': true, 'tasks': decoded, 'count': decoded.length};
         }
         if (decoded is Map<String, dynamic>) {
           return decoded;
@@ -1237,7 +1528,9 @@ class ApiService {
   }
 
   /// Get a specific maintenance task by ID for admin (view)
-  Future<Map<String, dynamic>> getAdminMaintenanceTaskById(String taskId) async {
+  Future<Map<String, dynamic>> getAdminMaintenanceTaskById(
+    String taskId,
+  ) async {
     try {
       print('[v0] Fetching admin maintenance task: $taskId');
 
@@ -1435,7 +1728,9 @@ class ApiService {
                 headers: headers,
               );
               if (retryResp.statusCode == 200) {
-                print('[v0] getSpecialMaintenanceTask: succeeded with variant $variant');
+                print(
+                  '[v0] getSpecialMaintenanceTask: succeeded with variant $variant',
+                );
                 return json.decode(retryResp.body);
               }
             } catch (_) {
@@ -1454,7 +1749,9 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> resetSpecialMaintenanceTask(String taskKey) async {
+  Future<Map<String, dynamic>> resetSpecialMaintenanceTask(
+    String taskKey,
+  ) async {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.post(
@@ -1488,10 +1785,7 @@ class ApiService {
       final response = await http.post(
         Uri.parse('$baseUrl/maintenance/$taskId/checklist/$itemId/assign'),
         headers: headers,
-        body: json.encode({
-          'staff_id': staffId,
-          'assigned_to': staffId,
-        }),
+        body: json.encode({'staff_id': staffId, 'assigned_to': staffId}),
       );
 
       if (response.statusCode == 200) {
@@ -1520,10 +1814,7 @@ class ApiService {
       final response = await http.patch(
         Uri.parse('$baseUrl/maintenance/$taskId/checklist/$itemId'),
         headers: headers,
-        body: json.encode({
-          'item_id': itemId,
-          'completed': completed,
-        }),
+        body: json.encode({'item_id': itemId, 'completed': completed}),
       );
 
       if (response.statusCode == 200) {
@@ -1747,11 +2038,11 @@ class ApiService {
       final headers = await _getAuthHeaders();
       final url = '$baseUrl/users/$userId';
       final body = json.encode(updateData);
-      
+
       print('[ApiService] PUT $url');
       print('[ApiService] Headers: $headers');
       print('[ApiService] Body: $body');
-      
+
       final response = await http.put(
         Uri.parse(url),
         headers: headers,
@@ -1764,8 +2055,11 @@ class ApiService {
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        final errorBody = response.body.isNotEmpty ? response.body : 'No error details';
-        throw Exception('Failed to update user: ${response.statusCode} - $errorBody');
+        final errorBody =
+            response.body.isNotEmpty ? response.body : 'No error details';
+        throw Exception(
+          'Failed to update user: ${response.statusCode} - $errorBody',
+        );
       }
     } catch (e) {
       print('[ApiService] Error updating user: $e');
@@ -1868,7 +2162,8 @@ class ApiService {
         'supplier_name':
             itemData['supplier'], // Map 'supplier' to 'supplier_name'
         'description': itemData['description'],
-        'recommended_on': itemData['recommended_on'] ?? [], // Include recommended locations
+        'recommended_on':
+            itemData['recommended_on'] ?? [], // Include recommended locations
         if (itemData['warranty_until'] != null)
           'warranty_until': itemData['warranty_until'],
       };
@@ -2077,12 +2372,11 @@ class ApiService {
   }) async {
     try {
       final headers = await _getAuthHeaders();
-      final queryParams = <String, String>{
-        'quantity': quantity.toString(),
-      };
+      final queryParams = <String, String>{'quantity': quantity.toString()};
 
       if (reason != null) queryParams['reason'] = reason;
-      if (costPerUnit != null) queryParams['cost_per_unit'] = costPerUnit.toString();
+      if (costPerUnit != null)
+        queryParams['cost_per_unit'] = costPerUnit.toString();
 
       final uri = Uri.parse(
         '$baseUrl/inventory/items/$itemId/restock',
@@ -2101,10 +2395,7 @@ class ApiService {
       }
     } catch (e) {
       print('[v0] Error restocking inventory item: $e');
-      return {
-        'success': false,
-        'detail': 'Error: ${e.toString()}',
-      };
+      return {'success': false, 'detail': 'Error: ${e.toString()}'};
     }
   }
 
@@ -2118,9 +2409,7 @@ class ApiService {
   }) async {
     try {
       final headers = await _getAuthHeaders();
-      final queryParams = <String, String>{
-        'quantity': quantity.toString(),
-      };
+      final queryParams = <String, String>{'quantity': quantity.toString()};
 
       if (reason != null) queryParams['reason'] = reason;
       if (referenceType != null) queryParams['reference_type'] = referenceType;
@@ -2143,10 +2432,7 @@ class ApiService {
       }
     } catch (e) {
       print('[v0] Error consuming inventory stock: $e');
-      return {
-        'success': false,
-        'detail': 'Error: ${e.toString()}',
-      };
+      return {'success': false, 'detail': 'Error: ${e.toString()}'};
     }
   }
 
@@ -2157,9 +2443,7 @@ class ApiService {
   }) async {
     try {
       final headers = await _getAuthHeaders();
-      final queryParams = <String, String>{
-        'inventory_id': itemId,
-      };
+      final queryParams = <String, String>{'inventory_id': itemId};
 
       if (transactionType != null) {
         queryParams['transaction_type'] = transactionType;
@@ -2179,17 +2463,11 @@ class ApiService {
           return {'success': true, 'data': data};
         }
       } else {
-        throw Exception(
-          'Failed to load transactions: ${response.statusCode}',
-        );
+        throw Exception('Failed to load transactions: ${response.statusCode}');
       }
     } catch (e) {
       print('[v0] Error fetching inventory transactions: $e');
-      return {
-        'success': false,
-        'data': [],
-        'detail': 'Error: ${e.toString()}',
-      };
+      return {'success': false, 'data': [], 'detail': 'Error: ${e.toString()}'};
     }
   }
 
@@ -2238,7 +2516,8 @@ class ApiService {
     try {
       final queryParams = <String, String>{};
       if (buildingId != null) queryParams['building_id'] = buildingId;
-      if (maintenanceTaskId != null) queryParams['maintenance_task_id'] = maintenanceTaskId;
+      if (maintenanceTaskId != null)
+        queryParams['maintenance_task_id'] = maintenanceTaskId;
 
       final uri = Uri.parse(
         '$baseUrl/inventory/reservations',
@@ -2279,7 +2558,9 @@ class ApiService {
         'maintenance_task_id': maintenanceTaskId,
       };
 
-      print('[v0] Creating inventory reservation: ${json.encode(reservationData)}');
+      print(
+        '[v0] Creating inventory reservation: ${json.encode(reservationData)}',
+      );
 
       final response = await http.post(
         Uri.parse('$baseUrl/inventory/reservations'),
@@ -2400,7 +2681,9 @@ class ApiService {
         }
         return {'success': true};
       } else {
-        throw Exception('Failed to delete inventory request: ${response.statusCode} ${response.body}');
+        throw Exception(
+          'Failed to delete inventory request: ${response.statusCode} ${response.body}',
+        );
       }
     } catch (e) {
       print('[v0] Error deleting inventory request: $e');
@@ -2415,7 +2698,9 @@ class ApiService {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.get(
-        Uri.parse('$baseUrl/inventory/maintenance-task/$maintenanceTaskId/requests'),
+        Uri.parse(
+          '$baseUrl/inventory/maintenance-task/$maintenanceTaskId/requests',
+        ),
         headers: headers,
       );
 
@@ -2466,7 +2751,9 @@ class ApiService {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.get(
-        Uri.parse('$baseUrl/inventory/buildings/$buildingId/departments/$department/items'),
+        Uri.parse(
+          '$baseUrl/inventory/buildings/$buildingId/departments/$department/items',
+        ),
         headers: headers,
       );
 
@@ -2495,7 +2782,9 @@ class ApiService {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.get(
-        Uri.parse('$baseUrl/inventory/buildings/$buildingId/search?q=${Uri.encodeComponent(searchTerm)}'),
+        Uri.parse(
+          '$baseUrl/inventory/buildings/$buildingId/search?q=${Uri.encodeComponent(searchTerm)}',
+        ),
         headers: headers,
       );
 
@@ -2506,9 +2795,7 @@ class ApiService {
         }
         return [];
       } else {
-        throw Exception(
-          'Failed to search inventory: ${response.statusCode}',
-        );
+        throw Exception('Failed to search inventory: ${response.statusCode}');
       }
     } catch (e) {
       print('[v0] Error searching inventory: $e');
@@ -2665,7 +2952,9 @@ class ApiService {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.get(
-        Uri.parse('$baseUrl/inventory/buildings/$buildingId/analytics?period_type=$periodType'),
+        Uri.parse(
+          '$baseUrl/inventory/buildings/$buildingId/analytics?period_type=$periodType',
+        ),
         headers: headers,
       );
 
@@ -2687,7 +2976,9 @@ class ApiService {
   }
 
   /// Get all inventory requests linked to a specific maintenance task
-  Future<List<Map<String, dynamic>>> getRequestsByMaintenanceTask(String taskId) async {
+  Future<List<Map<String, dynamic>>> getRequestsByMaintenanceTask(
+    String taskId,
+  ) async {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.get(
@@ -2795,16 +3086,18 @@ class ApiService {
       final headers = await _getAuthHeaders();
       print('[API] Request headers: ${headers.keys.join(", ")}');
       print('[API] Request URL: $uri');
-      
+
       final response = await http.get(uri, headers: headers);
 
       print('[API] Response status: ${response.statusCode}');
-      
+
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
         print('[API] Error response body: ${response.body}');
-        throw Exception('Failed to load announcements: ${response.statusCode} - ${response.body}');
+        throw Exception(
+          'Failed to load announcements: ${response.statusCode} - ${response.body}',
+        );
       }
     } catch (e) {
       print('[v0] Error fetching announcements: $e');
@@ -2995,7 +3288,9 @@ class ApiService {
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        throw Exception('Failed to load targeted announcements: ${response.statusCode}');
+        throw Exception(
+          'Failed to load targeted announcements: ${response.statusCode}',
+        );
       }
     } catch (e) {
       print('[v0] Error fetching targeted announcements: $e');
@@ -3004,7 +3299,9 @@ class ApiService {
   }
 
   /// Mark announcement as viewed
-  Future<Map<String, dynamic>> markAnnouncementViewed(String announcementId) async {
+  Future<Map<String, dynamic>> markAnnouncementViewed(
+    String announcementId,
+  ) async {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.post(
@@ -3015,7 +3312,9 @@ class ApiService {
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        throw Exception('Failed to mark announcement as viewed: ${response.statusCode}');
+        throw Exception(
+          'Failed to mark announcement as viewed: ${response.statusCode}',
+        );
       }
     } catch (e) {
       print('[v0] Error marking announcement as viewed: $e');
@@ -3035,7 +3334,9 @@ class ApiService {
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        throw Exception('Failed to publish scheduled announcements: ${response.statusCode}');
+        throw Exception(
+          'Failed to publish scheduled announcements: ${response.statusCode}',
+        );
       }
     } catch (e) {
       print('[v0] Error publishing scheduled announcements: $e');
@@ -3055,7 +3356,9 @@ class ApiService {
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        throw Exception('Failed to expire announcements: ${response.statusCode}');
+        throw Exception(
+          'Failed to expire announcements: ${response.statusCode}',
+        );
       }
     } catch (e) {
       print('[v0] Error expiring announcements: $e');

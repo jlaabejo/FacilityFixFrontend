@@ -4,6 +4,7 @@ import 'package:facilityfix/widgets/buttons.dart' as fx;
 import 'package:facilityfix/widgets/modals.dart';
 import 'package:facilityfix/services/api_services.dart';
 import 'package:facilityfix/config/env.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/tag.dart'; // StatusTag, PriorityTag, requestTypeTagTag, DepartmentTag
 import 'package:facilityfix/staff/view_details/invetory_details.dart';
@@ -1525,8 +1526,9 @@ class MaintenanceDetails extends StatefulWidget {
   final Function(Map<String, dynamic>)? onInventoryItemTap;
   final String? currentStaffId;
   final String? taskCategory;
-  final Function(Map<String, dynamic>, String)? onInventoryAction; // action: 'receive' or 'request'
-  
+  final Function(Map<String, dynamic>, String)?
+  onInventoryAction; // action: 'receive' or 'request'
+
   // Action callbacks
   final VoidCallback? onHold;
   final VoidCallback? onCreateAssessment;
@@ -1587,6 +1589,8 @@ class _MaintenanceState extends State<MaintenanceDetails> {
   List<Map<String, dynamic>> _inventoryRequests = [];
   final Set<String> _loadingItems = {}; // Track which items are being processed
   late final InventoryUpdateNotifier _notifier;
+  final Set<String> _suppressReturnIds =
+      {}; // Hide return button immediately after receive
 
   @override
   void initState() {
@@ -1641,19 +1645,30 @@ class _MaintenanceState extends State<MaintenanceDetails> {
     // First, try the staff-visible endpoint for inventory requests tied to the maintenance task.
     try {
       print('DEBUG: Loading inventory requests for task $taskId');
-      final respRequests = await apiService.getInventoryRequestsByMaintenanceTask(taskId.toString());
+      final respRequests = await apiService
+          .getInventoryRequestsByMaintenanceTask(taskId.toString());
       if (respRequests['success'] == true && respRequests['data'] != null) {
         final requests = List<Map<String, dynamic>>.from(respRequests['data']);
         // Enrich with item details
         for (var r in requests) {
           if (r['inventory_id'] != null) {
             try {
-              final itemData = await apiService.getInventoryItemById(r['inventory_id']);
+              final itemData = await apiService.getInventoryItemById(
+                r['inventory_id'],
+              );
               if (itemData != null) {
-                r['item_name'] = itemData['item_name'] ?? itemData['name'] ?? '';
-                r['item_code'] = itemData['item_code'] ?? itemData['code'] ?? '';
-                r['stock_quantity'] = itemData['available_stock'] ?? itemData['stock'] ?? itemData['current_stock'] ?? itemData['stock_quantity'] ?? 'N/A';
-                r['stock_status'] = itemData['status'] ?? itemData['stock_status'] ?? 'Unknown';
+                r['item_name'] =
+                    itemData['item_name'] ?? itemData['name'] ?? '';
+                r['item_code'] =
+                    itemData['item_code'] ?? itemData['code'] ?? '';
+                r['stock_quantity'] =
+                    itemData['available_stock'] ??
+                    itemData['stock'] ??
+                    itemData['current_stock'] ??
+                    itemData['stock_quantity'] ??
+                    'N/A';
+                r['stock_status'] =
+                    itemData['status'] ?? itemData['stock_status'] ?? 'Unknown';
               }
             } catch (e) {
               print('DEBUG: Error loading item details for request: $e');
@@ -1670,7 +1685,8 @@ class _MaintenanceState extends State<MaintenanceDetails> {
             _inventoryRequests = requests;
           });
           print('DEBUG: Loaded ${_inventoryRequests.length} inventory requests');
-          return; // data found, no need to check reservations
+          // Do NOT return; continue to check for admin reservations so that
+          // reservations can take precedence over staff requests when present.
         }
       }
     } catch (e) {
@@ -1680,24 +1696,47 @@ class _MaintenanceState extends State<MaintenanceDetails> {
 
     // If no requests found, check if there are admin reservations for this task
     try {
-      print('DEBUG: Checking for admin inventory reservations for task $taskId');
+      print(
+        'DEBUG: Checking for admin inventory reservations for task $taskId',
+      );
       final adminApiService = APIService(roleOverride: AppRole.admin);
-      final response = await adminApiService.getInventoryReservations(maintenanceTaskId: taskId);
+      final response = await adminApiService.getInventoryReservations(
+        maintenanceTaskId: taskId,
+      );
       if (response['success'] == true && response['data'] != null) {
         final reservations = List<Map<String, dynamic>>.from(response['data']);
         // Enrich with item details
         for (var r in reservations) {
           if (r['inventory_id'] != null) {
             try {
-              final itemData = await apiService.getInventoryItemById(r['inventory_id']);
+              final itemData = await apiService.getInventoryItemById(
+                r['inventory_id'],
+              );
               if (itemData != null) {
-                r['item_name'] = itemData['item_name'] ?? itemData['name'] ?? '';
-                r['item_code'] = itemData['item_code'] ?? itemData['code'] ?? '';
-                r['stock_quantity'] = itemData['available_stock'] ?? itemData['stock'] ?? itemData['current_stock'] ?? itemData['stock_quantity'] ?? 'N/A';
-                r['stock_status'] = itemData['status'] ?? itemData['stock_status'] ?? 'Unknown';
+                r['item_name'] =
+                    itemData['item_name'] ?? itemData['name'] ?? '';
+                r['item_code'] =
+                    itemData['item_code'] ?? itemData['code'] ?? '';
+                r['stock_quantity'] =
+                    itemData['available_stock'] ??
+                    itemData['stock'] ??
+                    itemData['current_stock'] ??
+                    itemData['stock_quantity'] ??
+                    'N/A';
+                r['stock_status'] =
+                    itemData['status'] ?? itemData['stock_status'] ?? 'Unknown';
               }
             } catch (e) {
               print('DEBUG: Error loading item details for reservation: $e');
+            }
+          }
+          // Normalize reservation ID field: accept id/_id/reservation_id/reservationId
+          if ((r['reservation_id'] ?? '').toString().isEmpty) {
+            if ((r['id'] ?? '').toString().isNotEmpty) r['reservation_id'] = r['id'];
+            else if ((r['_id'] ?? '').toString().isNotEmpty) r['reservation_id'] = r['_id'];
+            else if ((r['reservationId'] ?? '').toString().isNotEmpty) r['reservation_id'] = r['reservationId'];
+            else {
+              print('[v0] Warning: reservation for inventory ${r['inventory_id']} missing explicit id fields');
             }
           }
         }
@@ -1707,9 +1746,12 @@ class _MaintenanceState extends State<MaintenanceDetails> {
             r['type'] = 'reservation';
           }
           setState(() {
-            _inventoryRequests = reservations; // Show reservations as requests in UI
+            _inventoryRequests =
+                reservations; // Show reservations as requests in UI
           });
-          print('DEBUG: Loaded ${reservations.length} admin inventory reservations for staff view');
+          print(
+            'DEBUG: Loaded ${reservations.length} admin inventory reservations for staff view',
+          );
         }
       }
     } catch (e) {
@@ -1717,13 +1759,22 @@ class _MaintenanceState extends State<MaintenanceDetails> {
     }
   }
 
-  Future<void> _handleInventoryAction(Map<String, dynamic> request, String action) async {
-    final requestId = request['_doc_id'] ?? request['id'] ?? request['_id'] ?? request['request_id'] ?? request['reservation_id'];
+  Future<void> _handleInventoryAction(
+    Map<String, dynamic> request,
+    String action,
+  ) async {
+    final requestId =
+        request['_doc_id'] ??
+        request['id'] ??
+        request['_id'] ??
+        request['request_id'] ??
+        request['reservation_id'];
     if (requestId == null) {
       print('DEBUG: Request keys: ${request.keys.toList()}');
       print('DEBUG: Request map: $request');
+      final snackMsg = (request['type'] == 'reservation') ? 'Reservation ID not found' : 'Request ID not found';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Request ID not found')),
+        SnackBar(content: Text(snackMsg)),
       );
       return;
     }
@@ -1735,17 +1786,32 @@ class _MaintenanceState extends State<MaintenanceDetails> {
       final apiService = APIService();
 
       if (action == 'receive') {
-        if (request['type'] == 'reservation') {
+        final requestStatus = (request['status'] ?? '').toString().toLowerCase();
+        final requestTypeStr = (request['type'] ?? '').toString().toLowerCase();
+        final hasReservationId = (request['reservation_id'] ?? '').toString().isNotEmpty;
+
+        // Treat as reservation if explicitly marked OR has reservation_id OR status is 'reserved'
+        if (requestTypeStr == 'reservation' || hasReservationId || requestStatus == 'reserved') {
           // Mark reservation as received
-          final response = await apiService.markReservationReceived(requestId);
+          final reservationId = request['reservation_id'] ?? requestId;
+          print('DEBUG: Calling markReservationReceived for reservation ID: $reservationId');
+          final response = await apiService.markReservationReceived(reservationId);
           if (response['success'] == true) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Reservation marked as received successfully')),
+              const SnackBar(
+                content: Text('Reservation marked as received successfully'),
+              ),
             );
             // Optimistically update local request state so UI updates immediately
             setState(() {
-              final index = _inventoryRequests.indexWhere((r) =>
-                  (r['_doc_id'] ?? r['id'] ?? r['request_id'] ?? r['reservation_id']) == requestId);
+              final index = _inventoryRequests.indexWhere(
+                (r) =>
+                    (r['_doc_id'] ??
+                        r['id'] ??
+                        r['request_id'] ??
+                        r['reservation_id']) ==
+                    requestId,
+              );
               if (index != -1) {
                 _inventoryRequests[index]['status'] = 'received';
                 _inventoryRequests[index]['received'] = true;
@@ -1756,31 +1822,56 @@ class _MaintenanceState extends State<MaintenanceDetails> {
             final inventoryId = request['inventory_id'];
             if (inventoryId != null) {
               try {
-                final itemResp = await apiService.getInventoryItemById(inventoryId);
+                final itemResp = await apiService.getInventoryItemById(
+                  inventoryId,
+                );
                 if (itemResp != null) {
-                  final newStock = itemResp['current_stock'] ?? itemResp['quantity_in_stock'] ?? itemResp['stock'];
-                  final reservedQty = itemResp['reserved_quantity'] ?? itemResp['reserved'] ?? 0;
+                  final newStock =
+                      itemResp['current_stock'] ??
+                      itemResp['quantity_in_stock'] ??
+                      itemResp['stock'];
+                  final reservedQty =
+                      itemResp['reserved_quantity'] ??
+                      itemResp['reserved'] ??
+                      0;
                   setState(() {
-                    final index = _inventoryRequests.indexWhere((r) =>
-                        (r['_doc_id'] ?? r['id'] ?? r['request_id'] ?? r['reservation_id']) == requestId);
+                    final index = _inventoryRequests.indexWhere(
+                      (r) =>
+                          (r['_doc_id'] ??
+                              r['id'] ??
+                              r['request_id'] ??
+                              r['reservation_id']) ==
+                          requestId,
+                    );
                     if (index != -1) {
-                      if (newStock != null) _inventoryRequests[index]['stock_quantity'] = newStock;
-                      _inventoryRequests[index]['reserved_quantity'] = reservedQty;
+                      if (newStock != null)
+                        _inventoryRequests[index]['stock_quantity'] = newStock;
+                      _inventoryRequests[index]['reserved_quantity'] =
+                          reservedQty;
                     }
                   });
                 }
               } catch (e) {
-                print('DEBUG: Failed to refresh inventory item after receiving reservation: $e');
+                print(
+                  'DEBUG: Failed to refresh inventory item after receiving reservation: $e',
+                );
               }
             }
 
-            // Notify listeners that inventory was updated
-            _notifier.notifyReservationReceived(requestId, inventoryId ?? '');
+            // Hide the return button briefly while reloading to avoid flicker
+            setState(() => _suppressReturnIds.add(reservationId));
+            Timer(const Duration(seconds: 3), () {
+              if (mounted) setState(() => _suppressReturnIds.remove(reservationId));
+            });
+            // Notify listeners that inventory was updated (use the actual reservationId)
+            _notifier.notifyReservationReceived(reservationId, inventoryId ?? '');
           } else {
-            throw Exception(response['message'] ?? 'Failed to mark reservation as received');
+            throw Exception(
+              response['message'] ?? 'Failed to mark reservation as received',
+            );
           }
         } else {
-          // Update request status to 'received' and deduct stock
+          // Update request status to 'received' and deduct stock (for maintenance items or regular requests)
           final response = await apiService.updateInventoryRequestStatus(
             requestId: requestId,
             status: 'received',
@@ -1793,8 +1884,14 @@ class _MaintenanceState extends State<MaintenanceDetails> {
             );
             // Optimistically update local state and refresh item stock/reserved
             setState(() {
-              final index = _inventoryRequests.indexWhere((r) =>
-                  (r['_doc_id'] ?? r['id'] ?? r['request_id'] ?? r['reservation_id']) == requestId);
+              final index = _inventoryRequests.indexWhere(
+                (r) =>
+                    (r['_doc_id'] ??
+                        r['id'] ??
+                        r['request_id'] ??
+                        r['reservation_id']) ==
+                    requestId,
+              );
               if (index != -1) {
                 _inventoryRequests[index]['status'] = 'received';
                 _inventoryRequests[index]['received'] = true;
@@ -1804,24 +1901,47 @@ class _MaintenanceState extends State<MaintenanceDetails> {
             final inventoryId = request['inventory_id'];
             if (inventoryId != null) {
               try {
-                final itemResp = await apiService.getInventoryItemById(inventoryId);
+                final itemResp = await apiService.getInventoryItemById(
+                  inventoryId,
+                );
                 if (itemResp != null) {
-                  final newStock = itemResp['current_stock'] ?? itemResp['quantity_in_stock'] ?? itemResp['stock'];
-                  final reservedQty = itemResp['reserved_quantity'] ?? itemResp['reserved'] ?? 0;
+                  final newStock =
+                      itemResp['current_stock'] ??
+                      itemResp['quantity_in_stock'] ??
+                      itemResp['stock'];
+                  final reservedQty =
+                      itemResp['reserved_quantity'] ??
+                      itemResp['reserved'] ??
+                      0;
                   setState(() {
-                    final index = _inventoryRequests.indexWhere((r) =>
-                        (r['_doc_id'] ?? r['id'] ?? r['request_id'] ?? r['reservation_id']) == requestId);
+                    final index = _inventoryRequests.indexWhere(
+                      (r) =>
+                          (r['_doc_id'] ??
+                              r['id'] ??
+                              r['request_id'] ??
+                              r['reservation_id']) ==
+                          requestId,
+                    );
                     if (index != -1) {
-                      if (newStock != null) _inventoryRequests[index]['stock_quantity'] = newStock;
-                      _inventoryRequests[index]['reserved_quantity'] = reservedQty;
+                      if (newStock != null)
+                        _inventoryRequests[index]['stock_quantity'] = newStock;
+                      _inventoryRequests[index]['reserved_quantity'] =
+                          reservedQty;
                     }
                   });
                 }
               } catch (e) {
-                print('DEBUG: Failed to refresh inventory item after receiving request: $e');
+                print(
+                  'DEBUG: Failed to refresh inventory item after receiving request: $e',
+                );
               }
             }
 
+            // Hide the return button briefly while reloading to avoid flicker
+            setState(() => _suppressReturnIds.add(requestId));
+            Timer(const Duration(seconds: 3), () {
+              if (mounted) setState(() => _suppressReturnIds.remove(requestId));
+            });
             // Notify listeners that inventory was updated
             _notifier.notifyItemUpdated(inventoryId ?? '');
           } else {
@@ -1832,14 +1952,15 @@ class _MaintenanceState extends State<MaintenanceDetails> {
         final result = await showModalBottomSheet<RequestResult>(
           context: context,
           isScrollControlled: true,
-          builder: (ctx) => RequestItem(
-            itemName: request['item_name'] ?? 'Unknown Item',
-            itemId: request['inventory_id'] ?? '',
-            unit: request['unit'] ?? 'pcs',
-            stock: request['stock_quantity']?.toString() ?? '0',
-            maintenanceId: widget.id,
-            staffName: widget.assignedStaff ?? 'Unknown Staff',
-          ),
+          builder:
+              (ctx) => RequestItem(
+                itemName: request['item_name'] ?? 'Unknown Item',
+                itemId: request['inventory_id'] ?? '',
+                unit: request['unit'] ?? 'pcs',
+                stock: request['stock_quantity']?.toString() ?? '0',
+                maintenanceId: widget.id,
+                staffName: widget.assignedStaff ?? 'Unknown Staff',
+              ),
         );
 
         if (result != null) {
@@ -1850,7 +1971,9 @@ class _MaintenanceState extends State<MaintenanceDetails> {
             inventoryId: itemId,
             buildingId: 'default_building_id',
             quantityRequested: quantity,
-            purpose: result.notes ?? 'Additional request for maintenance task ${widget.id}',
+            purpose:
+                result.notes ??
+                'Additional request for maintenance task ${widget.id}',
             requestedBy: widget.currentStaffId ?? '',
             maintenanceTaskId: widget.id,
             status: 'pending',
@@ -1861,15 +1984,17 @@ class _MaintenanceState extends State<MaintenanceDetails> {
               const SnackBar(content: Text('Request created successfully')),
             );
             // Navigate to the new request details
-            final newRequestId = response['data']['id'] ?? response['data']['_doc_id'];
+            final newRequestId =
+                response['data']['id'] ?? response['data']['_doc_id'];
             if (newRequestId != null) {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => InventoryDetails(
-                    selectedTabLabel: 'inventory request',
-                    requestId: newRequestId,
-                  ),
+                  builder:
+                      (_) => InventoryDetails(
+                        selectedTabLabel: 'inventory request',
+                        requestId: newRequestId,
+                      ),
                 ),
               );
             }
@@ -1881,11 +2006,75 @@ class _MaintenanceState extends State<MaintenanceDetails> {
       }
     } catch (e) {
       print('Error handling inventory action: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       // Remove from loading set
+      setState(() => _loadingItems.remove(requestId));
+    }
+  }
+
+  // Handle 'return' action for inventory
+  Future<void> _handleReturnInventory(Map<String, dynamic> request) async {
+    final requestId =
+        request['_doc_id'] ??
+        request['id'] ??
+        request['_id'] ??
+        request['request_id'] ??
+        request['reservation_id'];
+    if (requestId == null) {
+      final msg = (request['type'] == 'reservation') ? 'Reservation ID not found for return' : 'Request ID not found for return';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      return;
+    }
+    if (_loadingItems.contains(requestId)) return;
+    setState(() => _loadingItems.add(requestId));
+    try {
+      final apiService = APIService();
+      if ((request['type'] ?? '').toString().toLowerCase() == 'reservation') {
+        final response = await apiService.returnInventoryReservation(requestId);
+        if (response['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Item returned successfully')),
+          );
+          await _loadInventoryRequests();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Failed to return item: ${response['message'] ?? 'Unknown error'}',
+              ),
+            ),
+          );
+        }
+      } else {
+        // Fallback for requests: update status to 'returned'. Backend may or may not support this.
+        final response = await apiService.updateInventoryRequestStatus(
+          requestId: requestId,
+          status: 'returned',
+          deductStock: false,
+        );
+        if (response['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Request marked as returned')),
+          );
+          await _loadInventoryRequests();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Failed to return request: ${response['message'] ?? 'Unknown error'}',
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error returning item: $e')));
+    } finally {
       setState(() => _loadingItems.remove(requestId));
     }
   }
@@ -1903,17 +2092,8 @@ class _MaintenanceState extends State<MaintenanceDetails> {
         (widget.staffDepartment ?? '').trim().isNotEmpty ||
         (widget.scheduleDate ?? '').trim().isNotEmpty;
 
-    final assessedBy = (widget.assignedStaff ?? '').trim();
-    final assessedDept = (widget.staffDepartment ?? '').trim();
-    final assessedAt = widget.assessedAt;
-    final assessedText = (widget.assessment ?? '').trim();
-    final assessedAttachments = widget.staffAttachments ?? const <String>[];
-    final hasAssessmentBlock =
-        assessedBy.isNotEmpty ||
-        assessedDept.isNotEmpty ||
-        assessedAt != null ||
-        assessedText.isNotEmpty ||
-        assessedAttachments.isNotEmpty;
+    // Use widget.assessedAt, widget.assignedStaff, etc. directly where needed.
+    // `hasAssessmentBlock` was used previously; not needed in this widget right now
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -1952,7 +2132,7 @@ class _MaintenanceState extends State<MaintenanceDetails> {
           // Basic info
           _Section(
             child: Column(
-                children: [
+              children: [
                 KeyValueRow.text(
                   label: 'Date Created',
                   valueText: _relativeOrFullDT(widget.createdAt),
@@ -1965,39 +2145,39 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                 if ((widget.location ?? '').trim().isNotEmpty) ...[
                   const SizedBox(height: 8),
                   KeyValueRow.text(
-                  label: 'Location',
-                  valueText: widget.location!.trim(),
+                    label: 'Location',
+                    valueText: widget.location!.trim(),
                   ),
                 ],
                 if ((widget.departmentTag ?? '').trim().isNotEmpty) ...[
                   const SizedBox(height: 8),
                   KeyValueRow(
-                  label: 'Department',
-                  value: DepartmentTag(widget.departmentTag!.trim()),
+                    label: 'Department',
+                    value: DepartmentTag(widget.departmentTag!.trim()),
                   ),
                 ],
                 if ((widget.priority ?? '').trim().isNotEmpty) ...[
                   const SizedBox(height: 8),
                   KeyValueRow(
-                  label: 'Priority',
-                  value: PriorityTag(priority: widget.priority!.trim()),
+                    label: 'Priority',
+                    value: PriorityTag(priority: widget.priority!.trim()),
                   ),
                 ],
                 if ((widget.scheduleDate ?? '').trim().isNotEmpty) ...[
                   const SizedBox(height: 8),
                   KeyValueRow.text(
-                  label: 'Recurrence',
-                  valueText: _relativeOrFullDT(
-                    DateTime.tryParse(widget.scheduleDate!.trim()) ??
-                      UiDateUtils.parse(widget.scheduleDate!.trim()),
-                  ),
+                    label: 'Recurrence',
+                    valueText: _relativeOrFullDT(
+                      DateTime.tryParse(widget.scheduleDate!.trim()) ??
+                          UiDateUtils.parse(widget.scheduleDate!.trim()),
+                    ),
                   ),
                 ],
                 if (widget.completedAt != null) ...[
                   const SizedBox(height: 8),
                   KeyValueRow.text(
-                  label: 'Completed',
-                  valueText: _relativeOrFullDT(widget.completedAt),
+                    label: 'Completed',
+                    valueText: _relativeOrFullDT(widget.completedAt),
                   ),
                 ],
               ],
@@ -2206,19 +2386,35 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                         ),
                     itemBuilder: (context, index) {
                       final request = _inventoryRequests[index];
-                      final itemName = request['item_name'] ?? request['name'] ?? 'Unknown Item';
+                      final itemName =
+                          request['item_name'] ??
+                          request['name'] ??
+                          'Unknown Item';
                       final quantity =
                           request['quantity_requested'] ??
                           request['quantity'] ??
                           0;
-                      final stockQuantity = request['stock_quantity'] ?? request['available_stock'] ?? 0;
-                      final status = (request['status'] ?? 'pending').toString();
-                      final itemType = (request['type'] ?? 'request').toString().toLowerCase();
+                      final stockQuantity =
+                          request['stock_quantity'] ??
+                          request['available_stock'] ??
+                          0;
+                      final status =
+                          (request['status'] ?? 'pending').toString();
+                      final itemType =
+                          (request['type'] ?? 'request')
+                              .toString()
+                              .toLowerCase();
                       // Only allow receiving when admin has approved the request, or when it's a reservation
                       final isApproved = status.toLowerCase() == 'approved' || status.toLowerCase() == 'reserved';
-                      final unit = request['unit'] ?? '';
+                      final hasReservationId = (request['reservation_id'] ?? '').toString().isNotEmpty;
+                      
                       final category = request['category'] ?? '';
-                      final requestId = request['_doc_id'] ?? request['id'] ?? request['_id'] ?? request['request_id'] ?? request['reservation_id'];
+                      final requestId =
+                          request['_doc_id'] ??
+                          request['id'] ??
+                          request['_id'] ??
+                          request['request_id'] ??
+                          request['reservation_id'];
 
                       // Determine if item is received
                       bool isReceived =
@@ -2261,6 +2457,16 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                                           color: Color(0xFF6B7280),
                                         ),
                                       ),
+                                      if (itemType == 'reservation') ...[
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          'Res ID: ${request['reservation_id'] ?? '(missing)'}',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF94A3B8),
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                   const SizedBox(height: 8),
@@ -2268,63 +2474,162 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                                     width: double.infinity,
                                     child: Row(
                                       children: [
-                                        if (!isReceived) ...[
-                                          Tooltip(
-                                            message: (itemType == 'reservation' || isApproved) ? 'Receive' : 'Waiting for admin approval',
-                                            child: OutlinedButton(
-                                              onPressed: (_loadingItems.contains(requestId) || !(itemType == 'reservation' || isApproved)) ? null : () => _handleInventoryAction(request, 'receive'),
-                                              style: OutlinedButton.styleFrom(
-                                                side: const BorderSide(color: Color(0xFF059669)),
-                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        // Receive button
+                                        if (isReceived) ...[
+                                          ElevatedButton(
+                                            onPressed: null, // Already received
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: const Color(
+                                                0xFF059669,
                                               ),
-                                              child: _loadingItems.contains(requestId)
-                                                  ? const SizedBox(
-                                                      width: 16,
-                                                      height: 16,
-                                                      child: CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF059669)),
-                                                      ),
-                                                    )
-                                                  : const Text(
-                                                      'Receive',
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        fontWeight: FontWeight.w600,
-                                                        color: Color(0xFF059669),
-                                                      ),
-                                                    ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 6,
+                                                  ),
+                                            ),
+                                            child: const Text(
+                                              'Received',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white,
+                                              ),
                                             ),
                                           ),
                                         ] else ...[
-                                          Expanded(
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 12,
-                                                vertical: 8,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFF059669),
-                                                borderRadius: BorderRadius.circular(6),
-                                              ),
-                                              child: const Text(
-                                                'Received',
-                                                textAlign: TextAlign.center,
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Colors.white,
+                                          Tooltip(
+                                            message:
+                                                (itemType == 'reservation' ||
+                                                        isApproved)
+                                                    ? 'Receive'
+                                                    : 'Waiting for admin approval',
+                                            child: OutlinedButton(
+                                                onPressed: (_loadingItems.contains(requestId) || !( (itemType == 'reservation' && hasReservationId) || isApproved))
+                                                  ? null
+                                                  : () => _handleInventoryAction(request, 'receive'),
+                                              style: OutlinedButton.styleFrom(
+                                                side: const BorderSide(
+                                                  color: Color(0xFF059669),
                                                 ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 6,
+                                                    ),
                                               ),
+                                              child:
+                                                  _loadingItems.contains(
+                                                        requestId,
+                                                      )
+                                                      ? const SizedBox(
+                                                        width: 16,
+                                                        height: 16,
+                                                        child: CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                          valueColor:
+                                                              AlwaysStoppedAnimation<
+                                                                Color
+                                                              >(
+                                                                Color(
+                                                                  0xFF059669,
+                                                                ),
+                                                              ),
+                                                        ),
+                                                      )
+                                                      : const Text(
+                                                        'Receive',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: Color(
+                                                            0xFF059669,
+                                                          ),
+                                                        ),
+                                                      ),
                                             ),
                                           ),
                                         ],
                                         const SizedBox(width: 8),
+                                        // Return button (for received items)
+                                        if (isReceived &&
+                                            !_suppressReturnIds.contains(
+                                              requestId,
+                                            )) ...[
+                                          Tooltip(
+                                            message:
+                                                isReceived
+                                                    ? 'Return this item'
+                                                    : 'You can only return after receiving',
+                                            child: OutlinedButton(
+                                              onPressed:
+                                                  (_loadingItems.contains(
+                                                            requestId,
+                                                          ) ||
+                                                          !isReceived)
+                                                      ? null
+                                                      : () =>
+                                                          _handleReturnInventory(
+                                                            request,
+                                                          ),
+                                              style: OutlinedButton.styleFrom(
+                                                side: const BorderSide(
+                                                  color: Color(0xFFDC2626),
+                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 6,
+                                                    ),
+                                              ),
+                                              child:
+                                                  _loadingItems.contains(
+                                                        requestId,
+                                                      )
+                                                      ? const SizedBox(
+                                                        width: 16,
+                                                        height: 16,
+                                                        child: CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                          valueColor:
+                                                              AlwaysStoppedAnimation<
+                                                                Color
+                                                              >(
+                                                                Color(
+                                                                  0xFFDC2626,
+                                                                ),
+                                                              ),
+                                                        ),
+                                                      )
+                                                      : const Text(
+                                                        'Return',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: Color(
+                                                            0xFFDC2626,
+                                                          ),
+                                                        ),
+                                                      ),
+                                            ),
+                                          ),
+                                        ],
+                                        const SizedBox(width: 8),
+                                        // Request button
                                         ElevatedButton(
-                                          onPressed: () => widget.onInventoryAction?.call(request, 'request'),
+                                          onPressed:
+                                              () => widget.onInventoryAction
+                                                  ?.call(request, 'request'),
                                           style: ElevatedButton.styleFrom(
-                                            backgroundColor: const Color(0xFF005CE7),
-                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                            backgroundColor: const Color(
+                                              0xFF005CE7,
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 6,
+                                            ),
                                           ),
                                           child: const Text(
                                             'Request',
@@ -2455,9 +2760,10 @@ class _MaintenanceState extends State<MaintenanceDetails> {
             if ((widget.assignedStaff?.trim().isNotEmpty ?? false)) ...[
               _AvatarNameBlock(
                 name: widget.assignedStaff!.trim(),
-                photoUrl: (widget.staffPhotoUrl?.trim().isNotEmpty ?? false)
-                    ? widget.staffPhotoUrl!.trim()
-                    : null,
+                photoUrl:
+                    (widget.staffPhotoUrl?.trim().isNotEmpty ?? false)
+                        ? widget.staffPhotoUrl!.trim()
+                        : null,
               ),
             ],
             SizedBox(height: 14),
@@ -2869,7 +3175,7 @@ class InventoryDetailsScreen extends StatelessWidget {
     );
 
     // Prefer itemId; if empty, fall back to requestId
-    final String headerId = _firstNonEmpty([itemId, requestId]) ?? '-';
+    // header ID handling not required here
 
     final List<Widget> sections = [];
 
@@ -3095,12 +3401,7 @@ class InventoryDetailsScreen extends StatelessWidget {
     return false;
   }
 
-  static String? _firstNonEmpty(List<String?> vals) {
-    for (final v in vals) {
-      if (_isNotEmpty(v)) return v!.trim();
-    }
-    return null;
-  }
+  // Utility removed: _firstNonEmpty not used now.
 
   static Widget _kvText(String text) => Text(
     text,

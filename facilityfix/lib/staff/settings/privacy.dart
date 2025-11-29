@@ -1,92 +1,165 @@
-import 'package:facilityfix/tenant/announcement.dart';
-import 'package:facilityfix/tenant/home.dart';
-import 'package:facilityfix/tenant/settings/profile.dart';
-import 'package:facilityfix/tenant/view_details/workorder_details.dart';
-import 'package:facilityfix/tenant/repair_management.dart';
-import 'package:facilityfix/widgets/view_details.dart';
+
+import 'package:facilityfix/staff/home.dart';
+import 'package:facilityfix/staff/maintenance_task.dart';
+import 'package:facilityfix/staff/repair_task.dart';
 import 'package:flutter/material.dart';
+import 'package:facilityfix/staff/announcement.dart';
+import 'package:facilityfix/staff/calendar.dart';
+import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 
-class ReminderPage extends StatefulWidget {
-  const ReminderPage({
-    super.key,
-    this.requestType = 'job service request', // or 'work order permit'
-  });
-
-  /// Controls which details screen to show.
-  final String requestType;
+class PrivacyPolicyPage extends StatefulWidget {
+  const PrivacyPolicyPage({super.key});
 
   @override
-  State<ReminderPage> createState() => _ReminderPageState();
+  State<PrivacyPolicyPage> createState() => _PrivacyPolicyPageState();
 }
 
-class _ReminderPageState extends State<ReminderPage> {
-  final int _selectedIndex = 1;
+class _PrivacyPolicyPageState extends State<PrivacyPolicyPage> {
+  int _selectedIndex = 0;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
     NavItem(icon: Icons.work),
+    NavItem(icon: Icons.build),
     NavItem(icon: Icons.announcement_rounded),
-    NavItem(icon: Icons.person),
+    NavItem(icon: Icons.calendar_month),
+    NavItem(icon: Icons.inventory),
   ];
 
   void _onTabTapped(int index) {
-    final destinations = [
-      const HomePage(),
-      const RepairManagement(),
-      const AnnouncementPage(),
-      const ProfilePage(),
-    ];
+    if (index == _selectedIndex) return;
 
-    if (index != _selectedIndex) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => destinations[index]),
-      );
+    switch (index) {
+      case 0:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+        break;
+      case 1:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const RepairTaskPage()),
+        );
+        break;
+      case 2:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MaintenanceTaskPage()),
+        );
+        break;
+      case 3:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AnnouncementPage()),
+        );
+        break;
+      case 4:
+        if (_selectedIndex != 4) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const CalendarPage()),
+          );
+        }
+        break;
+      case 5:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const InventoryPage()),
+        );
+        break;
     }
+
+    setState(() => _selectedIndex = index);
   }
 
   Widget _buildTabContent() {
-    switch (widget.requestType.toLowerCase()) {
-      case 'privacy policy':
-        return DetailsPermit(
-          title: 'Work Order Permit',
-          sectionTitle: 'Notes and Instructions',
-          notesHeading: 'NON-LIABILITY OF THE MANAGEMENT:',
-          subHeading: 'TERMS AND CONDITIONS:',
-          notes:
-              'The Management, its officers, staff, employees and affiliates, shall not be liable for any damages, loss, death or injury '
-              'caused by/or arising from the acts and/or negligence of the unit owner, tenant, contractor and other persons in respect to '
-              'the construction, renovation, repairs of facilities while in, or upon the premises where the activities are being conducted '
-              'whether in the interior or exterior part of the building. Unit owner, its tenant (if any), and contractor, its officers and '
-              'employees, shall be jointly and severally liable for any damages, loss, death or injury caused by/or arising from their acts and/or negligence.',
-          instructions: const [
-            'This permit is valid only on the dates and time specified above.',
-            'Submit this permit to the Engineering Office for approval at least three (3) days BEFORE the actual work schedule, signed by the Unit Owner/Authorized Representative.',
-            'Approval of Work Permit is during office hours and days only.',
-            'Work permit must be presented to the Guard-on-Duty for access to any area.',
-            'Post a copy of this work permit on the main door during the whole duration of work to inform neighboring units and the roving guard.',
-            'Working days: Monday to Friday, 8:00 AM–5:00 PM. Noisy works: 10:00 AM–5:00 PM.',
-            'Cutting of tiles inside the unit is not allowed. Use the designated area. Violations: ₱2,000 per offense (deducted from Construction Bond) plus immediate work stoppage.',
-            'Contractors must give their valid ID to the basement guard in exchange for the Condo Corp. Contractor ID.',
-            'Contractors must wear t-shirts. Workers wearing sleeveless shirts, shorts, sandals, or slippers are not allowed to enter.',
-            'Loitering in common areas is prohibited.',
-            'All debris must be placed in the designated area only. Violation fee: minimum ₱500 up to ₱2,000 for debris left in hallways/common areas.',
-            'All contractors and service providers are REQUIRED to follow the governing House Rules and Regulations.',
-          ],
-          onNext: () {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const WorkOrderDetailsPage(selectedTabLabel: 'work order permit', workOrderId: ''),
-              ),
-            );
-          },
-        );
-
-      default:
-        return const Center(child: Text('No requests found.'));
-    }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Privacy Policy',
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Last updated: November 28, 2025',
+            style: TextStyle(fontSize: 13, color: Colors.grey),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            '1. Introduction',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'FacilityFix ("we", "us", or "our") is committed to protecting the privacy of our users. This Privacy Policy explains how we collect, use, disclose, and safeguard your personal information when you use our services. By using our services, you consent to the collection and use of information in accordance with this policy.',
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            '2. Information We Collect',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'We may collect the following types of information: account information (name, email, contact), usage data, device data, location (if enabled), and any information you submit through forms or support requests. We only collect the minimum data necessary to provide and improve our services.',
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            '3. How We Use Your Information',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Your information is used to support and operate the app, respond to requests, provide notifications, improve our products, and comply with legal obligations. We do not sell personal data to third parties.',
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            '4. Sharing and Disclosure',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'We may share information with third-party service providers who perform services on our behalf (e.g., analytics, hosting), or where required by law. We require such providers to use your data only for the purposes we specify.',
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            '5. Your Rights',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Depending on your location, you may have certain rights regarding your personal data, including access, correction, or deletion. Contact our support for privacy-related requests.',
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            '6. Security',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'We use reasonable administrative, technical and physical controls to protect your data. However, no system can guarantee absolute security.',
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            '7. Contact Us',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'If you have any questions about this policy or wish to exercise your privacy rights, please contact the FacilityFix support team via the app or your account representative.'
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Back'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -94,7 +167,7 @@ class _ReminderPageState extends State<ReminderPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        title: 'Reminders',
+        title: 'Privacy Policy',
         leading: Row(
           children: const [
             BackButton(),

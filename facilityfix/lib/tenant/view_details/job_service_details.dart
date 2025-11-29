@@ -851,45 +851,7 @@ class _TenantJobServiceDetailPageState
                           id:
                               _jobServiceData!['job_service_id']?.toString() ??
                               _jobServiceData!['js_id']?.toString() ??
-                              _jobServiceData!['formatted_id'] ??
-                              _jobServiceData!['id'] ??
-                              '',
-                          formattedId: _jobServiceData!['formatted_id'],
-                          concernSlipId:
-                              _jobServiceData!['concern_slip_id']?.toString() ??
-                              '',
-                          createdAt:
-                              _parseDateTime(_jobServiceData!['created_at']) ??
-                              DateTime.now(),
-                          updatedAt: _parseDateTime(
-                            _jobServiceData!['updated_at'],
-                          ),
-                          requestTypeTag:
-                              _jobServiceData!['request_type'] ?? 'Job Service',
-                          priority: _jobServiceData!['priority'],
-                          statusTag: _jobServiceData!['status'] ?? 'pending',
-                          resolutionType: _jobServiceData!['resolution_type'],
-                          departmentTag: _jobServiceData!['category'],
-
-                          // Tenant / Requester - Use name fields, fallback to IDs
-                          requestedBy:
-                              _jobServiceData!['requested_by_name'] ??
-                              _jobServiceData!['requested_by'] ??
-                              '',
-                          unitId:
-                              _jobServiceData!['location'] ??
-                              _jobServiceData!['unit_id'] ??
-                              '',
-                          scheduleAvailability:
-                              _jobServiceData != null
-                                  ? _buildScheduleAvailability(_jobServiceData!)
-                                  : null,
-                          additionalNotes:
-                              _jobServiceData!['additional_notes'] ??
-                              _jobServiceData!['description'] ??
-                              _jobServiceData!['notes'],
-
-                          // Staff - Use assigned_to_name (enriched from getUserById)
+                              _jobSe                          // Staff - Use assigned_to_name (enriched from getUserById)
                           assignedStaff:
                               _jobServiceData!['assigned_to_name'] ??
                               _jobServiceData!['assigned_to'],

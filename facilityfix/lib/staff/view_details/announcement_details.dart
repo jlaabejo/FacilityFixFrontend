@@ -24,7 +24,7 @@ class AnnouncementDetailsPage extends StatefulWidget {
 }
 
 class _AnnouncementDetailsState extends State<AnnouncementDetailsPage> {
-  final int _selectedIndex = 2;
+  int _selectedIndex = 3;
 
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -69,21 +69,50 @@ class _AnnouncementDetailsState extends State<AnnouncementDetailsPage> {
   }
 
   void _onTabTapped(int index) {
-    final destinations = [
-      const HomePage(),
-      const RepairTaskPage(),
-      const MaintenanceTaskPage(),
-      const AnnouncementPage(),
-      const CalendarPage(),
-      const InventoryPage(),
-    ];
+    if (index == _selectedIndex) return;
 
-    if (index != _selectedIndex) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => destinations[index]),
-      );
+    switch (index) {
+      case 0:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+        break;
+      case 1:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const RepairTaskPage()),
+        );
+        break;
+      case 2:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MaintenanceTaskPage()),
+        );
+        break;
+      case 3:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AnnouncementPage()),
+        );
+        break;
+      case 4:
+        if (_selectedIndex != 4) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const CalendarPage()),
+          );
+        }
+        break;
+      case 5:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const InventoryPage()),
+        );
+        break;
     }
+
+    setState(() => _selectedIndex = index);
   }
 
   String _formatDate(String? dateString) {

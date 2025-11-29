@@ -197,20 +197,50 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
   }
 
   void _onTabTapped(int index) {
-    final destinations = [
-      const HomePage(),
-      const RepairTaskPage(),
-      const MaintenanceTaskPage(),
-      const AnnouncementPage(),
-      const CalendarPage(),
-      const InventoryPage(),
-    ];
-    if (index != _selectedIndex) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => destinations[index]),
-      );
+    if (index == _selectedIndex) return;
+
+    switch (index) {
+      case 0:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+        break;
+      case 1:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const RepairTaskPage()),
+        );
+        break;
+      case 2:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MaintenanceTaskPage()),
+        );
+        break;
+      case 3:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AnnouncementPage()),
+        );
+        break;
+      case 4:
+        if (_selectedIndex != 4) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const CalendarPage()),
+          );
+        }
+        break;
+      case 5:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const InventoryPage()),
+        );
+        break;
     }
+
+    setState(() => _selectedIndex = index);
   }
 
   Future<void> _updateJobServiceStatus(
@@ -765,7 +795,6 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
       appBar: CustomAppBar(
         leading: const BackButton(),
         title: 'Job Service Details',
-        showMore: true,
         showDelete:
             _jobServiceData != null &&
             _isDeletableStatus(_jobServiceData!['status']),

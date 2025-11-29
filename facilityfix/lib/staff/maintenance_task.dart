@@ -23,6 +23,7 @@ class MaintenanceTaskPage extends StatefulWidget {
 }
 
 class _MaintenanceTaskPageState extends State<MaintenanceTaskPage> {
+  int _selectedIndex = 2;
   // ─────────────── Filters ───────────────
   String _selectedStatus = 'All';
   final TextEditingController _searchController = TextEditingController();
@@ -321,7 +322,7 @@ class _MaintenanceTaskPageState extends State<MaintenanceTaskPage> {
   ];
 
   void _onTabTapped(int index) {
-    if (index == 2) return; // Already on Maintenance page
+    if (index == _selectedIndex) return;
 
     switch (index) {
       case 0:
@@ -349,10 +350,12 @@ class _MaintenanceTaskPageState extends State<MaintenanceTaskPage> {
         );
         break;
       case 4:
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const CalendarPage()),
-        );
+        if (_selectedIndex != 4) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const CalendarPage()),
+          );
+        }
         break;
       case 5:
         Navigator.pushReplacement(
@@ -361,6 +364,8 @@ class _MaintenanceTaskPageState extends State<MaintenanceTaskPage> {
         );
         break;
     }
+
+    setState(() => _selectedIndex = index);
   }
 
   // ===== Filtering logic =====================================================

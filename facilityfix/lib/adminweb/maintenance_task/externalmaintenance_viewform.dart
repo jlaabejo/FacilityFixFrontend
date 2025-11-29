@@ -7,6 +7,7 @@ import 'package:facilityfix/adminweb/widgets/tags.dart';
 import '../../utils/ui_format.dart';
 import '../../services/api_services.dart' as main_api;
 import 'externalmaintenance_form.dart';
+import '../services/maintenance_inventory.dart';
 
 class ExternalViewTaskPage extends StatefulWidget {
   /// Deep-linkable view with optional edit mode.
@@ -26,23 +27,26 @@ class ExternalViewTaskPage extends StatefulWidget {
 }
 
 class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
+  
   // -------- Route mapping helper --------
-  String? _getRoutePath(String routeKey) {
-    final Map<String, String> pathMap = {
-      'dashboard': '/dashboard',
-      'user_users': '/user/users',
-      'user_roles': '/user/roles',
-      'work_maintenance': '/work/maintenance',
-      'work_repair': '/work/repair',
-      'calendar': '/calendar',
-      'inventory_items': '/inventory/items',
-      'inventory_request': '/inventory/request',
-      'analytics': '/analytics',
-      'announcement': '/announcement',
-      'settings': '/settings',
-    };
-    return pathMap[routeKey];
-  }
+  static String? _getRoutePath(String routeKey) {
+      final Map<String, String> pathMap = {
+        'dashboard': '/dashboard',
+        'user_users': '/user/users',
+        'user_scheduling': '/user/scheduling',
+        'work_maintenance': '/work/maintenance',
+        'work_repair': '/work/repair',
+        'calendar': '/calendar',
+        'inventory_equipment': '/inventory/equipment',
+        'inventory_items': '/inventory/items',
+        'inventory_request': '/inventory/request',
+        'analytics': '/analytics',
+        'announcement': '/announcement',
+        'settings': '/settings',
+        'logout': '/logout',
+      };
+      return pathMap[routeKey];
+    }
 
 // Logout functionality
 void _handleLogout(BuildContext context) async {
@@ -896,6 +900,14 @@ void _handleLogout(BuildContext context) async {
       title: "Basic Information",
       child: Column(
         children: [
+          // Template display
+          Row(
+            children: [
+              const Expanded(flex: 2, child: Text('Template', style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w500))),
+              Expanded(flex: 3, child: Text(MaintenanceTemplates.displayName(_currentTaskData['template_id']?.toString() ?? _currentTaskData['template']?.toString() ?? ''), style: const TextStyle(fontSize: 14))),
+            ],
+          ),
+          const SizedBox(height: 8),
           _editableInfoRow("Created By", _createdByCtrl, validator: _req),
           _editableInfoRow(
             "Date Created",

@@ -75,7 +75,7 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
   ];
 
   void _onTabTapped(int index) {
-    if (index == 3) return; // Already on Announcement page
+    if (index == _selectedIndex) return;
 
     switch (index) {
       case 0:
@@ -96,11 +96,19 @@ class _AnnouncementPageState extends State<AnnouncementPage> {
           MaterialPageRoute(builder: (_) => const MaintenanceTaskPage()),
         );
         break;
-      case 4:
+      case 3:
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const CalendarPage()),
+          MaterialPageRoute(builder: (_) => const AnnouncementPage()),
         );
+        break;
+      case 4:
+        if (_selectedIndex != 4) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const CalendarPage()),
+          );
+        }
         break;
       case 5:
         Navigator.pushReplacement(

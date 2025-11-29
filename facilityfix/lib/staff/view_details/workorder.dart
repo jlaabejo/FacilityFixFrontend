@@ -2,7 +2,7 @@ import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/staff/maintenance_task.dart';
 import 'package:facilityfix/staff/repair_task.dart';
 import 'package:flutter/material.dart';
-import 'package:facilityfix/models/work_orders.dart'; 
+import 'package:facilityfix/models/work_orders.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
@@ -40,7 +40,7 @@ class WorkOrderDetailsPage extends StatefulWidget {
 }
 
 class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
-  final int _selectedIndex = 1;
+  int _selectedIndex = 1;
   late String _detailsLabel;
 
   // Fetched work order data
@@ -349,20 +349,50 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
   }
 
   void _onTabTapped(int index) {
-    final destinations = [
-      const HomePage(),
-      const RepairTaskPage(),
-      const MaintenanceTaskPage(),
-      const AnnouncementPage(),
-      const CalendarPage(),
-      const InventoryPage(),
-    ];
-    if (index != _selectedIndex) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => destinations[index]),
-      );
+    if (index == _selectedIndex) return;
+
+    switch (index) {
+      case 0:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+        break;
+      case 1:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const RepairTaskPage()),
+        );
+        break;
+      case 2:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MaintenanceTaskPage()),
+        );
+        break;
+      case 3:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AnnouncementPage()),
+        );
+        break;
+      case 4:
+        if (_selectedIndex != 4) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const CalendarPage()),
+          );
+        }
+        break;
+      case 5:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const InventoryPage()),
+        );
+        break;
     }
+
+    setState(() => _selectedIndex = index);
   }
 
   Future<void> _showMarkAsCompleteDialog() async {
@@ -846,7 +876,6 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       appBar: CustomAppBar(
         leading: const BackButton(),
         title: 'Work Order Details',
-        showMore: true,
         showDelete:
             ((widget.workOrder ?? _fetchedWorkOrder) != null) &&
             _isDeletableStatus(

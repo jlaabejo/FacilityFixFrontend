@@ -204,6 +204,7 @@ class _LoginPageState extends State<LoginPage> {
                     TextField(
                       controller: _email,
                       keyboardType: TextInputType.emailAddress,
+                      onSubmitted: (_) => _login(),
                       decoration: InputDecoration(
                         prefixIcon: const Icon(Icons.mail_outline),
                         hintText: 'Email',
@@ -219,6 +220,7 @@ class _LoginPageState extends State<LoginPage> {
                     TextField(
                       controller: _pass,
                       obscureText: _obscure,
+                      onSubmitted: (_) => _login(),
                       decoration: InputDecoration(
                         prefixIcon: const Icon(Icons.lock_outline),
                         hintText: 'Password',

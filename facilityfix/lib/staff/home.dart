@@ -383,7 +383,6 @@ class _HomeState extends State<HomePage> {
         });
         break;
     }
-
     setState(() => _selectedIndex = index);
   }
 

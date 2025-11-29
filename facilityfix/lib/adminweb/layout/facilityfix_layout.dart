@@ -269,10 +269,14 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       const SizedBox(height: 4),
 
                       // User Management navigation item
-                      _navItem(
-                        Icons.group_outlined,
-                        'User Management',
-                        'user_users',
+                      _dropdownNav(
+                        icon: Icons.group_outlined,
+                        title: 'User Management',
+                        sectionKey: 'user',
+                        children: [
+                          _subNavItem('Users', 'user_users'),
+                          _subNavItem('Availability & Scheduling', 'user_scheduling'),
+                        ],
                       ),
                       const SizedBox(height: 4),
 
@@ -298,6 +302,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         title: 'Inventory Management',
                         sectionKey: 'inventory',
                         children: [
+                          _subNavItem('Equipment Registry', 'inventory_equipment'),
                           _subNavItem('Inventory Items', 'inventory_items'),
                           _subNavItem('Inventory Request', 'inventory_request'),
                         ],

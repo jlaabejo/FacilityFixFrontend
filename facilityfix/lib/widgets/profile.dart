@@ -1,5 +1,6 @@
 import 'package:facilityfix/widgets/forms.dart';
 import 'package:flutter/material.dart';
+
 class LogoutButton extends StatelessWidget {
   final VoidCallback onPressed;
 
@@ -167,13 +168,13 @@ class SettingsOption extends StatelessWidget {
 
 /// Card section with optional trailing widget (e.g., edit icon)
 class SectionCard extends StatelessWidget {
-  final String title;
+  final String? title;
   final Widget child;
   final Widget? trailing;
 
   const SectionCard({
     super.key,
-    required this.title,
+    this.title,
     required this.child,
     this.trailing,
   });
@@ -191,16 +192,19 @@ class SectionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(title,
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w700)),
-                if (trailing != null) trailing!,
-              ],
-            ),
-            const SizedBox(height: 12),
+            if (title != null || trailing != null) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  if (title != null)
+                    Text(title!,
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                  if (trailing != null) trailing!,
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
             child,
           ],
         ),
