@@ -8,6 +8,10 @@ import '../services/api_service.dart';
 import '../widgets/delete_popup.dart';
 import 'pop_up/js_viewdetails_popup.dart';
 import 'pop_up/edit_popup.dart';
+import '../report_files/concern_slip_report.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:universal_html/html.dart' as html;
+import 'package:intl/intl.dart';
 
 class RepairJobServicePage extends StatefulWidget {
   const RepairJobServicePage({super.key});
@@ -112,9 +116,10 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   String _selectedCategory = 'All Categories';
   String _selectedStatus = 'All Status';
   String _selectedConcernType = 'Job Service';
-  
+
   // Helper function to convert routeKey to actual route path
   static String? _getRoutePath(String routeKey) {
+<<<<<<< Updated upstream
       final Map<String, String> pathMap = {
         'dashboard': '/dashboard',
         'user_users': '/user/users',
@@ -132,6 +137,26 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       };
       return pathMap[routeKey];
     }
+=======
+    final Map<String, String> pathMap = {
+      'dashboard': '/dashboard',
+      'user_users': '/user/users',
+      // 'user_roles': '/user/roles',
+      'user_scheduling': '/user/scheduling',
+      'work_maintenance': '/work/maintenance',
+      'work_repair': '/work/repair',
+      'calendar': '/calendar',
+      'inventory_equipment': '/inventory/equipment',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
+      'analytics': '/analytics',
+      'announcement': '/announcement',
+      'settings': '/settings',
+      'logout': '/logout',
+    };
+    return pathMap[routeKey];
+  }
+>>>>>>> Stashed changes
 
   // Handle logout functionality
   void _handleLogout(BuildContext context) {
@@ -852,15 +877,15 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
   }
 
   final List<double> _colW = <double>[
-    30, // CHECKBOX
-    95, // CONCERN ID
-    150, // TITLE
-    120, // DATE REQUESTED
-    100, // BUILDING & UNIT
-    70, // PRIORITY
-    80, // DEPARTMENT
-    70, // STATUS
-    38, // ACTION
+    25, // CHECKBOX
+    150, // JOB SERVICE ID
+    200, // TITLE
+    140, // DATE REQUESTED
+    120, // BUILDING & UNIT
+    80, // PRIORITY
+    120, // DEPARTMENT
+    100, // STATUS
+    50, // ACTION
   ];
 
   Widget _fixedCell(
@@ -1193,11 +1218,10 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
             ),
             child: PopupMenuButton<String>(
               onSelected: (value) {
-                // TODO: Implement export functionality
                 if (value == 'pdf') {
-                  // Export to PDF
+                  _exportJobServicesToPDF();
                 } else if (value == 'word') {
-                  // Export to Word
+                  _exportJobServicesToWord();
                 }
               },
               itemBuilder:
@@ -1362,7 +1386,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                             child: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
                               child: DataTable(
-                                columnSpacing: 50,
+                                columnSpacing: 12,
                                 headingRowHeight: 56,
                                 dataRowHeight: 64,
                                 headingRowColor: WidgetStateProperty.all(
@@ -1483,7 +1507,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                                           // SERVICE ID
                                           DataCell(
                                             _fixedCell(
-                                              0,
+                                              1,
                                               _ellipsis(
                                                 task['serviceId'] ?? 'N/A',
                                                 style: TextStyle(
@@ -1497,7 +1521,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                                           // TASK TITLE
                                           DataCell(
                                             _fixedCell(
-                                              1,
+                                              2,
                                               _ellipsis(
                                                 task['title'] ??
                                                     'Job Service Request',
@@ -1512,7 +1536,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                                           // DATE REQUESTED
                                           DataCell(
                                             _fixedCell(
-                                              2,
+                                              3,
                                               _ellipsis(
                                                 task['dateRequested'] ?? 'N/A',
                                               ),
@@ -1522,7 +1546,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                                           // BUILDING / UNIT
                                           DataCell(
                                             _fixedCell(
-                                              3,
+                                              4,
                                               _ellipsis(
                                                 task['buildingUnit'] ?? 'N/A',
                                               ),
@@ -1532,7 +1556,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                                           // PRIORITY
                                           DataCell(
                                             _fixedCell(
-                                              4,
+                                              5,
                                               _buildPriorityChip(
                                                 task['priority'] ?? 'Medium',
                                               ),
@@ -1542,7 +1566,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                                           // DEPARTMENT
                                           DataCell(
                                             _fixedCell(
-                                              5,
+                                              6,
                                               DepartmentTag(
                                                 task['department'] ?? 'N/A',
                                               ),
@@ -1552,7 +1576,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                                           // STATUS
                                           DataCell(
                                             _fixedCell(
-                                              6,
+                                              7,
                                               _buildStatusChip(
                                                 task['status'] ?? 'Pending',
                                               ),
@@ -1562,28 +1586,41 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
                                           // Action menu cell (narrow, centered)
                                           DataCell(
                                             _fixedCell(
-                                              7,
+                                              8,
                                               Builder(
                                                 builder: (context) {
-                                                  return IconButton(
-                                                    onPressed: () {
-                                                      final rbx =
-                                                          context.findRenderObject()
-                                                              as RenderBox;
-                                                      final position = rbx
-                                                          .localToGlobal(
-                                                            Offset.zero,
-                                                          );
-                                                      _showActionMenu(
-                                                        context,
-                                                        task,
-                                                        position,
-                                                      );
-                                                    },
-                                                    icon: Icon(
-                                                      Icons.more_vert,
-                                                      color: Colors.grey[400],
-                                                      size: 20,
+                                                  return Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          right: 8,
+                                                        ),
+                                                    child: IconButton(
+                                                      onPressed: () {
+                                                        final rbx =
+                                                            context.findRenderObject()
+                                                                as RenderBox;
+                                                        final position = rbx
+                                                            .localToGlobal(
+                                                              Offset.zero,
+                                                            );
+                                                        _showActionMenu(
+                                                          context,
+                                                          task,
+                                                          position,
+                                                        );
+                                                      },
+                                                      icon: Icon(
+                                                        Icons.more_vert,
+                                                        color: Colors.grey[400],
+                                                        size: 20,
+                                                      ),
+                                                      tooltip: 'Actions',
+                                                      padding: EdgeInsets.zero,
+                                                      constraints:
+                                                          const BoxConstraints(
+                                                            minWidth: 32,
+                                                            minHeight: 32,
+                                                          ),
                                                     ),
                                                   );
                                                 },
@@ -1871,5 +1908,314 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
         ),
       ),
     );
+  }
+
+  /// Export selected or filtered job services to PDF
+  Future<void> _exportJobServicesToPDF() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final userName = user?.displayName ?? user?.email ?? 'Admin User';
+
+      // If tasks are selected, export only selected tasks; otherwise export filtered tasks
+      final tasksToExport =
+          _selectedTaskIds.isNotEmpty
+              ? _filteredTasks
+                  .where(
+                    (task) => _selectedTaskIds.contains(task['id'].toString()),
+                  )
+                  .toList()
+              : _filteredTasks;
+
+      if (tasksToExport.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No job services selected to export'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // Map job service task to concern slip shape expected by the report generator
+      List<Map<String, dynamic>> mapped =
+          tasksToExport.map((task) {
+            final raw = task['rawData'] as Map<String, dynamic>? ?? {};
+            return {
+              'id': task['serviceId'] ?? task['id']?.toString() ?? 'N/A',
+              'formatted_id':
+                  task['serviceId'] ?? task['id']?.toString() ?? 'N/A',
+              'title': task['title'] ?? task['description'] ?? '',
+              'description':
+                  task['description'] ?? task['additionalNotes'] ?? '',
+              'created_at': raw['created_at'] ?? task['dateRequested'],
+              'completed_at': raw['completed_at'] ?? raw['assessed_at'] ?? null,
+              'status': task['status'] ?? raw['status'] ?? 'Pending',
+              'priority': task['priority'] ?? 'Medium',
+              'category': task['department'] ?? raw['category'] ?? '',
+              'reported_by_name':
+                  task['requestedBy'] ??
+                  raw['requested_by_name'] ??
+                  raw['reported_by'] ??
+                  'N/A',
+              'assigned_to_name':
+                  raw['assigned_to_name'] ?? raw['assigned_to'] ?? 'Unassigned',
+              'resolution_type': raw['resolution_type'] ?? 'Job Service',
+              'schedule_tracker':
+                  raw['schedule_tracker'] ??
+                  {
+                    'start_time': raw['scheduled_date'],
+                    'end_time':
+                        raw['scheduled_end_date'] ?? raw['scheduled_date'],
+                  },
+              'rawData': raw,
+            };
+          }).toList();
+
+      if (mapped.length == 1) {
+        await ConcernSlipReport.generateAndDownloadSinglePDF(
+          concernSlipData: mapped.first,
+          userName: userName,
+          location: 'Default Location',
+          contactNumber: '+1-234-567-8900',
+          email: 'admin@facilityfix.com',
+        );
+      } else {
+        await ConcernSlipReport.generateAndDownloadBulkPDF(
+          concernSlips: mapped,
+          userName: userName,
+          location: 'Default Location',
+          contactNumber: '+1-234-567-8900',
+          email: 'admin@facilityfix.com',
+        );
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Job service${mapped.length > 1 ? 's' : ''} exported successfully',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('[v0] Error exporting job services to PDF: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error exporting job services: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Export job services to Word document format
+  Future<void> _exportJobServicesToWord() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final userName = user?.displayName ?? user?.email ?? 'Admin User';
+
+      // If tasks are selected, export only selected tasks; otherwise export filtered tasks
+      final tasksToExport =
+          _selectedTaskIds.isNotEmpty
+              ? _filteredTasks
+                  .where(
+                    (task) => _selectedTaskIds.contains(task['id'].toString()),
+                  )
+                  .toList()
+              : _filteredTasks;
+
+      if (tasksToExport.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No job services selected to export'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      final now = DateTime.now();
+      final formattedDate = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
+
+      String htmlContent = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Job Service Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .logo { width: 80px; height: 80px; margin: 0 auto 10px; background-color: #f0f0f0; display: flex; align-items: center; justify-content: center; border: 1px solid #ccc; }
+        .facility-name { font-size: 12px; font-weight: bold; margin: 10px 0; }
+        .location, .contact { font-size: 11px; color: #666; margin: 5px 0; }
+        .report-title { font-size: 20px; font-weight: bold; margin: 20px 0; }
+        .generated-info { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 30px; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; border: 1px solid #ccc; }
+        th { background-color: #1976d2; color: white; padding: 12px 8px; text-align: left; font-weight: bold; font-size: 12px; }
+        td { padding: 10px 8px; border: 1px solid #ddd; font-size: 11px; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .summary { margin-top: 30px; padding: 15px; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; }
+        .summary-title { font-weight: bold; font-size: 14px; margin-bottom: 10px; }
+        .summary-grid { display: flex; justify-content: space-around; flex-wrap: wrap; }
+        .summary-item { text-align: center; margin: 10px; }
+        .summary-label { font-size: 11px; color: #666; }
+        .summary-value { font-size: 18px; font-weight: bold; }
+        .total-value { color: #1976d2; }
+        .pending-value { color: #ff9800; }
+        .assigned-value { color: #ffc107; }
+        .completed-value { color: #4caf50; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">[LOGO]</div>
+        <div class="facility-name">Facility: Smart Maintenance and Repair Analytics Management System</div>
+        <div class="location">Location: Default Location</div>
+        <div class="contact">Contact: +1-234-567-8900 | Email: admin@facilityfix.com</div>
+        <div class="report-title">Job Service Reports</div>
+        <div class="generated-info">
+            <span>Generated by: $userName</span>
+            <span>Generated at: $formattedDate</span>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Service ID</th>
+                <th>Title/Description</th>
+                <th>Status</th>
+                <th>Priority</th>
+                <th>Department</th>
+                <th>Requested By</th>
+                <th>Assigned To</th>
+                <th>Schedule</th>
+            </tr>
+        </thead>
+        <tbody>
+''';
+
+      for (final task in tasksToExport) {
+        final raw = task['rawData'] as Map<String, dynamic>? ?? {};
+        final serviceId = task['serviceId'] ?? task['id'] ?? '';
+        final title = task['title'] ?? task['description'] ?? '';
+        final status = task['status'] ?? raw['status'] ?? 'Pending';
+        final priority = task['priority'] ?? 'Medium';
+        final department = task['department'] ?? raw['category'] ?? '';
+        final requestedBy =
+            task['requestedBy'] ?? raw['requested_by_name'] ?? 'Unknown';
+        final assignedTo =
+            raw['assigned_to_name'] ?? raw['assigned_to'] ?? 'Unassigned';
+        final schedule = task['schedule'] ?? raw['scheduled_date'] ?? '';
+
+        htmlContent += '''
+            <tr>
+                <td>$serviceId</td>
+                <td>$title</td>
+                <td>$status</td>
+                <td>$priority</td>
+                <td>$department</td>
+                <td>$requestedBy</td>
+                <td>$assignedTo</td>
+                <td>$schedule</td>
+            </tr>
+''';
+      }
+
+      final total = tasksToExport.length;
+      final pendingCount =
+          tasksToExport
+              .where(
+                (t) =>
+                    (t['status']?.toString().toLowerCase().contains(
+                          'pending',
+                        ) ??
+                        false),
+              )
+              .length;
+      final assignedCount =
+          tasksToExport
+              .where(
+                (t) =>
+                    (t['status']?.toString().toLowerCase().contains(
+                          'assigned',
+                        ) ??
+                        false),
+              )
+              .length;
+      final completedCount =
+          tasksToExport
+              .where(
+                (t) =>
+                    (t['status']?.toString().toLowerCase().contains(
+                          'completed',
+                        ) ??
+                        false),
+              )
+              .length;
+
+      htmlContent += '''
+        </tbody>
+    </table>
+
+    <div class="summary">
+        <div class="summary-title">Report Summary</div>
+        <div class="summary-grid">
+            <div class="summary-item">
+                <div class="summary-label">Total Services</div>
+                <div class="summary-value total-value">$total</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-label">Pending</div>
+                <div class="summary-value pending-value">$pendingCount</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-label">Assigned</div>
+                <div class="summary-value assigned-value">$assignedCount</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-label">Completed</div>
+                <div class="summary-value completed-value">$completedCount</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+''';
+
+      final blob = html.Blob([htmlContent], 'text/html');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      html.AnchorElement(href: url)
+        ..setAttribute(
+          'download',
+          'job_service_report_${DateTime.now().millisecondsSinceEpoch}.doc',
+        )
+        ..click();
+      html.Url.revokeObjectUrl(url);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Job services exported as document successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('[v0] Error exporting job services to Word: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error exporting job services: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

@@ -165,6 +165,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
 
   // Helper function to convert routeKey to actual route path
   static String? _getRoutePath(String routeKey) {
+<<<<<<< Updated upstream
       final Map<String, String> pathMap = {
         'dashboard': '/dashboard',
         'user_users': '/user/users',
@@ -182,6 +183,26 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       };
       return pathMap[routeKey];
     }
+=======
+    final Map<String, String> pathMap = {
+      'dashboard': '/dashboard',
+      'user_users': '/user/users',
+      // 'user_roles': '/user/roles',
+      'user_scheduling': '/user/scheduling',
+      'work_maintenance': '/work/maintenance',
+      'work_repair': '/work/repair',
+      'calendar': '/calendar',
+      'inventory_equipment': '/inventory/equipment',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
+      'analytics': '/analytics',
+      'announcement': '/announcement',
+      'settings': '/settings',
+      'logout': '/logout',
+    };
+    return pathMap[routeKey];
+  }
+>>>>>>> Stashed changes
 
   // Handle logout functionality
   void _handleLogout(BuildContext context) {
@@ -1117,14 +1138,14 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
 
   final List<double> _colW = <double>[
     30, // CHECKBOX
-    95, // WORK ORDER ID
-    150, // TITLE
-    120, // DATE REQUESTED
-    100, // BUILDING & UNIT
-    70, // PRIORITY
-    80, // DEPARTMENT
-    70, // STATUS
-    38, // ACTION
+    150, // WORK ORDER ID
+    200, // TITLE
+    140, // DATE REQUESTED
+    120, // BUILDING & UNIT
+    80, // PRIORITY
+    120, // DEPARTMENT
+    100, // STATUS
+    50, // ACTION
   ];
 
   Widget _fixedCell(
@@ -1583,7 +1604,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                             scrollDirection: Axis.horizontal,
                             child: SingleChildScrollView(
                               child: DataTable(
-                                columnSpacing: 50,
+                                columnSpacing: 12,
                                 headingRowHeight: 56,
                                 dataRowHeight: 64,
                                 headingRowColor: WidgetStateProperty.all(
@@ -1616,16 +1637,16 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                   ),
                                   DataColumn(
                                     label: _fixedCell(
-                                      0,
+                                      1,
                                       const Text("WORK ORDER ID"),
                                     ),
                                   ),
                                   DataColumn(
-                                    label: _fixedCell(1, const Text("TITLE")),
+                                    label: _fixedCell(2, const Text("TITLE")),
                                   ),
                                   DataColumn(
                                     label: _fixedCell(
-                                      2,
+                                      3,
                                       InkWell(
                                         onTap: _toggleSortOrder,
                                         child: Row(
@@ -1647,27 +1668,27 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                   ),
                                   DataColumn(
                                     label: _fixedCell(
-                                      3,
+                                      4,
                                       const Text("BUILDING / UNIT"),
                                     ),
                                   ),
                                   DataColumn(
                                     label: _fixedCell(
-                                      4,
+                                      5,
                                       const Text("PRIORITY"),
                                     ),
                                   ),
                                   DataColumn(
                                     label: _fixedCell(
-                                      5,
+                                      6,
                                       const Text("DEPARTMENT"),
                                     ),
                                   ),
                                   DataColumn(
-                                    label: _fixedCell(6, const Text("STATUS")),
+                                    label: _fixedCell(7, const Text("STATUS")),
                                   ),
                                   DataColumn(
-                                    label: _fixedCell(7, const Text("")),
+                                    label: _fixedCell(8, const Text("")),
                                   ),
                                 ],
                                 rows:
@@ -1701,7 +1722,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           // WORK ORDER ID
                                           DataCell(
                                             _fixedCell(
-                                              0,
+                                              1,
                                               _ellipsis(
                                                 task['serviceId'] ?? 'N/A',
                                               ),
@@ -1711,7 +1732,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           // TITLE
                                           DataCell(
                                             _fixedCell(
-                                              1,
+                                              2,
                                               _ellipsis(
                                                 task['title'] ?? 'Untitled',
                                               ),
@@ -1721,7 +1742,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           // DATE REQUESTED
                                           DataCell(
                                             _fixedCell(
-                                              2,
+                                              3,
                                               _ellipsis(
                                                 task['dateRequested'] ?? 'N/A',
                                               ),
@@ -1731,7 +1752,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           // BUILDING / UNIT
                                           DataCell(
                                             _fixedCell(
-                                              3,
+                                              4,
                                               _ellipsis(
                                                 task['buildingUnit'] ?? 'N/A',
                                               ),
@@ -1741,7 +1762,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           // PRIORITY (chip)
                                           DataCell(
                                             _fixedCell(
-                                              4,
+                                              5,
                                               PriorityTag(
                                                 task['priority'] ?? '',
                                               ),
@@ -1751,7 +1772,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           // DEPARTMENT (chip)
                                           DataCell(
                                             _fixedCell(
-                                              5,
+                                              6,
                                               DepartmentTag(
                                                 task['department'] ?? 'N/A',
                                               ),
@@ -1761,7 +1782,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           // STATUS (chip)
                                           DataCell(
                                             _fixedCell(
-                                              6,
+                                              7,
                                               StatusTag(
                                                 task['status'] ?? 'Pending',
                                               ),
@@ -1771,28 +1792,42 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           // ACTION (menu)
                                           DataCell(
                                             _fixedCell(
-                                              7,
+                                              8,
                                               Builder(
                                                 builder: (cellContext) {
-                                                  return IconButton(
-                                                    onPressed: () {
-                                                      final RenderBox box =
-                                                          cellContext
-                                                                  .findRenderObject()
-                                                              as RenderBox;
-                                                      final offset = box
-                                                          .localToGlobal(
-                                                            Offset.zero,
-                                                          );
-                                                      _showActionMenu(
-                                                        cellContext,
-                                                        task,
-                                                        offset,
-                                                      );
-                                                    },
-                                                    icon: const Icon(
-                                                      Icons.more_vert,
-                                                      size: 20,
+                                                  return Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          right: 8,
+                                                        ),
+                                                    child: IconButton(
+                                                      onPressed: () {
+                                                        final RenderBox box =
+                                                            cellContext
+                                                                    .findRenderObject()
+                                                                as RenderBox;
+                                                        final offset = box
+                                                            .localToGlobal(
+                                                              Offset.zero,
+                                                            );
+                                                        _showActionMenu(
+                                                          cellContext,
+                                                          task,
+                                                          offset,
+                                                        );
+                                                      },
+                                                      icon: Icon(
+                                                        Icons.more_vert,
+                                                        color: Colors.grey[400],
+                                                        size: 20,
+                                                      ),
+                                                      tooltip: 'Actions',
+                                                      padding: EdgeInsets.zero,
+                                                      constraints:
+                                                          const BoxConstraints(
+                                                            minWidth: 32,
+                                                            minHeight: 32,
+                                                          ),
                                                     ),
                                                   );
                                                 },
