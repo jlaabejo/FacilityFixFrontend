@@ -16,6 +16,7 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  int _selectedIndex = 0;
   int _unreadNotifCount = 0;
 
   @override
@@ -46,6 +47,8 @@ class _SettingsPageState extends State<SettingsPage> {
   ];
 
   void _onTabTapped(int index) {
+    if (index == _selectedIndex) return;
+
     switch (index) {
       case 0:
         Navigator.pushReplacement(
@@ -72,10 +75,12 @@ class _SettingsPageState extends State<SettingsPage> {
         );
         break;
       case 4:
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const CalendarPage()),
-        );
+        if (_selectedIndex != 4) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const CalendarPage()),
+          );
+        }
         break;
       case 5:
         Navigator.pushReplacement(
@@ -84,6 +89,8 @@ class _SettingsPageState extends State<SettingsPage> {
         );
         break;
     }
+
+    setState(() => _selectedIndex = index);
   }
 
   @override

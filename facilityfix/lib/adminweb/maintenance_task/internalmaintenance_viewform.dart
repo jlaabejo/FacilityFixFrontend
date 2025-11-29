@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart'; 
 import '../../services/api_services.dart'; 
+import '../services/maintenance_inventory.dart';
 import '../../utils/ui_format.dart';
 import 'internalmaintenance_form.dart';
 import '../widgets/tags.dart';
@@ -57,6 +58,8 @@ void _handleLogout(BuildContext context) async {
 
   // Title controller
   final _titleCtrl = TextEditingController();
+  // Template controller (display only)
+  final _templateCtrl = TextEditingController();
 
   // Basic Information controllers
   final _departmentCtrl = TextEditingController();
@@ -136,6 +139,8 @@ void _handleLogout(BuildContext context) async {
       _populateFields();
 
       setState(() {
+        // Update template display
+        _templateCtrl.text = MaintenanceTemplates.displayName(_taskData?['template_id']?.toString() ?? _taskData?['template']?.toString() ?? '');
         _isLoading = false;
       });
     } catch (e) {
@@ -415,6 +420,7 @@ void _handleLogout(BuildContext context) async {
   @override
   void dispose() {
     _titleCtrl.dispose();
+    _templateCtrl.dispose();
     _departmentCtrl.dispose();
     _createdByCtrl.dispose();
     _estimatedDurationCtrl.dispose();
@@ -676,20 +682,24 @@ void _handleLogout(BuildContext context) async {
   }
 
   // ------------------------ UI ------------------------
-  String? _getRoutePath(String routeKey) {
-    switch (routeKey) {
-      case 'dashboard':
-        return '/dashboard';
-      case 'work_maintenance':
-      case 'maintenance':
-        return '/work/maintenance';
-      case 'home':
-      case '/':
-        return '/';
-      default:
-        return null;
+  static String? _getRoutePath(String routeKey) {
+      final Map<String, String> pathMap = {
+        'dashboard': '/dashboard',
+        'user_users': '/user/users',
+        'user_scheduling': '/user/scheduling',
+        'work_maintenance': '/work/maintenance',
+        'work_repair': '/work/repair',
+        'calendar': '/calendar',
+        'inventory_equipment': '/inventory/equipment',
+        'inventory_items': '/inventory/items',
+        'inventory_request': '/inventory/request',
+        'analytics': '/analytics',
+        'announcement': '/announcement',
+        'settings': '/settings',
+        'logout': '/logout',
+      };
+      return pathMap[routeKey];
     }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -1185,6 +1195,12 @@ void _handleLogout(BuildContext context) async {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              Expanded(child: _editableRow('Template', _templateCtrl)),
+            ],
+          ),
+          const SizedBox(height: 8),
           _editableRow('Location / Area', _locationCtrl, validator: _req),
           const SizedBox(height: 16),
           Text(

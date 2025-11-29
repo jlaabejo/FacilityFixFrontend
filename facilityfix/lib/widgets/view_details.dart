@@ -1684,10 +1684,9 @@ class _MaintenanceState extends State<MaintenanceDetails> {
           setState(() {
             _inventoryRequests = requests;
           });
-          print(
-            'DEBUG: Loaded ${_inventoryRequests.length} inventory requests',
-          );
-          return; // data found, no need to check reservations
+          print('DEBUG: Loaded ${_inventoryRequests.length} inventory requests');
+          // Do NOT return; continue to check for admin reservations so that
+          // reservations can take precedence over staff requests when present.
         }
       }
     } catch (e) {
@@ -1731,6 +1730,15 @@ class _MaintenanceState extends State<MaintenanceDetails> {
               print('DEBUG: Error loading item details for reservation: $e');
             }
           }
+          // Normalize reservation ID field: accept id/_id/reservation_id/reservationId
+          if ((r['reservation_id'] ?? '').toString().isEmpty) {
+            if ((r['id'] ?? '').toString().isNotEmpty) r['reservation_id'] = r['id'];
+            else if ((r['_id'] ?? '').toString().isNotEmpty) r['reservation_id'] = r['_id'];
+            else if ((r['reservationId'] ?? '').toString().isNotEmpty) r['reservation_id'] = r['reservationId'];
+            else {
+              print('[v0] Warning: reservation for inventory ${r['inventory_id']} missing explicit id fields');
+            }
+          }
         }
         if (reservations.isNotEmpty) {
           // Add type field to distinguish
@@ -1764,9 +1772,10 @@ class _MaintenanceState extends State<MaintenanceDetails> {
     if (requestId == null) {
       print('DEBUG: Request keys: ${request.keys.toList()}');
       print('DEBUG: Request map: $request');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Request ID not found')));
+      final snackMsg = (request['type'] == 'reservation') ? 'Reservation ID not found' : 'Request ID not found';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(snackMsg)),
+      );
       return;
     }
 
@@ -1777,9 +1786,16 @@ class _MaintenanceState extends State<MaintenanceDetails> {
       final apiService = APIService();
 
       if (action == 'receive') {
-        if (request['type'] == 'reservation') {
+        final requestStatus = (request['status'] ?? '').toString().toLowerCase();
+        final requestTypeStr = (request['type'] ?? '').toString().toLowerCase();
+        final hasReservationId = (request['reservation_id'] ?? '').toString().isNotEmpty;
+
+        // Treat as reservation if explicitly marked OR has reservation_id OR status is 'reserved'
+        if (requestTypeStr == 'reservation' || hasReservationId || requestStatus == 'reserved') {
           // Mark reservation as received
-          final response = await apiService.markReservationReceived(requestId);
+          final reservationId = request['reservation_id'] ?? requestId;
+          print('DEBUG: Calling markReservationReceived for reservation ID: $reservationId');
+          final response = await apiService.markReservationReceived(reservationId);
           if (response['success'] == true) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -1843,12 +1859,12 @@ class _MaintenanceState extends State<MaintenanceDetails> {
             }
 
             // Hide the return button briefly while reloading to avoid flicker
-            setState(() => _suppressReturnIds.add(requestId));
+            setState(() => _suppressReturnIds.add(reservationId));
             Timer(const Duration(seconds: 3), () {
-              if (mounted) setState(() => _suppressReturnIds.remove(requestId));
+              if (mounted) setState(() => _suppressReturnIds.remove(reservationId));
             });
-            // Notify listeners that inventory was updated
-            _notifier.notifyReservationReceived(requestId, inventoryId ?? '');
+            // Notify listeners that inventory was updated (use the actual reservationId)
+            _notifier.notifyReservationReceived(reservationId, inventoryId ?? '');
           } else {
             throw Exception(
               response['message'] ?? 'Failed to mark reservation as received',
@@ -2008,9 +2024,8 @@ class _MaintenanceState extends State<MaintenanceDetails> {
         request['request_id'] ??
         request['reservation_id'];
     if (requestId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Request ID not found for return')),
-      );
+      final msg = (request['type'] == 'reservation') ? 'Reservation ID not found for return' : 'Request ID not found for return';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       return;
     }
     if (_loadingItems.contains(requestId)) return;
@@ -2390,12 +2405,9 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                               .toString()
                               .toLowerCase();
                       // Only allow receiving when admin has approved the request, or when it's a reservation
-
-                      final isApproved =
-                          status.toLowerCase() == 'approved' ||
-                          status.toLowerCase() == 'reserved';
-                      final unit = request['unit'] ?? '';
-
+                      final isApproved = status.toLowerCase() == 'approved' || status.toLowerCase() == 'reserved';
+                      final hasReservationId = (request['reservation_id'] ?? '').toString().isNotEmpty;
+                      
                       final category = request['category'] ?? '';
                       final requestId =
                           request['_doc_id'] ??
@@ -2445,6 +2457,16 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                                           color: Color(0xFF6B7280),
                                         ),
                                       ),
+                                      if (itemType == 'reservation') ...[
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          'Res ID: ${request['reservation_id'] ?? '(missing)'}',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF94A3B8),
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                   const SizedBox(height: 8),
@@ -2483,20 +2505,9 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                                                     ? 'Receive'
                                                     : 'Waiting for admin approval',
                                             child: OutlinedButton(
-                                              onPressed:
-                                                  (_loadingItems.contains(
-                                                            requestId,
-                                                          ) ||
-                                                          !(itemType ==
-                                                                  'reservation' ||
-                                                              isApproved))
-                                                      ? null
-                                                      : () =>
-                                                          _handleInventoryAction(
-                                                            request,
-                                                            'receive',
-                                                          ),
-
+                                                onPressed: (_loadingItems.contains(requestId) || !( (itemType == 'reservation' && hasReservationId) || isApproved))
+                                                  ? null
+                                                  : () => _handleInventoryAction(request, 'receive'),
                                               style: OutlinedButton.styleFrom(
                                                 side: const BorderSide(
                                                   color: Color(0xFF059669),

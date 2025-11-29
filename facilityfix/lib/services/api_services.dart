@@ -1602,6 +1602,23 @@ class APIService {
         print(
           '[API] getMyAssignedMaintenance - Error response: ${response.body}',
         );
+        // If endpoint is missing (404) and staffId is provided, attempt fallback
+        if (response.statusCode == 404 && staffId != null && staffId.isNotEmpty) {
+          print('[API] getMyAssignedMaintenance - assigned-to-me not found; fallback to GET /maintenance/ and client-side filter');
+          final allResp = await get('/maintenance/', headers: _authHeaders(token));
+          if (allResp.statusCode >= 200 && allResp.statusCode < 300) {
+            final List<dynamic> allData = jsonDecode(allResp.body);
+            final filtered = allData.where((e) {
+              final assigned = e['assigned_to'] ?? e['assigned_staff'] ?? e['assigned_staff_name'] ?? e['assignedTo'];
+              return assigned != null && assigned.toString() == staffId;
+            }).map((e) => Map<String, dynamic>.from(e)).toList();
+            print('[API] getMyAssignedMaintenance - Fallback filtered ${filtered.length} tasks for staff $staffId');
+            return filtered.cast<Map<String, dynamic>>();
+          } else {
+            final errorBody = _tryDecode(allResp.body);
+            throw Exception('Failed to get all maintenance for fallback: ${errorBody['detail'] ?? allResp.body}');
+          }
+        }
         final errorBody = _tryDecode(response.body);
         throw Exception(
           'Failed to get assigned maintenance tasks: ${errorBody['detail'] ?? response.body}',
@@ -2118,6 +2135,17 @@ class APIService {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return jsonDecode(response.body);
       } else {
+        // If endpoint doesn't exist (404) fall back to querying requests via query param
+        if (response.statusCode == 404) {
+          print('[API] getInventoryRequestsByMaintenanceTask - endpoint not found, falling back to /inventory/requests?maintenance_task_id=...');
+          final fallbackResp = await get('/inventory/requests?maintenance_task_id=$maintenanceTaskId', headers: _authHeaders(token));
+          if (fallbackResp.statusCode >= 200 && fallbackResp.statusCode < 300) {
+            return jsonDecode(fallbackResp.body);
+          } else {
+            final errorBody = _tryDecode(fallbackResp.body);
+            throw Exception('Failed to load inventory requests with fallback: ${errorBody['detail'] ?? fallbackResp.body}');
+          }
+        }
         final errorBody = _tryDecode(response.body);
         throw Exception(
           'Failed to load inventory requests for maintenance task: ${errorBody['detail'] ?? response.body}',

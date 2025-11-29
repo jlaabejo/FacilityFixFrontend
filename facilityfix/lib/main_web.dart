@@ -6,16 +6,16 @@ import 'package:facilityfix/adminweb/pages/adminwebcalendar_page.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_core/firebase_core.dart';
-// import 'adminweb/inventory_management/adminequipmentregistry_page.dart';
+import 'adminweb/inventory_management/adminequipmentregistry_page.dart';
 import 'adminweb/inventory_management/admininventoryitems_page.dart';
 import 'adminweb/inventory_management/admininventoryrequest_page.dart';
+import 'adminweb/inventory_management/equipmentregisternew_page.dart';
 import 'adminweb/pages/adminwebanalytics_page.dart';
 import 'adminweb/announcement/adminwebannouncement_page.dart';
 import 'adminweb/layout/facilityfix_layout.dart';
 import 'adminweb/pages/login_page.dart';
 import 'adminweb/pages/adminwebdash_page.dart';
 import 'adminweb/user/adminwebuser_page.dart';
-import 'adminweb/pages/adminrole_page.dart';
 import 'adminweb/user/webavailabilityscheduling_page.dart';
 import 'adminweb/maintenance_task/adminmaintenance_page.dart';
 import 'adminweb/repair_task/adminrepair_cs_page.dart';
@@ -238,11 +238,11 @@ class _MyAppState extends State<MyApp> {
         builder: (context, state) => const AdminWebCalendarPage(),
       ),
       // Inventory Management routes
-      // GoRoute(
-      //   path: '/inventory/equipment',
-      //   name: 'inventory_equipment',
-      //   builder: (context, state) => const EquipmentRegistryPage(),
-      // ),
+      GoRoute(
+        path: '/inventory/equipment',
+        name: 'inventory_equipment',
+        builder: (context, state) => const EquipmentRegistryPage(),
+      ),
       GoRoute(
         path: '/inventory/items',
         name: 'inventory_items',
@@ -276,15 +276,26 @@ class _MyAppState extends State<MyApp> {
         name: 'create announcement',
         builder: (context, state) => const CreateAnnouncementPage(),
       ),
-      
 
-
-
+      GoRoute(
+        path: '/adminweb/inventory_management/equipmentregisternew',
+        name: 'equipment register new',
+        builder: (context, state) => const EquipmentRegisterNewPage(),
+      ),
+      GoRoute(
+        path: '/adminweb/inventory_management/equipmentregisternew/:equipmentId',
+        name: 'equipment register edit',
+        builder: (context, state) {
+          final equipmentId = state.pathParameters['equipmentId'];
+          final isEdit = state.uri.queryParameters['edit'] == '1';
+          return EquipmentRegisterNewPage(
+            equipmentId: equipmentId,
+            startInEditMode: isEdit,
+          );
+        },
+      ),
     ],
-    
   );
-
-
   }
 
   void _updateTheme(String selectedTheme) {
@@ -373,7 +384,7 @@ class PlaceholderPage extends StatelessWidget {
   }
   
   // Helper function to convert routeKey to actual route path
-static String? _getRoutePath(String routeKey) {
+  static String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
       'dashboard': '/dashboard',
       'user_users': '/user/users',

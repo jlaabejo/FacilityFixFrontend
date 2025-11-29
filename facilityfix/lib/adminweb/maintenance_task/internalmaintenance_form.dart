@@ -6,7 +6,10 @@ import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
 import '../services/round_robin_assignment_service.dart';
 import '../../services/auth_storage.dart';
+import '../../utils/inventory_notifier.dart';
+import '../services/inventory_resolver.dart';
 import '../../services/api_services.dart' as main_api;
+import '../services/maintenance_inventory.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:facilityfix/services/api_services.dart' as SecondaryAPI;
 
@@ -100,8 +103,11 @@ class _InternalMaintenanceFormPageState
 
   List<Map<String, dynamic>> _availableInventoryItems = [];
   List<Map<String, dynamic>> _selectedInventoryItems = [];
+  String? _selectedTemplateKey;
+  String? _buildingId;
   final _apiService = ApiService();
   final _mainApiService = main_api.APIService();
+  final InventoryResolver _inventoryResolver = InventoryResolver();
   final _roundRobinService = RoundRobinAssignmentService();
 
   // Local editing toggle used when the parent did not supply edit mode
@@ -114,7 +120,6 @@ class _InternalMaintenanceFormPageState
       final Map<String, String> pathMap = {
         'dashboard': '/dashboard',
         'user_users': '/user/users',
-        // 'user_roles': '/user/roles',
         'user_scheduling': '/user/scheduling',
         'work_maintenance': '/work/maintenance',
         'work_repair': '/work/repair',
@@ -210,15 +215,119 @@ class _InternalMaintenanceFormPageState
     await _loadStaffMembers();
 
     // Load inventory items
+    // Save building id and use it when loading inventory
+    _buildingId = profile != null ? (profile['building_id'] ?? profile['buildingId'] ?? profile['building'])?.toString() : null;
     await _loadInventoryItems();
+  }
+
+  Future<void> _applyTemplate(String? key) async {
+    if (key == null || key.isEmpty) return;
+    final items = MaintenanceTemplates.getItems(key);
+    if (items.isEmpty) return;
+
+    final List<Map<String, dynamic>> mapped = [];
+
+    for (final t in items) {
+      final found = _availableInventoryItems.firstWhere(
+            (it) => (it['item_code']?.toString() ?? it['itemCode']?.toString() ?? it['code']?.toString() ?? '').toString().toLowerCase() == t.sku.toLowerCase(),
+        orElse: () => <String, dynamic>{},
+      );
+      Map<String, dynamic> fuzzyFound = {};
+      if (found.isEmpty) {
+        // try fuzzy match by item name or item_code containing the template sku (case-insensitive)
+        fuzzyFound = _availableInventoryItems.firstWhere(
+            (it) {
+              final itemName = (it['item_name'] ?? it['name'] ?? '').toString().toLowerCase();
+              final itemCode = (it['item_code'] ?? it['itemCode'] ?? it['code'] ?? '').toString().toLowerCase();
+              final s = t.sku.toLowerCase();
+              return itemName.contains(s) || itemCode.contains(s);
+            },
+            orElse: () => <String, dynamic>{},
+        );
+      }
+
+        String? inventoryId;
+        if (found.isNotEmpty || fuzzyFound.isNotEmpty) {
+          final src = found.isNotEmpty ? found : fuzzyFound;
+          inventoryId = (src['id'] ?? src['_doc_id'] ?? src['item_code'] ?? src['itemCode'])?.toString();
+        } else {
+          inventoryId = await _inventoryResolver.resolveSku(t.sku, _buildingId ?? 'default_building_id');
+          if (inventoryId != null && inventoryId.isNotEmpty) {
+            try {
+              final itemResp = await _apiService.getInventoryItem(inventoryId);
+              if (itemResp != null && itemResp['success'] == true && itemResp['data'] is Map) {
+                final data = Map<String, dynamic>.from(itemResp['data']);
+                found.addAll(data);
+              }
+            } catch (e) {
+              print('[v0] Failed to fetch inventory item for resolved id $inventoryId: $e');
+            }
+          }
+        }
+
+        final reservedQty = (inventoryId != null && inventoryId.toString().isNotEmpty)
+          ? await _getReservedQty(inventoryId.toString())
+          : 0;
+        final resolved = inventoryId != null && inventoryId.toString().isNotEmpty && inventoryId.toString() != t.sku;
+
+        mapped.add({
+        'inventory_id': inventoryId,
+        'item_name': t.name,
+        'item_code': t.sku,
+        'quantity': t.qty,
+        'available_stock': found.isNotEmpty ? (found['current_stock'] ?? found['available_stock'] ?? found['stock'] ?? 0) : 0,
+        'reserved_stock': reservedQty,
+        'unit': t.unit,
+        'autoReserve': t.autoReserve,
+        'resolved': resolved,
+      });
+    }
+
+    setState(() {
+      _selectedInventoryItems = mapped;
+    });
+
+    final unmatched = items.where((t) => !_availableInventoryItems.any(
+          (it) => (it['item_code']?.toString() ?? it['itemCode']?.toString() ?? it['code']?.toString() ?? '') == t.sku,
+        ));
+
+    if (unmatched.isNotEmpty) {
+      final names = unmatched.map((u) => u.name).join(', ');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Some template items are not found in inventory: $names. They will use SKU fallback.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
+  Future<int> _getReservedQty(String inventoryId) async {
+    try {
+      final resp = await _apiService.getInventoryReservations();
+      if (resp['success'] == true && resp['data'] != null) {
+        final reservations = List<Map<String, dynamic>>.from(resp['data']);
+        int reservedTotal = 0;
+        for (var r in reservations) {
+          if ((r['inventory_id']?.toString() ?? '') == inventoryId) {
+            final status = (r['status'] ?? r['request_status'] ?? 'reserved').toString().toLowerCase();
+            if (status == 'reserved' || status == 'approved' || status == 'pending') {
+              reservedTotal += (r['quantity'] ?? 0) as int;
+            }
+          }
+        }
+        return reservedTotal;
+      }
+    } catch (e) {
+      print('[v0] Error computing reserved qty for $inventoryId: $e');
+    }
+    return 0;
   }
 
   Future<void> _loadInventoryItems() async {
     try {
       // TODO: Replace with actual building ID from user session
-      final response = await _mainApiService.getBuildingInventory(
-        'default_building_id',
-      );
+      final response = await _mainApiService.getBuildingInventory(_buildingId ?? 'default_building_id');
 
       if (response['success'] == true && response['data'] != null) {
         setState(() {
@@ -308,19 +417,19 @@ class _InternalMaintenanceFormPageState
           (context) => _InventorySelectionDialog(
             availableItems: filteredItems,
             selectedLocation: _selectedLocation,
-            onItemSelected: (item, quantity) {
+            onItemSelected: (item, quantity) async {
+              final inventoryId = item['id'] ?? item['_doc_id'] ?? item['item_code'] ?? item['itemCode'];
+              final reservedQty = (inventoryId != null) ? await _getReservedQty(inventoryId.toString()) : 0;
               setState(() {
                 _selectedInventoryItems.add({
-                  'inventory_id':
-                      item['item_code'] ??
-                      item['itemCode'] ??
-                      item['id'] ??
-                      item['_doc_id'],
+                  'inventory_id': inventoryId,
                   'item_name': item['item_name'],
                   'item_code': item['item_code'],
                   'quantity': quantity,
                   'available_stock': item['current_stock'],
                   'unit': item['unit'] ?? '',
+                  'reserved_stock': reservedQty,
+                  'autoReserve': false, // manually-added items should not auto-reserve
                 });
               });
             },
@@ -513,6 +622,11 @@ class _InternalMaintenanceFormPageState
 
     try {
       for (final item in _selectedInventoryItems) {
+        // Only create reservations for items marked as autoReserve
+        if (!(item['autoReserve'] == true || item['reserve'] == true)) {
+          print('[v0] Skipping reservation for ${item['item_name']} as autoReserve is false');
+          continue;
+        }
         final qty = item['quantity'];
         if (qty == null || qty <= 0) {
           print(
@@ -520,8 +634,27 @@ class _InternalMaintenanceFormPageState
           );
           continue;
         }
+        // Resolve inventoryId if it's a SKU or not resolved yet
+          String? inventoryId = item['inventory_id']?.toString();
+          if (inventoryId == null || inventoryId.isEmpty) {
+            inventoryId = await _inventoryResolver.resolveSku(item['item_code']?.toString() ?? '', _buildingId ?? 'default_building_id');
+        } else {
+          // If it looks like a SKU (uppercase + underscores) try resolve
+              final looksLikeSku = RegExp(r'^[A-Z0-9_-]+$') // SKU-like (uppercase, digits, underscore, dash)
+              .hasMatch(inventoryId);
+          if (looksLikeSku) {
+            final resolved = await _inventoryResolver.resolveSku(item['item_code']?.toString() ?? inventoryId, _buildingId ?? 'default_building_id');
+            if (resolved != null && resolved.isNotEmpty) inventoryId = resolved;
+          }
+        }
+
+        if (inventoryId == null || inventoryId.isEmpty) {
+          print('[v0] Skipping reservation for ${item['item_name']} - unresolved inventory id');
+          continue;
+        }
+
         final response = await _apiService.createInventoryReservation(
-          inventoryId: item['inventory_id'],
+          inventoryId: inventoryId,
           quantity: qty,
           maintenanceTaskId: taskId,
         );
@@ -529,9 +662,14 @@ class _InternalMaintenanceFormPageState
         // Extract the reservation ID from the response
         if (response['success'] == true && response['reservation_id'] != null) {
           createdReservationIds.add(response['reservation_id']);
-          print(
-            '[v0] Created inventory reservation: ${response['reservation_id']}',
-          );
+          print('[v0] Created inventory reservation: ${response['reservation_id']}');
+          try {
+            InventoryUpdateNotifier().notifyItemUpdated(inventoryId.toString());
+          } catch (_) {}
+          // Refresh local reserved counts immediately after creating each reservation
+          try {
+            await _refreshSelectedReservedCounts();
+          } catch (_) {}
         }
       }
       print(
@@ -541,6 +679,21 @@ class _InternalMaintenanceFormPageState
     } catch (e) {
       print('[v0] Error creating inventory reservations: $e');
       throw Exception('Failed to create inventory reservations: $e');
+    }
+  }
+
+  // Refresh reserved counts for the selected inventory items.
+  Future<void> _refreshSelectedReservedCounts() async {
+    if (_selectedInventoryItems.isEmpty) return;
+    for (int i = 0; i < _selectedInventoryItems.length; i++) {
+      final item = _selectedInventoryItems[i];
+      final invId = item['inventory_id']?.toString();
+      if (invId != null && invId.isNotEmpty) {
+        final qty = await _getReservedQty(invId);
+        setState(() {
+          _selectedInventoryItems[i]['reserved_stock'] = qty;
+        });
+      }
     }
   }
 
@@ -941,6 +1094,15 @@ class _InternalMaintenanceFormPageState
             (data['assigned_staff_name'] ?? 'Staff Name').toString();
       }
 
+      // Populate template (if present)
+      final templateKey = data['template_id'] ?? data['templateId'] ?? data['template'];
+      if (templateKey != null) {
+        _selectedTemplateKey = templateKey.toString();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _applyTemplate(_selectedTemplateKey);
+        });
+      }
+
       // Dates - parse flexibly (accept ISO strings or integer timestamps)
       DateTime? parseFlexibleDate(dynamic raw) {
         if (raw == null) return null;
@@ -1035,6 +1197,7 @@ class _InternalMaintenanceFormPageState
             'quantity': item['quantity'] ?? 0,
             'available_stock': item['available_stock'] ?? item['stock'] ?? '',
             'unit': item['unit'] ?? '',
+            'autoReserve': item['reserve'] ?? item['reserved'] ?? item['autoReserve'] ?? true,
           });
         }
       }
@@ -1139,6 +1302,7 @@ class _InternalMaintenanceFormPageState
       'scheduled_date': scheduledDateIso ?? _startDateController.text,
       'category': 'preventive',
       'task_type': 'internal',
+      'template_id': _selectedTemplateKey ?? '',
       'recurrence_type':
           _selectedRecurrence != null
               ? _selectedRecurrence!.toLowerCase()
@@ -1370,6 +1534,39 @@ class _InternalMaintenanceFormPageState
                         "General details about the maintenance task",
                       ),
                       const SizedBox(height: 24),
+
+                      // maintenance template selector
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Maintenance Template'),
+                                _fieldBox(
+                                  child: DropdownButtonFormField<String>(
+                                    value: _selectedTemplateKey,
+                                    decoration: _decoration('Select Template...'),
+                                    items: MaintenanceTemplates.keys()
+                                        .map((k) => DropdownMenuItem(
+                                              value: k,
+                                              child: Text(MaintenanceTemplates.displayName(k)),
+                                            ))
+                                        .toList(),
+                                    onChanged: (v) {
+                                      setState(() => _selectedTemplateKey = v);
+                                      _applyTemplate(v);
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 24),
+                          const Expanded(child: SizedBox()),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
 
                       Row(
                         children: [
@@ -2158,30 +2355,51 @@ class _InternalMaintenanceFormPageState
                                                   crossAxisAlignment:
                                                       CrossAxisAlignment.start,
                                                   children: [
-                                                    Text(
-                                                      item['item_name'] ??
-                                                          'Unknown Item',
-                                                      style: const TextStyle(
-                                                        fontWeight:
+                                                  Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: Text(
+                                                          item['item_name'] ??
+                                                            'Unknown Item',
+                                                          style: const TextStyle(
+                                                          fontWeight:
                                                             FontWeight.w600,
-                                                        fontSize: 14,
+                                                          fontSize: 14,
+                                                          ),
+                                                        ),
                                                       ),
+                                                      const SizedBox(width: 8),
+                                                      if (item['resolved'] == true) ...[
+                                                        if ((item['reserved_stock'] ?? 0) > 0)
+                                                          Container(
+                                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                            decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(6)),
+                                                            child: Text('Reserved: ${item['reserved_stock'] ?? 0}', style: const TextStyle(fontSize: 12, color: Colors.green)),
+                                                          ),
+                                                      ] else ...[
+                                                        Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                          decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(6)),
+                                                          child: const Text('Unresolved', style: TextStyle(fontSize: 12, color: Colors.red)),
+                                                        ),
+                                                      ],
+                                                    ],
+                                                  ),
+                                                  const SizedBox(height: 6),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    '${item['item_code'] ?? 'N/A'}',
+                                                    style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey[600],
                                                     ),
-                                                    const SizedBox(height: 4),
-                                                    Text(
-                                                      '${item['item_code'] ?? 'N/A'}',
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: Colors.grey[600],
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Text(
-                                                      'Stock: ${item['available_stock']} ${item['unit'] ?? ''}',
-                                                      style: TextStyle(
-                                                        fontSize: 11,
-                                                        color: Colors.grey[600],
-                                                      ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    'Stock: ${item['available_stock']} ${item['unit'] ?? ''} (Reserved: ${item['reserved_stock'] ?? 0})',
+                                                    style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.grey[600],
                                                     ),
                                                   ],
                                                 ),
@@ -2608,6 +2826,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                             ),
                           ),
                         ),
+                        
                     ],
                   ),
                 ),

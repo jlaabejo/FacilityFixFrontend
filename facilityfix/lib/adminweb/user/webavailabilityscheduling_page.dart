@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import 'userwidgets/stat_card_widget.dart';
 import 'userwidgets/dayoffrequest_view.dart';
+import 'pop_up/webscheduling_viewdetails_popup.dart';
+import 'pop_up/webdayoff_viewdetails_popup.dart';
 
 class StaffSchedulingPage extends StatefulWidget {
   const StaffSchedulingPage({super.key});
@@ -155,25 +157,22 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
   }
 
   // ---- Navigation Helper ----
-  static String? _getRoutePath(String routeKey) {
-      final Map<String, String> pathMap = {
-        'dashboard': '/dashboard',
-        'user_users': '/user/users',
-        // 'user_roles': '/user/roles',
-        'user_scheduling': '/user/scheduling',
-        'work_maintenance': '/work/maintenance',
-        'work_repair': '/work/repair',
-        'calendar': '/calendar',
-        'inventory_equipment': '/inventory/equipment',
-        'inventory_items': '/inventory/items',
-        'inventory_request': '/inventory/request',
-        'analytics': '/analytics',
-        'announcement': '/announcement',
-        'settings': '/settings',
-        'logout': '/logout',
-      };
-      return pathMap[routeKey];
-    }
+  String? _getRoutePath(String routeKey) {
+    final Map<String, String> pathMap = {
+      'dashboard': '/dashboard',
+      'user_users': '/user/users',
+      'user_scheduling': '/user/scheduling',
+      'work_maintenance': '/work/maintenance',
+      'work_repair': '/work/repair',
+      'calendar': '/calendar',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
+      'analytics': '/analytics',
+      'announcement': '/announcement',
+      'settings': '/settings',
+    };
+    return pathMap[routeKey];
+  }
 
   // ---- Logout Dialog ----
   void _handleLogout(BuildContext context) {
@@ -347,7 +346,12 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
   void _handleActionSelection(String action, Map<String, dynamic> staff) {
     switch (action) {
       case 'view':
-        _handleStaffClick(staff);
+        // If we're currently in the 'Day Off Request' view, show the Day Off details dialog
+        if (_selectedView == 'Day Off Request') {
+          WebDayOffViewDetailsDialog.show(context, staff);
+        } else {
+          WebSchedulingViewDetailsDialog.show(context, staff);
+        }
         break;
 
       case 'approve':
@@ -648,9 +652,9 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: StatCardWidget(
-                      title: 'PENDING REQUESTS',
-                      value: _statsData['pendingRequests'].toString(),
-                      subtitle: 'Day off requests',
+                      title: 'PENDING SUBMISSIONS',
+                      value: _statsData['pendingSubmissions'].toString(),
+                      subtitle: 'Need to log availability',
                       icon: Icons.access_time,
                       color: Colors.orange,
                     ),
