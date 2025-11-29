@@ -208,11 +208,7 @@ class AnnouncementCard extends StatelessWidget {
                       Row(
                         children: [
                           if (showChevron)
-                            Icon(
-                              Icons.chevron_right,
-                              color: accent,
-                              size: 22,
-                            ),
+                            Icon(Icons.chevron_right, color: accent, size: 22),
                           if (!isRead)
                             Container(
                               width: 8,
@@ -277,7 +273,6 @@ class AnnouncementCard extends StatelessWidget {
     );
   }
 }
-
 
 /// ----------------------------------------------------------------------------
 /// Lightweight style system for the card (accent bar & container tint)
@@ -487,7 +482,8 @@ class InventoryRequestCard extends StatelessWidget {
   final String requestId;
   final String department; // e.g., "Electrical", "Plumbing"
   final String status; // e.g., "Pending", "Approved", "Rejected"
-  final String? maintenanceId; // Maintenance ID if this is a maintenance-related request
+  final String?
+  maintenanceId; // Maintenance ID if this is a maintenance-related request
   final VoidCallback? onTap;
 
   const InventoryRequestCard({
@@ -902,7 +898,8 @@ class RepairCard extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 6,
                       children: [
-                        if (priorityTag != null && priorityTag!.trim().isNotEmpty)
+                        if (priorityTag != null &&
+                            priorityTag!.trim().isNotEmpty)
                           PriorityTag(priority: priorityTag!.trim()),
                         StatusTag(status: statusTag),
                       ],
@@ -933,7 +930,8 @@ class RepairCard extends StatelessWidget {
                 const SizedBox(height: 2),
 
                 // Unit or Location (optional)
-                if (unitId.trim().isNotEmpty || (location?.trim().isNotEmpty ?? false))
+                if (unitId.trim().isNotEmpty ||
+                    (location?.trim().isNotEmpty ?? false))
                   Row(
                     children: [
                       const Icon(
@@ -944,9 +942,9 @@ class RepairCard extends StatelessWidget {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          (location?.trim().isNotEmpty ?? false) 
-                            ? location!.trim() 
-                            : unitId.trim(),
+                          (location?.trim().isNotEmpty ?? false)
+                              ? location!.trim()
+                              : unitId.trim(),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -996,7 +994,10 @@ class RepairCard extends StatelessWidget {
                     leftCluster,
                     const Spacer(),
                     if (_shouldShowChat())
-                      IconPill(icon: Icons.chat_bubble_outline, onTap: onChatTap),
+                      IconPill(
+                        icon: Icons.chat_bubble_outline,
+                        onTap: onChatTap,
+                      ),
                   ],
                 ),
               ],
@@ -1009,18 +1010,22 @@ class RepairCard extends StatelessWidget {
 
   // ---- Helpers ----------------------------------------------------------------
 
-  // Check if chat should be shown (only for assigned, in progress, and on hold statuses)
+  // Check if chat should be shown (for assigned, to inspect, in progress, inspected, and on hold statuses)
   // Chat is disabled for work permits (concern_slip)
   bool _shouldShowChat() {
     if (onChatTap == null) return false;
-    
+
     // Disable chat for work permits
     final resType = (resolutionType ?? '').toLowerCase().trim();
     if (resType == 'concern_slip') return false;
-    
-    // Only show chat for assigned, in progress, and on hold statuses
+
+    // Show chat for assigned, to inspect, inspected, in progress, and on hold statuses
     final status = statusTag.toLowerCase().trim();
-    return status == 'assigned' || status == 'in progress' || status == 'on hold';
+    return status == 'assigned' ||
+        status == 'to inspect' ||
+        status == 'inspected' ||
+        status == 'in progress' ||
+        status == 'on hold';
   }
 
   // Returns: "Work Order • ..." (kept as-is; only date logic changed per request)
@@ -1311,7 +1316,6 @@ class MaintenanceCard extends StatelessWidget {
   }
 }
 
-
 // Ui Helpers
 
 // ==== AVATAR (image -> initials -> icon fallback) ============================
@@ -1404,9 +1408,7 @@ class _AssigneeLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final double avatarSize = dense ? 34 : 34;
 
-    final widgets = <Widget>[
-      _buildAvatar(photoUrl, name, size: avatarSize),
-    ];
+    final widgets = <Widget>[_buildAvatar(photoUrl, name, size: avatarSize)];
 
     // Only add name text if showName is true
     if (showName) {

@@ -7,6 +7,8 @@ import 'pop_up/edit_popup.dart';
 import '../widgets/delete_popup.dart';
 import '../popupwidgets/set_resolution_type_popup.dart';
 import '../services/api_service.dart';
+import 'package:facilityfix/adminweb/widgets/bulk_action_buttons.dart';
+import '../services/round_robin_assignment_service.dart';
 
 class AdminRepairPage extends StatefulWidget {
   const AdminRepairPage({super.key});
@@ -17,10 +19,15 @@ class AdminRepairPage extends StatefulWidget {
 
 class _AdminRepairPageState extends State<AdminRepairPage> {
   final ApiService _apiService = ApiService();
+  final RoundRobinAssignmentService _roundRobinService =
+      RoundRobinAssignmentService();
   List<Map<String, dynamic>> _repairTasks = [];
   List<Map<String, dynamic>> _filteredTasks = [];
   bool _isLoading = true;
   String _errorMessage = '';
+
+  // Selection state
+  final Set<String> _selectedTaskIds = {};
 
   // Pagination state
   int _currentPage = 0;
@@ -69,6 +76,21 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
         return _sortAscending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
       });
     });
+  }
+
+  // Handle selecting all tasks
+  void _onSelectAll(bool? selected) {
+    if (selected == true) {
+      setState(() {
+        _selectedTaskIds.addAll(
+          _filteredTasks.map((task) => task['id'].toString()),
+        );
+      });
+    } else {
+      setState(() {
+        _selectedTaskIds.clear();
+      });
+    }
   }
 
   // Parse date helper
@@ -679,10 +701,315 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     }
   }
 
+  void _bulkDeleteTasks() async {
+    if (_selectedTaskIds.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Concern Slips'),
+          content: Text(
+            'Are you sure you want to delete ${_selectedTaskIds.length} selected item(s)? This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      try {
+        // Show loading indicator
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+                SizedBox(width: 16),
+                Text('Deleting selected items...'),
+              ],
+            ),
+            duration: Duration(seconds: 3),
+          ),
+        );
+
+        // Delete each selected task
+        int successCount = 0;
+        for (final taskId in _selectedTaskIds) {
+          try {
+            final task = _repairTasks.firstWhere(
+              (t) => t['id'] == taskId,
+              orElse: () => {},
+            );
+            if (task.isNotEmpty) {
+              await _apiService.deleteConcernSlip(taskId);
+              successCount++;
+            }
+          } catch (e) {
+            print('[v0] Error deleting task $taskId: $e');
+          }
+        }
+
+        // Refresh the list and clear selections
+        if (mounted) {
+          setState(() {
+            _selectedTaskIds.clear();
+          });
+          await _loadConcernSlips();
+
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$successCount item(s) deleted successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        print('[v0] Error in bulk delete: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error deleting items: $e'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  void _bulkAssignTasks() async {
+    if (_selectedTaskIds.isEmpty) return;
+
+    // Get the selected tasks
+    final selectedTasks =
+        _repairTasks
+            .where((task) => _selectedTaskIds.contains(task['id']))
+            .toList();
+
+    if (selectedTasks.isEmpty) return;
+
+    print(
+      '[BulkAssign] Starting bulk assignment for ${selectedTasks.length} tasks',
+    );
+
+    // Show loading dialog
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (BuildContext context) => Dialog(
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Auto-assigning ${selectedTasks.length} concern slip(s) using round-robin...',
+                  ),
+                ],
+              ),
+            ),
+          ),
+    );
+
+    try {
+      int successCount = 0;
+      int failureCount = 0;
+      final List<Map<String, String>> failedTasks = [];
+
+      for (final task in selectedTasks) {
+        try {
+          print('[BulkAssign] Processing task: ${task['id']}');
+
+          // Extract department/category from task
+          String department = _getDepartmentFromTask(task);
+
+          if (department.isEmpty) {
+            final category =
+                task['category'] ?? task['classification'] ?? 'Unknown';
+            failureCount++;
+            failedTasks.add({
+              'id': task['id'].toString(),
+              'reason': 'Unsupported category: $category',
+            });
+            print(
+              '[BulkAssign] Skipped: ${task['id']} - Unsupported category: $category',
+            );
+            continue;
+          }
+
+          print(
+            '[BulkAssign] Assigning task ${task['id']} to department: $department',
+          );
+
+          // Use round-robin service to auto-assign
+          final assignedStaff = await _roundRobinService.autoAssignTask(
+            taskId: task['id'].toString(),
+            taskType: 'concern_slip',
+            department: department,
+            notes: 'Auto-assigned from bulk assignment',
+          );
+
+          if (assignedStaff != null) {
+            successCount++;
+            final staffName =
+                '${assignedStaff['first_name'] ?? 'Unknown'} ${assignedStaff['last_name'] ?? ''}';
+            print('[BulkAssign] Success: ${task['id']} → $staffName');
+          } else {
+            failureCount++;
+            failedTasks.add({
+              'id': task['id'].toString(),
+              'reason': 'No available staff or assignment error',
+            });
+            print(
+              '[BulkAssign] Failed: ${task['id']} - Assignment returned null',
+            );
+          }
+        } catch (e) {
+          failureCount++;
+          failedTasks.add({'id': task['id'].toString(), 'reason': 'Error: $e'});
+          print('[BulkAssign] Error assigning ${task['id']}: $e');
+        }
+      }
+
+      // Close loading dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      // Show result dialog
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder:
+              (BuildContext context) => AlertDialog(
+                title: const Text('Bulk Assignment Complete'),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Successfully assigned: $successCount',
+                        style: const TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (failureCount > 0)
+                        Text(
+                          'Failed: $failureCount',
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      if (failedTasks.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        const Text('Failed tasks:'),
+                        ...failedTasks.map(
+                          (task) => Text(
+                            '  • ${task['id']} - ${task['reason']}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      // Refresh the list
+                      _fetchRepairTasks();
+                      // Clear selection
+                      setState(() {
+                        _selectedTaskIds.clear();
+                      });
+                    },
+                    child: const Text('OK'),
+                  ),
+                ],
+              ),
+        );
+      }
+    } catch (e) {
+      print('[BulkAssign] Error: $e');
+      // Close loading dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      // Show error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  // Helper method to refresh tasks, called after bulk actions complete
+  Future<void> _fetchRepairTasks() async {
+    await _loadConcernSlips();
+  }
+
+  String _getDepartmentFromTask(Map<String, dynamic> task) {
+    final category =
+        (task['category'] ?? task['classification'] ?? '')
+            .toString()
+            .toLowerCase()
+            .trim();
+
+    // Map category to department
+    switch (category) {
+      case 'electrical':
+        return 'electrical';
+      case 'plumbing':
+        return 'plumbing';
+      case 'hvac':
+        return 'hvac';
+      case 'carpentry':
+        return 'carpentry';
+      case 'masonry':
+        return 'masonry';
+      case 'pest control':
+        return 'pest_control';
+      default:
+        return ''; // Default department
+    }
+  }
+
   final List<double> _colW = <double>[
-    85, // CONCERN ID
+    30, // CHECKBOX
+    95, // CONCERN ID
     130, // TITLE
-    130, // DATE REQUESTED
+    120, // DATE REQUESTED
     100, // BUILDING & UNIT
     70, // PRIORITY
     100, // CLASSIFICTAION
@@ -695,7 +1022,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     Widget child, {
     Alignment align = Alignment.centerLeft,
   }) {
-    return SizedBox(
+    return Container(
       width: _colW[i],
       child: Align(alignment: align, child: child),
     );
@@ -1183,6 +1510,20 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                                   DataColumn(
                                     label: _fixedCell(
                                       0,
+                                      Checkbox(
+                                        value:
+                                            _selectedTaskIds.length ==
+                                                _filteredTasks.length &&
+                                            _filteredTasks.isNotEmpty,
+                                        onChanged: _onSelectAll,
+                                        activeColor: Colors.blue,
+                                      ),
+                                      align: Alignment.center,
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: _fixedCell(
+                                      0,
                                       const Text("CONCERN ID"),
                                     ),
                                   ),
@@ -1243,6 +1584,30 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                                     _paginatedTasks.map((task) {
                                       return DataRow(
                                         cells: [
+                                          DataCell(
+                                            _fixedCell(
+                                              0,
+                                              Checkbox(
+                                                value: _selectedTaskIds
+                                                    .contains(task['id']),
+                                                onChanged: (selected) {
+                                                  setState(() {
+                                                    if (selected == true) {
+                                                      _selectedTaskIds.add(
+                                                        task['id'],
+                                                      );
+                                                    } else {
+                                                      _selectedTaskIds.remove(
+                                                        task['id'],
+                                                      );
+                                                    }
+                                                  });
+                                                },
+                                                activeColor: Colors.blue,
+                                              ),
+                                              align: Alignment.center,
+                                            ),
+                                          ),
                                           DataCell(
                                             _fixedCell(
                                               0,
@@ -1341,93 +1706,141 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                         ),
                         Padding(
                           padding: const EdgeInsets.all(20.0),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          child: Column(
                             children: [
-                              Text(
-                                _filteredTasks.isEmpty
-                                    ? "No entries"
-                                    : "Showing ${_currentPage * _itemsPerPage + 1} to ${((_currentPage + 1) * _itemsPerPage).clamp(0, _filteredTasks.length)} of ${_filteredTasks.length} ${_filteredTasks.length == 1 ? 'entry' : 'entries'}",
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 14,
-                                ),
-                              ),
+                              // Pagination controls and entry info row
                               Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  // Previous button
-                                  IconButton(
-                                    onPressed:
-                                        _currentPage > 0
-                                            ? () {
-                                              setState(() {
-                                                _currentPage--;
-                                              });
-                                            }
-                                            : null,
-                                    icon: const Icon(Icons.chevron_left),
-                                    color: Colors.blue,
-                                    disabledColor: Colors.grey[300],
+                                  Text(
+                                    _filteredTasks.isEmpty
+                                        ? "No entries"
+                                        : "Showing ${_currentPage * _itemsPerPage + 1} to ${((_currentPage + 1) * _itemsPerPage).clamp(0, _filteredTasks.length)} of ${_filteredTasks.length} ${_filteredTasks.length == 1 ? 'entry' : 'entries'}",
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 14,
+                                    ),
                                   ),
-                                  // Page numbers
-                                  ...List.generate(
-                                    _totalPages,
-                                    (index) => Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 4,
+                                  Row(
+                                    children: [
+                                      const SizedBox(height: 16),
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Builder(
+                                          builder: (context) {
+                                            // Determine if any selected task is already assigned
+                                            final bool
+                                            anySelectedAlreadyAssigned =
+                                                _repairTasks.any((t) {
+                                                  try {
+                                                    final id = t['id'];
+                                                    if (id == null)
+                                                      return false;
+                                                    if (!_selectedTaskIds
+                                                        .contains(id))
+                                                      return false;
+                                                    final mapped = _mapStatus(
+                                                      t['status'],
+                                                      t['workflow'],
+                                                      t['resolutionType'],
+                                                    );
+                                                    return mapped ==
+                                                            'to inspect' ||
+                                                        mapped == 'inspected';
+                                                  } catch (e) {
+                                                    return false;
+                                                  }
+                                                });
+
+                                            return BulkActionButtons(
+                                              selectedCount:
+                                                  _selectedTaskIds.length,
+                                              onAssign: _bulkAssignTasks,
+                                              onDelete: _bulkDeleteTasks,
+                                              isEnabled:
+                                                  _selectedTaskIds.isNotEmpty,
+                                              canAssign:
+                                                  !_selectedTaskIds.isEmpty &&
+                                                  !anySelectedAlreadyAssigned,
+                                            );
+                                          },
+                                        ),
                                       ),
-                                      child: InkWell(
-                                        onTap: () {
-                                          setState(() {
-                                            _currentPage = index;
-                                          });
-                                        },
-                                        child: Container(
-                                          width: 32,
-                                          height: 32,
-                                          decoration: BoxDecoration(
-                                            color:
-                                                _currentPage == index
-                                                    ? Colors.blue
-                                                    : Colors.transparent,
-                                            borderRadius: BorderRadius.circular(
-                                              4,
-                                            ),
-                                            border: Border.all(
-                                              color:
-                                                  _currentPage == index
-                                                      ? Colors.blue
-                                                      : Colors.grey[300]!,
-                                            ),
+                                      // Previous button
+                                      IconButton(
+                                        onPressed:
+                                            _currentPage > 0
+                                                ? () {
+                                                  setState(() {
+                                                    _currentPage--;
+                                                  });
+                                                }
+                                                : null,
+                                        icon: const Icon(Icons.chevron_left),
+                                        color: Colors.blue,
+                                        disabledColor: Colors.grey[300],
+                                      ),
+                                      // Page numbers
+                                      ...List.generate(
+                                        _totalPages,
+                                        (index) => Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 4,
                                           ),
-                                          alignment: Alignment.center,
-                                          child: Text(
-                                            '${index + 1}',
-                                            style: TextStyle(
-                                              color:
-                                                  _currentPage == index
-                                                      ? Colors.white
-                                                      : Colors.black87,
-                                              fontSize: 14,
+                                          child: InkWell(
+                                            onTap: () {
+                                              setState(() {
+                                                _currentPage = index;
+                                              });
+                                            },
+                                            child: Container(
+                                              width: 32,
+                                              height: 32,
+                                              decoration: BoxDecoration(
+                                                color:
+                                                    _currentPage == index
+                                                        ? Colors.blue
+                                                        : Colors.transparent,
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                                border: Border.all(
+                                                  color:
+                                                      _currentPage == index
+                                                          ? Colors.blue
+                                                          : Colors.grey[300]!,
+                                                ),
+                                              ),
+                                              alignment: Alignment.center,
+                                              child: Text(
+                                                '${index + 1}',
+                                                style: TextStyle(
+                                                  color:
+                                                      _currentPage == index
+                                                          ? Colors.white
+                                                          : Colors.black87,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                  // Next button
-                                  IconButton(
-                                    onPressed:
-                                        _currentPage < _totalPages - 1
-                                            ? () {
-                                              setState(() {
-                                                _currentPage++;
-                                              });
-                                            }
-                                            : null,
-                                    icon: const Icon(Icons.chevron_right),
-                                    color: Colors.blue,
-                                    disabledColor: Colors.grey[300],
+                                      // Next button
+                                      IconButton(
+                                        onPressed:
+                                            _currentPage < _totalPages - 1
+                                                ? () {
+                                                  setState(() {
+                                                    _currentPage++;
+                                                  });
+                                                }
+                                                : null,
+                                        icon: const Icon(Icons.chevron_right),
+                                        color: Colors.blue,
+                                        disabledColor: Colors.grey[300],
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),

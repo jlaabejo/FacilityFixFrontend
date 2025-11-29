@@ -2,7 +2,7 @@ import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/staff/maintenance_task.dart';
 import 'package:facilityfix/staff/repair_task.dart';
 import 'package:flutter/material.dart';
-import 'package:facilityfix/models/work_orders.dart'; 
+import 'package:facilityfix/models/work_orders.dart';
 import 'package:facilityfix/staff/announcement.dart';
 import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
@@ -566,6 +566,7 @@ class _WorkOrderDetailsState extends State<WorkOrderDetailsPage> {
       assessedAt: w.assessedAt,
       assessment: w.assessment,
       staffAttachments: w.staffAttachments,
+      isStaff: true,
     );
   }
 

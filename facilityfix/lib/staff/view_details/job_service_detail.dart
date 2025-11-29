@@ -859,6 +859,7 @@ class _StaffJobServiceDetailPageState extends State<StaffJobServiceDetailPage> {
 
                           // Callbacks
                           onViewConcernSlip: _viewConcernSlip,
+                          isStaff: true,
                         ),
                       ],
                       if (_jobServiceData!['assessment'] != null ||

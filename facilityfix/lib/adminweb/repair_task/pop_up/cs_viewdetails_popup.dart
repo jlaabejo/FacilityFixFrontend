@@ -5,6 +5,7 @@ import 'package:facilityfix/adminweb/widgets/delete_popup.dart';
 import 'package:intl/intl.dart';
 import 'edit_popup.dart';
 import 'package:flutter/material.dart';
+import '../../services/round_robin_assignment_service.dart';
 import 'package:flutter/services.dart';
 import '../../services/api_service.dart' as admin_api;
 
@@ -48,6 +49,8 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
   final _formKey = GlobalKey<FormState>();
   final APIService _apiService = APIService();
   final admin_api.ApiService _adminApiService = admin_api.ApiService();
+  final RoundRobinAssignmentService _roundRobinService =
+      RoundRobinAssignmentService();
 
   bool _formValid = false;
   bool _isAssigning = false;
@@ -55,6 +58,7 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
 
   String? selectedStaffId;
   String? selectedStaffName;
+  String? roundRobinAssignedStaffId; // Track the round-robin assigned staff
   DateTime? selectedDate;
   DateTime? selectedEndDate;
   final TextEditingController notesController = TextEditingController();
@@ -340,27 +344,96 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
   }
 
   void _autoAssignStaff() {
-    // Auto-assign staff based on department using round-robin or first available
-    if (_staffList.isEmpty) return;
+    // Auto-assign staff using round-robin algorithm
+    if (_staffList.isEmpty) {
+      print('[ConcernSlipDetail] No staff available for auto-assignment');
+      return;
+    }
 
-    // Sort by workload if available, otherwise use first staff
-    _staffList.sort((a, b) {
-      final workloadA = a['current_workload'] ?? 0;
-      final workloadB = b['current_workload'] ?? 0;
-      return workloadA.compareTo(workloadB);
-    });
+    _performRoundRobinAssignment();
+  }
 
-    // Auto-select the staff member with lowest workload
-    final autoSelectedStaff = _staffList.first;
-    setState(() {
-      selectedStaffId = _getStaffId(autoSelectedStaff);
-      selectedStaffName = _getStaffDisplayName(autoSelectedStaff);
-    });
-    _revalidate();
+  Future<void> _performRoundRobinAssignment() async {
+    try {
+      String? taskCategory = widget.task['category']?.toString().toLowerCase();
+      String? department;
 
-    print(
-      '[ConcernSlipDetail] Auto-assigned staff: $selectedStaffName (ID: $selectedStaffId)',
-    );
+      switch (taskCategory) {
+        case 'electrical':
+          department = 'electrical';
+          break;
+        case 'plumbing':
+          department = 'plumbing';
+          break;
+        case 'carpentry':
+          department = 'carpentry';
+          break;
+        case 'masonry':
+          department = 'masonry';
+          break;
+        case 'hvac':
+          department = 'electrical';
+          break;
+        case 'pest control':
+        case 'pest_control':
+          department = 'masonry';
+          break;
+        default:
+          department = null;
+      }
+
+      if (department == null) {
+        // Fallback to first staff if department cannot be determined
+        if (_staffList.isNotEmpty) {
+          final firstStaff = _staffList.first;
+          setState(() {
+            roundRobinAssignedStaffId = _getStaffId(firstStaff);
+            selectedStaffId = _getStaffId(firstStaff);
+            selectedStaffName = _getStaffDisplayName(firstStaff);
+          });
+        }
+        return;
+      }
+
+      final nextStaff = await _roundRobinService.getNextStaffForDepartment(
+        department,
+      );
+
+      if (nextStaff != null) {
+        setState(() {
+          roundRobinAssignedStaffId = _getStaffId(nextStaff);
+          selectedStaffId = _getStaffId(nextStaff);
+          selectedStaffName = _getStaffDisplayName(nextStaff);
+        });
+
+        print(
+          '[ConcernSlipDetail] Round-robin assigned staff: $selectedStaffName (ID: $selectedStaffId)',
+        );
+      } else {
+        print(
+          '[ConcernSlipDetail] No staff available from round-robin, falling back to first available',
+        );
+        if (_staffList.isNotEmpty) {
+          final firstStaff = _staffList.first;
+          setState(() {
+            roundRobinAssignedStaffId = _getStaffId(firstStaff);
+            selectedStaffId = _getStaffId(firstStaff);
+            selectedStaffName = _getStaffDisplayName(firstStaff);
+          });
+        }
+      }
+    } catch (e) {
+      print('[ConcernSlipDetail] Error in round-robin assignment: $e');
+      // Fallback to first staff
+      if (_staffList.isNotEmpty) {
+        final firstStaff = _staffList.first;
+        setState(() {
+          roundRobinAssignedStaffId = _getStaffId(firstStaff);
+          selectedStaffId = _getStaffId(firstStaff);
+          selectedStaffName = _getStaffDisplayName(firstStaff);
+        });
+      }
+    }
   }
 
   @override
@@ -372,41 +445,64 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
   String _getStaffDisplayName(Map<String, dynamic> staff) {
     final firstName = staff['first_name'] ?? '';
     final lastName = staff['last_name'] ?? '';
+    final department =
+        staff['staff_department'] ?? staff['department'] ?? 'General';
+    final userId = staff['user_id'] ?? staff['id'] ?? '';
     String name = '$firstName $lastName'.trim();
     if (name.isEmpty) name = 'Staff Member';
-    return name;
+
+    return '$name - $department ($userId)';
   }
 
   String _getStaffId(Map<String, dynamic> staff) {
     return staff['user_id'] ?? staff['id'] ?? '';
   }
 
-  Widget _buildSimpleAvatar(String name, {double size = 32}) {
-    // Get initials from name
-    final parts = name.trim().split(' ');
+  String _getStaffInitials(Map<String, dynamic> staff) {
+    final firstName = staff['first_name'] ?? '';
+    final lastName = staff['last_name'] ?? '';
     String initials = '';
-    if (parts.isNotEmpty) {
-      initials = parts[0].isNotEmpty ? parts[0][0].toUpperCase() : '';
-      if (parts.length > 1 && parts.last.isNotEmpty) {
-        initials += parts.last[0].toUpperCase();
-      }
-    }
-    if (initials.isEmpty) initials = '?';
+    if (firstName.isNotEmpty) initials += firstName[0].toUpperCase();
+    if (lastName.isNotEmpty) initials += lastName[0].toUpperCase();
 
-    // Generate color from name
-    int hash = 0;
-    for (int i = 0; i < name.length; i++) {
-      hash = name.codeUnitAt(i) + ((hash << 5) - hash);
-    }
+    return initials.isNotEmpty ? initials : 'SM';
+  }
+
+  Color _getStaffAvatarColor(Map<String, dynamic> staff) {
     final colors = [
-      Colors.blue[700]!,
-      Colors.green[700]!,
-      Colors.orange[700]!,
-      Colors.purple[700]!,
-      Colors.teal[700]!,
-      Colors.pink[700]!,
+      const Color(0xFF6366F1),
+      const Color(0xFF8B5CF6),
+      const Color(0xFFEC4899),
+      const Color(0xFFF59E0B),
+      const Color(0xFF10B981),
+      const Color(0xFF3B82F6),
+      const Color(0xFF06B6D4),
+      const Color(0xFFF97316),
+      const Color(0xFF14B8A6),
+      const Color(0xFFA855F7),
     ];
-    final color = colors[hash.abs() % colors.length];
+
+    final name =
+        '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'.trim();
+    final hash = name.hashCode.abs();
+    return colors[hash % colors.length];
+  }
+
+  Widget _buildSimpleAvatar(String name, {double size = 24}) {
+    final colors = [
+      const Color(0xFF6366F1),
+      const Color(0xFF8B5CF6),
+      const Color(0xFFEC4899),
+      const Color(0xFFF59E0B),
+      const Color(0xFF10B981),
+      const Color(0xFF3B82F6),
+      const Color(0xFF06B6D4),
+      const Color(0xFFF97316),
+      const Color(0xFF14B8A6),
+      const Color(0xFFA855F7),
+    ];
+    final hash = name.hashCode.abs();
+    final color = colors[hash % colors.length];
 
     return Container(
       width: size,
@@ -414,10 +510,14 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
       decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       child: Center(
         child: Text(
-          initials,
+          name
+              .split(' ')
+              .map((p) => p.isNotEmpty ? p[0].toUpperCase() : '')
+              .take(2)
+              .join(),
           style: TextStyle(
             color: Colors.white,
-            fontSize: size * 0.4,
+            fontSize: size * 0.35,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -829,7 +929,7 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
                           ),
                         ),
                       )
-                      : const Text('Save and Assign'),
+                      : const Text('Assign'),
             ),
           ] else ...[
             // Only show Next button if status is pending
@@ -1316,6 +1416,223 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
     );
   }
 
+  Widget _buildStaffSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'ASSIGNED STAFF',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[600],
+                letterSpacing: 0.5,
+              ),
+            ),
+            if (selectedStaffId != null &&
+                selectedStaffId == roundRobinAssignedStaffId)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.blue[100],
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Auto-assigned',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.blue[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        FormField<String>(
+          validator: (_) {
+            if (selectedStaffId == null || selectedStaffId!.isEmpty)
+              return 'Please select a staff member';
+            return null;
+          },
+          builder:
+              (state) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: selectedStaffId,
+                    decoration: InputDecoration(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 14,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color:
+                              state.hasError ? Colors.red : Colors.grey[300]!,
+                        ),
+                      ),
+                    ),
+                    hint: const Text('Select staff member'),
+                    selectedItemBuilder: (BuildContext context) {
+                      return _staffList.map<Widget>((m) {
+                        // When a staff is selected, display it with avatar and name
+                        if (selectedStaffId != null &&
+                            selectedStaffId!.isNotEmpty &&
+                            selectedStaffName != null) {
+                          return Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildSimpleAvatar(
+                                  selectedStaffName!,
+                                  size: 24,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    selectedStaffName!,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        // Fallback to original behavior if no staff is selected
+                        final name = _getStaffDisplayName(m);
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildSimpleAvatar(name, size: 24),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList();
+                    },
+                    items:
+                        _staffList.isNotEmpty
+                            ? _staffList.map((m) {
+                              final id = _getStaffId(m);
+                              final name = _getStaffDisplayName(m);
+                              final isRoundRobinSelected =
+                                  (id == roundRobinAssignedStaffId);
+                              return DropdownMenuItem<String>(
+                                value: id,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _buildSimpleAvatar(name, size: 28),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  name,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ),
+                                              if (isRoundRobinSelected)
+                                                Container(
+                                                  margin: const EdgeInsets.only(
+                                                    left: 8,
+                                                  ),
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.blue[100],
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          3,
+                                                        ),
+                                                  ),
+                                                  child: Text(
+                                                    'RR',
+                                                    style: TextStyle(
+                                                      fontSize: 9,
+                                                      color: Colors.blue[700],
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList()
+                            : [],
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() {
+                          selectedStaffId = v;
+                          try {
+                            final found = _staffList.firstWhere(
+                              (m) => (_getStaffId(m) == v),
+                              orElse: () => {},
+                            );
+                            if (found.isNotEmpty) {
+                              selectedStaffName = _getStaffDisplayName(found);
+                            }
+                          } catch (_) {}
+                          _revalidate();
+                        });
+                      }
+                    },
+                  ),
+                  if (state.hasError) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      state.errorText!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ],
+                ],
+              ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          widget.task['department'] ?? 'No Department',
+          style: TextStyle(color: Colors.grey[600], fontSize: 13),
+        ),
+      ],
+    );
+  }
+
   Widget _buildAssignmentFormView() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1400,7 +1717,7 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: _buildAutoAssignedStaffDisplay()),
+            Expanded(child: _buildStaffSelector()),
             const SizedBox(width: 24),
             Expanded(child: _buildDatePicker()),
           ],
