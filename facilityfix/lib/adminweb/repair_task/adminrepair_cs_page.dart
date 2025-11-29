@@ -423,6 +423,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
         'user_scheduling': '/user/scheduling',
         'work_maintenance': '/work/maintenance',
         'work_repair': '/work/repair',
+        'work_task_types': '/work/tasktypes',
         'calendar': '/calendar',
         'inventory_equipment': '/inventory/equipment',
         'inventory_items': '/inventory/items',
@@ -994,14 +995,14 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   }
 
   final List<double> _colW = <double>[
-    30, // CHECKBOX
-    95, // CONCERN ID
+    10, // CHECKBOX
+    100, // CONCERN ID
     130, // TITLE
-    120, // DATE REQUESTED
-    100, // BUILDING & UNIT
-    70, // PRIORITY
+    110, // DATE REQUESTED
+    90, // BUILDING & UNIT
+    60, // PRIORITY
     100, // CLASSIFICTAION
-    90, // STATUS
+    80, // STATUS
     38, // ACTION
   ];
 
@@ -1478,7 +1479,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                             scrollDirection: Axis.horizontal,
                             child: SingleChildScrollView(
                               child: DataTable(
-                                columnSpacing: 50,
+                                columnSpacing: 40,
                                 headingRowHeight: 56,
                                 dataRowHeight: 64,
                                 headingRowColor: WidgetStateProperty.all(

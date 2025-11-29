@@ -1,36 +1,33 @@
 import 'dart:math' as math;
 import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:flutter/material.dart';
-import 'package:facilityfix/utils/inventory_notifier.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
 import '../services/round_robin_assignment_service.dart';
 import '../../services/auth_storage.dart';
+import '../../utils/inventory_notifier.dart';
 import '../../services/api_services.dart' as main_api;
 import 'package:file_picker/file_picker.dart';
 import 'package:facilityfix/services/api_services.dart' as SecondaryAPI;
 
-class InternalMaintenanceFormPage extends StatefulWidget {
+class DisasterPreparednessFormPage extends StatefulWidget {
   final Map<String, dynamic>? maintenanceData;
   final bool isEditMode;
 
-  const InternalMaintenanceFormPage({
+  const DisasterPreparednessFormPage({
     super.key,
     this.maintenanceData,
     this.isEditMode = false,
-    
   });
 
-  
-
   @override
-  State<InternalMaintenanceFormPage> createState() =>
-      _InternalMaintenanceFormPageState();
+  State<DisasterPreparednessFormPage> createState() =>
+      _DisasterPreparednessFormPageState();
 }
 
-class _InternalMaintenanceFormPageState
-    extends State<InternalMaintenanceFormPage> {
+class _DisasterPreparednessFormPageState
+    extends State<DisasterPreparednessFormPage> {
   // -------------------- FORM & VALIDATION --------------------
   final _formKey = GlobalKey<FormState>();
   AutovalidateMode _autoMode =
@@ -56,9 +53,6 @@ class _InternalMaintenanceFormPageState
     'Dec',
   ];
 
-
-
-
   List<PlatformFile>? attachments = const [];
   bool _isAutoAssigning = false;
   // -------------------- CONTROLLERS --------------------
@@ -75,7 +69,8 @@ class _InternalMaintenanceFormPageState
   final _adminNotesController = TextEditingController();
   final _startDateController = TextEditingController(); // read-only
   final _nextDueDateController = TextEditingController(); // read-only
-  final _checklistItemController = TextEditingController(); // For checklist input
+  final _checklistItemController =
+      TextEditingController(); // For checklist input
 
   // -------------------- STATE --------------------
   String? _selectedPriority;
@@ -84,7 +79,7 @@ class _InternalMaintenanceFormPageState
   String? _selectedRecurrence;
   String? _selectedDepartment;
   String? _selectedStaffUserId; // Store the actual staff UID
-  String? _selectedTaskType;
+
   DateTime? _dateCreated;
   DateTime? _startDate;
   DateTime? _nextDueDate;
@@ -93,14 +88,20 @@ class _InternalMaintenanceFormPageState
 
   List<Map<String, dynamic>> _staffMembers = [];
   List<Map<String, dynamic>> get _filteredStaffMembers {
-    if (_selectedDepartment == null || _selectedDepartment!.isEmpty) return _staffMembers;
+    if (_selectedDepartment == null || _selectedDepartment!.isEmpty)
+      return _staffMembers;
     return _staffMembers.where((staff) {
-      final staffDept = (staff['staff_department'] ?? staff['department'])?.toString().toLowerCase();
+      final staffDept =
+          (staff['staff_department'] ?? staff['department'])
+              ?.toString()
+              .toLowerCase();
       return staffDept == _selectedDepartment!.toLowerCase();
     }).toList();
   }
+
   List<Map<String, dynamic>> _availableInventoryItems = [];
   List<Map<String, dynamic>> _selectedInventoryItems = [];
+  String? _buildingId;
   final _apiService = ApiService();
   final _mainApiService = main_api.APIService();
   final _roundRobinService = RoundRobinAssignmentService();
@@ -110,42 +111,43 @@ class _InternalMaintenanceFormPageState
 
   bool get _isEditing => widget.isEditMode || _isLocalEdit;
 
-  // -------------------- NAV --------------------
-  String? _getRoutePath(String routeKey) {
-    final Map<String, String> pathMap = {
-      'dashboard': '/dashboard',
-      'user_users': '/user/users',
-      'user_roles': '/user/roles',
-      'work_maintenance': '/work/maintenance',
-      'work_repair': '/work/repair',
-      'calendar': '/calendar',
-      'inventory_items': '/inventory/items',
-      'inventory_request': '/inventory/request',
-      'analytics': '/analytics',
-      'announcement': '/announcement',
-      'settings': '/settings',
-    };
-    return pathMap[routeKey];
+  static String? _getRoutePath(String routeKey) {
+      final Map<String, String> pathMap = {
+        'dashboard': '/dashboard',
+        'user_users': '/user/users',
+        'user_scheduling': '/user/scheduling',
+        'work_maintenance': '/work/maintenance',
+        'work_repair': '/work/repair',
+        'disaster_prepardness': '/disaster_prepardness',
+        'calendar': '/calendar',
+        'inventory_equipment': '/inventory/equipment',
+        'inventory_items': '/inventory/items',
+        'inventory_request': '/inventory/request',
+        'analytics': '/analytics',
+        'announcement': '/announcement',
+        'settings': '/settings',
+        'logout': '/logout',
+      };
+      return pathMap[routeKey];
+    }
+
+  // Logout functionality
+  void _handleLogout(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return const LogoutPopup();
+      },
+    );
+
+    if (result == true) {
+      context.go('/');
+    }
   }
-
-// Logout functionality
-void _handleLogout(BuildContext context) async {
-  final result = await showDialog<bool>(
-    context: context,
-    builder: (BuildContext context) {
-      return const LogoutPopup();
-    },
-  );
-
-  if (result == true) {
-    context.go('/');
-  }
-}
-
 
   // -------------------- HELPERS --------------------
   // TODO: Replace with your auth/current user provider
-  // String _getCurrentUserName() => 'Michelle Reyes'; // REMOVED
+  String _getCurrentUserName() => 'Michelle Reyes';
 
   String _fmtDate(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -209,13 +211,37 @@ void _handleLogout(BuildContext context) async {
     await _loadStaffMembers();
 
     // Load inventory items
+    // Save building id and use it when loading inventory
+    _buildingId = profile != null ? (profile['building_id'] ?? profile['buildingId'] ?? profile['building'])?.toString() : null;
     await _loadInventoryItems();
+  }
+
+  Future<int> _getReservedQty(String inventoryId) async {
+    try {
+      final resp = await _apiService.getInventoryReservations();
+      if (resp['success'] == true && resp['data'] != null) {
+        final reservations = List<Map<String, dynamic>>.from(resp['data']);
+        int reservedTotal = 0;
+        for (var r in reservations) {
+          if ((r['inventory_id']?.toString() ?? '') == inventoryId) {
+            final status = (r['status'] ?? r['request_status'] ?? 'reserved').toString().toLowerCase();
+            if (status == 'reserved' || status == 'approved' || status == 'pending') {
+              reservedTotal += (r['quantity'] ?? 0) as int;
+            }
+          }
+        }
+        return reservedTotal;
+      }
+    } catch (e) {
+      print('[v0] Error computing reserved qty for $inventoryId: $e');
+    }
+    return 0;
   }
 
   Future<void> _loadInventoryItems() async {
     try {
       // TODO: Replace with actual building ID from user session
-      final response = await _mainApiService.getBuildingInventory('default_building_id');
+      final response = await _mainApiService.getBuildingInventory(_buildingId ?? 'default_building_id');
 
       if (response['success'] == true && response['data'] != null) {
         setState(() {
@@ -305,15 +331,19 @@ void _handleLogout(BuildContext context) async {
           (context) => _InventorySelectionDialog(
             availableItems: filteredItems,
             selectedLocation: _selectedLocation,
-            onItemSelected: (item, quantity) {
+            onItemSelected: (item, quantity) async {
+              final inventoryId = item['id'] ?? item['_doc_id'] ?? item['item_code'] ?? item['itemCode'];
+              final reservedQty = (inventoryId != null) ? await _getReservedQty(inventoryId.toString()) : 0;
               setState(() {
                 _selectedInventoryItems.add({
-                  'inventory_id': item['item_code'] ?? item['itemCode'] ?? item['id'] ?? item['_doc_id'],
+                  'inventory_id': inventoryId,
                   'item_name': item['item_name'],
                   'item_code': item['item_code'],
                   'quantity': quantity,
                   'available_stock': item['current_stock'],
                   'unit': item['unit'] ?? '',
+                  'reserved_stock': reservedQty,
+                  'autoReserve': false, // manually-added items should not auto-reserve
                 });
               });
             },
@@ -365,6 +395,7 @@ void _handleLogout(BuildContext context) async {
           departmentKey = 'general_maintenance';
       }
 
+      // Fix: Pass departmentKey as a positional argument to getNextStaffForDepartment
       final nextStaff = await _roundRobinService.getNextStaffForDepartment(
         departmentKey,
       );
@@ -373,6 +404,7 @@ void _handleLogout(BuildContext context) async {
         final firstName = nextStaff['first_name'] ?? '';
         final lastName = nextStaff['last_name'] ?? '';
         final staffName = '$firstName $lastName'.trim();
+        // Use Firebase UID or staff_id from auto-assigned staff
         final staffId = nextStaff['user_id'] ?? nextStaff['id'];
 
         // Update the text field and selected staff ID
@@ -498,41 +530,74 @@ void _handleLogout(BuildContext context) async {
     }
   }
 
-  Future<List<Map<String, String>>> _createInventoryReservations(String taskId) async {
+  Future<List<String>> _createInventoryReservations(String taskId) async {
     if (_selectedInventoryItems.isEmpty) return [];
 
-    final List<Map<String, String>> createdReservations = [];
+    final List<String> createdReservationIds = [];
 
     try {
       for (final item in _selectedInventoryItems) {
-        final qty = item['quantity'];
-        if (qty == null || qty <= 0) {
-          print('[v0] Skipping reservation for ${item['item_name']} due to invalid quantity: $qty');
+        // Only create reservations for items marked as autoReserve
+        if (!(item['autoReserve'] == true || item['reserve'] == true)) {
+          print('[v0] Skipping reservation for ${item['item_name']} as autoReserve is false');
           continue;
         }
+        final qty = item['quantity'];
+        if (qty == null || qty <= 0) {
+          print(
+            '[v0] Skipping reservation for ${item['item_name']} due to invalid quantity: $qty',
+          );
+          continue;
+        }
+        // Resolve inventoryId if it's a SKU or not resolved yet
+          String? inventoryId = item['inventory_id']?.toString() ?? item['item_code']?.toString() ?? '';
+
+        if (inventoryId == null || inventoryId.isEmpty) {
+          print('[v0] Skipping reservation for ${item['item_name']} - unresolved inventory id');
+          continue;
+        }
+
         final response = await _apiService.createInventoryReservation(
-          inventoryId: item['inventory_id'],
+          inventoryId: inventoryId,
           quantity: qty,
           maintenanceTaskId: taskId,
         );
 
         // Extract the reservation ID from the response
         if (response['success'] == true && response['reservation_id'] != null) {
-          final rid = response['reservation_id'].toString();
-          createdReservations.add({
-            'inventory_id': item['inventory_id']?.toString() ?? '',
-            'reservation_id': rid,
-          });
+          createdReservationIds.add(response['reservation_id']);
           print('[v0] Created inventory reservation: ${response['reservation_id']}');
+          try {
+            InventoryUpdateNotifier().notifyItemUpdated(inventoryId.toString());
+          } catch (_) {}
+          // Refresh local reserved counts immediately after creating each reservation
+          try {
+            await _refreshSelectedReservedCounts();
+          } catch (_) {}
         }
       }
       print(
-        '[v0] Created ${createdReservations.length} inventory reservations linked to task $taskId',
+        '[v0] Created ${createdReservationIds.length} inventory reservations linked to task $taskId',
       );
-      return createdReservations;
+      return createdReservationIds;
     } catch (e) {
       print('[v0] Error creating inventory reservations: $e');
       throw Exception('Failed to create inventory reservations: $e');
+    }
+  }
+
+  // Refresh reserved counts for the selected inventory items.
+  Future<void> _refreshSelectedReservedCounts() async {
+    if (_selectedInventoryItems.isEmpty) return;
+    for (int i = 0; i < _selectedInventoryItems.length; i++) {
+      final item = _selectedInventoryItems[i];
+      final invId = item['inventory_id']?.toString();
+      if (invId != null && invId.isNotEmpty) {
+        final qty = await _getReservedQty(invId);
+        setState(() {
+          _selectedInventoryItems[i]['reserved_stock'] = qty;
+        });
+      }
     }
   }
 
@@ -734,25 +799,33 @@ void _handleLogout(BuildContext context) async {
     try {
       final taskId = widget.maintenanceData!['id']?.toString();
       if (taskId != null) {
-        final response = await _apiService.getInventoryReservations(maintenanceTaskId: taskId);
+        final response = await _apiService.getInventoryReservations(
+          maintenanceTaskId: taskId,
+        );
         if (response['success'] == true && response['data'] != null) {
-          final reservations = List<Map<String, dynamic>>.from(response['data']);
-          
+          final reservations = List<Map<String, dynamic>>.from(
+            response['data'],
+          );
+
           // Fetch details for each reserved item
           final List<Map<String, dynamic>> itemsWithDetails = [];
           for (final res in reservations) {
             final inventoryId = res['inventory_id'] ?? res['item_id'];
             if (inventoryId != null) {
               try {
-                final itemResponse = await _apiService.getInventoryItem(inventoryId);
-                if (itemResponse['success'] == true && itemResponse['data'] != null) {
+                final itemResponse = await _apiService.getInventoryItem(
+                  inventoryId,
+                );
+                if (itemResponse['success'] == true &&
+                    itemResponse['data'] != null) {
                   final item = itemResponse['data'];
                   itemsWithDetails.add({
                     'inventory_id': inventoryId,
                     'item_name': item['item_name'] ?? item['name'] ?? '',
                     'item_code': item['item_code'] ?? item['code'] ?? '',
                     'quantity': res['quantity'] ?? 0,
-                    'available_stock': item['current_stock'] ?? item['stock'] ?? '',
+                    'available_stock':
+                        item['current_stock'] ?? item['stock'] ?? '',
                     'unit': item['unit'] ?? '',
                   });
                 }
@@ -770,7 +843,7 @@ void _handleLogout(BuildContext context) async {
               }
             }
           }
-          
+
           setState(() {
             _selectedInventoryItems = itemsWithDetails;
           });
@@ -817,7 +890,14 @@ void _handleLogout(BuildContext context) async {
 
       // Remarks / Additional notes - accept several possible backend keys
       String? remarksVal;
-      for (final k in ['remarks', 'additional_notes', 'additional_note', 'additional_comments', 'notes', 'admin_notification']) {
+      for (final k in [
+        'remarks',
+        'additional_notes',
+        'additional_note',
+        'additional_comments',
+        'notes',
+        'admin_notification',
+      ]) {
         final v = data[k];
         if (v != null) {
           remarksVal = v.toString();
@@ -828,7 +908,12 @@ void _handleLogout(BuildContext context) async {
 
       // Admin notes - accept several possible backend keys
       String? adminNotesVal;
-      for (final k in ['admin_notes', 'admin_notification', 'notes', 'adminNote']) {
+      for (final k in [
+        'admin_notes',
+        'admin_notification',
+        'notes',
+        'adminNote',
+      ]) {
         final v = data[k];
         if (v != null) {
           adminNotesVal = v.toString();
@@ -844,8 +929,8 @@ void _handleLogout(BuildContext context) async {
       final validPriorities = ['Low', 'Medium', 'High'];
       _selectedPriority = validPriorities.contains(priority) ? priority : null;
 
-  // Status: coerce to string if present
-  _selectedStatus = data['status']?.toString();
+      // Status: coerce to string if present
+      _selectedStatus = data['status']?.toString();
 
       // Location: validate against location options
       final location = data['location'] ?? data['area'];
@@ -878,12 +963,7 @@ void _handleLogout(BuildContext context) async {
             })
             .join(' ');
         // Valid recurrence options: Weekly, Monthly, Quarterly, Annually
-        final validRecurrences = [
-          'Weekly',
-          'Monthly',
-          'Quarterly',
-          'Annually',
-        ];
+        final validRecurrences = ['Weekly', 'Monthly', 'Quarterly', 'Annually'];
         _selectedRecurrence =
             validRecurrences.contains(recurrenceCapitalized)
                 ? recurrenceCapitalized
@@ -917,6 +997,9 @@ void _handleLogout(BuildContext context) async {
         _assignedStaffController.text =
             (data['assigned_staff_name'] ?? 'Staff Name').toString();
       }
+
+      // Populate template (if present)
+      final templateKey = data['template_id'] ?? data['templateId'] ?? data['template'];
 
       // Dates - parse flexibly (accept ISO strings or integer timestamps)
       DateTime? parseFlexibleDate(dynamic raw) {
@@ -954,27 +1037,38 @@ void _handleLogout(BuildContext context) async {
         _dateCreatedController.text = _fmtDate(_dateCreated!);
       }
 
-      final startAt = parseFlexibleDate(data['start_date'] ?? data['scheduled_date']);
+      final startAt = parseFlexibleDate(
+        data['start_date'] ?? data['scheduled_date'],
+      );
       if (startAt != null) {
         _startDate = startAt;
         _startDateController.text = _fmtDate(_startDate!);
       }
 
-      final nextAt = parseFlexibleDate(data['next_due_date'] ?? data['next_due'] ?? data['next_occurrence']);
+      final nextAt = parseFlexibleDate(
+        data['next_due_date'] ?? data['next_due'] ?? data['next_occurrence'],
+      );
       if (nextAt != null) {
         _nextDueDate = nextAt;
         _nextDueDateController.text = _fmtDate(_nextDueDate!);
       }
 
       // Checklist items
-      final checklistData = data['checklist_completed'] ?? data['checklistItems'] ?? data['checklist'] ?? data['tasks'] ?? data['task_list'];
+      final checklistData =
+          data['checklist_completed'] ??
+          data['checklistItems'] ??
+          data['checklist'] ??
+          data['tasks'] ??
+          data['task_list'];
       if (checklistData != null && checklistData is List) {
         print('[Form] Populating checklist from data: $checklistData');
         _checklistItems.clear();
         for (var item in checklistData) {
           if (item is Map) {
             _checklistItems.add({
-              'id': item['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              'id':
+                  item['id'] ??
+                  DateTime.now().millisecondsSinceEpoch.toString(),
               'task': item['task'] ?? item['description'] ?? '',
               'completed': item['completed'] ?? false,
             });
@@ -995,12 +1089,13 @@ void _handleLogout(BuildContext context) async {
         _selectedInventoryItems.clear();
         for (var item in data['parts_used']) {
           _selectedInventoryItems.add({
-            'inventory_id': item['inventory_id'] ?? item['item_code'] ?? '', 
+            'inventory_id': item['inventory_id'] ?? item['item_code'] ?? '',
             'item_name': item['item_name'] ?? item['name'] ?? '',
             'item_code': item['item_code'] ?? item['code'] ?? '',
             'quantity': item['quantity'] ?? 0,
             'available_stock': item['available_stock'] ?? item['stock'] ?? '',
             'unit': item['unit'] ?? '',
+            'autoReserve': item['reserve'] ?? item['reserved'] ?? item['autoReserve'] ?? true,
           });
         }
       }
@@ -1077,7 +1172,7 @@ void _handleLogout(BuildContext context) async {
 
     final maintenance = <String, dynamic>{
       'id': id,
-      'maintenanceType': 'Internal',
+      'maintenanceType': 'Disaster',
       'taskTitle': _taskTitleController.text.trim(),
       'taskCode': id,
       'dateCreated': _dateCreatedController.text,
@@ -1103,8 +1198,8 @@ void _handleLogout(BuildContext context) async {
       'task_description': _descriptionController.text.trim(),
       'building_id': 'default_building',
       'scheduled_date': scheduledDateIso ?? _startDateController.text,
-      'category': 'preventive',
-      'task_type': 'internal',
+      'category': 'disaster',
+      'task_type': 'disaster',
       'recurrence_type':
           _selectedRecurrence != null
               ? _selectedRecurrence!.toLowerCase()
@@ -1137,13 +1232,9 @@ void _handleLogout(BuildContext context) async {
         print('[v0] Maintenance task updated successfully');
         print('[v0] Backend response: $result');
 
+        // upload files to firebase storage
 
-  
-
-
-      // upload files to firebase storage 
-
-      for (final file in attachments!) {
+        for (final file in attachments!) {
           await api.uploadMultipartFile(
             path: '/files/upload',
             file: file,
@@ -1154,11 +1245,7 @@ void _handleLogout(BuildContext context) async {
               'description': 'Attachment for maintenance task ${result['id']}',
             },
           );
-
-      }
-
-
-
+        }
 
         // Navigate back to maintenance list
         if (mounted) {
@@ -1172,7 +1259,9 @@ void _handleLogout(BuildContext context) async {
       } else {
         // CREATE new task
         print('[v0] Saving maintenance task to backend...');
-        final result = await _apiService.createAdminMaintenanceTask(maintenance);
+        final result = await _apiService.createAdminMaintenanceTask(
+          maintenance,
+        );
         print('[v0] Maintenance task saved successfully');
         print('[v0] Backend response: $result');
 
@@ -1185,68 +1274,38 @@ void _handleLogout(BuildContext context) async {
         print('[v0] Using task ID for inventory requests: $actualTaskId');
 
         // Create inventory reservations for selected items with the correct task ID
-        final createdPairs = await _createInventoryReservations(actualTaskId);
+        final inventoryReservationIds = await _createInventoryReservations(
+          actualTaskId,
+        );
 
-        // Update the maintenance task with the inventory reservation IDs and attach reservation IDs to parts_used
-        if (createdPairs.isNotEmpty) {
+        // Update the maintenance task with the inventory reservation IDs
+        if (inventoryReservationIds.isNotEmpty) {
           try {
-            final reservationIds = createdPairs.map((m) => m['reservation_id']?.toString() ?? '').where((s) => s.isNotEmpty).toList();
-
-            // Build mapping and updated parts
-            final Map<String, String> reservationMap = {};
-            for (final p in createdPairs) {
-              final inv = p['inventory_id']?.toString() ?? '';
-              final rid = p['reservation_id']?.toString() ?? '';
-              if (inv.isNotEmpty && rid.isNotEmpty) reservationMap[inv] = rid;
-            }
-
-            final List<Map<String, dynamic>> updatedPartsUsed = (_selectedInventoryItems.map((it) {
-              final copy = Map<String, dynamic>.from(it);
-              final inv = it['inventory_id']?.toString() ?? '';
-              if (reservationMap.containsKey(inv)) copy['reservation_id'] = reservationMap[inv];
-              return copy;
-            })).toList();
-
-            // Also update the UI list with reservation ids
-            for (final it in _selectedInventoryItems) {
-              final inv = it['inventory_id']?.toString() ?? '';
-              if (reservationMap.containsKey(inv)) it['reservation_id'] = reservationMap[inv];
-            }
-
-            final response = await _apiService.updateMaintenanceTask(actualTaskId, {
-              'inventory_reservation_ids': reservationIds,
-              'parts_used': updatedPartsUsed,
-            });
-            // Notify registry of inventory updates
-            try {
-              final notifier = InventoryUpdateNotifier();
-              reservationMap.forEach((inv, rid) {
-                notifier.notifyItemUpdated(inv);
-              });
-            } catch (e) {
-              print('[v0] Failed to notify inventory after attaching reservation ids: $e');
-            }
+            final response = await _apiService.updateMaintenanceTask(
+              actualTaskId,
+              {'inventory_reservation_ids': inventoryReservationIds},
+            );
 
             final result = response;
 
             // upload files to firebase storage
 
-      for (final file in attachments!) {
-          await api.uploadMultipartFile(
-            path: '/files/upload',
-            file: file,
-            fields: {
-              'entity_type': 'Internal Maintenance Attachments',
-              'entity_id': actualTaskId,
-              'file_type': 'any',
-              'description': 'Attachment for maintenance task ${result['id']}',
-            },
-          );
-
-      }
+            for (final file in attachments!) {
+              await api.uploadMultipartFile(
+                path: '/files/upload',
+                file: file,
+                fields: {
+                  'entity_type': 'Internal Maintenance Attachments',
+                  'entity_id': actualTaskId,
+                  'file_type': 'any',
+                  'description':
+                      'Attachment for maintenance task ${result['id']}',
+                },
+              );
+            }
 
             print(
-              '[v0] Updated maintenance task with inventory reservation IDs: $reservationIds',
+              '[v0] Updated maintenance task with inventory reservation IDs: $inventoryReservationIds',
             );
           } catch (e) {
             print(
@@ -1275,7 +1334,7 @@ void _handleLogout(BuildContext context) async {
   @override
   Widget build(BuildContext context) {
     return FacilityFixLayout(
-      currentRoute: 'work_maintenance',
+      currentRoute: 'disaster_prepardness',
       onNavigate: (routeKey) {
         final routePath = _getRoutePath(routeKey);
         if (routePath != null) {
@@ -1297,7 +1356,7 @@ void _handleLogout(BuildContext context) async {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    "Task Management",
+                    "Disaster Preparedness",
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -1322,12 +1381,12 @@ void _handleLogout(BuildContext context) async {
                         size: 16,
                       ),
                       TextButton(
-                        onPressed: () => context.go('/work/maintenance'),
+                        onPressed: () => context.go('/disaster_prepardness'), // Adjust route if needed
                         style: TextButton.styleFrom(
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                         ),
-                        child: const Text('Task Management'),
+                        child: const Text('Disaster Preparedness'),
                       ),
                       const Icon(
                         Icons.chevron_right,
@@ -1340,7 +1399,7 @@ void _handleLogout(BuildContext context) async {
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                         ),
-                        child: const Text('Maintenance Tasks'),
+                        child: const Text('Create Task'),
                       ),
                     ],
                   ),
@@ -1366,46 +1425,31 @@ void _handleLogout(BuildContext context) async {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ===== Basic Information =====
+                      // ===== Task Details =====
                       _buildSectionHeader(
-                        "Basic Information",
-                        "General details about the maintenance task",
+                        "Task Details",
+                        "Details for the disaster preparedness task",
                       ),
                       const SizedBox(height: 24),
 
                       Row(
                         children: [
-                            // Task Type
-                            Expanded(
+                          // Task Title
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                              _fieldLabel('Task Type'),
-                              _fieldBox(
-                              child: DropdownButtonFormField<String>(
-                              value: _selectedTaskType,
-                              validator: _reqDropdown,
-                              decoration: _decoration('Select Task Type...'),
-                              items: const [
-                                'Preventive Maintenance',
-                                'Corrective Maintenance',
-                                'Inspection',
-                                'Repair',
-                                'Others',
-                              ].map((type) => DropdownMenuItem(
-                                value: type,
-                                child: Text(type),
-                              )).toList(),
-                              onChanged: (value) {
-                                setState(() {
-                                _selectedTaskType = value;
-                                });
-                              },
-                              ),
-                              ),
+                                _fieldLabel('Task Title'),
+                                _fieldBox(
+                                  child: TextFormField(
+                                    controller: _taskTitleController,
+                                    validator: _req,
+                                    decoration: _decoration('Enter Task Title'),
+                                  ),
+                                ),
                               ],
                             ),
-                            ),
+                          ),
                           const SizedBox(width: 24),
 
                           // Task ID
@@ -1439,360 +1483,36 @@ void _handleLogout(BuildContext context) async {
                       ),
                       const SizedBox(height: 24),
 
-                      Row(
-                        children: [
-                          // Created By - Fetch from admin profile
-                            Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                              _fieldLabel('Created By'),
-                              _fieldBox(
-                                child: TextFormField(
-                                initialValue: _createdByName ?? 'Admin User',
-                                enabled: false,
-                                decoration: _decoration(
-                                  _createdByName ?? 'Admin User',
-                                ).copyWith(
-                                  disabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(
-                                    color: Colors.grey[300]!,
-                                  ),
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.grey[50],
-                                ),
-                                ),
-                              ),
-                              ],
-                            ),
-                            ),
-                          const SizedBox(width: 24),
-
-                          // Date Created
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _fieldLabel('Date Created'),
-                                _fieldBox(
-                                  child: TextFormField(
-                                    controller: _dateCreatedController,
-                                    readOnly: true,
-                                    validator: _req,
-                                    onTap:
-                                        () => _pickDate(
-                                          initial:
-                                              _dateCreated ?? DateTime.now(),
-                                          onPick: (d) {
-                                            setState(() {
-                                              _dateCreated = d;
-                                              _dateCreatedController
-                                                  .text = _fmtDate(d);
-                                            });
-                                          },
-                                        ),
-                                    decoration: _decoration(
-                                      'YYYY-MM-DD',
-                                    ).copyWith(
-                                      suffixIcon: const Icon(
-                                        Icons.calendar_today,
-                                        size: 18,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 40),
-
-                      // ===== Task Scope & Description =====
-                      _buildSectionHeader(
-                        "Task Scope & Description",
-                        "Detailed description of what needs to be done",
-                      ),
-                      const SizedBox(height: 24),
-
-                      Row(
-                        children: [
-                          // Priority - left
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _fieldLabel('Priority'),
-                                _fieldBox(
-                                  child: DropdownButtonFormField<String>(
-                                    value: _selectedPriority,
-                                    validator: _reqDropdown,
-                                    decoration: _decoration(
-                                      'Select Priority...',
-                                    ),
-                                    items:
-                                        const [
-                                              'Low',
-                                              'Medium',
-                                              'High',
-                                            ]
-                                            .map(
-                                              (v) => DropdownMenuItem(
-                                                value: v,
-                                                child: Text(v),
-                                              ),
-                                            )
-                                            .toList(),
-                                    onChanged:
-                                        (v) => setState(
-                                          () => _selectedPriority = v,
-                                        ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-
-                          // Location/Area - right
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _fieldLabel('Location / Area'),
-                                _fieldBox(
-                                  child: DropdownButtonFormField<String>(
-                                    value: _selectedLocation,
-                                    validator: _reqDropdown,
-                                    decoration: _decoration(
-                                      'Select Location...',
-                                    ),
-                                    items:
-                                        const [
-                                              'Swimming pool',
-                                              'Basketball Court',
-                                              'Gym',
-                                              'Parking area',
-                                              'Lobby',
-                                              'Elevators',
-                                              'Halls',
-                                              'Garden',
-                                              'Corridors',
-                                              'Others',
-                                            ]
-                                            .map(
-                                              (v) => DropdownMenuItem(
-                                                value: v,
-                                                child: Text(v),
-                                              ),
-                                            )
-                                            .toList(),
-                                    onChanged: (v) {
-                                      setState(() {
-                                        _selectedLocation = v;
-                                      });
-                                      _autoPopulateInventoryForLocation(v);
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Specify Location (only shown when "Others" is selected, on the right)
-                      if (_selectedLocation == 'Others')
-                        Row(
-                          children: [
-                            const Expanded(child: SizedBox()), // Left spacer
-                            const SizedBox(width: 24),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _fieldLabel('Specify Location'),
-                                  _fieldBox(
-                                    child: TextFormField(
-                                      validator: _req,
-                                      decoration: _decoration(
-                                        'Enter custom location...',
-                                      ),
-                                      onChanged: (value) {
-                                        // Store custom location value
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-
-                      if (_selectedLocation == 'Others')
-                        const SizedBox(height: 24),
-
                       // Description
-                      _fieldLabel('Description'),
+                      _fieldLabel('Task Description'),
                       TextFormField(
                         controller: _descriptionController,
                         validator: _req,
-                        maxLines: 5,
-                        decoration: _decoration('Enter Description....'),
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // ===== Schedule and Checklist =====
-                      _buildSectionHeader(
-                        "Schedule and Checklist",
-                        "Define task steps and scheduling",
+                        maxLines: 3,
+                        decoration: _decoration('Enter task description...'),
                       ),
                       const SizedBox(height: 24),
 
-                      // ===== Recurrence & Schedule =====
-                      // Row 1: Recurrence and Estimated Duration
                       Row(
                         children: [
-                          // Recurrence
+                          // Created By
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _fieldLabel('Recurrence Frequency'),
-                                _fieldBox(
-                                  child: DropdownButtonFormField<String>(
-                                    value: _selectedRecurrence,
-                                    validator: _reqDropdown,
-                                    decoration: _decoration(
-                                      'Select frequency...',
-                                    ),
-                                    items:
-                                        const [
-                                              'Weekly',
-                                              'Monthly',
-                                              'Quarterly',
-                                              'Annually',
-                                            ]
-                                            .map(
-                                              (v) => DropdownMenuItem(
-                                                value: v,
-                                                child: Text(v),
-                                              ),
-                                            )
-                                            .toList(),
-                                    onChanged: _handleRecurrenceChange,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-
-                          // Estimated Duration
-                            Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                              _fieldLabel('Estimated Duration'),
-                              _fieldBox(
-                                child: TextFormField(
-                                controller: _estimatedDurationController,
-                                validator: _durationValidator,
-                                decoration: _decoration(
-                                  'e.g., 3 hrs / 45 mins',
-                                ).copyWith(
-                                  suffixIcon: IconButton(
-                                  icon: const Icon(Icons.access_time),
-                                  tooltip: 'Pick hours & minutes',
-                                  onPressed: () async {
-                                    final picked = await showTimePicker(
-                                    context: context,
-                                    // Use a neutral initial time for duration selection
-                                    initialTime: TimeOfDay(hour: 0, minute: 30),
-                                    );
-                                    if (picked != null) {
-                                    final h = picked.hour;
-                                    final m = picked.minute;
-                                    String formatted;
-                                    if (h > 0 && m > 0) {
-                                      formatted = '$h hrs $m mins';
-                                    } else if (h > 0) {
-                                      formatted = '$h hrs';
-                                    } else {
-                                      formatted = '$m mins';
-                                    }
-                                    setState(() {
-                                      _estimatedDurationController.text = formatted;
-                                    });
-                                    }
-                                  },
-                                  ),
-                                ),
-                                ),
-                              ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Row 2: Start Date and Next Due Date
-                      Row(
-                        children: [
-                          // Start Date
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _fieldLabel('Start Date'),
+                                _fieldLabel('Created By'),
                                 _fieldBox(
                                   child: TextFormField(
-                                    controller: _startDateController,
-                                    validator: _req,
-                                    readOnly: true,
-                                    onTap:
-                                        () => _pickDate(
-                                          initial: _startDate ?? DateTime.now(),
-                                          onPick: _handleStartDateChange,
+                                    initialValue: _createdByName ?? 'Admin User',
+                                    enabled: false,
+                                    decoration: _decoration(
+                                      _createdByName ?? 'Admin User',
+                                    ).copyWith(
+                                      disabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(
+                                          color: Colors.grey[300]!,
                                         ),
-                                    decoration: _decoration(
-                                      'YYYY-MM-DD',
-                                    ).copyWith(
-                                      suffixIcon: const Icon(
-                                        Icons.calendar_today,
-                                        size: 18,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-
-                          // Next Due Date
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _fieldLabel('Next Due Date'),
-                                _fieldBox(
-                                  child: TextFormField(
-                                    controller: _nextDueDateController,
-                                    validator: _req,
-                                    readOnly: true,
-                                    decoration: _decoration(
-                                      'YYYY-MM-DD',
-                                    ).copyWith(
-                                      suffixIcon: const Icon(
-                                        Icons.calendar_today,
-                                        size: 18,
                                       ),
                                       filled: true,
                                       fillColor: Colors.grey[50],
@@ -1802,211 +1522,25 @@ void _handleLogout(BuildContext context) async {
                               ],
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      // Recurrence summary (placed below Start Date / Next Due Date)
-                      _buildRecurrenceSummary(),
-                      const SizedBox(height: 24),
-                      // Checklist input field with Add Task button beside it - Left side only
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 6,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _fieldLabel('Checklist/Task Step'),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _fieldBox(
-                                        child: TextFormField(
-                                          controller: _checklistItemController,
-                                          decoration: _decoration(
-                                            'Add a task step...',
-                                          ),
-                                          onFieldSubmitted:
-                                              (_) => _addChecklistItem(),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    _fieldBox(
-                                      child: ElevatedButton(
-                                        onPressed: _addChecklistItem,
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.blue,
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 20,
-                                          ),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                          ),
-                                          minimumSize: const Size(
-                                            0,
-                                            _kFieldHeight,
-                                          ),
-                                        ),
-                                        child: const Text("Add Task"),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Expanded(flex: 4, child: SizedBox()),
-                        ],
-                      ),
-
-                      // Display added checklist items - Left side only (match Add Task field width)
-                      if (_checklistItems.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 6, // same flex as the Add Task input column
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey[300]!),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: ListView.separated(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  itemCount: _checklistItems.length,
-                                  separatorBuilder:
-                                      (context, index) => Divider(
-                                        height: 1,
-                                        color: Colors.grey[300],
-                                      ),
-                                  itemBuilder: (context, index) {
-                                    final item = _checklistItems[index];
-                                    return ListTile(
-                                      dense: true,
-                                      leading: Icon(
-                                        Icons.check_circle_outline,
-                                        color: Colors.grey[600],
-                                        size: 20,
-                                      ),
-                                      title: Text(
-                                        item['task'],
-                                        style: const TextStyle(fontSize: 14),
-                                      ),
-                                      trailing: IconButton(
-                                        icon: const Icon(
-                                          Icons.delete_outline,
-                                          size: 20,
-                                        ),
-                                        color: Colors.red[400],
-                                        onPressed:
-                                            () => _removeChecklistItem(
-                                              item['id'],
-                                            ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                            const Expanded(flex: 4, child: SizedBox()),
-                          ],
-                        ),
-                      ],
-
-                      const SizedBox(height: 40),
-
-                      // ===== Assign Staff =====
-                      _buildSectionHeader(
-                        "Assign Staff",
-                        "Select department and assign staff member",
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Department (left) and Assign Staff (right) - auto fill on change
-                      Row(
-                        children: [
-                          // Department - left
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _fieldLabel('Department'),
-                                _fieldBox(
-                                  child: DropdownButtonFormField<String>(
-                                    value: _selectedDepartment,
-                                    validator: _reqDropdown,
-                                    decoration: _decoration(
-                                      'Select Department...',
-                                    ),
-                                    items:
-                                        [
-                                              'Carpentry',
-                                              'Electrical',
-                                              'Masonry',
-                                              'Plumbing',
-                                            ]
-                                            .map(
-                                              (d) => DropdownMenuItem(
-                                                value: d,
-                                                child: Text(d),
-                                              ),
-                                            )
-                                            .toList(),
-                                    onChanged: (v) {
-                                      setState(() {
-                                        _selectedDepartment = v;
-                                        // Check if current staff is in the new department
-                                        if (_selectedStaffUserId != null) {
-                                          final inDept = _filteredStaffMembers.any((s) => (s['user_id'] ?? s['id']) == _selectedStaffUserId);
-                                          if (!inDept) {
-                                            _selectedStaffUserId = null;
-                                            _assignedStaffController.clear();
-                                          }
-                                        }
-                                        // Automatically attempt to assign staff for the selected department
-                                        _handleAutoAssignStaff();
-                                      });
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
                           const SizedBox(width: 24),
 
-                          // Assign Staff - right (read-only, auto-filled)
+                          // Created At
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _fieldLabel('Assign Staff'),
+                                _fieldLabel('Created At'),
                                 _fieldBox(
-                                  child: DropdownButtonFormField<String>(
-                                    value: _selectedStaffUserId,
-                                    decoration: _decoration(
-                                      'Select Staff...',
+                                  child: TextFormField(
+                                    controller: _dateCreatedController,
+                                    readOnly: true,
+                                    validator: _req,
+                                    decoration: _decoration('YYYY-MM-DD').copyWith(
+                                      suffixIcon: const Icon(
+                                        Icons.calendar_today,
+                                        size: 18,
+                                      ),
                                     ),
-                                    items: _filteredStaffMembers.map((staff) {
-                                      final id = staff['user_id'] ?? staff['id'];
-                                      final name = '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'.trim();
-                                      return DropdownMenuItem<String>(
-                                        value: id,
-                                        child: Text(name),
-                                      );
-                                    }).toList(),
-                                    onChanged: (v) {
-                                      setState(() {
-                                        _selectedStaffUserId = v;
-                                        final staff = _staffMembers.firstWhere((s) => (s['user_id'] ?? s['id']) == v, orElse: () => {});
-                                        _assignedStaffController.text = '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'.trim();
-                                      });
-                                    },
                                   ),
                                 ),
                               ],
@@ -2014,373 +1548,219 @@ void _handleLogout(BuildContext context) async {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 24),
 
-                      const SizedBox(height: 8),
-
-                      // Helper/info note
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[50],
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue[100]!),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              size: 16,
-                              color: Colors.blue[700],
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Select a department to automatically assign staff.',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.blue[900],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 40),
-
-                      // Place inventory UI on the right side
                       Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Left column containing the Inventory section
-                          SizedBox(
-                            width: 520,
+                          // Equipment Dropdown
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: _buildSectionHeader(
-                                        "Inventory Items",
-                                        "Reserve parts or supplies for the task",
-                                      ),
-                                    ),
-                                    ElevatedButton.icon(
-                                      onPressed: _addInventoryItem,
-                                      icon: const Icon(Icons.add, size: 18),
-                                      label: const Text("Add Item"),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(
-                                          0xFF2E7D32,
-                                        ),
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 20,
-                                          vertical: 12,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 24),
-
-                                if (_selectedInventoryItems.isEmpty)
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[50],
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: Colors.grey[200]!,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      'No inventory items reserved yet. Click "Add Item" to reserve inventory.',
-                                      style: TextStyle(color: Colors.grey[600]),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  )
-                                else
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                        color: Colors.grey[300]!,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: ListView.separated(
-                                      shrinkWrap: true,
-                                      physics:
-                                          const NeverScrollableScrollPhysics(),
-                                      itemCount: _selectedInventoryItems.length,
-                                      separatorBuilder:
-                                          (context, index) => Divider(
-                                            height: 1,
-                                            color: Colors.grey[300],
-                                          ),
-                                      itemBuilder: (context, index) {
-                                        final item =
-                                            _selectedInventoryItems[index];
-                                        return Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 8,
-                                            horizontal: 12,
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              // Icon
-                                              Container(
-                                                width: 40,
-                                                height: 40,
-                                                decoration: BoxDecoration(
-                                                  color: const Color(
-                                                    0xFFE8F5E8,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                ),
-                                                child: const Icon(
-                                                  Icons.inventory_2,
-                                                  color: Color(0xFF2E7D32),
-                                                  size: 20,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12),
-
-                                                // Item details
-                                                Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                  children: [
-                                                  Text(
-                                                    item['item_name'] ??
-                                                      'Unknown Item',
-                                                    style: const TextStyle(
-                                                    fontWeight:
-                                                      FontWeight.w600,
-                                                    fontSize: 14,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 4),
-                                                  Text(
-                                                    '${item['item_code'] ?? 'N/A'}',
-                                                    style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: Colors.grey[600],
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 4),
-                                                  Text(
-                                                    'Stock: ${item['available_stock']} ${item['unit'] ?? ''}',
-                                                    style: TextStyle(
-                                                    fontSize: 11,
-                                                    color: Colors.grey[600],
-                                                    ),
-                                                  ),
-                                                  ],
-                                                ),
-                                              ),
-
-                                                // Quantity controls (fixed increment/decrement)
-                                                Container(
-                                                decoration: BoxDecoration(
-                                                  border: Border.all(
-                                                  color: Colors.grey[300]!,
-                                                  ),
-                                                  borderRadius:
-                                                    BorderRadius.circular(8),
-                                                ),
-                                                child: Row(
-                                                  mainAxisSize:
-                                                    MainAxisSize.min,
-                                                  children: [
-                                                  // Decrement button
-                                                  IconButton(
-                                                    icon: const Icon(
-                                                    Icons.remove,
-                                                    size: 16,
-                                                    ),
-                                                    padding:
-                                                      const EdgeInsets.all(4),
-                                                    constraints:
-                                                      const BoxConstraints(
-                                                    minWidth: 32,
-                                                    minHeight: 32,
-                                                    ),
-                                                    onPressed: () {
-                                                    setState(() {
-                                                      final currentQty =
-                                                        int.tryParse(
-                                                          item['quantity']
-                                                            ?.toString() ??
-                                                          '0',
-                                                          ) ??
-                                                          0;
-                                                      final availableStock =
-                                                        int.tryParse(
-                                                          item['available_stock']
-                                                            ?.toString() ??
-                                                          '0',
-                                                          ) ??
-                                                          0;
-
-                                                      if (currentQty > 1) {
-                                                      _selectedInventoryItems[index]
-                                                        ['quantity'] =
-                                                        currentQty - 1;
-                                                      } else {
-                                                      // Optionally notify user they can't go below 1
-                                                      ScaffoldMessenger.of(
-                                                        context,
-                                                      ).showSnackBar(
-                                                        const SnackBar(
-                                                        content: Text(
-                                                          'Quantity cannot be less than 1',
-                                                        ),
-                                                        duration:
-                                                          Duration(
-                                                          seconds: 1,
-                                                        ),
-                                                        ),
-                                                      );
-                                                      }
-
-                                                      // Ensure consistency if available stock dropped to 0
-                                                      if (availableStock <= 0) {
-                                                      _selectedInventoryItems[index]
-                                                        ['quantity'] = 0;
-                                                      }
-                                                    });
-                                                    },
-                                                    color: Colors.grey[700],
-                                                  ),
-
-                                                  // Quantity display (non-editable to ensure consistent updates)
-                                                  SizedBox(
-                                                    width: 50,
-                                                    child: Center(
-                                                    child: Text(
-                                                      '${item['quantity']}',
-                                                      textAlign: TextAlign.center,
-                                                      style: const TextStyle(
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                        FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                    ),
-                                                  ),
-
-                                                  // Increment button (robust parsing & clamping)
-                                                  IconButton(
-                                                    icon: const Icon(
-                                                    Icons.add,
-                                                    size: 16,
-                                                    ),
-                                                    padding:
-                                                      const EdgeInsets.all(4),
-                                                    constraints:
-                                                      const BoxConstraints(
-                                                    minWidth: 32,
-                                                    minHeight: 32,
-                                                    ),
-                                                    onPressed: () {
-                                                    setState(() {
-                                                      final currentQty =
-                                                        int.tryParse(
-                                                          item['quantity']
-                                                            ?.toString() ??
-                                                          '0',
-                                                          ) ??
-                                                          0;
-                                                      final availableStock =
-                                                        int.tryParse(
-                                                          item['available_stock']
-                                                            ?.toString() ??
-                                                          '0',
-                                                          ) ??
-                                                          0;
-
-                                                      if (availableStock <= 0) {
-                                                      ScaffoldMessenger.of(
-                                                        context,
-                                                      ).showSnackBar(
-                                                        const SnackBar(
-                                                        content:
-                                                          Text('No stock available'),
-                                                        duration:
-                                                          Duration(
-                                                          seconds: 2,
-                                                        ),
-                                                        ),
-                                                      );
-                                                      return;
-                                                      }
-
-                                                      final newQty = (currentQty + 1)
-                                                        .clamp(1, availableStock);
-
-                                                      _selectedInventoryItems[index]
-                                                        ['quantity'] = newQty;
-                                                    });
-                                                    },
-                                                    color: const Color(
-                                                    0xFF2E7D32,
-                                                    ),
-                                                  ),
-                                                    ],
-                                                  ),
-                                                  ),
-                                                  const SizedBox(width: 8),
-
-                                              // Delete button
-                                              IconButton(
-                                                icon: const Icon(
-                                                  Icons.delete_outline,
-                                                  size: 20,
-                                                ),
-                                                color: Colors.red[400],
-                                                onPressed:
-                                                    () => _removeInventoryItem(
-                                                      index,
-                                                    ),
-                                                tooltip: 'Remove',
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      },
-                                    ),
+                                _fieldLabel('Equipment'),
+                                _fieldBox(
+                                  child: DropdownButtonFormField<String>(
+                                    value: _selectedLocation, // Reuse or add new variable
+                                    validator: _reqDropdown,
+                                    decoration: _decoration('Select Equipment...'),
+                                    items: const [
+                                      'Generator',
+                                      'Fire Extinguisher',
+                                      'Emergency Lights',
+                                      'First Aid Kit',
+                                      'Communication Device',
+                                      'Other',
+                                    ].map((v) => DropdownMenuItem(
+                                      value: v,
+                                      child: Text(v),
+                                    )).toList(),
+                                    onChanged: (v) => setState(() => _selectedLocation = v),
                                   ),
+                                ),
                               ],
                             ),
                           ),
-                          // Left spacer to push inventory to the right
-                          const Expanded(child: SizedBox()),
+                          const SizedBox(width: 24),
+
+                          // Location
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Location'),
+                                _fieldBox(
+                                  child: DropdownButtonFormField<String>(
+                                    value: _selectedLocation,
+                                    validator: _reqDropdown,
+                                    decoration: _decoration('Select Location...'),
+                                    items: const [
+                                      'Building A',
+                                      'Building B',
+                                      'Parking Area',
+                                      'Lobby',
+                                      'Other',
+                                    ].map((v) => DropdownMenuItem(
+                                      value: v,
+                                      child: Text(v),
+                                    )).toList(),
+                                    onChanged: (v) => setState(() => _selectedLocation = v),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
+                      const SizedBox(height: 24),
 
-                      const SizedBox(height: 40),
-                    _buildSectionHeader(
-                      "Admin Note",
-                      "Notes for admins and post-task remarks",
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _adminNotesController,
-                      maxLines: 5,
-                      decoration: _decoration('Enter Description....'),
-                    ),
+                      // Recurrence
+                      _fieldLabel('Recurrence'),
+                      _fieldBox(
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedRecurrence,
+                          validator: _reqDropdown,
+                          decoration: _decoration('Select recurrence...'),
+                          items: const [
+                            'Weekly',
+                            'Monthly',
+                            'Quarterly',
+                            'Annually',
+                          ].map((v) => DropdownMenuItem(
+                            value: v,
+                            child: Text(v),
+                          )).toList(),
+                          onChanged: (v) => _handleRecurrenceChange(v),
+                        ),
+                      ),
+                      if (_recurrenceSummaryText() != null) _buildRecurrenceSummary(),
+                      const SizedBox(height: 24),
+
+                      // Assigned Staff with Auto-Assign
+                      _fieldLabel('Assigned Staff'),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _fieldBox(
+                              child: TextFormField(
+                                controller: _assignedStaffController,
+                                validator: _req,
+                                decoration: _decoration('Assigned staff name'),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            onPressed: _isAutoAssigning ? null : _handleAutoAssignStaff,
+                            icon: _isAutoAssigning
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.shuffle),
+                            label: Text(_isAutoAssigning ? 'Assigning...' : 'Auto Assign'),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Checklist
+                      _fieldLabel('Checklist'),
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey[300]!),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          children: [
+                            // Add new item
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _checklistItemController,
+                                      decoration: _decoration('Add checklist item...'),
+                                      onSubmitted: (_) => _addChecklistItem(),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  ElevatedButton(
+                                    onPressed: _addChecklistItem,
+                                    child: const Text('Add'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // List of items
+                            if (_checklistItems.isNotEmpty)
+                              ..._checklistItems.map((item) => ListTile(
+                                leading: Checkbox(
+                                  value: item['completed'],
+                                  onChanged: (v) => setState(() => item['completed'] = v),
+                                ),
+                                title: Text(item['task']),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.delete, size: 18),
+                                  onPressed: () => _removeChecklistItem(item['id']),
+                                ),
+                              )),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Inventory Items
+                      _fieldLabel('Inventory Items'),
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey[300]!),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    '${_selectedInventoryItems.length} item(s) selected',
+                                    style: TextStyle(color: Colors.grey[600]),
+                                  ),
+                                  ElevatedButton.icon(
+                                    onPressed: _addInventoryItem,
+                                    icon: const Icon(Icons.add),
+                                    label: const Text('Add Item'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_selectedInventoryItems.isNotEmpty)
+                              ..._selectedInventoryItems.map((item) => ListTile(
+                                title: Text(item['item_name'] ?? ''),
+                                subtitle: Text('Qty: ${item['quantity']}'),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.delete, size: 18),
+                                  onPressed: () => _removeInventoryItem(_selectedInventoryItems.indexOf(item)),
+                                ),
+                              )),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Admin Notes
+                      _fieldLabel('Admin Notes'),
+                      TextFormField(
+                        controller: _adminNotesController,
+                        maxLines: 3,
+                        decoration: _decoration('Enter admin notes...'),
+                      ),
                       const SizedBox(height: 24),
 
                       // ===== Actions =====
@@ -2412,7 +1792,9 @@ void _handleLogout(BuildContext context) async {
                               ),
                             ),
                             child: Text(
-                              _isEditing ? "Save Changes" : "Submit Internal Task",
+                              _isEditing
+                                  ? "Save Changes"
+                                  : "Submit Disaster Task",
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
@@ -2595,6 +1977,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                             ),
                           ),
                         ),
+                        
                     ],
                   ),
                 ),
@@ -2629,7 +2012,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
 
             // Items list
             Expanded(
-                  child:
+              child:
                   _filteredItems.isEmpty
                       ? Center(
                         child: Text(
@@ -2694,7 +2077,8 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                                       color: Colors.grey[600],
                                     ),
                                   ),
-                                  if (item['unit'] != null && item['unit'].toString().isNotEmpty)
+                                  if (item['unit'] != null &&
+                                      item['unit'].toString().isNotEmpty)
                                     Text(
                                       'Unit: ${item['unit']}',
                                       style: TextStyle(
@@ -2790,7 +2174,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24,
-                                           vertical: 12,
+                      vertical: 12,
                     ),
                   ),
                 ),

@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../widgets/logout_popup.dart';
 import 'pop_up/equipment_viewdetails_popup.dart';
-import 'pop_up/maintenance_history_details_popup.dart';
 
 class EquipmentRegistryPage extends StatefulWidget {
   const EquipmentRegistryPage({super.key});
@@ -1025,7 +1024,7 @@ class _EquipmentRegistryPageState extends State<EquipmentRegistryPage> {
                                 Expanded(
                                   flex: 2,
                                   child: Text(
-                                    equipment['id'] ?? equipment['equipmentId'] ?? equipment['formatted_id'] ?? equipment['_doc_id'] ?? '',
+                                    equipment['formatted_id'] ?? '',
                                     style: const TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w500,
