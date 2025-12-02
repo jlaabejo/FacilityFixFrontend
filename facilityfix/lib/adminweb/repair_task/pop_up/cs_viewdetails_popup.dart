@@ -1,5 +1,5 @@
 import 'package:facilityfix/adminweb/widgets/tags.dart';
-import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/services/api_services_mobile.dart';
 import 'package:facilityfix/utils/ui_format.dart';
 import 'package:facilityfix/adminweb/widgets/delete_popup.dart';
 import 'package:intl/intl.dart';
@@ -7,7 +7,7 @@ import 'edit_popup.dart';
 import 'package:flutter/material.dart';
 import '../../services/round_robin_assignment_service.dart';
 import 'package:flutter/services.dart';
-import '../../services/api_service.dart' as admin_api;
+import '../../services/api_service_web.dart' as admin_api;
 
 class ConcernSlipDetailDialog extends StatefulWidget {
   final Map<String, dynamic> task;

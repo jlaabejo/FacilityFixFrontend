@@ -1,4 +1,5 @@
 import 'package:facilityfix/adminweb/repair_task/pop_up/cs_viewdetails_popup.dart';
+import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:facilityfix/adminweb/widgets/tags.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -6,7 +7,7 @@ import '../layout/facilityfix_layout.dart';
 import 'pop_up/edit_popup.dart';
 import '../widgets/delete_popup.dart';
 import '../popupwidgets/set_resolution_type_popup.dart';
-import '../services/api_service.dart';
+import '../services/api_service_web.dart';
 import 'package:facilityfix/adminweb/widgets/bulk_action_buttons.dart';
 import '../services/round_robin_assignment_service.dart';
 import '../report_files/concern_slip_report.dart';
@@ -426,6 +427,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       'user_users': '/user/users',
       'user_scheduling': '/user/scheduling',
       'work_maintenance': '/work/maintenance',
+      'work_task_type': '/work/task_type',
       'work_repair': '/work/repair',
       'calendar': '/calendar',
       'inventory_equipment': '/inventory/equipment',
@@ -434,36 +436,36 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       'analytics': '/analytics',
       'announcement': '/announcement',
       'settings': '/settings',
-      'logout': '/logout',
+      //'logout': '/logout',
     };
     return pathMap[routeKey];
   }
 
-  // Handle logout functionality
-  void _handleLogout(BuildContext context) {
-    showDialog(
+  // Logout functionality
+  void _handleLogout(BuildContext context) async {
+    print('[DEBUG] _handleLogout called');
+    // Ensure we're not already navigating
+    if (!mounted) return;
+    
+    final result = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Logout'),
-          content: const Text('Are you sure you want to logout?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                context.go('/'); // Go back to login page
-              },
-              child: const Text('Logout'),
-            ),
-          ],
-        );
+      barrierDismissible: false, // Prevent accidental dismissal
+      builder: (dialogContext) {
+        print('[DEBUG] Dialog builder called');
+        return const LogoutPopup();
       },
     );
+    print('[DEBUG] Dialog result: $result');
+    
+    if (result == true && mounted) {
+      // Perform logout
+      print('[DEBUG] Logging out...');
+      context.go('/');
+    } else {
+      print('[DEBUG] Logout cancelled or dialog dismissed');
+    }
   }
+
 
   // Check if task can be assigned to staff
   bool _canAssignStaff(Map<String, dynamic> task) {
@@ -1033,11 +1035,16 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     return FacilityFixLayout(
       currentRoute: 'work_repair',
       onNavigate: (routeKey) {
+        print('[DEBUG] onNavigate called with routeKey: $routeKey');
         final routePath = _getRoutePath(routeKey);
         if (routePath != null) {
+          print('[DEBUG] Navigating to route: $routePath');
           context.go(routePath);
         } else if (routeKey == 'logout') {
+          print('[DEBUG] Logout route detected, calling _handleLogout');
           _handleLogout(context);
+        } else {
+          print('[DEBUG] Unknown routeKey: $routeKey');
         }
       },
       body: Padding(

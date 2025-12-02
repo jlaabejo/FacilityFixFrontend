@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../popupwidgets/webnotification_popup.dart';
-import '../services/api_service.dart';
+import '../services/api_service_web.dart';
 
 class FacilityFixLayout extends StatefulWidget {
   final Widget body;
@@ -49,8 +49,6 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
     super.initState();
     // Auto-expand sections if current route is a child
     _autoExpandForCurrentRoute();
-    // Always expand work section by default
-    _expanded['work'] = true;
     _logHighlight(
       'initState -> currentRoute=${widget.currentRoute}, expanded=$_expanded',
     );
@@ -276,13 +274,13 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         title: 'User Management',
                         sectionKey: 'user',
                         children: [
-                          _subNavItem('Staff Availability & Scheduling', 'user_scheduling'),
+                          _subNavItem('Availability & Scheduling', 'user_scheduling'),
                           _subNavItem('Users', 'user_users'),
                         ],
                       ),
                       const SizedBox(height: 4),
 
-                      // Task Management dropdownMaintenance Tasks
+                      // Task Management dropdown
                       _dropdownNav(
                         icon: Icons.build_outlined,
                         title: 'Task Management',
@@ -290,7 +288,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         children: [
                           _subNavItem('Maintenance Tasks', 'work_maintenance'),
                           _subNavItem('Repair Tasks', 'work_repair'),
-                          _subNavItem('Task Types', 'work_task_types'),
+                          _subNavItem('Task Type', 'work_task_type'),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -305,8 +303,8 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         title: 'Inventory Management',
                         sectionKey: 'inventory',
                         children: [
-                          _subNavItem('Inventory Items', 'inventory_items'),
                           _subNavItem('Equipment Registry', 'inventory_equipment'),
+                          _subNavItem('Inventory Items', 'inventory_items'),
                           _subNavItem('Inventory Request', 'inventory_request'),
                         ],
                       ),
@@ -316,8 +314,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       _navItem(
                         Icons.analytics_outlined,
                         'Analytics',
-                        'analytics',
-                      ),
+                        'analytics',),
                       const SizedBox(height: 4),
 
                       // Announcement navigation item - Fixed: changed from 'announcement' to 'announcements'
@@ -457,24 +454,9 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         opacity: 1, 
                       ),
                     ),
-                    // Use a LayoutBuilder + ConstrainedBox inside the SingleChildScrollView so
-                    // the child layout receives bounded height constraints. Without this,
-                    // any Expanded/Flexible children inside pages (e.g. DataTables with
-                    // Expanded rows) will cause: "RenderFlex children have non-zero flex but
-                    // incoming height constraints are unbounded" errors.
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final viewportHeight = constraints.maxHeight;
-                        return SingleChildScrollView(
-                          padding: const EdgeInsets.all(24),
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(minHeight: viewportHeight),
-                            child: IntrinsicHeight(
-                              child: widget.body,
-                            ),
-                          ),
-                        );
-                      },
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: widget.body,
                     ),
                   ),
                 ),
@@ -757,7 +739,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
             onTap: () => _handleNavigation(routeKey),
             borderRadius: BorderRadius.circular(6),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
               child: Text(
                 title,
                 style: TextStyle(

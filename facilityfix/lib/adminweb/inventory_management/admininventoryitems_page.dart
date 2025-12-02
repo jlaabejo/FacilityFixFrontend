@@ -4,8 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../widgets/delete_popup.dart';
-import '../services/api_service.dart';
-// auth storage not required here — ApiService handles auth internally
+import '../services/api_service_web.dart';
 import 'pop_up/inventoryitem_details_popup.dart';
 import '../popupwidgets/stock_management_popup.dart';
 import '../widgets/tags.dart';
@@ -95,35 +94,47 @@ class _InventoryManagementItemsPageState
 
   // Route mapping helper function
   static String? _getRoutePath(String routeKey) {
-      final Map<String, String> pathMap = {
-        'dashboard': '/dashboard',
-        'user_users': '/user/users',
-        'user_scheduling': '/user/scheduling',
-        'work_maintenance': '/work/maintenance',
-        'work_repair': '/work/repair',
-        'calendar': '/calendar',
-        'inventory_equipment': '/inventory/equipment',
-        'inventory_items': '/inventory/items',
-        'inventory_request': '/inventory/request',
-        'analytics': '/analytics',
-        'announcement': '/announcement',
-        'settings': '/settings',
-        'logout': '/logout',
-      };
-      return pathMap[routeKey];
-    }
+    final Map<String, String> pathMap = {
+      'dashboard': '/dashboard',
+      'user_users': '/user/users',
+      'user_scheduling': '/user/scheduling',
+      'work_maintenance': '/work/maintenance',
+      'work_task_type': '/work/task_type',
+      'work_repair': '/work/repair',
+      'calendar': '/calendar',
+      'inventory_equipment': '/inventory/equipment',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
+      'analytics': '/analytics',
+      'announcement': '/announcement',
+      'settings': '/settings',
+      //'logout': '/logout',
+    };
+    return pathMap[routeKey];
+  }
 
   // Logout functionality
   void _handleLogout(BuildContext context) async {
+    print('[DEBUG] _handleLogout called');
+    // Ensure we're not already navigating
+    if (!mounted) return;
+    
     final result = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
+      barrierDismissible: false, // Prevent accidental dismissal
+      builder: (dialogContext) {
+        print('[DEBUG] Dialog builder called');
         return const LogoutPopup();
       },
     );
-
-    if (result == true) {
+    print('[DEBUG] Dialog result: $result');
+    
+    if (result == true && mounted) {
+      // Perform logout
+      print('[DEBUG] Logging out...');
       context.go('/');
+    } else {
+      print('[DEBUG] Logout cancelled or dialog dismissed');
     }
   }
 
@@ -164,8 +175,9 @@ class _InventoryManagementItemsPageState
     Map<String, dynamic> item,
     Offset position,
   ) {
-    final RenderBox overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox;
+    final overlayObj = Overlay.of(context).context.findRenderObject();
+    if (overlayObj == null || overlayObj is! RenderBox || !overlayObj.hasSize) return;
+    final RenderBox overlay = overlayObj as RenderBox;
 
     showMenu(
       context: context,
@@ -812,11 +824,16 @@ class _InventoryManagementItemsPageState
     return FacilityFixLayout(
       currentRoute: 'inventory_items',
       onNavigate: (routeKey) {
+        print('[DEBUG] onNavigate called with routeKey: $routeKey');
         final routePath = _getRoutePath(routeKey);
         if (routePath != null) {
+          print('[DEBUG] Navigating to route: $routePath');
           context.go(routePath);
         } else if (routeKey == 'logout') {
+          print('[DEBUG] Logout route detected, calling _handleLogout');
           _handleLogout(context);
+        } else {
+          print('[DEBUG] Unknown routeKey: $routeKey');
         }
       },
       body: Padding(
@@ -912,7 +929,7 @@ class _InventoryManagementItemsPageState
                     const SizedBox(width: 16),
                     ElevatedButton.icon(
                       onPressed: () {
-                        context.goNamed('inventory_forecasting');
+                        context.go('/inventory/forecasting');
                       },
                       icon: const Icon(Icons.trending_up, size: 22),
                       label: const Text(
@@ -1356,11 +1373,10 @@ class _InventoryManagementItemsPageState
                                         builder: (context) {
                                           return IconButton(
                                             onPressed: () {
-                                              final rbx =
-                                                  context.findRenderObject()
-                                                      as RenderBox;
-                                              final position = rbx
-                                                  .localToGlobal(Offset.zero);
+                                              final renderObj = context.findRenderObject();
+                                              if (renderObj == null || renderObj is! RenderBox || !renderObj.hasSize) return;
+                                              final rbx = renderObj as RenderBox;
+                                              final position = rbx.localToGlobal(Offset.zero);
                                               // Anchor the popup below the icon for better positioning
                                               final Offset menuPosition =
                                                   position +

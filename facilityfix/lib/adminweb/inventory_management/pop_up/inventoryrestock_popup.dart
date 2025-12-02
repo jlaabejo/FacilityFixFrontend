@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../services/api_service.dart';
+import '../../services/api_service_web.dart';
 import '../../../services/auth_storage.dart';
 
 class RestockDialog extends StatefulWidget {

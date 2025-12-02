@@ -1,15 +1,10 @@
-import 'dart:math' as math;
 import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../layout/facilityfix_layout.dart';
-import '../services/api_service.dart';
-import '../services/round_robin_assignment_service.dart';
 import '../../services/auth_storage.dart';
-import '../../utils/inventory_notifier.dart';
-import '../../services/api_services.dart' as main_api;
-import 'package:file_picker/file_picker.dart';
-import 'package:facilityfix/services/api_services.dart' as SecondaryAPI;
+import '../../services/api_services_mobile.dart' as main_api;
+import '../layout/facilityfix_layout.dart';
+import '../services/api_service_web.dart';
 
 class TaskTypeFormPage extends StatefulWidget {
   final Map<String, dynamic>? maintenanceData;
@@ -26,333 +21,327 @@ class TaskTypeFormPage extends StatefulWidget {
       _TaskTypeFormPageState();
 }
 
+// Manual Inventory Input Dialog (for input-only Task Type form)
+class _ManualInventoryInputDialog extends StatefulWidget {
+  final Function(Map<String, dynamic> item, int quantity) onItemAdded;
+
+  const _ManualInventoryInputDialog({required this.onItemAdded});
+
+  @override
+  State<_ManualInventoryInputDialog> createState() =>
+      _ManualInventoryInputDialogState();
+}
+
+class _ManualInventoryInputDialogState extends State<_ManualInventoryInputDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _codeController = TextEditingController();
+  final _unitController = TextEditingController();
+  final _availableStockController = TextEditingController();
+  final _quantityController = TextEditingController(text: '1');
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _codeController.dispose();
+    _unitController.dispose();
+    _availableStockController.dispose();
+    _quantityController.dispose();
+    super.dispose();
+  }
+
+  void _onAdd() {
+    if (!_formKey.currentState!.validate()) return;
+
+    final name = _nameController.text.trim();
+    final code = _codeController.text.trim();
+    final unit = _unitController.text.trim();
+    final qty = int.tryParse(_quantityController.text.trim()) ?? 1;
+    final availableStock = int.tryParse(_availableStockController.text.trim()) ?? 0;
+
+    final item = <String, dynamic>{
+      'item_name': name,
+      'item_code': code,
+      'unit': unit,
+      'available_stock': availableStock,
+    };
+    widget.onItemAdded(item, qty);
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Container(
+        width: 520,
+        padding: const EdgeInsets.all(20),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Add Inventory Item',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _nameController,
+                decoration: InputDecoration(labelText: 'Item name', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _codeController,
+                      decoration: InputDecoration(labelText: 'Item code', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _unitController,
+                      decoration: InputDecoration(labelText: 'Unit', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _availableStockController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(labelText: 'Available stock', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 120,
+                    child: TextFormField(
+                      controller: _quantityController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(labelText: 'Quantity', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+                      validator: (v) {
+                        final n = int.tryParse(v ?? '0') ?? 0;
+                        if (n <= 0) return 'Must be > 0';
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                  const SizedBox(width: 8),
+                  ElevatedButton(onPressed: _onAdd, child: const Text('Add Item'), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2E7D32), foregroundColor: Colors.white)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TaskTypeFormPageState
     extends State<TaskTypeFormPage> {
+
   // -------------------- FORM & VALIDATION --------------------
   final _formKey = GlobalKey<FormState>();
-  AutovalidateMode _autoMode =
-      AutovalidateMode.disabled; // turn on after first submit
-  final SecondaryAPI.APIService api = SecondaryAPI.APIService();
-
-  String? _createdByName;
+  AutovalidateMode _autoMode = AutovalidateMode.disabled; // turn on after first submit
 
   // For consistent field heights (match external design)
   static const double _kFieldHeight = 48;
-  static const List<String> _monthNames = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
 
-  List<PlatformFile>? attachments = const [];
-  bool _isAutoAssigning = false;
+
   // -------------------- CONTROLLERS --------------------
   final _taskTitleController = TextEditingController();
-  final _codeIdController =
-      TextEditingController(); // Auto-generated, read-only
-  final _assignedStaffController = TextEditingController(
-    text: 'Staff Name',
-  ); // Now editable, default placeholder
+  final _taskIdController = TextEditingController(); // Auto-generated, read-only
   final _dateCreatedController = TextEditingController(); // read-only display
   final _descriptionController = TextEditingController();
-  final _estimatedDurationController = TextEditingController();
-  final _remarksController = TextEditingController();
-  final _adminNotesController = TextEditingController();
-  final _startDateController = TextEditingController(); // read-only
-  final _nextDueDateController = TextEditingController(); // read-only
-  final _checklistItemController =
-      TextEditingController(); // For checklist input
-
+  final _otherCategoryController = TextEditingController();
+  
   // -------------------- STATE --------------------
-  String? _selectedPriority;
-  String? _selectedStatus;
-  String? _selectedLocation;
-  String? _selectedRecurrence;
-  String? _selectedDepartment;
-  String? _selectedStaffUserId; // Store the actual staff UID
-
+  String? _createdByName;
   DateTime? _dateCreated;
-  DateTime? _startDate;
-  DateTime? _nextDueDate;
+  DateTime? _dateUpdated;
+  String? _selectedCategory;
 
-  final List<Map<String, dynamic>> _checklistItems = [];
+  // Maintenance Types
+  final List<String> _maintenanceTypes = [
+    'Preventive',
+    'Corrective',
+    'Proactive',
+    'Emergency',
+    'Inspection',
+    'Repair',
+    'Other',
+  ];
 
-  List<Map<String, dynamic>> _staffMembers = [];
-  List<Map<String, dynamic>> get _filteredStaffMembers {
-    if (_selectedDepartment == null || _selectedDepartment!.isEmpty)
-      return _staffMembers;
-    return _staffMembers.where((staff) {
-      final staffDept =
-          (staff['staff_department'] ?? staff['department'])
-              ?.toString()
-              .toLowerCase();
-      return staffDept == _selectedDepartment!.toLowerCase();
-    }).toList();
-  }
-
-  List<Map<String, dynamic>> _availableInventoryItems = [];
+  // Inventory management (manual input only for Task Type form)
   List<Map<String, dynamic>> _selectedInventoryItems = [];
-  String? _buildingId;
-  final _apiService = ApiService();
+  List<Map<String, dynamic>> _availableInventoryItems = [];
   final _mainApiService = main_api.APIService();
-  final _roundRobinService = RoundRobinAssignmentService();
-
-  // Local editing toggle used when the parent did not supply edit mode
-  bool _isLocalEdit = false;
-
-  bool get _isEditing => widget.isEditMode || _isLocalEdit;
+  final ApiService _adminApi = ApiService();
+  bool _isLoadingExisting = false;
+  bool _isSubmitting = false;
+  String? _currentTaskTypeId;
 
   static String? _getRoutePath(String routeKey) {
-      final Map<String, String> pathMap = {
-        'dashboard': '/dashboard',
-        'user_users': '/user/users',
-        'user_scheduling': '/user/scheduling',
-        'work_maintenance': '/work/maintenance',
-        'work_repair': '/work/repair',
-        'disaster_prepardness': '/disaster_prepardness',
-        'calendar': '/calendar',
-        'inventory_equipment': '/inventory/equipment',
-        'inventory_items': '/inventory/items',
-        'inventory_request': '/inventory/request',
-        'analytics': '/analytics',
-        'announcement': '/announcement',
-        'settings': '/settings',
-        'logout': '/logout',
-      };
-      return pathMap[routeKey];
-    }
+    final Map<String, String> pathMap = {
+      'dashboard': '/dashboard',
+      'user_users': '/user/users',
+      'user_scheduling': '/user/scheduling',
+      'work_maintenance': '/work/maintenance',
+      'work_task_type': '/work/task_type',
+      'work_repair': '/work/repair',
+      'calendar': '/calendar',
+      'inventory_equipment': '/inventory/equipment',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
+      'analytics': '/analytics',
+      'announcement': '/announcement',
+      'settings': '/settings',
+      //'logout': '/logout',
+    };
+    return pathMap[routeKey];
+  }
 
   // Logout functionality
   void _handleLogout(BuildContext context) async {
+    print('[DEBUG] _handleLogout called');
+    // Ensure we're not already navigating
+    if (!mounted) return;
+    
     final result = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
+      barrierDismissible: false, // Prevent accidental dismissal
+      builder: (dialogContext) {
+        print('[DEBUG] Dialog builder called');
         return const LogoutPopup();
       },
     );
-
-    if (result == true) {
+    print('[DEBUG] Dialog result: $result');
+    
+    if (result == true && mounted) {
+      // Perform logout
+      print('[DEBUG] Logging out...');
       context.go('/');
+    } else {
+      print('[DEBUG] Logout cancelled or dialog dismissed');
     }
   }
 
   // -------------------- HELPERS --------------------
-  // TODO: Replace with your auth/current user provider
-  String _getCurrentUserName() => 'Michelle Reyes';
-
+  // Date formatting utility
   String _fmtDate(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  Future<void> _pickDate({
-    required DateTime initial,
-    required ValueChanged<DateTime> onPick,
-  }) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2101),
-    );
-    if (picked != null) onPick(picked);
-  }
-
   Future<void> _initAutoFields() async {
-    final token = await AuthStorage.getToken();
-    if (token != null) {
-      _apiService.setAuthToken(token);
-    }
+    // Input-only Task Type form: generate local code and set dates
+    final year = DateTime.now().year;
+    final number = DateTime.now().millisecondsSinceEpoch % 100000;
+    _taskIdController.text = 'TT-$year-${number.toString().padLeft(5, '0')}';
 
-    final profile = await AuthStorage.getProfile();
-    if (profile != null) {
-      final firstName = profile['first_name'] ?? '';
-      final lastName = profile['last_name'] ?? '';
-      final fullName = '$firstName $lastName'.trim();
-
-      // Set the Created By name
-      setState(() {
-        _createdByName = fullName.isNotEmpty ? fullName : 'Admin User';
-      });
-
-      // Also set assigned staff controller
-      if (fullName.isNotEmpty) {
-        _assignedStaffController.text = fullName;
-      }
-    }
-
-    try {
-      // Try to fetch an IPM/ID from the API - fallback to a Task Type code if unavailable
-      final codeId = await _apiService.getNextIPMCode();
-      _codeIdController.text = codeId;
-      print('[v0] Generated code: $codeId');
-    } catch (e) {
-      print('[v0] Error fetching code from backend: $e');
-      // Fallback to timestamp-based code for Task Type
-      final year = DateTime.now().year;
-      final number = DateTime.now().millisecondsSinceEpoch % 100000;
-      _codeIdController.text = 'TT-$year-${number.toString().padLeft(5, '0')}';
-    }
-
-    // Date Created (default to now)
+    // Date Created
     _dateCreated = DateTime.now();
     _dateCreatedController.text = _fmtDate(_dateCreated!);
 
-    _startDate = DateTime.now();
-    _startDateController.text = _fmtDate(_startDate!);
-
-    // Load staff members
-    await _loadStaffMembers();
-
-    // Load inventory items
-    // Save building id and use it when loading inventory
-    _buildingId = profile != null ? (profile['building_id'] ?? profile['buildingId'] ?? profile['building'])?.toString() : null;
-    await _loadInventoryItems();
-  }
-
-  Future<int> _getReservedQty(String inventoryId) async {
+    // Populate created by from stored profile if available
     try {
-      final resp = await _apiService.getInventoryReservations();
-      if (resp['success'] == true && resp['data'] != null) {
-        final reservations = List<Map<String, dynamic>>.from(resp['data']);
-        int reservedTotal = 0;
-        for (var r in reservations) {
-          if ((r['inventory_id']?.toString() ?? '') == inventoryId) {
-            final status = (r['status'] ?? r['request_status'] ?? 'reserved').toString().toLowerCase();
-            if (status == 'reserved' || status == 'approved' || status == 'pending') {
-              reservedTotal += (r['quantity'] ?? 0) as int;
-            }
-          }
-        }
-        return reservedTotal;
+      final profile = await AuthStorage.getProfile();
+      if (profile != null) {
+        final firstName = profile['first_name'] ?? '';
+        final lastName = profile['last_name'] ?? '';
+        final fullName = '$firstName $lastName'.trim();
+        setState(() {
+          _createdByName = fullName.isNotEmpty ? fullName : null;
+        });
       }
-    } catch (e) {
-      print('[v0] Error computing reserved qty for $inventoryId: $e');
+    } catch (_) {
+      // ignore profile errors in this input-only flow
     }
-    return 0;
   }
 
   Future<void> _loadInventoryItems() async {
     try {
-      // TODO: Replace with actual building ID from user session
-      final response = await _mainApiService.getBuildingInventory(_buildingId ?? 'default_building_id');
-
+      // Load building ID from profile when available
+      String? buildingId;
+      try {
+        final profile = await AuthStorage.getProfile();
+        buildingId = profile?['building_id'] as String? ?? profile?['buildingId'] as String?; 
+      } catch (_) {
+        buildingId = null;
+      }
+      buildingId ??= 'default_building_id';
+      print('[v0] TaskTypeForm: loading inventory for building: $buildingId');
+      final response = await _mainApiService.getBuildingInventory(buildingId);
       if (response['success'] == true && response['data'] != null) {
         setState(() {
-          _availableInventoryItems = List<Map<String, dynamic>>.from(
-            response['data'],
-          );
+          _availableInventoryItems = List<Map<String, dynamic>>.from(response['data']);
         });
+        print('[DEBUG] TaskTypeForm loaded ${_availableInventoryItems.length} inventory items');
+        // Update stock info for any existing selected items
+        _updateInventoryStock();
       }
     } catch (e) {
-      print('[v0] Error loading inventory items: $e');
       // Don't fail the whole form if inventory loading fails
+      print('[v0] Error loading inventory items: $e');
     }
   }
 
-  Future<void> _loadStaffMembers() async {
-    setState(() => _staffMembers.clear());
-    try {
-      final staffData = await _apiService.getStaffMembers();
-      setState(() {
-        _staffMembers = List<Map<String, dynamic>>.from(staffData);
-      });
-    } catch (e) {
-      print('[v0] Error loading staff members: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load staff members: $e')),
-        );
-      }
-    }
-  }
-
-  void _addChecklistItem() {
-    final itemText = _checklistItemController.text.trim();
-    if (itemText.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please enter a task item')));
-      return;
-    }
-
-    setState(() {
-      _checklistItems.add({
-        'id': DateTime.now().millisecondsSinceEpoch.toString(),
-        'task': itemText,
-        'completed': false,
-      });
-      _checklistItemController.clear(); // Reset input field
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Task item added successfully!')),
-    );
-  }
-
-  void _removeChecklistItem(String id) {
-    setState(() {
-      _checklistItems.removeWhere((item) => item['id'] == id);
-    });
-  }
 
   void _addInventoryItem() {
+    // Use building inventory dialog (no recommendation filtering)
     if (_availableInventoryItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No inventory items available')),
+      // When no items are returned from the API, fall back to manual entry dialog
+      showDialog(
+        context: context,
+        builder: (context) => _ManualInventoryInputDialog(
+          onItemAdded: (item, qty) {
+            setState(() {
+              _selectedInventoryItems.add({
+                'inventory_id': item['item_code'] ?? item['id'] ?? item['_doc_id'] ?? '',
+                'item_name': item['item_name'] ?? item['name'] ?? '',
+                'item_code': item['item_code'] ?? item['code'] ?? '',
+                'quantity': qty,
+                'available_stock': item['available_stock'] ?? item['stock'] ?? 0,
+                'unit': item['unit'] ?? item['uom'] ?? item['unit_of_measure'] ?? '',
+              });
+            });
+          },
+        ),
       );
       return;
     }
 
-    // Filter items based on selected location
-    List<Map<String, dynamic>> filteredItems = _availableInventoryItems;
-    if (_selectedLocation != null && _selectedLocation!.isNotEmpty) {
-      filteredItems =
-          _availableInventoryItems.where((item) {
-            final recommendedOn = item['recommended_on'];
-            if (recommendedOn == null)
-              return true; // Show items without recommendations
-            if (recommendedOn is List) {
-              return recommendedOn.contains(_selectedLocation);
-            }
-            return true;
-          }).toList();
-    }
-
     showDialog(
       context: context,
-      builder:
-          (context) => _InventorySelectionDialog(
-            availableItems: filteredItems,
-            selectedLocation: _selectedLocation,
-            onItemSelected: (item, quantity) async {
-              // Validate quantity and clamp to minimum 1
-              final parsedQty = (quantity is int) ? quantity : int.tryParse(quantity?.toString() ?? '') ?? 1;
-              final qty = parsedQty <= 0 ? 1 : parsedQty;
-              print('[Form] _addInventoryItem callback -> item: ${item['item_name'] ?? item['name'] ?? item['item_code']}, qty: $qty');
-              final inventoryId = item['id'] ?? item['_doc_id'] ?? item['item_code'] ?? item['itemCode'];
-              final reservedQty = (inventoryId != null) ? await _getReservedQty(inventoryId.toString()) : 0;
-              setState(() {
-                _selectedInventoryItems.add({
-                  'inventory_id': inventoryId,
-                  'item_name': item['item_name'],
-                  'item_code': item['item_code'],
-                  'quantity': qty,
-                  'available_stock': item['current_stock'],
-                  'unit': item['unit'] ?? '',
-                  'reserved_stock': reservedQty,
-                  'autoReserve': false, // manually-added items should not auto-reserve
-                });
-              });
-            },
-          ),
+      builder: (context) => _InventorySelectionDialog(
+        availableItems: _availableInventoryItems,
+        selectedLocation: null,
+        onItemSelected: (item, quantity) {
+          final qty = (quantity <= 0) ? 1 : quantity;
+          setState(() {
+            _selectedInventoryItems.add({
+              'inventory_id': item['item_code'] ?? item['id'] ?? item['_doc_id'],
+              'item_name': item['item_name'] ?? item['name'] ?? '',
+              'item_code': item['item_code'] ?? item['code'] ?? '',
+              'quantity': qty,
+              'available_stock': item['current_stock'] ?? item['available_stock'] ?? item['stock'] ?? 0,
+              'unit': item['unit'] ?? item['uom'] ?? item['unit_of_measure'] ?? '',
+            });
+          });
+        },
+      ),
     );
   }
 
@@ -362,371 +351,39 @@ class _TaskTypeFormPageState
     });
   }
 
-  // Auto-assign staff based on selected department using round-robin
-  Future<void> _handleAutoAssignStaff() async {
-    if (_selectedDepartment == null || _selectedDepartment!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a department first'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 2),
-        ),
+  void _updateInventoryStock() {
+    // Update stock info for selected items from available inventory
+    if (_availableInventoryItems.isEmpty || _selectedInventoryItems.isEmpty) return;
+    
+    for (int i = 0; i < _selectedInventoryItems.length; i++) {
+      final selectedItem = _selectedInventoryItems[i];
+      final inventoryId = selectedItem['inventory_id'] ?? selectedItem['item_code'];
+      
+      // Find matching item in available inventory
+      final matchingItem = _availableInventoryItems.firstWhere(
+        (item) => 
+          (item['item_code'] == inventoryId) ||
+          (item['id'] == inventoryId) ||
+          (item['_doc_id'] == inventoryId),
+        orElse: () => <String, dynamic>{},
       );
-      return;
-    }
-
-    // Set loading state
-    setState(() {
-      _isAutoAssigning = true;
-    });
-
-    try {
-      // Map UI department names to backend department values
-      String departmentKey;
-      switch (_selectedDepartment!.toLowerCase()) {
-        case 'carpentry':
-          departmentKey = 'carpentry';
-          break;
-        case 'electrical':
-          departmentKey = 'electrical';
-          break;
-        case 'masonry':
-          departmentKey = 'masonry';
-          break;
-        case 'plumbing':
-          departmentKey = 'plumbing';
-          break;
-        default:
-          departmentKey = 'general_maintenance';
-      }
-
-      // Fix: Pass departmentKey as a positional argument to getNextStaffForDepartment
-      final nextStaff = await _roundRobinService.getNextStaffForDepartment(
-        departmentKey,
-      );
-
-      if (nextStaff != null) {
-        final firstName = nextStaff['first_name'] ?? '';
-        final lastName = nextStaff['last_name'] ?? '';
-        final staffName = '$firstName $lastName'.trim();
-        // Use Firebase UID or staff_id from auto-assigned staff
-        final staffId = nextStaff['user_id'] ?? nextStaff['id'];
-
-        // Update the text field and selected staff ID
-        if (mounted) {
-          setState(() {
-            _assignedStaffController.text = staffName;
-            _selectedStaffUserId = staffId;
-            // _isAutoAssigning = false;
-          });
-
-          // Show success message
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.white),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text('Auto-assigned to $staffName')),
-                ],
-              ),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          // setState(() {
-          //   _isAutoAssigning = false;
-          // });
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.warning_amber_rounded, color: Colors.white),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'No available staff found in $_selectedDepartment department',
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print('[AutoAssign] Error auto-assigning staff: $e');
-      if (mounted) {
-        // setState(() {
-        //   _isAutoAssigning = false;
-        // });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(child: Text('Failed to auto-assign staff: $e')),
-              ],
-            ),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    }
-  }
-
-  // Auto-populate recommended inventory items for selected location
-  void _autoPopulateInventoryForLocation(String? location) {
-    if (location == null || location.isEmpty) return;
-    if (_availableInventoryItems.isEmpty) return;
-
-    // Find items recommended for this location
-    final recommendedItems =
-        _availableInventoryItems.where((item) {
-          final recommendedOn = item['recommended_on'];
-          if (recommendedOn == null) return false;
-          if (recommendedOn is List) {
-            return recommendedOn.contains(location);
-          }
-          return false;
-        }).toList();
-
-    // Add recommended items that aren't already selected
-    for (final item in recommendedItems) {
-      final itemCode = item['item_code'] ?? item['itemCode'];
-      final alreadyAdded = _selectedInventoryItems.any(
-        (selected) => selected['inventory_id'] == itemCode,
-      );
-
-      if (!alreadyAdded) {
+      
+      if (matchingItem.isNotEmpty) {
+        final currentStock = matchingItem['current_stock'] ?? matchingItem['available_stock'] ?? matchingItem['stock'] ?? 0;
+        print('[DEBUG] TaskTypeForm updating stock for ${selectedItem['item_name']}: $currentStock');
         setState(() {
-          _selectedInventoryItems.add({
-            'inventory_id': itemCode,
-            'item_name': item['item_name'],
-            'item_code': item['item_code'],
-            'quantity': 0, // Default quantity
-            'available_stock': item['current_stock'],
-            'unit': item['unit'] ?? '',
-          });
+          _selectedInventoryItems[i]['available_stock'] = currentStock;
         });
       }
-    }
-
-    // Show feedback to user
-    if (recommendedItems.isNotEmpty && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Added ${recommendedItems.length} recommended item(s) for $location',
-          ),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-        ),
-      );
     }
   }
 
   Future<List<String>> _createInventoryReservations(String taskId) async {
-    if (_selectedInventoryItems.isEmpty) return [];
-
-    final List<String> createdReservationIds = [];
-
-    try {
-      for (final item in _selectedInventoryItems) {
-        // Only create reservations for items marked as autoReserve
-        if (!(item['autoReserve'] == true || item['reserve'] == true)) {
-          print('[v0] Skipping reservation for ${item['item_name']} as autoReserve is false');
-          continue;
-        }
-        final qty = item['quantity'];
-        if (qty == null || qty <= 0) {
-          print(
-            '[v0] Skipping reservation for ${item['item_name']} due to invalid quantity: $qty',
-          );
-          continue;
-        }
-        // Resolve inventoryId if it's a SKU or not resolved yet
-          String? inventoryId = item['inventory_id']?.toString() ?? item['item_code']?.toString() ?? '';
-
-        if (inventoryId == null || inventoryId.isEmpty) {
-          print('[v0] Skipping reservation for ${item['item_name']} - unresolved inventory id');
-          continue;
-        }
-
-        final response = await _apiService.createInventoryReservation(
-          inventoryId: inventoryId,
-          quantity: qty,
-          maintenanceTaskId: taskId,
-        );
-
-        // Extract the reservation ID from the response
-        if (response['success'] == true && response['reservation_id'] != null) {
-          createdReservationIds.add(response['reservation_id']);
-          print('[v0] Created inventory reservation: ${response['reservation_id']}');
-          try {
-            InventoryUpdateNotifier().notifyItemUpdated(inventoryId.toString());
-          } catch (_) {}
-          // Refresh local reserved counts immediately after creating each reservation
-          try {
-            await _refreshSelectedReservedCounts();
-          } catch (_) {}
-        }
-      }
-      print(
-        '[v0] Created ${createdReservationIds.length} inventory reservations linked to task $taskId',
-      );
-      return createdReservationIds;
-    } catch (e) {
-      print('[v0] Error creating inventory reservations: $e');
-      throw Exception('Failed to create inventory reservations: $e');
-    }
+    // Input-only form helper: does nothing and returns empty list. Kept for compatibility.
+    return [];
   }
 
-  // Refresh reserved counts for the selected inventory items.
-  Future<void> _refreshSelectedReservedCounts() async {
-    if (_selectedInventoryItems.isEmpty) return;
-    for (int i = 0; i < _selectedInventoryItems.length; i++) {
-      final item = _selectedInventoryItems[i];
-      final invId = item['inventory_id']?.toString();
-      if (invId != null && invId.isNotEmpty) {
-        final qty = await _getReservedQty(invId);
-        setState(() {
-          _selectedInventoryItems[i]['reserved_stock'] = qty;
-        });
-      }
-    }
-  }
-
-  DateTime _calculateNextDueDate(DateTime base, String frequency) {
-    switch (frequency) {
-      case 'Weekly':
-        return base.add(const Duration(days: 7));
-      case 'Monthly':
-        return _addMonths(base, 1);
-      case 'Quarterly':
-        return _addMonths(base, 3);
-      case 'Annually':
-        return _addMonths(base, 12);
-      default:
-        return base;
-    }
-  }
-
-  DateTime _addMonths(DateTime date, int monthsToAdd) {
-    final totalMonths = date.month + monthsToAdd;
-    final year = date.year + ((totalMonths - 1) ~/ 12);
-    final month = ((totalMonths - 1) % 12) + 1;
-    final day = math.min(date.day, _daysInMonth(year, month));
-    return DateTime(year, month, day);
-  }
-
-  int _daysInMonth(int year, int month) {
-    final nextMonth = month == 12 ? 1 : month + 1;
-    final nextMonthYear = month == 12 ? year + 1 : year;
-    return DateTime(
-      nextMonthYear,
-      nextMonth,
-      1,
-    ).subtract(const Duration(days: 1)).day;
-  }
-
-  void _handleRecurrenceChange(String? value) {
-    if (value == null) {
-      setState(() {
-        _selectedRecurrence = null;
-        _nextDueDate = null;
-        _nextDueDateController.clear();
-      });
-      return;
-    }
-
-    final baseStart = _startDate ?? DateTime.now();
-    final normalized = DateTime(baseStart.year, baseStart.month, baseStart.day);
-    final nextDue = _calculateNextDueDate(normalized, value);
-
-    setState(() {
-      _selectedRecurrence = value;
-      _startDate = normalized;
-      _nextDueDate = nextDue;
-      _updateDateControllers();
-    });
-  }
-
-  void _handleStartDateChange(DateTime date) {
-    final normalized = DateTime(date.year, date.month, date.day);
-
-    setState(() {
-      _startDate = normalized;
-      if (_selectedRecurrence != null) {
-        _nextDueDate = _calculateNextDueDate(normalized, _selectedRecurrence!);
-      }
-      _updateDateControllers();
-    });
-  }
-
-  void _updateDateControllers() {
-    if (_startDate != null) {
-      _startDateController.text = _fmtDate(_startDate!);
-    }
-    if (_nextDueDate != null) {
-      _nextDueDateController.text = _fmtDate(_nextDueDate!);
-    }
-  }
-
-  String _formatFriendlyDate(DateTime date) {
-    final month = _monthNames[date.month - 1];
-    return '$month ${date.day}, ${date.year}';
-  }
-
-  String? _recurrenceSummaryText() {
-    if (_selectedRecurrence == null ||
-        _startDate == null ||
-        _nextDueDate == null) {
-      return null;
-    }
-
-    final start = _formatFriendlyDate(_startDate!);
-    final next = _formatFriendlyDate(_nextDueDate!);
-    return 'Repeats $_selectedRecurrence starting $start. Next occurrence $next';
-  }
-
-  Widget _buildRecurrenceSummary() {
-    final summary = _recurrenceSummaryText();
-    if (summary == null) return const SizedBox.shrink();
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.blue.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue.shade100),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.event_repeat, color: Colors.blue),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              summary,
-              style: const TextStyle(color: Colors.blue, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // No inventory counts are maintained for TaskTypeFormPage.
 
   // -------------------- VALIDATORS --------------------
   String? _req(String? v) =>
@@ -734,33 +391,10 @@ class _TaskTypeFormPageState
 
   String? _reqDropdown<T>(T? v) => (v == null) ? 'Required' : null;
 
-  String? _durationValidator(String? v) {
+  String? _validateCategory(String? v) {
     if (v == null || v.trim().isEmpty) return 'Required';
-    final re = RegExp(
-      r'^\d+\s*(min|mins|minutes|hr|hrs|hour|hours)$',
-      caseSensitive: false,
-    );
-    return re.hasMatch(v.trim())
-        ? null
-        : 'Use formats like "45 mins" or "3 hrs"';
-  }
-
-  // Parse duration string to minutes (e.g., "3 hrs" -> 180, "45 mins" -> 45)
-  int _parseDurationToMinutes(String durationStr) {
-    final trimmed = durationStr.trim().toLowerCase();
-    final re = RegExp(r'(\d+)\s*(min|mins|minutes|hr|hrs|hour|hours)');
-    final match = re.firstMatch(trimmed);
-
-    if (match == null) return 0;
-
-    final value = int.tryParse(match.group(1) ?? '0') ?? 0;
-    final unit = match.group(2) ?? '';
-
-    if (unit.startsWith('hr') || unit.startsWith('hour')) {
-      return value * 60; // Convert hours to minutes
-    } else {
-      return value; // Already in minutes
-    }
+    if (v == 'Other' && (_otherCategoryController.text.trim().isEmpty)) return 'Please specify the category name';
+    return null;
   }
 
   // -------------------- INIT/DISPOSE --------------------
@@ -771,383 +405,162 @@ class _TaskTypeFormPageState
   }
 
   Future<void> _initialize() async {
+    print('[DEBUG] TaskTypeForm initializing - isEditMode: ${widget.isEditMode}');
+    print('[DEBUG] TaskTypeForm maintenanceData: ${widget.maintenanceData}');
     await _initAutoFields();
-    // If the parent passed maintenanceData without explicit isEditMode, treat as local edit
-    if (widget.maintenanceData != null) {
-      setState(() {
-        _isLocalEdit = true;
-      });
-      await _fetchAndPopulateMaintenanceData();
-      await _loadReservedInventoryItems();
-    } else if (widget.isEditMode && widget.maintenanceData != null) {
-      await _fetchAndPopulateMaintenanceData();
-      await _loadReservedInventoryItems();
-    }
-  }
-
-  Future<void> _fetchAndPopulateMaintenanceData() async {
-    try {
-      final id = widget.maintenanceData!['id']?.toString();
-      if (id != null) {
-        final response = await _apiService.getAdminMaintenanceTaskById(id);
-        if (response['success'] == true && response['data'] != null) {
-          _populateFormFields(response['data']);
-        } else {
-          // Fallback to passed data if fetch fails
-          _populateFormFields(widget.maintenanceData!);
-        }
-      } else {
-        // Fallback to passed data
+    if (widget.isEditMode) {
+      final candidateId = _resolveTaskTypeId(widget.maintenanceData);
+      print('[DEBUG] TaskTypeForm candidateId: $candidateId');
+      if (candidateId != null) {
+        _currentTaskTypeId = candidateId;
+        print('[DEBUG] TaskTypeForm fetching data for ID: $candidateId');
+        await _loadTaskType(candidateId);
+      } else if (widget.maintenanceData != null) {
+        print('[DEBUG] TaskTypeForm using provided data directly');
         _populateFormFields(widget.maintenanceData!);
       }
-    } catch (e) {
-      print('[Form] Error fetching maintenance data: $e');
-      // Fallback to passed data
+    } else if (widget.maintenanceData != null) {
       _populateFormFields(widget.maintenanceData!);
     }
+    await _loadInventoryItems();
   }
 
-  Future<void> _loadReservedInventoryItems() async {
+  String? _resolveTaskTypeId(Map<String, dynamic>? data) {
+    if (data == null) return null;
+    return (data['id'] ?? data['formatted_id'] ?? data['task_type_id'] ?? data['taskTypeId'])?.toString();
+  }
+
+  Future<void> _loadTaskType(String taskTypeId) async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingExisting = true;
+    });
     try {
-      final taskId = widget.maintenanceData!['id']?.toString();
-      if (taskId != null) {
-        final response = await _apiService.getInventoryReservations(
-          maintenanceTaskId: taskId,
-        );
-        if (response['success'] == true && response['data'] != null) {
-          final reservations = List<Map<String, dynamic>>.from(
-            response['data'],
-          );
-
-          // Fetch details for each reserved item
-          final List<Map<String, dynamic>> itemsWithDetails = [];
-          for (final res in reservations) {
-            final inventoryId = res['inventory_id'] ?? res['item_id'];
-            if (inventoryId != null) {
-              try {
-                final itemResponse = await _apiService.getInventoryItem(
-                  inventoryId,
-                );
-                if (itemResponse['success'] == true &&
-                    itemResponse['data'] != null) {
-                  final item = itemResponse['data'];
-                  itemsWithDetails.add({
-                    'inventory_id': inventoryId,
-                    'item_name': item['item_name'] ?? item['name'] ?? '',
-                    'item_code': item['item_code'] ?? item['code'] ?? '',
-                    'quantity': res['quantity'] ?? 0,
-                    'available_stock':
-                        item['current_stock'] ?? item['stock'] ?? '',
-                    'unit': item['unit'] ?? '',
-                  });
-                }
-              } catch (e) {
-                print('Error fetching details for inventory $inventoryId: $e');
-                // Add with limited info if fetch fails
-                itemsWithDetails.add({
-                  'inventory_id': inventoryId,
-                  'item_name': res['item_name'] ?? '',
-                  'item_code': res['item_code'] ?? inventoryId,
-                  'quantity': res['quantity'] ?? 0,
-                  'available_stock': '',
-                  'unit': '',
-                });
-              }
-            }
-          }
-
-          setState(() {
-            _selectedInventoryItems = itemsWithDetails;
-          });
-        }
-      }
+      print('[DEBUG] TaskTypeForm fetching task type: $taskTypeId');
+      final data = await _adminApi.getTaskType(taskTypeId);
+      print('[DEBUG] TaskTypeForm received data: $data');
+      _populateFormFields(data);
     } catch (e) {
-      print('Error loading reserved inventory: $e');
+      print('[DEBUG] TaskTypeForm load error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load task type: $e')),
+        );
+      }
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingExisting = false;
+      });
     }
   }
 
+  // If widget provided data via maintenanceData, _populateFormFields will populate _selectedInventoryItems.
+
   void _populateFormFields(Map<String, dynamic> data) {
-    // Debug: print the data received for population
-    print('[Form] Populating form fields from data: $data');
+    print('[DEBUG] TaskTypeForm populating fields with data: $data');
     setState(() {
-      // Basic fields
-      _taskTitleController.text = data['task_title'] ?? data['taskTitle'] ?? '';
-      _codeIdController.text =
-          data['task_code'] ?? data['id']?.toString() ?? '';
+      // Basic fields - task types use 'name' field
+      _taskTitleController.text = data['name'] ?? data['task_title'] ?? data['taskTitle'] ?? '';
+      print('[DEBUG] TaskTypeForm task title set to: ${_taskTitleController.text}');
+      final resolvedId = _resolveTaskTypeId(data) ?? '';
+      print('[DEBUG] TaskTypeForm resolved ID: $resolvedId');
+      _taskIdController.text = resolvedId;
+      if (resolvedId.isNotEmpty) {
+        _currentTaskTypeId = resolvedId;
+      }
       _descriptionController.text =
           data['task_description'] ?? data['description'] ?? '';
 
-      // Handle estimated_duration - convert from minutes (int) back to readable format
-      final durationMinutes = data['estimated_duration'];
-      if (durationMinutes != null &&
-          durationMinutes is int &&
-          durationMinutes > 0) {
-        if (durationMinutes >= 60) {
-          final hours = durationMinutes ~/ 60;
-          final remainingMins = durationMinutes % 60;
-          if (remainingMins > 0) {
-            _estimatedDurationController.text =
-                '$hours hrs $remainingMins mins';
-          } else {
-            _estimatedDurationController.text = '$hours hrs';
-          }
-        } else {
-          _estimatedDurationController.text = '$durationMinutes mins';
-        }
-      } else if (durationMinutes is String) {
-        _estimatedDurationController.text = durationMinutes;
-      } else {
-        _estimatedDurationController.text = '';
-      }
-
-      // Remarks / Additional notes - accept several possible backend keys
-      String? remarksVal;
-      for (final k in [
-        'remarks',
-        'additional_notes',
-        'additional_note',
-        'additional_comments',
-        'notes',
-        'admin_notification',
-      ]) {
-        final v = data[k];
-        if (v != null) {
-          remarksVal = v.toString();
-          break;
-        }
-      }
-      _remarksController.text = remarksVal ?? '';
-
-      // Admin notes - accept several possible backend keys
-      String? adminNotesVal;
-      for (final k in [
-        'admin_notes',
-        'admin_notification',
-        'notes',
-        'adminNote',
-      ]) {
-        final v = data[k];
-        if (v != null) {
-          adminNotesVal = v.toString();
-          break;
-        }
-      }
-      _adminNotesController.text = adminNotesVal ?? '';
-      print('[Form] Populated admin notes: "${_adminNotesController.text}"');
-
-      // Dropdowns - validate values are in options list
-      // Priority: Low, Medium, High
-      final priority = data['priority']?.toString();
-      final validPriorities = ['Low', 'Medium', 'High'];
-      _selectedPriority = validPriorities.contains(priority) ? priority : null;
-
-      // Status: coerce to string if present
-      _selectedStatus = data['status']?.toString();
-
-      // Location: validate against location options
-      final location = data['location'] ?? data['area'];
-      final validLocations = [
-        'Swimming pool',
-        'Basketball Court',
-        'Gym',
-        'Parking area',
-        'Lobby',
-        'Elevators',
-        'Halls',
-        'Garden',
-        'Corridors',
-        'Other',
-      ];
-      _selectedLocation =
-          (location != null && validLocations.contains(location.toString()))
-              ? location.toString()
-              : null;
-
-      // Recurrence - capitalize first letter to match dropdown options
-      final recurrence = data['recurrence_type'] ?? data['recurrence'];
-      if (recurrence != null) {
-        final recurrenceCapitalized = recurrence
-            .toString()
-            .split('_')
-            .map((word) {
-              if (word.isEmpty) return word;
-              return word[0].toUpperCase() + word.substring(1).toLowerCase();
-            })
-            .join(' ');
-        // Valid recurrence options: Weekly, Monthly, Quarterly, Annually
-        final validRecurrences = ['Weekly', 'Monthly', 'Quarterly', 'Annually'];
-        _selectedRecurrence =
-            validRecurrences.contains(recurrenceCapitalized)
-                ? recurrenceCapitalized
-                : null;
-      }
-
-      // Department: validate against department options
-      final department = data['department'];
-      final validDepartments = [
-        'Carpentry',
-        'Electrical',
-        'Masonry',
-        'Plumbing',
-      ];
-      final deptStr = department?.toString();
-      try {
-        _selectedDepartment = validDepartments.firstWhere(
-          (d) => d.toLowerCase() == deptStr?.toLowerCase(),
-        );
-      } catch (_) {
-        _selectedDepartment = null;
-      }
-
-      // Staff assignment (coerce id to String, name to String)
-      if (data['assigned_to'] != null) {
+      // Attempt to populate maintenance type from 'category' or 'maintenance_type' if present
+      final categoryVal = data['category'] ?? data['maintenance_type'] ?? data['type'];
+      if (categoryVal != null) {
+        final catStr = categoryVal.toString();
         try {
-          _selectedStaffUserId = data['assigned_to']?.toString();
+          _selectedCategory = _maintenanceTypes.firstWhere(
+            (d) => d.toLowerCase() == catStr.toLowerCase(),
+          );
+          _otherCategoryController.text = '';
         } catch (_) {
-          _selectedStaffUserId = null;
+          _selectedCategory = 'Other';
+          _otherCategoryController.text = catStr;
         }
-        _assignedStaffController.text =
-            (data['assigned_staff_name'] ?? 'Staff Name').toString();
       }
 
-      // Populate template (if present)
-      final templateKey = data['template_id'] ?? data['templateId'] ?? data['template'];
-
-      // Dates - parse flexibly (accept ISO strings or integer timestamps)
-      DateTime? parseFlexibleDate(dynamic raw) {
-        if (raw == null) return null;
-        try {
-          if (raw is DateTime) return raw;
-          if (raw is int) {
-            // Heuristic: if it's in seconds (10 digits), convert to ms
-            if (raw.abs() < 100000000000) {
-              // likely seconds
-              return DateTime.fromMillisecondsSinceEpoch(raw * 1000);
-            }
-            return DateTime.fromMillisecondsSinceEpoch(raw);
-          }
-          if (raw is String) {
-            // Try ISO parse
-            return DateTime.tryParse(raw);
-          }
-          if (raw is double) {
-            final asInt = raw.toInt();
-            if (asInt.abs() < 100000000000) {
-              return DateTime.fromMillisecondsSinceEpoch(asInt * 1000);
-            }
-            return DateTime.fromMillisecondsSinceEpoch(asInt);
-          }
-        } catch (e) {
-          print('parseFlexibleDate error: $e');
-        }
-        return null;
-      }
-
-      final createdAt = parseFlexibleDate(data['created_at']);
-      if (createdAt != null) {
-        _dateCreated = createdAt;
-        _dateCreatedController.text = _fmtDate(_dateCreated!);
-      }
-
-      final startAt = parseFlexibleDate(
-        data['start_date'] ?? data['scheduled_date'],
-      );
-      if (startAt != null) {
-        _startDate = startAt;
-        _startDateController.text = _fmtDate(_startDate!);
-      }
-
-      final nextAt = parseFlexibleDate(
-        data['next_due_date'] ?? data['next_due'] ?? data['next_occurrence'],
-      );
-      if (nextAt != null) {
-        _nextDueDate = nextAt;
-        _nextDueDateController.text = _fmtDate(_nextDueDate!);
-      }
-
-      // Checklist items
-      final checklistData =
-          data['checklist_completed'] ??
-          data['checklistItems'] ??
-          data['checklist'] ??
-          data['tasks'] ??
-          data['task_list'];
-      if (checklistData != null && checklistData is List) {
-        print('[Form] Populating checklist from data: $checklistData');
-        _checklistItems.clear();
-        for (var item in checklistData) {
-          if (item is Map) {
-            _checklistItems.add({
-              'id':
-                  item['id'] ??
-                  DateTime.now().millisecondsSinceEpoch.toString(),
-              'task': item['task'] ?? item['description'] ?? '',
-              'completed': item['completed'] ?? false,
-            });
-          } else if (item is String) {
-            _checklistItems.add({
-              'id': DateTime.now().millisecondsSinceEpoch.toString(),
-              'task': item,
-              'completed': false,
-            });
-          }
-        }
-        print('[Form] Populated ${_checklistItems.length} checklist items');
-      }
-
-      // Inventory items
-      if (data['parts_used'] != null && data['parts_used'] is List) {
-        print('[Form] Populating inventory from data: ${data['parts_used']}');
+      // Inventory items - need to fetch stock info since backend doesn't include it
+      final inventoryList = data['inventory_items'] ?? data['parts_used'] ?? data['inventoryItems'];
+      if (inventoryList is List) {
         _selectedInventoryItems.clear();
-        for (var item in data['parts_used']) {
+        for (final item in inventoryList) {
+          final rawQuantity = item['quantity'] ?? item['qty'] ?? 0;
+          final qty = rawQuantity is int
+              ? rawQuantity
+              : int.tryParse(rawQuantity?.toString() ?? '0') ?? 0;
+          
+          // Stock info not provided by backend, will be populated when available inventory loads
+          final rawStock = item['available_stock'] ?? item['stock'] ?? item['current_stock'] ?? 0;
+          final availableStock = rawStock is int
+              ? rawStock
+              : int.tryParse(rawStock?.toString() ?? '0') ?? 0;
+          
+          print('[DEBUG] TaskTypeForm adding inventory item: ${item['item_name']} (${item['inventory_id']}) qty: $qty, stock: $availableStock');
           _selectedInventoryItems.add({
-            'inventory_id': item['inventory_id'] ?? item['item_code'] ?? '',
+            'inventory_id': item['inventory_id'] ?? item['item_id'] ?? item['item_code'] ?? '',
             'item_name': item['item_name'] ?? item['name'] ?? '',
             'item_code': item['item_code'] ?? item['code'] ?? '',
-            'quantity': item['quantity'] ?? 0,
-            'available_stock': item['available_stock'] ?? item['stock'] ?? '',
-            'unit': item['unit'] ?? '',
-            'autoReserve': item['reserve'] ?? item['reserved'] ?? item['autoReserve'] ?? true,
+            'quantity': qty,
+            'available_stock': availableStock,
+            'unit': item['unit'] ?? item['uom'] ?? item['unit_of_measure'] ?? ''
           });
         }
+        // Update stock info from available inventory after items are loaded
+        _updateInventoryStock();
       }
+      // Populate created/updated metadata if present
+      try {
+        final createdVal = data['created_at'] ?? data['date_created'] ?? data['createdAt'] ?? data['created_by_date'];
+        if (createdVal != null) {
+          if (createdVal is int) {
+            _dateCreated = DateTime.fromMillisecondsSinceEpoch(createdVal);
+          } else if (createdVal is String) {
+            _dateCreated = DateTime.tryParse(createdVal) ?? _dateCreated;
+          }
+          if (_dateCreated != null) {
+            _dateCreatedController.text = _fmtDate(_dateCreated!);
+          }
+        }
 
-      // Created by - keep as current user, don't override from data
-      // _createdByName = data['created_by'] ?? 'Admin User';
+        final updatedVal = data['updated_at'] ?? data['date_updated'] ?? data['updatedAt'];
+        if (updatedVal != null) {
+          if (updatedVal is int) {
+            _dateUpdated = DateTime.fromMillisecondsSinceEpoch(updatedVal);
+          } else if (updatedVal is String) {
+            _dateUpdated = DateTime.tryParse(updatedVal) ?? _dateUpdated;
+          }
+        }
+
+        final createdBy = data['created_by'] ?? data['createdBy'] ?? data['created_by_name'];
+        if (createdBy != null) {
+          _createdByName = createdBy.toString();
+        }
+      } catch (e) {
+        // Ignore any parsing errors on optional metadata
+      }
     });
   }
 
   @override
   void dispose() {
     _taskTitleController.dispose();
-    _codeIdController.dispose(); // Dispose new controller
-    _assignedStaffController.dispose();
+    _taskIdController.dispose();
     _dateCreatedController.dispose();
     _descriptionController.dispose();
-    _estimatedDurationController.dispose();
-    _remarksController.dispose();
-    _adminNotesController.dispose();
-    _startDateController.dispose();
-    _nextDueDateController.dispose();
-    _checklistItemController.dispose(); // Dispose new controller
+    _otherCategoryController.dispose();
     super.dispose();
   }
 
   // -------------------- ACTIONS --------------------
   void _cancelEdit() {
-    // If we're in a local edit session, revert changes and exit edit mode.
-    if (_isLocalEdit) {
-      setState(() {
-        _autoMode = AutovalidateMode.disabled;
-        _isLocalEdit = false;
-        if (widget.maintenanceData != null) {
-          _populateFormFields(widget.maintenanceData!);
-        }
-      });
-      return;
-    }
-
-    // Otherwise, close the form / dialog
     Navigator.of(context).pop();
   }
 
@@ -1162,49 +575,64 @@ class _TaskTypeFormPageState
       return;
     }
 
-    final id = _codeIdController.text;
+    final id = _taskIdController.text;
     final dateCreatedIso = _dateCreated?.toIso8601String() ?? DateTime.now().toIso8601String();
 
-    final taskType = <String, dynamic>{
-      'id': id,
+    final categoryValue = (_selectedCategory == 'Other') ? _otherCategoryController.text.trim() : (_selectedCategory ?? _maintenanceTypes.first);
+    final payload = <String, dynamic>{
       'name': _taskTitleController.text.trim(),
-      'task_type_id': id,
       'description': _descriptionController.text.trim(),
-      'category': _selectedDepartment ?? 'Maintenance',
-      'date_created': dateCreatedIso,
+      'category': categoryValue,
+      'maintenance_type': categoryValue,
       'inventory_items': _selectedInventoryItems.map((i) => {
-            'inventory_id': i['inventory_id'],
-            'quantity': i['quantity'] ?? 0,
-            'autoReserve': i['autoReserve'] ?? false,
-          }).toList(),
+        'inventory_id': i['inventory_id'],
+        'item_name': i['item_name'],
+        'item_code': i['item_code'],
+        'quantity': i['quantity'] ?? 0,
+        'unit': i['unit'] ?? '',
+      }).toList(),
     };
+    if (_currentTaskTypeId != null) {
+      payload['task_type_id'] = _currentTaskTypeId;
+    }
 
-    // Debug: print the task type payload being sent
-    print('[Form] Task type payload: $taskType');
-
+    final isEdit = widget.isEditMode && _currentTaskTypeId != null;
+    print('[DEBUG] TaskTypeForm saving - isEdit: $isEdit, ID: $_currentTaskTypeId');
+    print('[DEBUG] TaskTypeForm payload: $payload');
+    setState(() => _isSubmitting = true);
     try {
-      if (widget.isEditMode && widget.maintenanceData != null) {
-        // Update: for now, we just print and pop
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Task type updated (local-only)')),
-        );
-        Navigator.of(context).pop(taskType);
-      } else {
-        // Create: push to list - no backend endpoint implemented in codebase
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Task type created (local-only)')),
-        );
-        // Navigate back to the task types list passing the new item as extra
+      if (isEdit) {
+        print('[DEBUG] TaskTypeForm updating task type: $_currentTaskTypeId');
+        final result = await _adminApi.updateTaskType(_currentTaskTypeId!, payload);
+        print('[DEBUG] TaskTypeForm update result: $result');
         if (mounted) {
-          context.push('/work/tasktypes', extra: taskType);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Task type saved')), 
+          );
+        }
+      } else {
+        print('[DEBUG] TaskTypeForm creating new task type');
+        final created = await _adminApi.createTaskType(payload);
+        print('[DEBUG] TaskTypeForm create result: $created');
+        _currentTaskTypeId = _resolveTaskTypeId(created);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Task type created')), 
+          );
         }
       }
+      if (mounted) {
+        context.go('/work/task_type');
+      }
     } catch (e) {
-      print('[v0] Error saving maintenance task: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save maintenance task: $e')),
+          SnackBar(content: Text('Failed to save task type: $e')),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
       }
     }
   }
@@ -1213,13 +641,18 @@ class _TaskTypeFormPageState
   @override
   Widget build(BuildContext context) {
     return FacilityFixLayout(
-      currentRoute: 'work_task_types_create',
+      currentRoute: 'work_task_type_create',
       onNavigate: (routeKey) {
+        print('[DEBUG] onNavigate called with routeKey: $routeKey');
         final routePath = _getRoutePath(routeKey);
         if (routePath != null) {
+          print('[DEBUG] Navigating to route: $routePath');
           context.go(routePath);
         } else if (routeKey == 'logout') {
+          print('[DEBUG] Logout route detected, calling _handleLogout');
           _handleLogout(context);
+        } else {
+          print('[DEBUG] Unknown routeKey: $routeKey');
         }
       },
       body: SingleChildScrollView(
@@ -1260,7 +693,7 @@ class _TaskTypeFormPageState
                             size: 16,
                           ),
                           TextButton(
-                            onPressed: () => context.go('/work/tasktypes'),
+                            onPressed: () => context.go('/work/task_type'),
                             style: TextButton.styleFrom(
                               foregroundColor: Colors.black,
                               padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -1285,6 +718,8 @@ class _TaskTypeFormPageState
                 ],
               ),
               const SizedBox(height: 32),
+              if (_isLoadingExisting)
+                const LinearProgressIndicator(minHeight: 3),
 
               // ---------- FORM ----------
               Container(
@@ -1339,7 +774,7 @@ class _TaskTypeFormPageState
                                 _fieldLabel('Task Type ID'),
                                 _fieldBox(
                                   child: TextFormField(
-                                    controller: _codeIdController,
+                                    controller: _taskIdController,
                                     enabled: false,
                                     decoration: _decoration(
                                       'Auto-generated',
@@ -1398,30 +833,61 @@ class _TaskTypeFormPageState
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _fieldLabel('Category'),
-                                _fieldBox(
+                                _fieldLabel('Maintenance Type'),
+                                  _fieldBox(
                                   child: DropdownButtonFormField<String>(
-                                    value: _selectedDepartment ?? 'Maintenance',
-                                    validator: _reqDropdown,
-                                    decoration: _decoration('Select Category...'),
-                                    items: const [
-                                      'Maintenance',
-                                      'Repair',
-                                      'Cleaning',
-                                      'Inspection',
-                                      'Disaster Preparedness',
-                                      'Other',
-                                    ].map((v) => DropdownMenuItem(
+                                    value: _selectedCategory ?? _maintenanceTypes.first,
+                                    validator: _validateCategory,
+                                    decoration: _decoration('Select Maintenance Type...'),
+                                    items: _maintenanceTypes.map((v) => DropdownMenuItem(
                                       value: v,
                                       child: Text(v),
                                     )).toList(),
-                                    onChanged: (v) => setState(() => _selectedDepartment = v),
+                                    onChanged: (v) => setState(() {
+                                      _selectedCategory = v;
+                                      if (v != 'Other') _otherCategoryController.text = '';
+                                    }),
                                   ),
                                 ),
                               ],
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 24),
+                      // Specify Category (only shown when "Others" is selected, on the right)
+                      if ((_selectedCategory ?? '') == 'Other')
+                        Row(
+                          children: [
+                            const Expanded(child: SizedBox()), // Left spacer
+                            const SizedBox(width: 24),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _fieldLabel('Specify Maintenance Type'),
+                                  _fieldBox(
+                                    child: TextFormField(
+                                      controller: _otherCategoryController,
+                                      validator: _req,
+                                      decoration: _decoration(
+                                        'Enter custom category...',
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      
+                      // Description
+                      _fieldLabel('Description'),
+                      TextFormField(
+                        controller: _descriptionController,
+                        validator: _req,
+                        maxLines: 3,
+                        decoration: _decoration('Enter a short description for this task type...'),
                       ),
                       const SizedBox(height: 32),
 
@@ -1442,7 +908,7 @@ class _TaskTypeFormPageState
                                     Expanded(
                                       child: _buildSectionHeader(
                                         "Inventory Items",
-                                        "Reserve parts or supplies for the task",
+                                          "Add parts or supplies to the task",
                                       ),
                                     ),
                                     ElevatedButton.icon(
@@ -1481,7 +947,7 @@ class _TaskTypeFormPageState
                                       ),
                                     ),
                                     child: Text(
-                                      'No inventory items reserved yet. Click "Add Item" to reserve inventory.',
+                                      'No inventory items added yet. Click "Add Item" to add an inventory item.',
                                       style: TextStyle(color: Colors.grey[600]),
                                       textAlign: TextAlign.center,
                                     ),
@@ -1553,16 +1019,9 @@ class _TaskTypeFormPageState
                                                         ),
                                                       ),
                                                       const SizedBox(width: 4),
-                                                      if ((item['reserved_stock'] ?? 0) > 0)
-                                                        Container(
-                                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                          decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(6)),
-                                                          child: Text('Reserved: ${item['reserved_stock'] ?? 0}', style: const TextStyle(fontSize: 12, color: Colors.green)),
-                                                        ),
                                                     ],
                                                   ),
                                                   const SizedBox(height: 6),
-                                                  const SizedBox(height: 4),
                                                   Text(
                                                     '${item['item_code'] ?? 'N/A'}',
                                                     style: TextStyle(
@@ -1572,12 +1031,20 @@ class _TaskTypeFormPageState
                                                   ),
                                                   const SizedBox(height: 4),
                                                     Text(
-                                                      'Stock: ${item['available_stock']} ${item['unit'] ?? ''} (Reserved: ${item['reserved_stock'] ?? 0})',
+                                                      'Stock: ${item['available_stock']}',
                                                       style: TextStyle(
-                                                      fontSize: 11,
-                                                      color: Colors.grey[600],
+                                                        fontSize: 11,
+                                                        color: Colors.grey[600],
                                                       ),
                                                     ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    'Unit: ${item['unit'] ?? item['uom'] ?? item['unit_of_measure'] ?? '—'}',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: Colors.grey[600],
+                                                    ),
+                                                  ),
                                                   ],
                                                 ),
                                               ),
@@ -1776,15 +1243,7 @@ class _TaskTypeFormPageState
                         ],
                       ),
                       const SizedBox(height: 24),
-                      // Description
-                      _fieldLabel('Description'),
-                      TextFormField(
-                        controller: _descriptionController,
-                        validator: _req,
-                        maxLines: 3,
-                        decoration: _decoration('Enter a short description for this task type...'),
-                      ),
-                      const SizedBox(height: 24),
+
 
                       // ===== Actions =====
                       Row(
@@ -1794,7 +1253,7 @@ class _TaskTypeFormPageState
                           TextButton(
                             onPressed: _cancelEdit,
                             child: Text(
-                              _isEditing ? 'Cancel' : 'Cancel',
+                              'Cancel',
                               style: TextStyle(color: Colors.grey[800]),
                             ),
                           ),
@@ -1802,7 +1261,7 @@ class _TaskTypeFormPageState
 
                           // Primary action (Submit / Save)
                           ElevatedButton(
-                            onPressed: _onNext, // VALIDATE then NAVIGATE
+                            onPressed: _isSubmitting ? null : _onNext, // VALIDATE then NAVIGATE
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.blue,
                               foregroundColor: Colors.white,
@@ -1814,13 +1273,24 @@ class _TaskTypeFormPageState
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             ),
-                              child: Text(
-                                _isEditing ? "Save Changes" : "Create Task Type",
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                            child: _isSubmitting
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Text(
+                                    widget.isEditMode
+                                        ? "Save Changes"
+                                        : "Create Task Type",
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
                           ),
                         ],
                       ),
@@ -1929,7 +1399,7 @@ class _InventorySelectionDialog extends StatefulWidget {
 
 class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
   Map<String, dynamic>? _selectedItem;
-  final _quantityController = TextEditingController(text: '1');
+  final _quantityController = TextEditingController(text: '0');
   String _searchQuery = '';
 
   @override
@@ -1998,7 +1468,6 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                             ),
                           ),
                         ),
-                        
                     ],
                   ),
                 ),
@@ -2033,7 +1502,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
 
             // Items list
             Expanded(
-              child:
+                  child:
                   _filteredItems.isEmpty
                       ? Center(
                         child: Text(
@@ -2069,14 +1538,10 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                             ),
                             child: ListTile(
                               onTap: () {
-                                    setState(() {
-                                      _selectedItem = item;
-                                      // Prefill quantity to 1 for convenience
-                                      if ((_quantityController.text.trim() == '0' || _quantityController.text.trim().isEmpty)) {
-                                        _quantityController.text = '1';
-                                      }
-                                    });
-                                  },
+                                setState(() {
+                                  _selectedItem = item;
+                                });
+                              },
                               title: Text(
                                 item['item_name'] ?? 'Unknown Item',
                                 style: const TextStyle(
@@ -2102,10 +1567,9 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                                       color: Colors.grey[600],
                                     ),
                                   ),
-                                  if (item['unit'] != null &&
-                                      item['unit'].toString().isNotEmpty)
+                                  if (item['unit'] != null && item['unit'].toString().isNotEmpty)
                                     Text(
-                                      'Unit: ${item['unit']}',
+                                      'Unit: ${item['unit'] ?? item['uom'] ?? item['unit_of_measure']}',
                                       style: TextStyle(
                                         fontSize: 12,
                                         color: Colors.grey[600],
@@ -2177,7 +1641,8 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                       _selectedItem == null
                           ? null
                           : () {
-                            final quantity = int.tryParse(_quantityController.text) ?? 1;
+                            final quantity =
+                                int.tryParse(_quantityController.text) ?? 1;
                             if (quantity <= 0) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -2188,8 +1653,6 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                               );
                               return;
                             }
-                            // Debug info so we can trace add callback behavior
-                            print('DEBUG: Inventory dialog add -> item=${_selectedItem!['item_name'] ?? _selectedItem!['name'] ?? _selectedItem!['item_code']}, quantity=$quantity');
                             widget.onItemSelected(_selectedItem!, quantity);
                             Navigator.pop(context);
                           },
@@ -2200,116 +1663,9 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24,
-                      vertical: 12,
+                                           vertical: 12,
                     ),
                   ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// Add Location Dialog
-class _AddLocationDialog extends StatefulWidget {
-  final Function(String location) onLocationAdded;
-
-  const _AddLocationDialog({required this.onLocationAdded});
-
-  @override
-  State<_AddLocationDialog> createState() => _AddLocationDialogState();
-}
-
-class _AddLocationDialogState extends State<_AddLocationDialog> {
-  final _locationController = TextEditingController();
-
-  @override
-  void dispose() {
-    _locationController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        width: 400,
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Add Custom Location',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Location input
-            TextField(
-              controller: _locationController,
-              decoration: InputDecoration(
-                labelText: 'Location Name',
-                hintText: 'Enter custom location...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              autofocus: true,
-            ),
-
-            const SizedBox(height: 24),
-
-            // Actions
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    final location = _locationController.text.trim();
-                    if (location.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Please enter a location name'),
-                        ),
-                      );
-                      return;
-                    }
-                    widget.onLocationAdded(location);
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                  ),
-                  child: const Text('Add'),
                 ),
               ],
             ),

@@ -4,7 +4,7 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
-import '../../services/api_services.dart';
+import '../../services/api_services_mobile.dart';
 import '../../services/auth_storage.dart';
 
 class AdminWebDashPage extends StatefulWidget {
@@ -192,35 +192,47 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
 
   // Helper function to convert routeKey to actual route path
   static String? _getRoutePath(String routeKey) {
-      final Map<String, String> pathMap = {
-        'dashboard': '/dashboard',
-        'user_users': '/user/users',
-        'user_scheduling': '/user/scheduling',
-        'work_maintenance': '/work/maintenance',
-        'work_repair': '/work/repair',
-        'calendar': '/calendar',
-        'inventory_equipment': '/inventory/equipment',
-        'inventory_items': '/inventory/items',
-        'inventory_request': '/inventory/request',
-        'analytics': '/analytics',
-        'announcement': '/announcement',
-        'settings': '/settings',
-        'logout': '/logout',
-      };
-      return pathMap[routeKey];
-    }
+    final Map<String, String> pathMap = {
+      'dashboard': '/dashboard',
+      'user_users': '/user/users',
+      'user_scheduling': '/user/scheduling',
+      'work_maintenance': '/work/maintenance',
+      'work_task_type': '/work/task_type',
+      'work_repair': '/work/repair',
+      'calendar': '/calendar',
+      'inventory_equipment': '/inventory/equipment',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
+      'analytics': '/analytics',
+      'announcement': '/announcement',
+      'settings': '/settings',
+      //'logout': '/logout',
+    };
+    return pathMap[routeKey];
+  }
 
   // Logout functionality
   void _handleLogout(BuildContext context) async {
+    print('[DEBUG] _handleLogout called');
+    // Ensure we're not already navigating
+    if (!mounted) return;
+    
     final result = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
+      barrierDismissible: false, // Prevent accidental dismissal
+      builder: (dialogContext) {
+        print('[DEBUG] Dialog builder called');
         return const LogoutPopup();
       },
     );
-
-    if (result == true) {
+    print('[DEBUG] Dialog result: $result');
+    
+    if (result == true && mounted) {
+      // Perform logout
+      print('[DEBUG] Logging out...');
       context.go('/');
+    } else {
+      print('[DEBUG] Logout cancelled or dialog dismissed');
     }
   }
 
@@ -261,11 +273,16 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
     return FacilityFixLayout(
       currentRoute: 'dashboard',
       onNavigate: (routeKey) {
+        print('[DEBUG] onNavigate called with routeKey: $routeKey');
         final routePath = _getRoutePath(routeKey);
         if (routePath != null) {
+          print('[DEBUG] Navigating to route: $routePath');
           context.go(routePath);
         } else if (routeKey == 'logout') {
+          print('[DEBUG] Logout route detected, calling _handleLogout');
           _handleLogout(context);
+        } else {
+          print('[DEBUG] Unknown routeKey: $routeKey');
         }
       },
       body:

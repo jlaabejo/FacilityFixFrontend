@@ -11,7 +11,7 @@ import 'package:facilityfix/widgets/view_details.dart';
 import 'package:facilityfix/widgets/modals.dart'; // <-- CustomPopup
 import 'package:facilityfix/widgets/buttons.dart'
   as custom_buttons; // <-- FilledButton lives here
-import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/services/api_services_mobile.dart';
 import 'package:facilityfix/config/env.dart';
 
 class InventoryDetails extends StatefulWidget {

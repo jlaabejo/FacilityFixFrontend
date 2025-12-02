@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:facilityfix/services/firebase_chat_service.dart';
-import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/services/api_services_mobile.dart';
 import 'package:facilityfix/models/chat_models.dart';
 import 'package:facilityfix/services/auth_storage.dart';
 import 'package:facilityfix/staff/announcement.dart';

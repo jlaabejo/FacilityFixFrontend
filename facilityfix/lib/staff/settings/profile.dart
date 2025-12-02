@@ -23,7 +23,7 @@ import 'package:facilityfix/widgets/buttons.dart' as custom_buttons;
 import 'package:facilityfix/services/auth_storage.dart';
 import 'package:facilityfix/services/profile_service.dart';
 import 'package:intl/intl.dart';
-import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/services/api_services_mobile.dart';
 import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/widgets/schedule_availability.dart';
 

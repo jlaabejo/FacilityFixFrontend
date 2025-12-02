@@ -2,7 +2,7 @@ import 'package:facilityfix/utils/ui_format.dart';
 import 'package:intl/intl.dart';
 import 'package:facilityfix/widgets/buttons.dart' as fx;
 import 'package:facilityfix/widgets/modals.dart';
-import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/services/api_services_mobile.dart';
 import 'package:facilityfix/config/env.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -1762,24 +1762,37 @@ class _MaintenanceState extends State<MaintenanceDetails> {
     Map<String, dynamic> request,
     String action,
   ) async {
-    final requestId =
-        request['_doc_id'] ??
-        request['id'] ??
-        request['_id'] ??
-        request['request_id'] ??
-        request['reservation_id'];
+    // Try multiple possible ID field names
+    String? requestId;
+    for (final idField in ['_doc_id', 'id', '_id', 'request_id', 'reservation_id']) {
+      if ((request[idField] ?? '').toString().isNotEmpty) {
+        requestId = request[idField].toString();
+        break;
+      }
+    }
+    
+    final itemType = request['type'] ?? 'unknown';
+    final inventoryId = request['inventory_id'];
+    
     if (requestId == null) {
       print('DEBUG: Request keys: ${request.keys.toList()}');
       print('DEBUG: Request map: $request');
-      final snackMsg = (request['type'] == 'reservation') ? 'Reservation ID not found' : 'Request ID not found';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(snackMsg)),
-      );
-      return;
+      
+      // For reservations without explicit ID, try to use inventory_id as identifier
+      if (itemType == 'reservation' && inventoryId != null) {
+        print('DEBUG: Using inventory_id as fallback identifier for reservation');
+        requestId = 'fallback_${inventoryId}';
+      } else {
+        final snackMsg = (itemType == 'reservation') ? 'Reservation ID not found' : 'Request ID not found';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(snackMsg)),
+        );
+        return;
+      }
     }
 
-    // Add to loading set
-    setState(() => _loadingItems.add(requestId));
+    // Add to loading set (requestId is guaranteed to be non-null at this point)
+    setState(() => _loadingItems.add(requestId!));
 
     try {
       final apiService = APIService();
@@ -1937,10 +1950,12 @@ class _MaintenanceState extends State<MaintenanceDetails> {
             }
 
             // Hide the return button briefly while reloading to avoid flicker
-            setState(() => _suppressReturnIds.add(requestId));
-            Timer(const Duration(seconds: 3), () {
-              if (mounted) setState(() => _suppressReturnIds.remove(requestId));
-            });
+            if (requestId != null) {
+              setState(() => _suppressReturnIds.add(requestId!));
+              Timer(const Duration(seconds: 3), () {
+                if (mounted) setState(() => _suppressReturnIds.remove(requestId));
+              });
+            }
             // Notify listeners that inventory was updated
             _notifier.notifyItemUpdated(inventoryId ?? '');
           } else {
@@ -2032,7 +2047,8 @@ class _MaintenanceState extends State<MaintenanceDetails> {
     try {
       final apiService = APIService();
       if ((request['type'] ?? '').toString().toLowerCase() == 'reservation') {
-        final response = await apiService.returnInventoryReservation(requestId);
+        final quantity = request['quantity'] ?? 1;
+        final response = await apiService.returnReservation(requestId, quantity: quantity);
         if (response['success'] == true) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Item returned successfully')),

@@ -100,7 +100,6 @@ app.*.map.json
 
 # Web
 /web/favicon.png
-lib/generated_plugin_registrant.dart
 
 # Coverage
 coverage/

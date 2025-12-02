@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../widgets/logout_popup.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import '../../services/auth_storage.dart';
+import '../services/api_service_web.dart';
 
 class InventoryForecastingPage extends StatefulWidget {
   const InventoryForecastingPage({super.key});
@@ -34,11 +34,13 @@ class _InventoryForecastingPageState extends State<InventoryForecastingPage> {
       'user_users': '/user/users',
       'user_scheduling': '/user/scheduling',
       'work_maintenance': '/work/maintenance',
+      'work_task_type': '/work/task_type',
       'work_repair': '/work/repair',
       'calendar': '/calendar',
       'inventory_equipment': '/inventory/equipment',
       'inventory_items': '/inventory/items',
       'inventory_request': '/inventory/request',
+      'inventory_forecasting': '/inventory/forecasting',
       'analytics': '/analytics',
       'announcement': '/announcement',
       'settings': '/settings',
@@ -49,15 +51,26 @@ class _InventoryForecastingPageState extends State<InventoryForecastingPage> {
 
   // Logout functionality
   void _handleLogout(BuildContext context) async {
+    print('[DEBUG] _handleLogout called');
+    // Ensure we're not already navigating
+    if (!mounted) return;
+    
     final result = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
+      barrierDismissible: false, // Prevent accidental dismissal
+      builder: (dialogContext) {
+        print('[DEBUG] Dialog builder called');
         return const LogoutPopup();
       },
     );
-
-    if (result == true) {
+    print('[DEBUG] Dialog result: $result');
+    
+    if (result == true && mounted) {
+      // Perform logout
+      print('[DEBUG] Logging out...');
       context.go('/');
+    } else {
+      print('[DEBUG] Logout cancelled or dialog dismissed');
     }
   }
 
@@ -225,38 +238,30 @@ class _InventoryForecastingPageState extends State<InventoryForecastingPage> {
   // Fetch forecasting data from API
   Future<void> _fetchForecastingData() async {
     setState(() => _isLoading = true);
-
     try {
-      // TODO: Replace with actual building ID from context or route
-      final buildingId = 'your_building_id_here'; // e.g., from GoRouterState or provider
-
-      // TODO: Replace with actual JWT token from auth context
-      final jwtToken = 'YOUR_JWT_TOKEN'; // e.g., from secure storage or provider
-
-      final response = await http.get(
-        Uri.parse('YOUR_API_BASE_URL/inventory/forecasting/$buildingId'),
-        headers: {
-          'Authorization': 'Bearer $jwtToken',
-          'Content-Type': 'application/json',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body) as List;
-        setState(() {
-          _forecastingData = data.map((item) => item as Map<String, dynamic>).toList();
-          _isLoading = false;
-        });
-      } else {
-        // Handle error, e.g., show snackbar
+      final profile = await AuthStorage.getProfile();
+      final buildingId = profile?['building_id'] ?? profile?['building'] ?? profile?['buildingId'];
+      if (buildingId == null) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load data: ${response.statusCode}')),
+          const SnackBar(content: Text('Unable to determine building id')),
+        );
+        return;
+      }
+
+      final apiService = ApiService();
+      final data = await apiService.getInventoryForecasting(buildingId.toString());
+      setState(() {
+        _forecastingData = data;
+        _isLoading = false;
+      });
+      if (mounted && (data == null || data.isEmpty)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No forecasting data found or invalid server response')),
         );
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      // Handle error, e.g., show snackbar
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error loading data: $e')),
       );
@@ -291,13 +296,18 @@ class _InventoryForecastingPageState extends State<InventoryForecastingPage> {
   @override
   Widget build(BuildContext context) {
     return FacilityFixLayout(
-      currentRoute: '/admin/inventory/forecasting',
+      currentRoute: 'inventory_items',
       onNavigate: (routeKey) {
+        print('[DEBUG] onNavigate called with routeKey: $routeKey');
         final routePath = _getRoutePath(routeKey);
         if (routePath != null) {
+          print('[DEBUG] Navigating to route: $routePath');
           context.go(routePath);
         } else if (routeKey == 'logout') {
+          print('[DEBUG] Logout route detected, calling _handleLogout');
           _handleLogout(context);
+        } else {
+          print('[DEBUG] Unknown routeKey: $routeKey');
         }
       },
       body: Padding(
@@ -900,7 +910,7 @@ class _InventoryForecastingPageState extends State<InventoryForecastingPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          "Forecast Analysis",
+                          "Forecasting Analysis",
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
@@ -981,98 +991,235 @@ class _InventoryForecastingPageState extends State<InventoryForecastingPage> {
                   ),
                   Divider(height: 1, thickness: 1, color: Colors.grey[400]),
 
-                  // Data Table
-                  _isLoading
-                      ? const Padding(
-                          padding: EdgeInsets.all(20.0),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
-                      : SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: DataTable(
-                            columnSpacing: 30,
-                            headingRowHeight: 56,
-                            dataRowHeight: 64,
-                            headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
-                            headingTextStyle: TextStyle(
+                  // Table Header
+                  Container(
+                    color: Colors.grey[50],
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
+                    child: Row(
+                      children: [
+                        _fixedCell(
+                          0,
+                          const Text(
+                            'ID',
+                            style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: Colors.grey[600],
                               letterSpacing: 0.5,
                             ),
-                            dataTextStyle: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.black87,
-                            ),
-                            columns: [
-                              DataColumn(label: _fixedCell(0, const Text("ID"))),
-                              DataColumn(label: _fixedCell(1, const Text("NAME"))),
-                              DataColumn(
-                                label: _fixedCell(2, const Text("CATEGORY")),
-                              ),
-                              DataColumn(label: _fixedCell(3, const Text("STATUS"))),
-                              DataColumn(
-                                label: _fixedCell(
-                                  4,
-                                  const Text("STOCK(AVAIL/TOTAL)"),
-                                ),
-                              ),
-                              DataColumn(
-                                label: _fixedCell(5, const Text("USAGE/MO")),
-                              ),
-                              DataColumn(label: _fixedCell(6, const Text("TREND"))),
-                              DataColumn(
-                                label: _fixedCell(7, const Text("DAYS TO MIN")),
-                              ),
-                              DataColumn(
-                                label: _fixedCell(8, const Text("REORDER BY")),
-                              ),
-                            ],
-                            rows:
-                                _paginatedData
-                                    .map(
-                                      (item) => DataRow(
-                                        cells: [
-                                          DataCell(_fixedCell(0, Text(item['id']))),
-                                          DataCell(
-                                            _fixedCell(1, _ellipsis(item['name'])),
-                                          ),
-                                          DataCell(
-                                            _fixedCell(
-                                              2,
-                                              _categoryTag(item['category']),
-                                            ),
-                                          ),
-                                          DataCell(
-                                            _fixedCell(3, _statusTag(item['status'])),
-                                          ),
-                                          DataCell(
-                                            _fixedCell(4, Text(item['stock'])),
-                                          ),
-                                          DataCell(
-                                            _fixedCell(5, Text(item['usage'])),
-                                          ),
-                                          DataCell(
-                                            _fixedCell(
-                                              6,
-                                              _trendWidget(item['trend']['icon'], item['trend']['color']),
-                                            ),
-                                          ),
-                                          DataCell(
-                                            _fixedCell(
-                                              7,
-                                              _daysToMinWidget(item['daysToMin']),
-                                            ),
-                                          ),
-                                          DataCell(
-                                            _fixedCell(8, Text(item['reorderBy'])),
-                                          ),
-                                        ],
-                                      ),
-                                    )
-                                    .toList(),
                           ),
                         ),
+                        _fixedCell(
+                          1,
+                          const Text(
+                            'NAME',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        _fixedCell(
+                          2,
+                          const Text(
+                            'CATEGORY',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        _fixedCell(
+                          3,
+                          const Text(
+                            'STATUS',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        _fixedCell(
+                          4,
+                          const Text(
+                            'STOCK(AVAIL/TOTAL)',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        _fixedCell(
+                          5,
+                          const Text(
+                            'USAGE/MO',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        _fixedCell(
+                          6,
+                          const Text(
+                            'TREND',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        _fixedCell(
+                          7,
+                          const Text(
+                            'DAYS TO MIN',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        _fixedCell(
+                          8,
+                          const Text(
+                            'REORDER BY',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Table Body
+                  if (_isLoading)
+                    const Padding(
+                      padding: EdgeInsets.all(48),
+                      child: Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (_forecastingData.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(48),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.analytics_outlined,
+                              size: 64,
+                              color: Colors.grey[400],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No forecasting data available',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _paginatedData.length,
+                      itemBuilder: (context, index) {
+                        final item = _paginatedData[index];
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 16,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: Colors.grey[200]!,
+                                width: 1,
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              _fixedCell(
+                                0,
+                                _ellipsis(
+                                  item['id'] ?? 'N/A',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              _fixedCell(
+                                1,
+                                _ellipsis(
+                                  item['name'] ?? 'Unknown',
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              ),
+                              _fixedCell(
+                                2,
+                                _categoryTag(item['category'] ?? 'General'),
+                              ),
+                              _fixedCell(
+                                3,
+                                _statusTag(item['status'] ?? 'Active'),
+                              ),
+                              _fixedCell(
+                                4,
+                                _ellipsis(
+                                  item['stock'] ?? '0/0',
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              ),
+                              _fixedCell(
+                                5,
+                                _ellipsis(
+                                  item['usage'] ?? '0',
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              ),
+                              _fixedCell(
+                                6,
+                                item['trend'] != null
+                                    ? _trendWidget(
+                                        item['trend']['icon'] ?? 'trending_flat',
+                                        item['trend']['color'] ?? 'grey',
+                                      )
+                                    : const Icon(Icons.trending_flat, size: 16),
+                              ),
+                              _fixedCell(
+                                7,
+                                _daysToMinWidget(item['daysToMin'] ?? 'N/A'),
+                              ),
+                              _fixedCell(
+                                8,
+                                _ellipsis(
+                                  item['reorderBy'] ?? 'N/A',
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   Divider(height: 1, thickness: 1, color: Colors.grey[400]),
 
                   // Pagination controls

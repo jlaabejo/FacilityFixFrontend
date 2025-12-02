@@ -2,7 +2,7 @@ import 'package:facilityfix/adminweb/inventory_management/inventory_item_create_
 import 'package:flutter/material.dart';
 import 'inventoryrestock_popup.dart';
 import '../../widgets/tags.dart';
-import '../../services/api_service.dart';
+import '../../services/api_service_web.dart';
 import '../../../services/auth_storage.dart';
 import '../../../utils/inventory_notifier.dart';
 
@@ -505,20 +505,6 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
               textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
             ),
           ),
-          // const SizedBox(width: 8),
-          // OutlinedButton.icon(
-          //   onPressed: () {
-          //     InventoryItemHistoryDialog.show(context, _itemData);
-          //   },
-          //   icon: const Icon(Icons.history, size: 16),
-          //   label: const Text('View History'),
-          //   style: OutlinedButton.styleFrom(
-          //     foregroundColor: Colors.grey[700],
-          //     side: BorderSide(color: Colors.grey[300]!),
-          //     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          //     textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-          //   ),
-          // ),
           const SizedBox(width: 8),
           OutlinedButton.icon(
             onPressed: () async {
@@ -625,7 +611,4 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
       ],
     );
   }
-
-
-  // Status rendering moved to shared StockStatusTag in widgets/tags.dart
 }

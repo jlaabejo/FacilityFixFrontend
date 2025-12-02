@@ -19,7 +19,7 @@ import 'package:facilityfix/widgets/view_details.dart';
 // - WorkOrderPermitDetails
 
 // Import API services
-import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/services/api_services_mobile.dart';
 
 class WorkOrderDetailsPage extends StatefulWidget {
   final String selectedTabLabel;

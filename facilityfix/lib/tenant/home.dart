@@ -1,4 +1,4 @@
-import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/services/api_services_mobile.dart';
 import 'package:facilityfix/tenant/view_details/annnouncement_details.dart';
 import 'package:facilityfix/tenant/view_details/concern_slip_details.dart';
 import 'package:facilityfix/widgets/modals.dart';

@@ -9,7 +9,7 @@ import 'package:facilityfix/tenant/view_details/concern_slip_details.dart';
 import 'package:facilityfix/tenant/view_details/job_service_details.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/view_details.dart';
-import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/services/api_services_mobile.dart';
 
 /// Tenant-only details page.
 /// - Uses only the mobile `APIService`.

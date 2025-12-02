@@ -7,9 +7,9 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../layout/facilityfix_layout.dart';
 import '../widgets/delete_popup.dart';
-import '../services/api_service.dart';
+import '../services/api_service_web.dart';
 import 'pop_up/inventory_requestdetails_popup.dart';
-import '../../services/api_services.dart' as api_services;
+import '../../services/api_services_mobile.dart' as api_services;
 import 'package:facilityfix/utils/inventory_notifier.dart';
 
 class InventoryRequestPage extends StatefulWidget {
@@ -141,6 +141,11 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     }
   }
 
+  Future<void> _refreshData() async {
+    await _loadInventoryItems();
+    await _loadInventoryRequests();
+  }
+
   Future<void> _loadInventoryRequests() async {
     setState(() {
       _isLoading = true;
@@ -199,35 +204,47 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
 
   // Route mapping helper function
   static String? _getRoutePath(String routeKey) {
-      final Map<String, String> pathMap = {
-        'dashboard': '/dashboard',
-        'user_users': '/user/users',
-        'user_scheduling': '/user/scheduling',
-        'work_maintenance': '/work/maintenance',
-        'work_repair': '/work/repair',
-        'calendar': '/calendar',
-        'inventory_equipment': '/inventory/equipment',
-        'inventory_items': '/inventory/items',
-        'inventory_request': '/inventory/request',
-        'analytics': '/analytics',
-        'announcement': '/announcement',
-        'settings': '/settings',
-        'logout': '/logout',
-      };
-      return pathMap[routeKey];
-    }
+    final Map<String, String> pathMap = {
+      'dashboard': '/dashboard',
+      'user_users': '/user/users',
+      'user_scheduling': '/user/scheduling',
+      'work_maintenance': '/work/maintenance',
+      'work_task_type': '/work/task_type',
+      'work_repair': '/work/repair',
+      'calendar': '/calendar',
+      'inventory_equipment': '/inventory/equipment',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
+      'analytics': '/analytics',
+      'announcement': '/announcement',
+      'settings': '/settings',
+      //'logout': '/logout',
+    };
+    return pathMap[routeKey];
+  }
 
   // Logout functionality
   void _handleLogout(BuildContext context) async {
+    print('[DEBUG] _handleLogout called');
+    // Ensure we're not already navigating
+    if (!mounted) return;
+    
     final result = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
+      barrierDismissible: false, // Prevent accidental dismissal
+      builder: (dialogContext) {
+        print('[DEBUG] Dialog builder called');
         return const LogoutPopup();
       },
     );
-
-    if (result == true) {
+    print('[DEBUG] Dialog result: $result');
+    
+    if (result == true && mounted) {
+      // Perform logout
+      print('[DEBUG] Logging out...');
       context.go('/');
+    } else {
+      print('[DEBUG] Logout cancelled or dialog dismissed');
     }
   }
 
@@ -269,8 +286,9 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     Map<String, dynamic> item,
     Offset position,
   ) {
-    final RenderBox overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox;
+    final overlayObj = Overlay.of(context).context.findRenderObject();
+    if (overlayObj == null || overlayObj is! RenderBox || !overlayObj.hasSize) return;
+    final RenderBox overlay = overlayObj as RenderBox;
 
     showMenu(
       context: context,
@@ -1042,11 +1060,16 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     return FacilityFixLayout(
       currentRoute: 'inventory_request',
       onNavigate: (routeKey) {
+        print('[DEBUG] onNavigate called with routeKey: $routeKey');
         final routePath = _getRoutePath(routeKey);
         if (routePath != null) {
+          print('[DEBUG] Navigating to route: $routePath');
           context.go(routePath);
         } else if (routeKey == 'logout') {
+          print('[DEBUG] Logout route detected, calling _handleLogout');
           _handleLogout(context);
+        } else {
+          print('[DEBUG] Unknown routeKey: $routeKey');
         }
       },
       body: Padding(
@@ -1217,7 +1240,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: InkWell(
-                    onTap: _loadInventoryRequests,
+                    onTap: _refreshData,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -1557,11 +1580,10 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                                         builder: (context) {
                                           return IconButton(
                                             onPressed: () {
-                                              final rbx =
-                                                  context.findRenderObject()
-                                                      as RenderBox;
-                                              final position = rbx
-                                                  .localToGlobal(Offset.zero);
+                                              final renderObj = context.findRenderObject();
+                                              if (renderObj == null || renderObj is! RenderBox || !renderObj.hasSize) return;
+                                              final rbx = renderObj as RenderBox;
+                                              final position = rbx.localToGlobal(Offset.zero);
                                               // Anchor menu below the icon so it doesn't overlap
                                               final Offset menuPosition =
                                                   position +

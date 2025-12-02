@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:universal_html/html.dart' as html;
 import 'dart:convert';
 import '../layout/facilityfix_layout.dart';
-import '../services/api_service.dart';
+import '../services/api_service_web.dart';
 import '../../services/auth_storage.dart';
 import '../report_files/analytics_report.dart';
 
@@ -366,6 +366,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
       'user_users': '/user/users',
       'user_scheduling': '/user/scheduling',
       'work_maintenance': '/work/maintenance',
+      'work_task_type': '/work/task_type',
       'work_repair': '/work/repair',
       'calendar': '/calendar',
       'inventory_equipment': '/inventory/equipment',
@@ -374,22 +375,33 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
       'analytics': '/analytics',
       'announcement': '/announcement',
       'settings': '/settings',
-      'logout': '/logout',
+      //'logout': '/logout',
     };
     return pathMap[routeKey];
   }
 
   // Logout functionality
   void _handleLogout(BuildContext context) async {
+    print('[DEBUG] _handleLogout called');
+    // Ensure we're not already navigating
+    if (!mounted) return;
+    
     final result = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
+      barrierDismissible: false, // Prevent accidental dismissal
+      builder: (dialogContext) {
+        print('[DEBUG] Dialog builder called');
         return const LogoutPopup();
       },
     );
-
-    if (result == true) {
+    print('[DEBUG] Dialog result: $result');
+    
+    if (result == true && mounted) {
+      // Perform logout
+      print('[DEBUG] Logging out...');
       context.go('/');
+    } else {
+      print('[DEBUG] Logout cancelled or dialog dismissed');
     }
   }
 
@@ -504,18 +516,11 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
 
       // Create a download URL and trigger download
       final url = html.Url.createObjectUrlFromBlob(blob);
-<<<<<<< Updated upstream
       final anchor =
           html.AnchorElement(href: url)
             ..setAttribute('download', filename)
             ..click();
 
-=======
-      (html.AnchorElement(href: url)
-        ..setAttribute('download', filename)
-        ..click());
-      
->>>>>>> Stashed changes
       // Clean up the URL
       html.Url.revokeObjectUrl(url);
 
@@ -549,11 +554,16 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
     return FacilityFixLayout(
       currentRoute: 'analytics',
       onNavigate: (routeKey) {
+        print('[DEBUG] onNavigate called with routeKey: $routeKey');
         final routePath = _getRoutePath(routeKey);
         if (routePath != null) {
+          print('[DEBUG] Navigating to route: $routePath');
           context.go(routePath);
         } else if (routeKey == 'logout') {
+          print('[DEBUG] Logout route detected, calling _handleLogout');
           _handleLogout(context);
+        } else {
+          print('[DEBUG] Unknown routeKey: $routeKey');
         }
       },
       body:

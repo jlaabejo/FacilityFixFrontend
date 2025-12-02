@@ -1,9 +1,10 @@
+import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import 'pop_up/webusers_viewdetails_popup.dart';
 import '../widgets/delete_popup.dart';
-import '../services/api_service.dart';
+import '../services/api_service_web.dart';
 import '../widgets/tags.dart';
 
 class AdminUserPage extends StatefulWidget {
@@ -264,49 +265,51 @@ class _AdminUserPageState extends State<AdminUserPage> {
   }
 
   // ---- Navigation Helper ----
-  String? _getRoutePath(String routeKey) {
+  static String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
       'dashboard': '/dashboard',
       'user_users': '/user/users',
-      // 'user_roles': '/user/roles',
       'user_scheduling': '/user/scheduling',
       'work_maintenance': '/work/maintenance',
+      'work_task_type': '/work/task_type',
       'work_repair': '/work/repair',
       'calendar': '/calendar',
+      'inventory_equipment': '/inventory/equipment',
       'inventory_items': '/inventory/items',
       'inventory_request': '/inventory/request',
       'analytics': '/analytics',
       'announcement': '/announcement',
       'settings': '/settings',
+      //'logout': '/logout',
     };
     return pathMap[routeKey];
   }
 
-  // ---- Logout Dialog ----
-  void _handleLogout(BuildContext context) {
-    showDialog(
+  // Logout functionality
+  void _handleLogout(BuildContext context) async {
+    print('[DEBUG] _handleLogout called');
+    // Ensure we're not already navigating
+    if (!mounted) return;
+    
+    final result = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Logout'),
-          content: const Text('Are you sure you want to logout?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                context.go('/');
-              },
-              child: const Text('Logout'),
-            ),
-          ],
-        );
+      barrierDismissible: false, // Prevent accidental dismissal
+      builder: (dialogContext) {
+        print('[DEBUG] Dialog builder called');
+        return const LogoutPopup();
       },
     );
+    print('[DEBUG] Dialog result: $result');
+    
+    if (result == true && mounted) {
+      // Perform logout
+      print('[DEBUG] Logging out...');
+      context.go('/');
+    } else {
+      print('[DEBUG] Logout cancelled or dialog dismissed');
+    }
   }
+
 
   // ---- Filter Dropdown Builder ----
   Widget _buildFilterDropdown(
@@ -956,11 +959,16 @@ class _AdminUserPageState extends State<AdminUserPage> {
     return FacilityFixLayout(
       currentRoute: 'user_users',
       onNavigate: (routeKey) {
+        print('[DEBUG] onNavigate called with routeKey: $routeKey');
         final routePath = _getRoutePath(routeKey);
         if (routePath != null) {
+          print('[DEBUG] Navigating to route: $routePath');
           context.go(routePath);
         } else if (routeKey == 'logout') {
+          print('[DEBUG] Logout route detected, calling _handleLogout');
           _handleLogout(context);
+        } else {
+          print('[DEBUG] Unknown routeKey: $routeKey');
         }
       },
       body: Padding(

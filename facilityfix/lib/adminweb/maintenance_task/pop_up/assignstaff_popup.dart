@@ -1,7 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../services/api_services.dart';
-import '../../services/api_service.dart' as admin_api;
+import '../../../services/api_services_mobile.dart';
+import '../../services/api_service_web.dart' as admin_api;
 import '../../services/round_robin_assignment_service.dart';
 import 'package:intl/intl.dart';
 

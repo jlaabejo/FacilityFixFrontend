@@ -7,7 +7,7 @@ import 'package:facilityfix/staff/inventory.dart';
 import 'package:facilityfix/staff/maintenance_task.dart';
 import 'package:facilityfix/staff/repair_task.dart';
 import 'package:http/http.dart' as http;
-import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/services/api_services_mobile.dart';
 import 'package:facilityfix/services/auth_storage.dart';
 import 'package:facilityfix/config/env.dart';
 import 'package:facilityfix/staff/form/assessment_form.dart';
@@ -73,16 +73,23 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
       return;
     }
 
-    // For maintenance tasks, load admin reservations first
+    // Load staff's assigned inventory reservations for this task
     try {
-      print('DEBUG: Checking for admin inventory reservations for task $taskId');
-      final adminApiService = APIService(roleOverride: AppRole.admin);
-      final response = await adminApiService.getInventoryReservations(maintenanceTaskId: taskId);
+      print('DEBUG: Loading staff inventory reservations for task $taskId');
+      final response = await apiService.getMyInventoryReservations();
       if (response['success'] == true && response['data'] != null) {
-        final reservations = List<Map<String, dynamic>>.from(response['data']);
-        print('DEBUG: Raw reservation data: ${reservations.first}');
+        final allReservations = List<Map<String, dynamic>>.from(response['data']);
+        
+        // Filter reservations for this specific maintenance task
+        final taskReservations = allReservations.where((r) {
+          final maintenanceTaskId = r['maintenance_task_id'] ?? r['reference_id'];
+          return maintenanceTaskId?.toString() == taskId.toString();
+        }).toList();
+        
+        print('DEBUG: Found ${taskReservations.length} reservations for task $taskId');
+        
         // Enrich with item details
-        for (var r in reservations) {
+        for (var r in taskReservations) {
           if (r['inventory_id'] != null) {
             try {
               final itemData = await apiService.getInventoryItemById(r['inventory_id']);
@@ -96,39 +103,43 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
               print('DEBUG: Error loading item details for reservation: $e');
             }
           }
-            // Normalize reservation id for downstream usage
-            if ((r['reservation_id'] ?? '').toString().isEmpty) {
-              if ((r['id'] ?? '').toString().isNotEmpty) r['reservation_id'] = r['id'];
-              else if ((r['_id'] ?? '').toString().isNotEmpty) r['reservation_id'] = r['_id'];
-              else if ((r['reservationId'] ?? '').toString().isNotEmpty) r['reservation_id'] = r['reservationId'];
-              else {
-                print('[v0] Warning: reservation for inventory ${r['inventory_id']} missing explicit id fields');
-              }
+          
+          // Normalize reservation id for downstream usage
+          // Try multiple possible ID field names from the API response
+          String? reservationId;
+          for (final idField in ['id', '_id', 'reservation_id', 'reservationId', '_doc_id']) {
+            if ((r[idField] ?? '').toString().isNotEmpty) {
+              reservationId = r[idField].toString();
+              break;
             }
-        }
-        if (reservations.isNotEmpty) {
-          // Mark as reservations
-          for (var r in reservations) {
-            r['type'] = 'reservation';
           }
+          
+          if (reservationId != null) {
+            r['reservation_id'] = reservationId;
+            r['_doc_id'] = reservationId;  // Also set _doc_id for consistency
+          } else {
+            print('[v0] Warning: reservation for inventory ${r['inventory_id']} missing explicit id fields');
+            print('[v0] Available fields: ${r.keys.toList()}');
+            // Use inventory_id + task_id as a composite identifier as fallback
+            r['reservation_id'] = 'composite_${r['inventory_id']}_${r['maintenance_task_id']}';
+            r['_doc_id'] = r['reservation_id'];
+          }
+          
+          // Mark as reservation type
+          r['type'] = 'reservation';
+        }
+        
+        if (taskReservations.isNotEmpty) {
           setState(() {
-            _inventoryRequests = reservations; // Show reservations as requests in UI
+            _inventoryRequests = taskReservations;
           });
-          print('DEBUG: Loaded ${reservations.length} admin inventory reservations for staff view');
-          print('DEBUG: First reservation type: ${reservations.first['type']}');
-          return; // data found, no need to check requests
+          print('DEBUG: Loaded ${taskReservations.length} inventory reservations for maintenance task');
+          return; // Data found, exit early
         }
       }
     } catch (e) {
-      final msg = e.toString();
-      if (msg.contains('Admin access required') || msg.contains('admin')) {
-        print('DEBUG: Reservations endpoint requires admin access; staff cannot view reservations.');
-        // set a flag visible to the UI so we can show a message if desired
-        holdMeta['reservations_admin_only'] = true;
-      } else {
-        print('DEBUG: Error checking inventory reservations: $e');
-      }
-      // continue to check requests below
+      print('DEBUG: Error loading staff inventory reservations: $e');
+      // Continue to show empty list if no reservations
     }
 
     // We intentionally DO NOT load staff-made requests here. Only admin-created
@@ -718,21 +729,39 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
   }
 
   Future<void> _handleInventoryAction(Map<String, dynamic> request, String action) async {
-    final requestId = request['_doc_id'] ?? request['id'] ?? request['_id'] ?? request['request_id'] ?? request['reservation_id'];
+    // Try multiple possible ID field names for existing request/reservation IDs
+    String? requestId;
+    for (final idField in ['_doc_id', 'id', '_id', 'request_id', 'reservation_id']) {
+      if ((request[idField] ?? '').toString().isNotEmpty) {
+        requestId = request[idField].toString();
+        break;
+      }
+    }
+    
     final itemType = request['type'] ?? 'unknown';
     final referenceId = request['reference_id'] ?? request['maintenance_task_id'];
     final isMaintenanceItem = referenceId == widget.task['id'];
+    final inventoryId = request['inventory_id'];
     
     print('DEBUG: _handleInventoryAction called with action: $action, type: $itemType, requestId: $requestId');
     
-    if (requestId == null) {
+    // For some actions like 'request' and 'return', we don't need an existing ID
+    // since we'll be creating new requests or using the flexible action endpoint
+    if (requestId == null && !['request', 'return'].contains(action)) {
       print('DEBUG: Request keys: ${request.keys.toList()}');
-      print('DEBUG: Request map: $request'); // Add debug print
-      final snackMsg = (itemType == 'reservation') ? 'Reservation ID not found' : 'Request ID not found';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(snackMsg)),
-      );
-      return;
+      print('DEBUG: Request map: $request');
+      
+      // For reservations without explicit ID, try to use inventory_id + maintenance_task_id as identifier
+      if (itemType == 'reservation' && inventoryId != null && isMaintenanceItem) {
+        print('DEBUG: Using composite identifier for reservation');
+        requestId = 'composite_${inventoryId}_${widget.task['id']}';
+      } else {
+        final snackMsg = (itemType == 'reservation') ? 'Reservation ID not found' : 'Request ID not found';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(snackMsg)),
+        );
+        return;
+      }
     }
 
     try {
@@ -748,9 +777,40 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
           if (_isUpdating) return;
           setState(() => _isUpdating = true);
           try {
-            final reservationId = request['reservation_id'] ?? requestId;
-            print('DEBUG: Calling markReservationReceived for reservation $reservationId');
-            final response = await apiService.markReservationReceived(reservationId);
+            // Use the extracted requestId, but if it's a composite ID, we need to handle it differently
+            String reservationId = request['reservation_id'] ?? requestId;
+            
+            print('DEBUG: Calling receiveInventoryReservation for reservation $reservationId');
+            
+            // If it's a composite ID, we need to reload reservations and find the actual ID
+            Map<String, dynamic> response;
+            if (reservationId.startsWith('composite_')) {
+              print('DEBUG: Composite ID detected, trying to find actual reservation ID');
+              // Try to get the actual reservation ID from fresh API data
+              try {
+                final reservationsResponse = await apiService.getMyInventoryReservations();
+                if (reservationsResponse['success'] == true && reservationsResponse['data'] != null) {
+                  final reservations = List<Map<String, dynamic>>.from(reservationsResponse['data']);
+                  final matchingReservation = reservations.firstWhere(
+                    (r) => r['inventory_id'] == inventoryId && 
+                           (r['maintenance_task_id'] ?? r['reference_id']) == widget.task['id'],
+                    orElse: () => <String, dynamic>{},
+                  );
+                  
+                  if (matchingReservation.isNotEmpty) {
+                    final actualId = matchingReservation['id'] ?? matchingReservation['_id'] ?? matchingReservation['reservation_id'];
+                    if (actualId != null) {
+                      reservationId = actualId.toString();
+                      print('DEBUG: Found actual reservation ID: $reservationId');
+                    }
+                  }
+                }
+              } catch (e) {
+                print('DEBUG: Failed to get actual reservation ID: $e');
+              }
+            }
+            
+            response = await apiService.receiveInventoryReservation(reservationId);
 
             if (response['success'] == true) {
               print('DEBUG: Reservation marked as received successfully');
@@ -841,18 +901,18 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
         );
 
         if (result != null) {
-          // Create a new request for the same item
+          // Use the new handleReservationAction method for requesting items
           final itemId = request['inventory_id'];
           final quantity = int.tryParse(result.quantity) ?? 1;
 
           final response = await apiService.createInventoryRequest(
             inventoryId: itemId,
-            buildingId: 'default_building_id', // TODO: Get actual building ID
+            buildingId: 'default_building',
             quantityRequested: quantity,
             purpose: result.notes ?? 'Additional request for maintenance task ${widget.task['id']}',
             requestedBy: widget.currentStaffId,
             maintenanceTaskId: widget.task['id'],
-            status: 'pending', // Additional requests need admin approval
+            status: 'pending',
           );
 
           if (response['success'] == true) {
@@ -871,6 +931,39 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
           } else {
             throw Exception(response['message'] ?? 'Failed to submit request');
           }
+        }
+      } else if (action == 'return') {
+        // Handle return action using the new API method
+        final itemId = request['inventory_id'];
+        final quantity = request['quantity'] ?? 1;
+
+        final response = await apiService.handleReservationAction(
+          inventoryId: itemId,
+          quantity: quantity,
+          maintenanceTaskId: widget.task['id'],
+          action: 'return',
+          itemName: request['item_name'],
+          itemCode: request['item_code'],
+          currentStock: request['current_stock'],
+          stockQuantity: request['stock_quantity'],
+          stockStatus: request['stock_status'],
+        );
+
+        if (response['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Item returned successfully')),
+          );
+          // Reload inventory requests to reflect changes
+          await _loadInventoryRequests();
+          // Notify inventory update
+          try {
+            final notifier = InventoryUpdateNotifier();
+            notifier.notifyItemUpdated(itemId?.toString() ?? '');
+          } catch (e) {
+            print('DEBUG: Failed to notify inventory update: $e');
+          }
+        } else {
+          throw Exception(response['message'] ?? 'Failed to return item');
         }
       }
     } catch (e) {

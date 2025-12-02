@@ -454,68 +454,6 @@ class StockStatusTag extends StatelessWidget {
   }
 }
 
-// Maintenance Type Status Widget 
-class MaintenanceTypeTag extends StatelessWidget {
-  final String type;
-
-  const MaintenanceTypeTag(this.type, {super.key});
-
-  Color _getBackgroundColor(String type) {
-    switch (type.toLowerCase()) {
-      case 'internal':
-        return const Color(0xFFE8F5E9); // light green background
-      case 'external':
-        return const Color(0xFFE3F2FD); // light blue background
-      case 'safety compliance':
-        return const Color(0xFFFFF3E0); // light orange background
-      default:
-        return const Color(0xFFF5F5F7); // gray background
-    }
-  }
-
-  Color _getTextColor(String type) {
-    switch (type.toLowerCase()) {
-      case 'internal':
-        return const Color(0xFF2E7D32); // green text
-      case 'external':
-        return const Color(0xFF1976D2); // blue text
-      case 'safety compliance':
-        return const Color(0xFFE65100); // orange text
-      default:
-        return const Color(0xFF7D7D7D); // gray text
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Convert to Title Case for display
-    String displayText = type
-        .trim()
-        .split(RegExp(r'\s+'))
-        .map((word) => word.isEmpty ? word : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
-        .join(' ');
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: _getBackgroundColor(type),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        displayText,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: _getTextColor(type),
-        ),
-      ),
-    );
-  }
-}
-
 // Request Type Tag -----------------------------------------
 
 enum DisplayCasing { original, title, upper, lower }
@@ -708,3 +646,93 @@ class RoleTag extends StatelessWidget {
   }
 }
 
+// Maintenance Type Tag
+class MaintenanceTypeTag extends StatelessWidget {
+  final String type;
+
+  const MaintenanceTypeTag(this.type, {super.key});
+
+  Color _getBackgroundColor(String type) {
+    final normalized = type.toLowerCase().replaceAll('_', ' ').trim();
+
+    switch (normalized) {
+      case 'preventive':
+        return const Color(0xFFE3F2FD); // light blue
+      case 'corrective':
+        return const Color(0xFFFFF3E0); // light orange
+      case 'proactive':
+        return const Color(0xFFE8F5E9); // light green
+      case 'emergency':
+        return const Color(0xFFFFEBEE); // light red
+      case 'inspection':
+        return const Color(0xFFF3E5F5); // light purple
+      case 'repair':
+        return const Color(0xFFE0F7FA); // light cyan
+      case 'internal':
+        return const Color(0xFFF5F5F7); // light gray
+      case 'external':
+        return const Color(0xFFFFF3E0); // light orange
+      default:
+        return const Color(0xFFF5F5F7); // light gray
+    }
+  }
+
+  Color _getTextColor(String type) {
+    final normalized = type.toLowerCase().replaceAll('_', ' ').trim();
+
+    switch (normalized) {
+      case 'preventive':
+        return const Color(0xFF1976D2); // blue
+      case 'corrective':
+        return const Color(0xFFEF6C00); // orange
+      case 'proactive':
+        return const Color(0xFF2E7D32); // green
+      case 'emergency':
+        return const Color(0xFFD32F2F); // red
+      case 'inspection':
+        return const Color(0xFF7B1FA2); // purple
+      case 'repair':
+        return const Color(0xFF00838F); // cyan
+      case 'internal':
+        return const Color(0xFF7D7D7D); // gray
+      case 'external':
+        return const Color(0xFFEF6C00); // orange
+      default:
+        return const Color(0xFF7D7D7D); // gray
+    }
+  }
+
+  String _getDisplayText(String type) {
+    final normalized = type.toLowerCase().replaceAll('_', ' ').trim();
+
+    // Convert to Title Case for display
+    return normalized
+        .split(RegExp(r'\s+'))
+        .map((word) => word.isEmpty ? word : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
+        .join(' ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final displayText = _getDisplayText(type);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: _getBackgroundColor(type),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        displayText,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: _getTextColor(type),
+        ),
+      ),
+    );
+  }
+}
