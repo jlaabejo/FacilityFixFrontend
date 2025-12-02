@@ -408,6 +408,9 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
         print(
           '[ConcernSlipDetail] Round-robin assigned staff: $selectedStaffName (ID: $selectedStaffId)',
         );
+        
+        // Trigger validation after state update
+        WidgetsBinding.instance.addPostFrameCallback((_) => _revalidate());
       } else {
         print(
           '[ConcernSlipDetail] No staff available from round-robin, falling back to first available',
@@ -419,6 +422,9 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
             selectedStaffId = _getStaffId(firstStaff);
             selectedStaffName = _getStaffDisplayName(firstStaff);
           });
+          
+          // Trigger validation after state update
+          WidgetsBinding.instance.addPostFrameCallback((_) => _revalidate());
         }
       }
     } catch (e) {
@@ -431,6 +437,9 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
           selectedStaffId = _getStaffId(firstStaff);
           selectedStaffName = _getStaffDisplayName(firstStaff);
         });
+        
+        // Trigger validation after state update
+        WidgetsBinding.instance.addPostFrameCallback((_) => _revalidate());
       }
     }
   }
@@ -1479,51 +1488,34 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
                     ),
                     hint: const Text('Select staff member'),
                     selectedItemBuilder: (BuildContext context) {
+                      // Must return one widget per item in the dropdown list
                       return _staffList.map<Widget>((m) {
-                        // When a staff is selected, display it with avatar and name
-                        if (selectedStaffId != null &&
-                            selectedStaffId!.isNotEmpty &&
-                            selectedStaffName != null) {
-                          return Padding(
-                            padding: const EdgeInsets.only(left: 4),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _buildSimpleAvatar(
-                                  selectedStaffName!,
-                                  size: 24,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    selectedStaffName!,
+                        // Show the selected staff with avatar and name
+                        if (selectedStaffId != null && selectedStaffId!.isNotEmpty) {
+                          if (_getStaffId(m) == selectedStaffId) {
+                            return Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildSimpleAvatar(
+                                    selectedStaffName ?? 'S',
+                                    size: 24,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    selectedStaffName ?? 'Select staff member',
                                     overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
                                     style: const TextStyle(fontSize: 14),
                                   ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-                        // Fallback to original behavior if no staff is selected
-                        final name = _getStaffDisplayName(m);
-                        return Padding(
-                          padding: const EdgeInsets.only(left: 4),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _buildSimpleAvatar(name, size: 24),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  name,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 14),
-                                ),
+                                ],
                               ),
-                            ],
-                          ),
-                        );
+                            );
+                          }
+                        }
+                        // Return empty/placeholder for non-selected items
+                        return const SizedBox.shrink();
                       }).toList();
                     },
                     items:
@@ -1625,10 +1617,6 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
               ),
         ),
         const SizedBox(height: 8),
-        Text(
-          widget.task['department'] ?? 'No Department',
-          style: TextStyle(color: Colors.grey[600], fontSize: 13),
-        ),
       ],
     );
   }
