@@ -1,38 +1,39 @@
 import 'package:flutter/material.dart';
-import 'assignstaff_popup.dart';
+import 'package:go_router/go_router.dart';
+import '../../maintenance_task/pop_up/assignstaff_popup.dart';
 import '../../services/api_service.dart';
 
-class TyphoonFloodDialog extends StatefulWidget {
+class FireSafetyDialog extends StatefulWidget {
   final Map<String, dynamic> maintenanceData;
   final VoidCallback? onSaved;
 
-  const TyphoonFloodDialog({
+  const FireSafetyDialog({
     super.key,
     required this.maintenanceData,
     this.onSaved,
   });
 
   @override
-  State<TyphoonFloodDialog> createState() => _TyphoonFloodDialogState();
+  State<FireSafetyDialog> createState() => _FireSafetyDialogState();
 
   static void show(BuildContext context, Map<String, dynamic> data, {VoidCallback? onSaved}) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return TyphoonFloodDialog(maintenanceData: data, onSaved: onSaved);
+        return FireSafetyDialog(maintenanceData: data, onSaved: onSaved);
       },
     );
   }
 }
 
-class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
+class _FireSafetyDialogState extends State<FireSafetyDialog> {
   bool isEditMode = false;
   int? selectedTaskIndex;
   late List<Map<String, dynamic>> tasks;
   final ApiService _apiService = ApiService();
   bool _isSaving = false;
 
-  // NEW: narrow width for the checkbox column
+  // Width used by the new checkbox column to keep layout tidy
   static const double _checkColWidth = 40;
 
   @override
@@ -47,7 +48,7 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
           'id': item['id'] ?? '',
           'name': item['task'] ?? 'Unnamed Task',
           'assigned': item['assigned_to'] ?? null,  // Use item-level assignment
-          'rotation': widget.maintenanceData['recurrence_type'] ?? 'Quarterly',
+          'rotation': widget.maintenanceData['recurrence_type'] ?? 'Monthly',
           'status': (item['completed'] == true) ? 'Completed' : null,
           'completed': item['completed'] ?? false,
         };
@@ -60,34 +61,44 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
   List<Map<String, dynamic>> _getDefaultTasks() {
     return [
       {
-        'name': 'Electrical safety inspection',
-        'assigned': null,
-        'rotation': 'Annually',
-        'status': 'In Progress',
-      },
-      {
-        'name': 'Plumbing & drainage restoration',
+        'id': 'fs_1',
+        'name': 'Fire Extinguishers Present And Fully Charged',
         'assigned': null,
         'rotation': 'Annually',
         'status': null,
+        'completed': false,
       },
       {
-        'name': 'Building envelope & roof inspection',
+        'id': 'fs_2',
+        'name': 'Fire Alarm System Functional And Tested',
+        'assigned': null,
+        'rotation': 'Semi-Annually',
+        'status': null,
+        'completed': false,
+      },
+      {
+        'id': 'fs_3',
+        'name': 'Emergency Exit Signs Visible And Illuminated',
+        'assigned': null,
+        'rotation': 'Monthly',
+        'status': null,
+        'completed': false,
+      },
+      {
+        'id': 'fs_4',
+        'name': 'Fire Exit Doors Unblocked And Operable',
+        'assigned': null,
+        'rotation': 'Monthly',
+        'status': null,
+        'completed': false,
+      },
+      {
+        'id': 'fs_5',
+        'name': 'Fire Sprinkler System Inspection',
         'assigned': null,
         'rotation': 'Annually',
         'status': null,
-      },
-      {
-        'name': 'Generator & fuel system check',
-        'assigned': null,
-        'rotation': 'Annually',
-        'status': null,
-      },
-      {
-        'name': 'Mold & IAQ control',
-        'assigned': null,
-        'rotation': 'Annually',
-        'status': null,
+        'completed': false,
       },
     ];
   }
@@ -150,7 +161,7 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
       onAssignmentComplete: () async {
         // After assignment, refresh the task data
         try {
-          final response = await _apiService.getSpecialMaintenanceTask('typhoon_flood');
+          final response = await _apiService.getSpecialMaintenanceTask('fire_safety');
           if (response['success'] == true && mounted) {
             final updatedTask = response['task'] as Map<String, dynamic>;
             final checklistCompleted = updatedTask['checklist_completed'] as List?;
@@ -162,7 +173,7 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
                     'id': checklistItem['id'] ?? '',
                     'name': checklistItem['task'] ?? 'Unnamed Task',
                     'assigned': checklistItem['assigned_to'] ?? null,
-                    'rotation': updatedTask['recurrence_type'] ?? 'Quarterly',
+                    'rotation': updatedTask['recurrence_type'] ?? 'Monthly',
                     'status': (checklistItem['completed'] == true) ? 'Completed' : null,
                     'completed': checklistItem['completed'] ?? false,
                   };
@@ -241,7 +252,7 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
     }
   }
 
-  // NEW: helper to evaluate completion from status
+  // Helper: evaluate if a task is completed based on its status
   bool _isTaskCompleted(Map<String, dynamic> task) {
     final status = (task['status'] as String?)?.trim().toLowerCase();
     return status == 'completed';
@@ -273,16 +284,19 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Title + description container 
             Padding(
               padding: const EdgeInsets.fromLTRB(32, 24, 32, 0),
               child: _buildTitleSection(),
             ),
+
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(32, 24, 32, 32),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Tasks table
                     _buildTasksTable(),
                     if (isEditMode) ...[
                       const SizedBox(height: 16),
@@ -292,6 +306,7 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
                 ),
               ),
             ),
+            
             _buildFooter(),
           ],
         ),
@@ -310,12 +325,13 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Title + description on the left
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'TYPHOON / FLOOD SAFETY',
+                  'FIRE SAFETY',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w600,
@@ -335,7 +351,7 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
                 const SizedBox(height: 12),
                 Text(
                   widget.maintenanceData['description'] ??
-                      'Checklist for typhoon and flood preparedness. Covers electrical safety, plumbing restoration, roof inspections, generator and fuel system checks, and mold/IAQ control to ensure building resilience against flooding and storms.',
+                      'Comprehensive fire safety inspection ensuring all fire protection systems, equipment, and emergency exits are functional and compliant with safety regulations. Regular checks include fire extinguishers, alarm systems, sprinklers, emergency lighting, and exit accessibility to maintain a safe environment for all occupants.',
                   style: TextStyle(
                     fontSize: 15,
                     height: 1.6,
@@ -345,6 +361,8 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
               ],
             ),
           ),
+
+          // Close button 
           IconButton(
             onPressed: () => Navigator.of(context).pop(),
             icon: const Icon(
@@ -363,6 +381,7 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
   Widget _buildTasksTable() {
     return Column(
       children: [
+        // Table Header
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
@@ -374,10 +393,10 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
           ),
           child: Row(
             children: [
-              // Keep spacing for delete icon when in edit mode
+              // Spacer to align with delete icon when in edit mode 
               if (isEditMode) const SizedBox(width: 40),
 
-              // checkbox column 
+              // checkbox column header 
               SizedBox(
                 width: _checkColWidth,
                 child: const Center(
@@ -392,9 +411,10 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
                 ),
               ),
 
-              const Expanded(
+              // Details/Task
+              Expanded(
                 flex: 3,
-                child: Align(
+                child: const Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Details/Task',
@@ -406,9 +426,10 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
                   ),
                 ),
               ),
-              const Expanded(
+              // Assigned
+              Expanded(
                 flex: 1,
-                child: Center(
+                child: const Center(
                   child: Text(
                     'Assigned',
                     style: TextStyle(
@@ -416,12 +437,14 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
                       fontWeight: FontWeight.w600,
                       color: Colors.black87,
                     ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ),
-              const Expanded(
+              // Rotation
+              Expanded(
                 flex: 1,
-                child: Center(
+                child: const Center(
                   child: Text(
                     'Rotation',
                     style: TextStyle(
@@ -429,12 +452,14 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
                       fontWeight: FontWeight.w600,
                       color: Colors.black87,
                     ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ),
-              const Expanded(
+              // Status
+              Expanded(
                 flex: 1,
-                child: Center(
+                child: const Center(
                   child: Text(
                     'Status',
                     style: TextStyle(
@@ -442,12 +467,14 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
                       fontWeight: FontWeight.w600,
                       color: Colors.black87,
                     ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ),
             ],
           ),
         ),
+        // Table Rows
         ...List.generate(tasks.length, (index) {
           return _buildTaskRow(index);
         }),
@@ -473,7 +500,10 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFFE3F2FD) : Colors.white,
           border: Border(
-            bottom: BorderSide(color: Colors.grey[300]!, width: 1),
+            bottom: BorderSide(
+              color: Colors.grey[300]!,
+              width: 1,
+            ),
             left: isSelected
                 ? const BorderSide(color: Color(0xFF1976D2), width: 3)
                 : BorderSide.none,
@@ -482,6 +512,7 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            // Keep delete button behavior/placement as-is
             if (isEditMode)
               IconButton(
                 onPressed: () => _deleteTask(index),
@@ -490,28 +521,31 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
                 constraints: const BoxConstraints(minWidth: 40),
               ),
 
-            // NEW: auto-checking checkbox linked to status
+            // NEW: Auto-checking checkbox column linked to task status
             SizedBox(
               width: _checkColWidth,
               child: Center(
                 child: Checkbox(
                   value: isCompleted,
+                  // In view mode, it's read-only; in edit mode, toggling updates status.
                   onChanged: isEditMode
                       ? (bool? value) {
                           setState(() {
                             if (value == true) {
                               tasks[index]['status'] = 'Completed';
                             } else {
+                              // Simple fallback when unchecked in edit mode
                               tasks[index]['status'] = 'Pending';
                             }
                           });
                         }
-                      : null, // read-only when not editing
+                      : null,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
             ),
 
+            // Details/Task 
             Expanded(
               flex: 3,
               child: isEditMode
@@ -543,6 +577,7 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
             ),
             const SizedBox(width: 16),
 
+            // Assigned 
             Expanded(
               flex: 1,
               child: isEditMode
@@ -552,11 +587,16 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
                       onChanged: (value) {
                         tasks[index]['assigned'] = value.isEmpty ? null : value;
                       },
-                      style: const TextStyle(fontSize: 14),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.black87,
+                      ),
                       decoration: const InputDecoration(
                         isDense: true,
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 8,
+                        ),
                         border: OutlineInputBorder(),
                         hintText: 'Null',
                       ),
@@ -574,6 +614,7 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
             ),
             const SizedBox(width: 16),
 
+            // Rotation 
             Expanded(
               flex: 1,
               child: isEditMode
@@ -617,12 +658,17 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
                   : Center(
                       child: Text(
                         task['rotation'],
-                        style: const TextStyle(fontSize: 14),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black87,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
                     ),
             ),
             const SizedBox(width: 16),
 
+            // Status 
             Expanded(
               flex: 1,
               child: Center(
@@ -681,15 +727,22 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[300]!, width: 1),
+          border: Border.all(
+            color: Colors.grey[300]!,
+            width: 1,
+          ),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(Icons.add_circle_outline, color: Color(0xFF1976D2), size: 24),
-            SizedBox(width: 8),
-            Text(
+          children: [
+            Icon(
+              Icons.add_circle_outline,
+              color: const Color(0xFF1976D2),
+              size: 24,
+            ),
+            const SizedBox(width: 8),
+            const Text(
               'Add New Task',
               style: TextStyle(
                 fontSize: 14,
@@ -714,21 +767,54 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
               onPressed: () {
                 setState(() {
                   isEditMode = false;
+                  // Reset tasks to original state if needed
                   tasks = List<Map<String, dynamic>>.from(
                     widget.maintenanceData['tasks'] ?? _getDefaultTasks(),
                   );
                 });
               },
               style: TextButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 16,
+                ),
               ),
               child: const Text(
                 'Cancel',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           if (isEditMode) const SizedBox(width: 16),
+          ElevatedButton.icon(
+            onPressed: () => context.go('/admin/disaster-preparedness/create'),
+            icon: const Icon(
+              Icons.add,
+              size: 20,
+            ),
+            label: const Text(
+              'New Task',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4CAF50),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 32,
+                vertical: 16,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              elevation: 0,
+            ),
+          ),
+          const SizedBox(width: 16),
           ElevatedButton.icon(
             onPressed: isEditMode ? _saveChanges : _handleAssignTask,
             icon: Icon(
@@ -737,13 +823,18 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
             ),
             label: Text(
               isEditMode ? 'Save Changes' : 'Assign Task',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF1976D2),
               foregroundColor: Colors.white,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 32,
+                vertical: 16,
+              ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -768,13 +859,18 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
           //   ),
           //   label: Text(
           //     isEditMode ? 'Done' : 'Edit Task',
-          //     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+          //     style: const TextStyle(
+          //       fontSize: 16,
+          //       fontWeight: FontWeight.w500,
+          //     ),
           //   ),
           //   style: ElevatedButton.styleFrom(
           //     backgroundColor: const Color(0xFF1976D2),
           //     foregroundColor: Colors.white,
-          //     padding:
-          //         const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+          //     padding: const EdgeInsets.symmetric(
+          //       horizontal: 32,
+          //       vertical: 16,
+          //     ),
           //     shape: RoundedRectangleBorder(
           //       borderRadius: BorderRadius.circular(8),
           //     ),

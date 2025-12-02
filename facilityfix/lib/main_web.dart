@@ -9,6 +9,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'adminweb/inventory_management/adminequipmentregistry_page.dart';
 import 'adminweb/inventory_management/admininventoryitems_page.dart';
 import 'adminweb/inventory_management/admininventoryrequest_page.dart';
+import 'adminweb/inventory_management/admininventoryforecasting_page.dart';
 import 'adminweb/inventory_management/equipmentregisternew_page.dart';
 import 'adminweb/pages/adminwebanalytics_page.dart';
 import 'adminweb/announcement/adminwebannouncement_page.dart';
@@ -18,6 +19,7 @@ import 'adminweb/pages/adminwebdash_page.dart';
 import 'adminweb/user/adminwebuser_page.dart';
 import 'adminweb/user/webavailabilityscheduling_page.dart';
 import 'adminweb/maintenance_task/adminmaintenance_page.dart';
+import 'adminweb/maintenance_task/admintasktype_page.dart';
 import 'adminweb/repair_task/adminrepair_cs_page.dart';
 import 'adminweb/repair_task/adminrepair_js_page.dart';
 import 'adminweb/repair_task/adminrepair_wop_page.dart';
@@ -26,11 +28,13 @@ import 'adminweb/maintenance_task/internalmaintenance_form.dart';
 import 'adminweb/maintenance_task/internalmaintenance_viewform.dart';
 import 'adminweb/maintenance_task/externalmaintenance_form.dart';
 import 'adminweb/maintenance_task/externalmaintenance_viewform.dart';
+import 'adminweb/maintenance_task/task_type_form.dart';
 import 'adminweb/announcement/createwebannouncement_page.dart';
 import 'adminweb/announcement/editwebannouncement_page.dart';
 import 'adminweb/pages/adminsettings_page.dart';
 import 'adminweb/pages/adminwebprofile_page.dart';
 import 'adminweb/pages/loadingscreen_page.dart';
+import 'adminweb/disaster_prepardness/disasterpreparedness_form.dart';
 
 
 
@@ -134,17 +138,35 @@ class _MyAppState extends State<MyApp> {
           name: 'work_repair_concernslip',
           builder: (context, state) => const AdminRepairPage(),
         ),
-        // Settings route
-      GoRoute(
-        path: '/settings',
-        name: 'settings',
-        builder: (context, state) => AdminWebSettingsPage(
-          onThemeChanged: (theme) {
-            final statefulApp = context.findAncestorStateOfType<_MyAppState>();
-            statefulApp?._updateTheme(theme);
+        GoRoute(
+          path: '/work/tasktypes',
+          name: 'work_task_types',
+          builder: (context, state) => const AdminTaskTypePage(),
+        ),
+        GoRoute(
+          path: '/work/tasktypes/create',
+          name: 'work_task_types_create',
+          builder: (context, state) {
+            final extra = state.extra as Map<String, dynamic>?;
+            final isEdit = state.uri.queryParameters['edit'] == '1';
+            return TaskTypeFormPage(
+              maintenanceData: extra,
+              isEditMode: isEdit,
+            );
           },
         ),
-      ),
+
+        // Settings route
+        GoRoute(
+          path: '/settings',
+          name: 'settings',
+          builder: (context, state) => AdminWebSettingsPage(
+            onThemeChanged: (theme) {
+              final statefulApp = context.findAncestorStateOfType<_MyAppState>();
+              statefulApp?._updateTheme(theme);
+            },
+          ),
+        ),
       // Logout route (can redirect back to login)
       GoRoute(
         path: '/logout',
@@ -198,6 +220,11 @@ class _MyAppState extends State<MyApp> {
         },
       ),
       GoRoute(
+        path: '/admin/disaster-preparedness/create',
+        name: 'disaster_preparedness_create',
+        builder: (context, state) => const DisasterPreparednessFormPage(),
+      ),
+      GoRoute(
         path: '/adminweb/pages/adminrepair_js_page',
         name: 'work_repair_jobservice',
         builder: (context, state) => const RepairJobServicePage(),
@@ -231,12 +258,14 @@ class _MyAppState extends State<MyApp> {
         name: 'profile',
         builder: (context, state) => const AdminWebProfilePage(),
       ),
+
       // Calendar route
       GoRoute(
         path: '/calendar',
         name: 'calendar',
         builder: (context, state) => const AdminWebCalendarPage(),
       ),
+
       // Inventory Management routes
       GoRoute(
         path: '/inventory/equipment',
@@ -253,6 +282,11 @@ class _MyAppState extends State<MyApp> {
         name: 'inventory_request',
         builder: (context, state) => const InventoryRequestPage(),
       ),
+      GoRoute(
+        path: '/inventory/forecasting',
+        name: 'inventory_forecasting',
+        builder: (context, state) => const InventoryForecastingPage(),
+      ),
       
       // Analytics route
       GoRoute(
@@ -267,8 +301,6 @@ class _MyAppState extends State<MyApp> {
         name: 'announcement',
         builder: (context, state) => const AdminWebAnnouncementPage(),
       ),
-      
-
       
       // Announcement route
       GoRoute(
@@ -367,9 +399,9 @@ class PlaceholderPage extends StatelessWidget {
     final Map<String, String> routeMap = {
       'dashboard': 'dashboard',
       'user_users': 'user_users',
-      // 'user_roles': 'user_roles',
       'user_scheduling': 'user_scheduling',
       'work_maintenance': 'work_maintenance',
+      'work_task_types': 'work_task_types',
       'work_repair': 'work_repair',
       'calendar': 'calendar',
       'inventory_equipment': 'inventory_equipment',
@@ -391,6 +423,8 @@ class PlaceholderPage extends StatelessWidget {
       // 'user_roles': '/user/roles',
       'user_scheduling': '/user/scheduling',
       'work_maintenance': '/work/maintenance',
+      'work_task_types': '/work/tasktypes',
+      'work_task_types_create': '/work/tasktypes/create',
       'work_repair': '/work/repair',
       'calendar': '/calendar',
       'inventory_equipment': '/inventory/equipment',

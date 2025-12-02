@@ -4,7 +4,6 @@ import 'inventoryrestock_popup.dart';
 import '../../widgets/tags.dart';
 import '../../services/api_service.dart';
 import '../../../services/auth_storage.dart';
-import '../../services/maintenance_inventory.dart';
 import '../../../utils/inventory_notifier.dart';
 
 class InventoryItemDetailsDialog {
@@ -57,10 +56,6 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
   late Map<String, dynamic> _itemData;
   final ApiService _api = ApiService();
   late final InventoryUpdateNotifier _notifier;
-  // Templates applicable to this item (by SKU)
-  List<String> _templatesForItem = [];
-  String? _selectedTemplateKey;
-  bool _isCreatingTask = false;
 
   @override
   void initState() {
@@ -108,8 +103,6 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
         });
         // Now load reserved stock with updated data
         await _maybeLoadReservedStock();
-        // Find templates that include this item SKU
-        _updateTemplatesForCurrentItem();
       } else {
         print('[InventoryDetails] Failed to load item details: ${resp['detail']}');
         // Still try to load reserved stock with existing data
@@ -185,76 +178,6 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
     }
   }
 
-  void _updateTemplatesForCurrentItem() {
-    try {
-      final sku = (_itemData['itemCode'] ?? _itemData['item_code'] ?? _itemData['itemCode'] ?? _itemData['sku'] ?? '').toString().toLowerCase();
-      final keys = MaintenanceTemplates.keys();
-      final matches = <String>[];
-      for (final k in keys) {
-        final items = MaintenanceTemplates.getItems(k);
-        if (items.any((t) => t.sku.toLowerCase() == sku)) matches.add(k);
-      }
-      setState(() {
-        _templatesForItem = matches;
-        _selectedTemplateKey = matches.isNotEmpty ? matches.first : null;
-      });
-    } catch (e) {
-      print('[InventoryDetails] failed to compute templates for item: $e');
-    }
-  }
-
-  Future<void> _createTaskFromTemplate() async {
-    if (_selectedTemplateKey == null) return;
-    setState(() {
-      _isCreatingTask = true;
-    });
-    try {
-      final items = MaintenanceTemplates.getItems(_selectedTemplateKey!);
-      if (items.isEmpty) throw Exception('No items in template');
-
-      final profile = await AuthStorage.getProfile();
-      final buildingId = profile != null ? (profile['building_id'] ?? profile['buildingId'] ?? profile['building'])?.toString() : 'default_building_id';
-
-      final taskTitle = '${MaintenanceTemplates.displayName(_selectedTemplateKey!)} (Auto-created from Inventory)';
-      final taskData = {
-        'task_title': taskTitle,
-        'task_description': 'Auto-created from Inventory Item Details for ${_itemData['itemName'] ?? _itemData['item_name'] ?? ''}',
-        'building_id': buildingId ?? 'default_building_id',
-        'scheduled_date': DateTime.now().toUtc().toIso8601String(),
-        'template_id': _selectedTemplateKey,
-      };
-
-      final svc = MaintenanceInventoryService();
-      final resp = await svc.createTaskAndReserve(taskData: taskData, items: items);
-      if (resp['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Task created and items reserved successfully'), backgroundColor: Colors.green));
-        // Refresh item details (the notifier will also trigger reload)
-        await _loadItemDetails();
-        // Notify other listeners about updated inventory items if returned
-        try {
-          final reserved = resp['reserved_items'];
-          if (reserved != null && reserved is List) {
-            for (final r in reserved) {
-              final invId = r['inventory_id']?.toString();
-              if (invId != null && invId.isNotEmpty) InventoryUpdateNotifier().notifyItemUpdated(invId);
-            }
-          }
-        } catch (e) {
-          print('[InventoryDetails] Error notifying reserved items: $e');
-        }
-      } else {
-        final err = resp['error'] ?? 'Unknown error';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to create task: $err'), backgroundColor: Colors.red));
-      }
-    } catch (e) {
-      print('[InventoryDetails] Error creating task from template: $e');
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to create task: $e'), backgroundColor: Colors.red));
-    } finally {
-      setState(() {
-        _isCreatingTask = false;
-      });
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -274,61 +197,6 @@ class _InventoryItemDetailsContentState extends State<_InventoryItemDetailsConte
               children: [
                 // Item Title and Code + Status
                 _buildItemHeader(),
-                const SizedBox(height: 24),
-                // Quick create maintenance task and auto-reserve items from template
-                if (_templatesForItem.isNotEmpty) ...[
-                  _buildSectionTitle('Reserve using Template'),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: _selectedTemplateKey,
-                          items: _templatesForItem.map((k) => DropdownMenuItem(value: k, child: Text(MaintenanceTemplates.displayName(k)))).toList(),
-                          onChanged: (v) => setState(() => _selectedTemplateKey = v),
-                          decoration: InputDecoration(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey[300]!)),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton.icon(
-                        onPressed: _isCreatingTask ? null : _createTaskFromTemplate,
-                        icon: _isCreatingTask ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.playlist_add, size: 18),
-                        label: Text(_isCreatingTask ? 'Creating...' : 'Create Task & Reserve'),
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1976D2), foregroundColor: Colors.white),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  if (_selectedTemplateKey != null) ...[
-                    // Show preview of template items with quantity
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey[200]!),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: MaintenanceTemplates.getItems(_selectedTemplateKey!).map((ti) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(ti.name),
-                              Text('${ti.qty} ${ti.unit}'),
-                            ],
-                          ),
-                        )).toList(),
-                      ),
-                    )
-                  ]
-                ],
-                Divider(color: Colors.grey[200], thickness: 1, height: 1),
                 const SizedBox(height: 24),
 
                 // Basic Information Section

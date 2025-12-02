@@ -1,15 +1,13 @@
 import 'dart:math' as math;
 import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:flutter/material.dart';
+import 'package:facilityfix/utils/inventory_notifier.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
 import '../services/round_robin_assignment_service.dart';
 import '../../services/auth_storage.dart';
-import '../../utils/inventory_notifier.dart';
-import '../services/inventory_resolver.dart';
 import '../../services/api_services.dart' as main_api;
-import '../services/maintenance_inventory.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:facilityfix/services/api_services.dart' as SecondaryAPI;
 
@@ -21,7 +19,10 @@ class InternalMaintenanceFormPage extends StatefulWidget {
     super.key,
     this.maintenanceData,
     this.isEditMode = false,
+    
   });
+
+  
 
   @override
   State<InternalMaintenanceFormPage> createState() =>
@@ -55,6 +56,9 @@ class _InternalMaintenanceFormPageState
     'Dec',
   ];
 
+
+
+
   List<PlatformFile>? attachments = const [];
   bool _isAutoAssigning = false;
   // -------------------- CONTROLLERS --------------------
@@ -71,8 +75,7 @@ class _InternalMaintenanceFormPageState
   final _adminNotesController = TextEditingController();
   final _startDateController = TextEditingController(); // read-only
   final _nextDueDateController = TextEditingController(); // read-only
-  final _checklistItemController =
-      TextEditingController(); // For checklist input
+  final _checklistItemController = TextEditingController(); // For checklist input
 
   // -------------------- STATE --------------------
   String? _selectedPriority;
@@ -81,7 +84,7 @@ class _InternalMaintenanceFormPageState
   String? _selectedRecurrence;
   String? _selectedDepartment;
   String? _selectedStaffUserId; // Store the actual staff UID
-
+  String? _selectedTaskType;
   DateTime? _dateCreated;
   DateTime? _startDate;
   DateTime? _nextDueDate;
@@ -90,24 +93,16 @@ class _InternalMaintenanceFormPageState
 
   List<Map<String, dynamic>> _staffMembers = [];
   List<Map<String, dynamic>> get _filteredStaffMembers {
-    if (_selectedDepartment == null || _selectedDepartment!.isEmpty)
-      return _staffMembers;
+    if (_selectedDepartment == null || _selectedDepartment!.isEmpty) return _staffMembers;
     return _staffMembers.where((staff) {
-      final staffDept =
-          (staff['staff_department'] ?? staff['department'])
-              ?.toString()
-              .toLowerCase();
+      final staffDept = (staff['staff_department'] ?? staff['department'])?.toString().toLowerCase();
       return staffDept == _selectedDepartment!.toLowerCase();
     }).toList();
   }
-
   List<Map<String, dynamic>> _availableInventoryItems = [];
   List<Map<String, dynamic>> _selectedInventoryItems = [];
-  String? _selectedTemplateKey;
-  String? _buildingId;
   final _apiService = ApiService();
   final _mainApiService = main_api.APIService();
-  final InventoryResolver _inventoryResolver = InventoryResolver();
   final _roundRobinService = RoundRobinAssignmentService();
 
   // Local editing toggle used when the parent did not supply edit mode
@@ -135,19 +130,20 @@ class _InternalMaintenanceFormPageState
     return pathMap[routeKey];
   }
 
-  // Logout functionality
-  void _handleLogout(BuildContext context) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return const LogoutPopup();
-      },
-    );
+// Logout functionality
+void _handleLogout(BuildContext context) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (BuildContext context) {
+      return const LogoutPopup();
+    },
+  );
 
-    if (result == true) {
-      context.go('/');
-    }
+  if (result == true) {
+    context.go('/');
   }
+}
+
 
   // -------------------- HELPERS --------------------
   // TODO: Replace with your auth/current user provider
@@ -480,7 +476,7 @@ class _InternalMaintenanceFormPageState
                       : 0;
               setState(() {
                 _selectedInventoryItems.add({
-                  'inventory_id': inventoryId,
+                  'inventory_id': item['item_code'] ?? item['itemCode'] ?? item['id'] ?? item['_doc_id'],
                   'item_name': item['item_name'],
                   'item_code': item['item_code'],
                   'quantity': quantity,
@@ -540,7 +536,6 @@ class _InternalMaintenanceFormPageState
           departmentKey = 'general_maintenance';
       }
 
-      // Fix: Pass departmentKey as a positional argument to getNextStaffForDepartment
       final nextStaff = await _roundRobinService.getNextStaffForDepartment(
         departmentKey,
       );
@@ -549,7 +544,6 @@ class _InternalMaintenanceFormPageState
         final firstName = nextStaff['first_name'] ?? '';
         final lastName = nextStaff['last_name'] ?? '';
         final staffName = '$firstName $lastName'.trim();
-        // Use Firebase UID or staff_id from auto-assigned staff
         final staffId = nextStaff['user_id'] ?? nextStaff['id'];
 
         // Update the text field and selected staff ID
@@ -675,10 +669,10 @@ class _InternalMaintenanceFormPageState
     }
   }
 
-  Future<List<String>> _createInventoryReservations(String taskId) async {
+  Future<List<Map<String, String>>> _createInventoryReservations(String taskId) async {
     if (_selectedInventoryItems.isEmpty) return [];
 
-    final List<String> createdReservationIds = [];
+    final List<Map<String, String>> createdReservations = [];
 
     try {
       for (final item in _selectedInventoryItems) {
@@ -724,9 +718,8 @@ class _InternalMaintenanceFormPageState
           );
           continue;
         }
-
         final response = await _apiService.createInventoryReservation(
-          inventoryId: inventoryId,
+          inventoryId: item['inventory_id'],
           quantity: qty,
           maintenanceTaskId: taskId,
         );
@@ -747,27 +740,12 @@ class _InternalMaintenanceFormPageState
         }
       }
       print(
-        '[v0] Created ${createdReservationIds.length} inventory reservations linked to task $taskId',
+        '[v0] Created ${createdReservations.length} inventory reservations linked to task $taskId',
       );
-      return createdReservationIds;
+      return createdReservations;
     } catch (e) {
       print('[v0] Error creating inventory reservations: $e');
       throw Exception('Failed to create inventory reservations: $e');
-    }
-  }
-
-  // Refresh reserved counts for the selected inventory items.
-  Future<void> _refreshSelectedReservedCounts() async {
-    if (_selectedInventoryItems.isEmpty) return;
-    for (int i = 0; i < _selectedInventoryItems.length; i++) {
-      final item = _selectedInventoryItems[i];
-      final invId = item['inventory_id']?.toString();
-      if (invId != null && invId.isNotEmpty) {
-        final qty = await _getReservedQty(invId);
-        setState(() {
-          _selectedInventoryItems[i]['reserved_stock'] = qty;
-        });
-      }
     }
   }
 
@@ -969,33 +947,25 @@ class _InternalMaintenanceFormPageState
     try {
       final taskId = widget.maintenanceData!['id']?.toString();
       if (taskId != null) {
-        final response = await _apiService.getInventoryReservations(
-          maintenanceTaskId: taskId,
-        );
+        final response = await _apiService.getInventoryReservations(maintenanceTaskId: taskId);
         if (response['success'] == true && response['data'] != null) {
-          final reservations = List<Map<String, dynamic>>.from(
-            response['data'],
-          );
-
+          final reservations = List<Map<String, dynamic>>.from(response['data']);
+          
           // Fetch details for each reserved item
           final List<Map<String, dynamic>> itemsWithDetails = [];
           for (final res in reservations) {
             final inventoryId = res['inventory_id'] ?? res['item_id'];
             if (inventoryId != null) {
               try {
-                final itemResponse = await _apiService.getInventoryItem(
-                  inventoryId,
-                );
-                if (itemResponse['success'] == true &&
-                    itemResponse['data'] != null) {
+                final itemResponse = await _apiService.getInventoryItem(inventoryId);
+                if (itemResponse['success'] == true && itemResponse['data'] != null) {
                   final item = itemResponse['data'];
                   itemsWithDetails.add({
                     'inventory_id': inventoryId,
                     'item_name': item['item_name'] ?? item['name'] ?? '',
                     'item_code': item['item_code'] ?? item['code'] ?? '',
                     'quantity': res['quantity'] ?? 0,
-                    'available_stock':
-                        item['current_stock'] ?? item['stock'] ?? '',
+                    'available_stock': item['current_stock'] ?? item['stock'] ?? '',
                     'unit': item['unit'] ?? '',
                   });
                 }
@@ -1013,7 +983,7 @@ class _InternalMaintenanceFormPageState
               }
             }
           }
-
+          
           setState(() {
             _selectedInventoryItems = itemsWithDetails;
           });
@@ -1060,14 +1030,7 @@ class _InternalMaintenanceFormPageState
 
       // Remarks / Additional notes - accept several possible backend keys
       String? remarksVal;
-      for (final k in [
-        'remarks',
-        'additional_notes',
-        'additional_note',
-        'additional_comments',
-        'notes',
-        'admin_notification',
-      ]) {
+      for (final k in ['remarks', 'additional_notes', 'additional_note', 'additional_comments', 'notes', 'admin_notification']) {
         final v = data[k];
         if (v != null) {
           remarksVal = v.toString();
@@ -1078,12 +1041,7 @@ class _InternalMaintenanceFormPageState
 
       // Admin notes - accept several possible backend keys
       String? adminNotesVal;
-      for (final k in [
-        'admin_notes',
-        'admin_notification',
-        'notes',
-        'adminNote',
-      ]) {
+      for (final k in ['admin_notes', 'admin_notification', 'notes', 'adminNote']) {
         final v = data[k];
         if (v != null) {
           adminNotesVal = v.toString();
@@ -1099,8 +1057,8 @@ class _InternalMaintenanceFormPageState
       final validPriorities = ['Low', 'Medium', 'High'];
       _selectedPriority = validPriorities.contains(priority) ? priority : null;
 
-      // Status: coerce to string if present
-      _selectedStatus = data['status']?.toString();
+  // Status: coerce to string if present
+  _selectedStatus = data['status']?.toString();
 
       // Location: validate against location options
       final location = data['location'] ?? data['area'];
@@ -1133,7 +1091,12 @@ class _InternalMaintenanceFormPageState
             })
             .join(' ');
         // Valid recurrence options: Weekly, Monthly, Quarterly, Annually
-        final validRecurrences = ['Weekly', 'Monthly', 'Quarterly', 'Annually'];
+        final validRecurrences = [
+          'Weekly',
+          'Monthly',
+          'Quarterly',
+          'Annually',
+        ];
         _selectedRecurrence =
             validRecurrences.contains(recurrenceCapitalized)
                 ? recurrenceCapitalized
@@ -1214,38 +1177,27 @@ class _InternalMaintenanceFormPageState
         _dateCreatedController.text = _fmtDate(_dateCreated!);
       }
 
-      final startAt = parseFlexibleDate(
-        data['start_date'] ?? data['scheduled_date'],
-      );
+      final startAt = parseFlexibleDate(data['start_date'] ?? data['scheduled_date']);
       if (startAt != null) {
         _startDate = startAt;
         _startDateController.text = _fmtDate(_startDate!);
       }
 
-      final nextAt = parseFlexibleDate(
-        data['next_due_date'] ?? data['next_due'] ?? data['next_occurrence'],
-      );
+      final nextAt = parseFlexibleDate(data['next_due_date'] ?? data['next_due'] ?? data['next_occurrence']);
       if (nextAt != null) {
         _nextDueDate = nextAt;
         _nextDueDateController.text = _fmtDate(_nextDueDate!);
       }
 
       // Checklist items
-      final checklistData =
-          data['checklist_completed'] ??
-          data['checklistItems'] ??
-          data['checklist'] ??
-          data['tasks'] ??
-          data['task_list'];
+      final checklistData = data['checklist_completed'] ?? data['checklistItems'] ?? data['checklist'] ?? data['tasks'] ?? data['task_list'];
       if (checklistData != null && checklistData is List) {
         print('[Form] Populating checklist from data: $checklistData');
         _checklistItems.clear();
         for (var item in checklistData) {
           if (item is Map) {
             _checklistItems.add({
-              'id':
-                  item['id'] ??
-                  DateTime.now().millisecondsSinceEpoch.toString(),
+              'id': item['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
               'task': item['task'] ?? item['description'] ?? '',
               'completed': item['completed'] ?? false,
             });
@@ -1266,7 +1218,7 @@ class _InternalMaintenanceFormPageState
         _selectedInventoryItems.clear();
         for (var item in data['parts_used']) {
           _selectedInventoryItems.add({
-            'inventory_id': item['inventory_id'] ?? item['item_code'] ?? '',
+            'inventory_id': item['inventory_id'] ?? item['item_code'] ?? '', 
             'item_name': item['item_name'] ?? item['name'] ?? '',
             'item_code': item['item_code'] ?? item['code'] ?? '',
             'quantity': item['quantity'] ?? 0,
@@ -1381,7 +1333,6 @@ class _InternalMaintenanceFormPageState
       'scheduled_date': scheduledDateIso ?? _startDateController.text,
       'category': 'preventive',
       'task_type': 'internal',
-      'template_id': _selectedTemplateKey ?? '',
       'recurrence_type':
           _selectedRecurrence != null
               ? _selectedRecurrence!.toLowerCase()
@@ -1414,9 +1365,13 @@ class _InternalMaintenanceFormPageState
         print('[v0] Maintenance task updated successfully');
         print('[v0] Backend response: $result');
 
-        // upload files to firebase storage
 
-        for (final file in attachments!) {
+  
+
+
+      // upload files to firebase storage 
+
+      for (final file in attachments!) {
           await api.uploadMultipartFile(
             path: '/files/upload',
             file: file,
@@ -1427,7 +1382,11 @@ class _InternalMaintenanceFormPageState
               'description': 'Attachment for maintenance task ${result['id']}',
             },
           );
-        }
+
+      }
+
+
+
 
         // Navigate back to maintenance list
         if (mounted) {
@@ -1441,9 +1400,7 @@ class _InternalMaintenanceFormPageState
       } else {
         // CREATE new task
         print('[v0] Saving maintenance task to backend...');
-        final result = await _apiService.createAdminMaintenanceTask(
-          maintenance,
-        );
+        final result = await _apiService.createAdminMaintenanceTask(maintenance);
         print('[v0] Maintenance task saved successfully');
         print('[v0] Backend response: $result');
 
@@ -1456,38 +1413,68 @@ class _InternalMaintenanceFormPageState
         print('[v0] Using task ID for inventory requests: $actualTaskId');
 
         // Create inventory reservations for selected items with the correct task ID
-        final inventoryReservationIds = await _createInventoryReservations(
-          actualTaskId,
-        );
+        final createdPairs = await _createInventoryReservations(actualTaskId);
 
-        // Update the maintenance task with the inventory reservation IDs
-        if (inventoryReservationIds.isNotEmpty) {
+        // Update the maintenance task with the inventory reservation IDs and attach reservation IDs to parts_used
+        if (createdPairs.isNotEmpty) {
           try {
-            final response = await _apiService.updateMaintenanceTask(
-              actualTaskId,
-              {'inventory_reservation_ids': inventoryReservationIds},
-            );
+            final reservationIds = createdPairs.map((m) => m['reservation_id']?.toString() ?? '').where((s) => s.isNotEmpty).toList();
+
+            // Build mapping and updated parts
+            final Map<String, String> reservationMap = {};
+            for (final p in createdPairs) {
+              final inv = p['inventory_id']?.toString() ?? '';
+              final rid = p['reservation_id']?.toString() ?? '';
+              if (inv.isNotEmpty && rid.isNotEmpty) reservationMap[inv] = rid;
+            }
+
+            final List<Map<String, dynamic>> updatedPartsUsed = (_selectedInventoryItems.map((it) {
+              final copy = Map<String, dynamic>.from(it);
+              final inv = it['inventory_id']?.toString() ?? '';
+              if (reservationMap.containsKey(inv)) copy['reservation_id'] = reservationMap[inv];
+              return copy;
+            })).toList();
+
+            // Also update the UI list with reservation ids
+            for (final it in _selectedInventoryItems) {
+              final inv = it['inventory_id']?.toString() ?? '';
+              if (reservationMap.containsKey(inv)) it['reservation_id'] = reservationMap[inv];
+            }
+
+            final response = await _apiService.updateMaintenanceTask(actualTaskId, {
+              'inventory_reservation_ids': reservationIds,
+              'parts_used': updatedPartsUsed,
+            });
+            // Notify registry of inventory updates
+            try {
+              final notifier = InventoryUpdateNotifier();
+              reservationMap.forEach((inv, rid) {
+                notifier.notifyItemUpdated(inv);
+              });
+            } catch (e) {
+              print('[v0] Failed to notify inventory after attaching reservation ids: $e');
+            }
 
             final result = response;
 
             // upload files to firebase storage
 
-            for (final file in attachments!) {
-              await api.uploadMultipartFile(
-                path: '/files/upload',
-                file: file,
-                fields: {
-                  'entity_type': 'Internal Maintenance Attachments',
-                  'entity_id': actualTaskId,
-                  'file_type': 'any',
-                  'description':
-                      'Attachment for maintenance task ${result['id']}',
-                },
-              );
-            }
+      for (final file in attachments!) {
+          await api.uploadMultipartFile(
+            path: '/files/upload',
+            file: file,
+            fields: {
+              'entity_type': 'Internal Maintenance Attachments',
+              'entity_id': actualTaskId,
+              'file_type': 'any',
+              'description': 'Attachment for maintenance task ${result['id']}',
+            },
+          );
+
+      }
 
             print(
-              '[v0] Updated maintenance task with inventory reservation IDs: $inventoryReservationIds',
+              '[v0] Updated maintenance task with inventory reservation IDs: $reservationIds',
             );
           } catch (e) {
             print(
@@ -1614,10 +1601,10 @@ class _InternalMaintenanceFormPageState
                       ),
                       const SizedBox(height: 24),
 
-                      // maintenance template selector
                       Row(
                         children: [
-                          Expanded(
+                            // Task Type
+                            Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -1649,31 +1636,7 @@ class _InternalMaintenanceFormPageState
                                 ),
                               ],
                             ),
-                          ),
-                          const SizedBox(width: 24),
-                          const Expanded(child: SizedBox()),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      Row(
-                        children: [
-                          // Task Title
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _fieldLabel('Task Title'),
-                                _fieldBox(
-                                  child: TextFormField(
-                                    controller: _taskTitleController,
-                                    validator: _req,
-                                    decoration: _decoration('Enter Task Title'),
-                                  ),
-                                ),
-                              ],
                             ),
-                          ),
                           const SizedBox(width: 24),
 
                           // Task ID
@@ -1710,33 +1673,32 @@ class _InternalMaintenanceFormPageState
                       Row(
                         children: [
                           // Created By - Fetch from admin profile
-                          Expanded(
+                            Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _fieldLabel('Created By'),
-                                _fieldBox(
-                                  child: TextFormField(
-                                    initialValue:
-                                        _createdByName ?? 'Admin User',
-                                    enabled: false,
-                                    decoration: _decoration(
-                                      _createdByName ?? 'Admin User',
-                                    ).copyWith(
-                                      disabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                        borderSide: BorderSide(
-                                          color: Colors.grey[300]!,
-                                        ),
-                                      ),
-                                      filled: true,
-                                      fillColor: Colors.grey[50],
-                                    ),
+                              _fieldLabel('Created By'),
+                              _fieldBox(
+                                child: TextFormField(
+                                initialValue: _createdByName ?? 'Admin User',
+                                enabled: false,
+                                decoration: _decoration(
+                                  _createdByName ?? 'Admin User',
+                                ).copyWith(
+                                  disabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey[300]!,
                                   ),
+                                  ),
+                                  filled: true,
+                                  fillColor: Colors.grey[50],
                                 ),
+                                ),
+                              ),
                               ],
                             ),
-                          ),
+                            ),
                           const SizedBox(width: 24),
 
                           // Date Created
@@ -1803,7 +1765,11 @@ class _InternalMaintenanceFormPageState
                                       'Select Priority...',
                                     ),
                                     items:
-                                        const ['Low', 'Medium', 'High']
+                                        const [
+                                              'Low',
+                                              'Medium',
+                                              'High',
+                                            ]
                                             .map(
                                               (v) => DropdownMenuItem(
                                                 value: v,
@@ -1959,51 +1925,47 @@ class _InternalMaintenanceFormPageState
                           const SizedBox(width: 24),
 
                           // Estimated Duration
-                          Expanded(
+                            Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _fieldLabel('Estimated Duration'),
-                                _fieldBox(
-                                  child: TextFormField(
-                                    controller: _estimatedDurationController,
-                                    validator: _durationValidator,
-                                    decoration: _decoration(
-                                      'e.g., 3 hrs / 45 mins',
-                                    ).copyWith(
-                                      suffixIcon: IconButton(
-                                        icon: const Icon(Icons.access_time),
-                                        tooltip: 'Pick hours & minutes',
-                                        onPressed: () async {
-                                          final picked = await showTimePicker(
-                                            context: context,
-                                            // Use a neutral initial time for duration selection
-                                            initialTime: TimeOfDay(
-                                              hour: 0,
-                                              minute: 30,
-                                            ),
-                                          );
-                                          if (picked != null) {
-                                            final h = picked.hour;
-                                            final m = picked.minute;
-                                            String formatted;
-                                            if (h > 0 && m > 0) {
-                                              formatted = '$h hrs $m mins';
-                                            } else if (h > 0) {
-                                              formatted = '$h hrs';
-                                            } else {
-                                              formatted = '$m mins';
-                                            }
-                                            setState(() {
-                                              _estimatedDurationController
-                                                  .text = formatted;
-                                            });
-                                          }
-                                        },
-                                      ),
-                                    ),
+                              _fieldLabel('Estimated Duration'),
+                              _fieldBox(
+                                child: TextFormField(
+                                controller: _estimatedDurationController,
+                                validator: _durationValidator,
+                                decoration: _decoration(
+                                  'e.g., 3 hrs / 45 mins',
+                                ).copyWith(
+                                  suffixIcon: IconButton(
+                                  icon: const Icon(Icons.access_time),
+                                  tooltip: 'Pick hours & minutes',
+                                  onPressed: () async {
+                                    final picked = await showTimePicker(
+                                    context: context,
+                                    // Use a neutral initial time for duration selection
+                                    initialTime: TimeOfDay(hour: 0, minute: 30),
+                                    );
+                                    if (picked != null) {
+                                    final h = picked.hour;
+                                    final m = picked.minute;
+                                    String formatted;
+                                    if (h > 0 && m > 0) {
+                                      formatted = '$h hrs $m mins';
+                                    } else if (h > 0) {
+                                      formatted = '$h hrs';
+                                    } else {
+                                      formatted = '$m mins';
+                                    }
+                                    setState(() {
+                                      _estimatedDurationController.text = formatted;
+                                    });
+                                    }
+                                  },
                                   ),
                                 ),
+                                ),
+                              ),
                               ],
                             ),
                           ),
@@ -2231,12 +2193,7 @@ class _InternalMaintenanceFormPageState
                                         _selectedDepartment = v;
                                         // Check if current staff is in the new department
                                         if (_selectedStaffUserId != null) {
-                                          final inDept = _filteredStaffMembers
-                                              .any(
-                                                (s) =>
-                                                    (s['user_id'] ?? s['id']) ==
-                                                    _selectedStaffUserId,
-                                              );
+                                          final inDept = _filteredStaffMembers.any((s) => (s['user_id'] ?? s['id']) == _selectedStaffUserId);
                                           if (!inDept) {
                                             _selectedStaffUserId = null;
                                             _assignedStaffController.clear();
@@ -2263,29 +2220,22 @@ class _InternalMaintenanceFormPageState
                                 _fieldBox(
                                   child: DropdownButtonFormField<String>(
                                     value: _selectedStaffUserId,
-                                    decoration: _decoration('Select Staff...'),
-                                    items:
-                                        _filteredStaffMembers.map((staff) {
-                                          final id =
-                                              staff['user_id'] ?? staff['id'];
-                                          final name =
-                                              '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'
-                                                  .trim();
-                                          return DropdownMenuItem<String>(
-                                            value: id,
-                                            child: Text(name),
-                                          );
-                                        }).toList(),
+                                    decoration: _decoration(
+                                      'Select Staff...',
+                                    ),
+                                    items: _filteredStaffMembers.map((staff) {
+                                      final id = staff['user_id'] ?? staff['id'];
+                                      final name = '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'.trim();
+                                      return DropdownMenuItem<String>(
+                                        value: id,
+                                        child: Text(name),
+                                      );
+                                    }).toList(),
                                     onChanged: (v) {
                                       setState(() {
                                         _selectedStaffUserId = v;
-                                        final staff = _staffMembers.firstWhere(
-                                          (s) => (s['user_id'] ?? s['id']) == v,
-                                          orElse: () => {},
-                                        );
-                                        _assignedStaffController.text =
-                                            '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'
-                                                .trim();
+                                        final staff = _staffMembers.firstWhere((s) => (s['user_id'] ?? s['id']) == v, orElse: () => {});
+                                        _assignedStaffController.text = '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'.trim();
                                       });
                                     },
                                   ),
@@ -2437,11 +2387,11 @@ class _InternalMaintenanceFormPageState
                                               ),
                                               const SizedBox(width: 12),
 
-                                              // Item details
-                                              Expanded(
+                                                // Item details
+                                                Expanded(
                                                 child: Column(
                                                   crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
+                                                    CrossAxisAlignment.start,
                                                   children: [
                                                     Row(
                                                       children: [
@@ -2537,176 +2487,162 @@ class _InternalMaintenanceFormPageState
                                                         color: Colors.grey[600],
                                                       ),
                                                     ),
+                                                  ),
                                                   ],
                                                 ),
                                               ),
 
-                                              // Quantity controls (fixed increment/decrement)
-                                              Container(
+                                                // Quantity controls (fixed increment/decrement)
+                                                Container(
                                                 decoration: BoxDecoration(
                                                   border: Border.all(
-                                                    color: Colors.grey[300]!,
+                                                  color: Colors.grey[300]!,
                                                   ),
                                                   borderRadius:
-                                                      BorderRadius.circular(8),
+                                                    BorderRadius.circular(8),
                                                 ),
                                                 child: Row(
                                                   mainAxisSize:
-                                                      MainAxisSize.min,
+                                                    MainAxisSize.min,
                                                   children: [
-                                                    // Decrement button
-                                                    IconButton(
-                                                      icon: const Icon(
-                                                        Icons.remove,
-                                                        size: 16,
-                                                      ),
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                            4,
-                                                          ),
-                                                      constraints:
-                                                          const BoxConstraints(
-                                                            minWidth: 32,
-                                                            minHeight: 32,
-                                                          ),
-                                                      onPressed: () {
-                                                        setState(() {
-                                                          final currentQty =
-                                                              int.tryParse(
-                                                                item['quantity']
-                                                                        ?.toString() ??
-                                                                    '0',
-                                                              ) ??
-                                                              0;
-                                                          final availableStock =
-                                                              int.tryParse(
-                                                                item['available_stock']
-                                                                        ?.toString() ??
-                                                                    '0',
-                                                              ) ??
-                                                              0;
-
-                                                          if (currentQty > 1) {
-                                                            _selectedInventoryItems[index]['quantity'] =
-                                                                currentQty - 1;
-                                                          } else {
-                                                            // Optionally notify user they can't go below 1
-                                                            ScaffoldMessenger.of(
-                                                              context,
-                                                            ).showSnackBar(
-                                                              const SnackBar(
-                                                                content: Text(
-                                                                  'Quantity cannot be less than 1',
-                                                                ),
-                                                                duration:
-                                                                    Duration(
-                                                                      seconds:
-                                                                          1,
-                                                                    ),
-                                                              ),
-                                                            );
-                                                          }
-
-                                                          // Ensure consistency if available stock dropped to 0
-                                                          if (availableStock <=
-                                                              0) {
-                                                            _selectedInventoryItems[index]['quantity'] =
-                                                                0;
-                                                          }
-                                                        });
-                                                      },
-                                                      color: Colors.grey[700],
+                                                  // Decrement button
+                                                  IconButton(
+                                                    icon: const Icon(
+                                                    Icons.remove,
+                                                    size: 16,
                                                     ),
+                                                    padding:
+                                                      const EdgeInsets.all(4),
+                                                    constraints:
+                                                      const BoxConstraints(
+                                                    minWidth: 32,
+                                                    minHeight: 32,
+                                                    ),
+                                                    onPressed: () {
+                                                    setState(() {
+                                                      final currentQty =
+                                                        int.tryParse(
+                                                          item['quantity']
+                                                            ?.toString() ??
+                                                          '0',
+                                                          ) ??
+                                                          0;
+                                                      final availableStock =
+                                                        int.tryParse(
+                                                          item['available_stock']
+                                                            ?.toString() ??
+                                                          '0',
+                                                          ) ??
+                                                          0;
 
-                                                    // Quantity display (non-editable to ensure consistent updates)
-                                                    SizedBox(
-                                                      width: 50,
-                                                      child: Center(
-                                                        child: Text(
-                                                          '${item['quantity']}',
-                                                          textAlign:
-                                                              TextAlign.center,
-                                                          style:
-                                                              const TextStyle(
-                                                                fontSize: 14,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w600,
-                                                              ),
+                                                      if (currentQty > 1) {
+                                                      _selectedInventoryItems[index]
+                                                        ['quantity'] =
+                                                        currentQty - 1;
+                                                      } else {
+                                                      // Optionally notify user they can't go below 1
+                                                      ScaffoldMessenger.of(
+                                                        context,
+                                                      ).showSnackBar(
+                                                        const SnackBar(
+                                                        content: Text(
+                                                          'Quantity cannot be less than 1',
                                                         ),
+                                                        duration:
+                                                          Duration(
+                                                          seconds: 1,
+                                                        ),
+                                                        ),
+                                                      );
+                                                      }
+
+                                                      // Ensure consistency if available stock dropped to 0
+                                                      if (availableStock <= 0) {
+                                                      _selectedInventoryItems[index]
+                                                        ['quantity'] = 0;
+                                                      }
+                                                    });
+                                                    },
+                                                    color: Colors.grey[700],
+                                                  ),
+
+                                                  // Quantity display (non-editable to ensure consistent updates)
+                                                  SizedBox(
+                                                    width: 50,
+                                                    child: Center(
+                                                    child: Text(
+                                                      '${item['quantity']}',
+                                                      textAlign: TextAlign.center,
+                                                      style: const TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                        FontWeight.w600,
                                                       ),
                                                     ),
-
-                                                    // Increment button (robust parsing & clamping)
-                                                    IconButton(
-                                                      icon: const Icon(
-                                                        Icons.add,
-                                                        size: 16,
-                                                      ),
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                            4,
-                                                          ),
-                                                      constraints:
-                                                          const BoxConstraints(
-                                                            minWidth: 32,
-                                                            minHeight: 32,
-                                                          ),
-                                                      onPressed: () {
-                                                        setState(() {
-                                                          final currentQty =
-                                                              int.tryParse(
-                                                                item['quantity']
-                                                                        ?.toString() ??
-                                                                    '0',
-                                                              ) ??
-                                                              0;
-                                                          final availableStock =
-                                                              int.tryParse(
-                                                                item['available_stock']
-                                                                        ?.toString() ??
-                                                                    '0',
-                                                              ) ??
-                                                              0;
-
-                                                          if (availableStock <=
-                                                              0) {
-                                                            ScaffoldMessenger.of(
-                                                              context,
-                                                            ).showSnackBar(
-                                                              const SnackBar(
-                                                                content: Text(
-                                                                  'No stock available',
-                                                                ),
-                                                                duration:
-                                                                    Duration(
-                                                                      seconds:
-                                                                          2,
-                                                                    ),
-                                                              ),
-                                                            );
-                                                            return;
-                                                          }
-
-                                                          final newQty =
-                                                              (currentQty + 1)
-                                                                  .clamp(
-                                                                    1,
-                                                                    availableStock,
-                                                                  );
-
-                                                          _selectedInventoryItems[index]['quantity'] =
-                                                              newQty;
-                                                        });
-                                                      },
-                                                      color: const Color(
-                                                        0xFF2E7D32,
-                                                      ),
                                                     ),
-                                                  ],
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
+                                                  ),
+
+                                                  // Increment button (robust parsing & clamping)
+                                                  IconButton(
+                                                    icon: const Icon(
+                                                    Icons.add,
+                                                    size: 16,
+                                                    ),
+                                                    padding:
+                                                      const EdgeInsets.all(4),
+                                                    constraints:
+                                                      const BoxConstraints(
+                                                    minWidth: 32,
+                                                    minHeight: 32,
+                                                    ),
+                                                    onPressed: () {
+                                                    setState(() {
+                                                      final currentQty =
+                                                        int.tryParse(
+                                                          item['quantity']
+                                                            ?.toString() ??
+                                                          '0',
+                                                          ) ??
+                                                          0;
+                                                      final availableStock =
+                                                        int.tryParse(
+                                                          item['available_stock']
+                                                            ?.toString() ??
+                                                          '0',
+                                                          ) ??
+                                                          0;
+
+                                                      if (availableStock <= 0) {
+                                                      ScaffoldMessenger.of(
+                                                        context,
+                                                      ).showSnackBar(
+                                                        const SnackBar(
+                                                        content:
+                                                          Text('No stock available'),
+                                                        duration:
+                                                          Duration(
+                                                          seconds: 2,
+                                                        ),
+                                                        ),
+                                                      );
+                                                      return;
+                                                      }
+
+                                                      final newQty = (currentQty + 1)
+                                                        .clamp(1, availableStock);
+
+                                                      _selectedInventoryItems[index]
+                                                        ['quantity'] = newQty;
+                                                    });
+                                                    },
+                                                    color: const Color(
+                                                    0xFF2E7D32,
+                                                    ),
+                                                  ),
+                                                    ],
+                                                  ),
+                                                  ),
+                                                  const SizedBox(width: 8),
 
                                               // Delete button
                                               IconButton(
@@ -2736,16 +2672,16 @@ class _InternalMaintenanceFormPageState
                       ),
 
                       const SizedBox(height: 40),
-                      _buildSectionHeader(
-                        "Admin Note",
-                        "Notes for admins and post-task remarks",
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _adminNotesController,
-                        maxLines: 5,
-                        decoration: _decoration('Enter Description....'),
-                      ),
+                    _buildSectionHeader(
+                      "Admin Note",
+                      "Notes for admins and post-task remarks",
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _adminNotesController,
+                      maxLines: 5,
+                      decoration: _decoration('Enter Description....'),
+                    ),
                       const SizedBox(height: 24),
 
                       // ===== Actions =====
@@ -2777,9 +2713,7 @@ class _InternalMaintenanceFormPageState
                               ),
                             ),
                             child: Text(
-                              _isEditing
-                                  ? "Save Changes"
-                                  : "Submit Internal Task",
+                              _isEditing ? "Save Changes" : "Submit Internal Task",
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
@@ -2996,7 +2930,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
 
             // Items list
             Expanded(
-              child:
+                  child:
                   _filteredItems.isEmpty
                       ? Center(
                         child: Text(
@@ -3061,8 +2995,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                                       color: Colors.grey[600],
                                     ),
                                   ),
-                                  if (item['unit'] != null &&
-                                      item['unit'].toString().isNotEmpty)
+                                  if (item['unit'] != null && item['unit'].toString().isNotEmpty)
                                     Text(
                                       'Unit: ${item['unit']}',
                                       style: TextStyle(
@@ -3158,7 +3091,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24,
-                      vertical: 12,
+                                           vertical: 12,
                     ),
                   ),
                 ),
