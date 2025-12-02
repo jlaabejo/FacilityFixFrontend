@@ -2,14 +2,12 @@ import 'dart:math' as math;
 
 import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:flutter/material.dart';
+import 'package:facilityfix/utils/inventory_notifier.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
 import '../../services/auth_storage.dart';
-import '../../utils/inventory_notifier.dart';
-import '../services/inventory_resolver.dart';
 import '../../services/api_services.dart' as main_api;
-import '../services/maintenance_inventory.dart';
 
 class ExternalMaintenanceFormPage extends StatefulWidget {
   final Map<String, dynamic>? maintenanceData;
@@ -74,12 +72,11 @@ class _ExternalMaintenanceFormPageState
   DateTime? _loggedDate;
   String? _selectedAssessmentReceived;
   String? _selectedAdminNotifications;
+  String? _selectedTaskType;
   bool _isOtherLocation = false;
   bool _isOtherServiceCategory = false;
   // Inventory selections (basic local state for UI)
   List<Map<String, dynamic>> _selectedInventoryItems = [];
-  String? _selectedTemplateKey;
-  String? _buildingId;
   // Estimated time for service (used by estimated duration field)
   TimeOfDay? _estimatedTime;
 
@@ -333,24 +330,22 @@ class _ExternalMaintenanceFormPageState
   }
 
   // ---------- Routing helpers ----------
-  static String? _getRoutePath(String routeKey) {
-      final Map<String, String> pathMap = {
-        'dashboard': '/dashboard',
-        'user_users': '/user/users',
-        'user_scheduling': '/user/scheduling',
-        'work_maintenance': '/work/maintenance',
-        'work_repair': '/work/repair',
-        'calendar': '/calendar',
-        'inventory_equipment': '/inventory/equipment',
-        'inventory_items': '/inventory/items',
-        'inventory_request': '/inventory/request',
-        'analytics': '/analytics',
-        'announcement': '/announcement',
-        'settings': '/settings',
-        'logout': '/logout',
-      };
-      return pathMap[routeKey];
-    }
+  String? _getRoutePath(String routeKey) {
+    final Map<String, String> pathMap = {
+      'dashboard': '/dashboard',
+      'user_users': '/user/users',
+      'user_roles': '/user/roles',
+      'work_maintenance': '/work/maintenance',
+      'work_repair': '/work/repair',
+      'calendar': '/calendar',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
+      'analytics': '/analytics',
+      'announcement': '/announcement',
+      'settings': '/settings',
+    };
+    return pathMap[routeKey];
+  }
 
   // Logout functionality
   void _handleLogout(BuildContext context) async {
@@ -372,7 +367,6 @@ class _ExternalMaintenanceFormPageState
   bool _isLoadingData = false;
   // main API service for inventory
   final _mainApiService = main_api.APIService();
-  final InventoryResolver _inventoryResolver = InventoryResolver();
   List<Map<String, dynamic>> _availableInventoryItems = [];
 
   @override
@@ -391,127 +385,11 @@ class _ExternalMaintenanceFormPageState
     _initAutoFields();
     // load inventory items in background
     _loadInventoryItems();
-    // Listen to inventory updates to refresh reserved counts
-    InventoryUpdateNotifier().addListener(_onInventoryUpdate);
 
     // If in edit mode, fetch the full task data
     if (widget.isEditMode) {
       _fetchTaskData();
     }
-  }
-
-  void _onInventoryUpdate() {
-    // Refresh reserved stock values when an inventory item updates
-    _refreshSelectedReservedCounts();
-  }
-
-  Future<void> _applyTemplate(String? key) async {
-    if (key == null || key.isEmpty) return;
-    final items = MaintenanceTemplates.getItems(key);
-    if (items.isEmpty) return;
-
-    final List<Map<String, dynamic>> mapped = [];
-
-    for (final t in items) {
-      // Try to resolve the inventory item from the already loaded available items
-      final found = _availableInventoryItems.firstWhere(
-        (it) => (it['item_code']?.toString() ?? it['itemCode']?.toString() ?? it['code']?.toString() ?? '').toString().toLowerCase() == t.sku.toLowerCase(),
-        orElse: () => <String, dynamic>{},
-      );
-      Map<String, dynamic> fuzzyFound = {};
-      if (found.isEmpty) {
-        fuzzyFound = _availableInventoryItems.firstWhere(
-          (it) {
-            final itemName = (it['item_name'] ?? it['name'] ?? '').toString().toLowerCase();
-            final itemCode = (it['item_code'] ?? it['itemCode'] ?? it['code'] ?? '').toString().toLowerCase();
-            final s = t.sku.toLowerCase();
-            return itemName.contains(s) || itemCode.contains(s);
-          },
-          orElse: () => <String, dynamic>{},
-        );
-      }
-        String? inventoryId;
-        if (found.isNotEmpty || fuzzyFound.isNotEmpty) {
-          final src = found.isNotEmpty ? found : fuzzyFound;
-          inventoryId = (src['id'] ?? src['_doc_id'] ?? src['item_code'] ?? src['itemCode'])?.toString();
-        } else {
-          inventoryId = await _inventoryResolver.resolveSku(t.sku, _buildingId ?? 'default_building_id');
-          if (inventoryId != null && inventoryId.isNotEmpty) {
-            try {
-              final itemResp = await _apiService.getInventoryItem(inventoryId);
-              if (itemResp != null && itemResp['success'] == true && itemResp['data'] is Map) {
-                final data = Map<String, dynamic>.from(itemResp['data']);
-                found.addAll(data);
-              }
-            } catch (e) {
-              print('[v0] Failed to fetch inventory item for resolved id $inventoryId: $e');
-            }
-          }
-        }
-
-        final reservedQty = (inventoryId != null && inventoryId.toString().isNotEmpty)
-          ? await _getReservedQty(inventoryId.toString())
-          : 0;
-        final resolved = inventoryId != null && inventoryId.toString().isNotEmpty && inventoryId.toString() != t.sku;
-
-        mapped.add({
-        'inventory_id': inventoryId,
-        'item_name': t.name,
-        'item_code': t.sku,
-        'quantity': t.qty,
-        'available_stock': found.isNotEmpty ? (found['current_stock'] ?? found['available_stock'] ?? found['stock'] ?? 0) : 0,
-        'reserved_stock': reservedQty,
-        'unit': t.unit,
-        'autoReserve': t.autoReserve,
-        'resolved': resolved,
-        'resolvedFromTemplate': false,
-        });
-    }
-
-    setState(() {
-      _selectedInventoryItems = mapped;
-    });
-    try {
-      await _refreshSelectedReservedCounts();
-    } catch (_) {}
-
-    // Notify user if some template SKUs couldn't be matched to inventory items
-    final unmatched = items.where((t) => !_availableInventoryItems.any(
-          (it) => (it['item_code']?.toString() ?? it['itemCode']?.toString() ?? it['code']?.toString() ?? '') == t.sku,
-        ));
-
-    if (unmatched.isNotEmpty) {
-      final names = unmatched.map((u) => u.name).join(', ');
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Some template items are not found in inventory: $names. They will use SKU fallback.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-    }
-  }
-
-  /// Returns the total reserved quantity for the given inventory id across reservations
-  Future<int> _getReservedQty(String inventoryId) async {
-    try {
-      final resp = await _apiService.getInventoryReservations();
-      if (resp['success'] == true && resp['data'] != null) {
-        final reservations = List<Map<String, dynamic>>.from(resp['data']);
-        int reservedTotal = 0;
-        for (var r in reservations) {
-          if ((r['inventory_id']?.toString() ?? '') == inventoryId) {
-            final status = (r['status'] ?? r['request_status'] ?? 'reserved').toString().toLowerCase();
-            if (status == 'reserved' || status == 'approved' || status == 'pending') {
-              reservedTotal += (r['quantity'] ?? 0) as int;
-            }
-          }
-        }
-        return reservedTotal;
-      }
-    } catch (e) {
-      print('[v0] Error computing reserved qty for $inventoryId: $e');
-    }
-    return 0;
   }
 
   void _populateFormFields(Map<String, dynamic> data) {
@@ -575,25 +453,11 @@ class _ExternalMaintenanceFormPageState
             })
             .join(' ');
         // Valid recurrence options: Weekly, Monthly, Quarterly, Annually
-        final validRecurrences = [
-          'Weekly',
-          'Monthly',
-          'Quarterly',
-          'Annually',
-        ];
+        final validRecurrences = ['Weekly', 'Monthly', 'Quarterly', 'Annually'];
         _selectedRecurrence =
             validRecurrences.contains(recurrenceCapitalized)
                 ? recurrenceCapitalized
                 : null;
-      }
-
-      // Populate template (if present)
-      final templateKey = data['template_id'] ?? data['templateId'] ?? data['template'];
-      if (templateKey != null) {
-        _selectedTemplateKey = templateKey.toString();
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _applyTemplate(_selectedTemplateKey);
-        });
       }
 
       final assessmentReceived = data['assessment_received'];
@@ -660,7 +524,7 @@ class _ExternalMaintenanceFormPageState
       // Inventory items - preserve inventory identifiers so edits keep stable ids
       if (data['parts_used'] != null && data['parts_used'] is List) {
         _selectedInventoryItems.clear();
-          for (var item in data['parts_used']) {
+        for (var item in data['parts_used']) {
           _selectedInventoryItems.add({
             'inventory_id':
                 item['inventory_id'] ?? item['id'] ?? item['_doc_id'],
@@ -672,8 +536,7 @@ class _ExternalMaintenanceFormPageState
                 item['stock'] ??
                 item['current_stock'] ??
                 0,
-            // Convert incoming 'reserve'/'reserved' field to normalized 'autoReserve'
-            'autoReserve': item['reserve'] ?? item['reserved'] ?? true,
+            'reserve': item['reserve'] ?? item['reserved'] ?? true,
           });
         }
       }
@@ -723,7 +586,7 @@ class _ExternalMaintenanceFormPageState
                   'available_stock':
                       item['current_stock'] ?? item['available_stock'] ?? 0,
                   'quantity': quantity,
-                  'autoReserve': false, // manually added items don't auto-reserve unless user toggles behavior
+                  'reserve': true,
                 });
               });
             },
@@ -740,7 +603,9 @@ class _ExternalMaintenanceFormPageState
 
   Future<void> _loadInventoryItems() async {
     try {
-      final response = await _mainApiService.getBuildingInventory(_buildingId ?? 'default_building_id');
+      final response = await _mainApiService.getBuildingInventory(
+        'default_building_id',
+      );
       if (response['success'] == true && response['data'] != null) {
         setState(() {
           _availableInventoryItems = List<Map<String, dynamic>>.from(
@@ -754,86 +619,47 @@ class _ExternalMaintenanceFormPageState
     }
   }
 
-  Future<List<String>> _createInventoryReservations(String taskId) async {
+  Future<List<Map<String, String>>> _createInventoryReservations(
+    String taskId,
+  ) async {
     if (_selectedInventoryItems.isEmpty) return [];
 
-    final List<String> createdReservationIds = [];
+    final List<Map<String, String>> createdReservations = [];
 
     try {
       for (final item in _selectedInventoryItems) {
-        // Only create reservations for items marked as autoReserve
-        if (!(item['autoReserve'] == true || item['reserve'] == true)) {
-          print('[v0] Skipping reservation for ${item['item_name']} as autoReserve is false');
-          continue;
-        }
         final qty = item['quantity'];
         if (qty == null || qty <= 0) {
-          print('[v0] Skipping reservation for ${item['item_name']} due to invalid quantity: $qty');
+          print(
+            '[v0] Skipping reservation for ${item['item_name']} due to invalid quantity: $qty',
+          );
           continue;
         }
-        // Resolve inventoryId if it's a SKU or not resolved yet
-        String? inventoryId = item['inventory_id']?.toString();
-        if (inventoryId == null || inventoryId.isEmpty) {
-          inventoryId = await _inventoryResolver.resolveSku(item['item_code']?.toString() ?? '', _buildingId ?? 'default_building_id');
-        } else {
-          // If it looks like a SKU (uppercase + underscores) try resolve
-          final looksLikeSku = RegExp(r'^[A-Z0-9_-]+$').hasMatch(inventoryId);
-          if (looksLikeSku) {
-            final resolved = await _inventoryResolver.resolveSku(item['item_code']?.toString() ?? inventoryId, _buildingId ?? 'default_building_id');
-            if (resolved != null && resolved.isNotEmpty) inventoryId = resolved;
-          }
-        }
-
-        if (inventoryId == null || inventoryId.isEmpty) {
-          print('[v0] Skipping reservation for ${item['item_name']} - unresolved inventory id');
-          continue;
-        }
-        // Update the selected item with the resolved inventory id and mark it resolved for UI
-        setState(() {
-          item['inventory_id'] = inventoryId;
-          item['resolved'] = true;
-        });
-
         final response = await _apiService.createInventoryReservation(
-          inventoryId: inventoryId,
+          inventoryId: item['inventory_id'],
           quantity: qty,
           maintenanceTaskId: taskId,
         );
 
         // Extract the reservation ID from the response
         if (response['success'] == true && response['reservation_id'] != null) {
-          createdReservationIds.add(response['reservation_id']);
-          print('[v0] Created inventory reservation: ${response['reservation_id']}');
-          try {
-            InventoryUpdateNotifier().notifyItemUpdated(inventoryId.toString());
-          } catch (_) {}
+          final rid = response['reservation_id'].toString();
+          createdReservations.add({
+            'inventory_id': item['inventory_id']?.toString() ?? '',
+            'reservation_id': rid,
+          });
+          print(
+            '[v0] Created inventory reservation: $rid for inventory ${item['inventory_id']}',
+          );
         }
       }
       print(
-        '[v0] Created ${createdReservationIds.length} inventory reservations linked to task $taskId',
+        '[v0] Created ${createdReservations.length} inventory reservations linked to task $taskId',
       );
-      // Refresh local reserved counts for selected items to reflect newly created reservations
-      try {
-        await _refreshSelectedReservedCounts();
-      } catch (_) {}
-      return createdReservationIds;
+      return createdReservations;
     } catch (e) {
       print('[v0] Error creating inventory reservations: $e');
       throw Exception('Failed to create inventory reservations: $e');
-    }
-  }
-
-  Future<void> _refreshSelectedReservedCounts() async {
-    if (_selectedInventoryItems.isEmpty) return;
-    for (int i = 0; i < _selectedInventoryItems.length; i++) {
-      final item = _selectedInventoryItems[i];
-      final invId = item['inventory_id']?.toString();
-      if (invId != null && invId.isNotEmpty) {
-        final qty = await _getReservedQty(invId);
-        setState(() {
-          _selectedInventoryItems[i]['reserved_stock'] = qty;
-        });
-      }
     }
   }
 
@@ -905,8 +731,7 @@ class _ExternalMaintenanceFormPageState
         // Don't set logged by for new tasks
         // _loggedByController.text = 'Admin User';
       }
-      _buildingId = profile != null ? (profile['building_id'] ?? profile['buildingId'] ?? profile['building'])?.toString() : null;
-      
+
       // Don't set logged date for new tasks - only when logging completed service
       // _loggedDate = DateTime.now();
     } catch (e) {
@@ -929,9 +754,10 @@ class _ExternalMaintenanceFormPageState
     setState(() => _isLoadingData = true);
 
     try {
-      final taskId = widget.maintenanceData!['id']?.toString() ??
-                     widget.maintenanceData!['task_code']?.toString() ??
-                     widget.maintenanceData!['taskCode']?.toString();
+      final taskId =
+          widget.maintenanceData!['id']?.toString() ??
+          widget.maintenanceData!['task_code']?.toString() ??
+          widget.maintenanceData!['taskCode']?.toString();
       if (taskId == null) {
         print('[v0] No task ID found in maintenanceData');
         return;
@@ -941,7 +767,9 @@ class _ExternalMaintenanceFormPageState
       if (taskData['success'] == true && taskData['data'] != null) {
         _populateFormFields(taskData['data']);
       } else {
-        print('[v0] Failed to fetch task data: ${taskData['message'] ?? 'Unknown error'}');
+        print(
+          '[v0] Failed to fetch task data: ${taskData['message'] ?? 'Unknown error'}',
+        );
         // Fallback to passed data
         _populateFormFields(widget.maintenanceData!);
       }
@@ -990,7 +818,10 @@ class _ExternalMaintenanceFormPageState
     if (v == null || v.trim().isEmpty) return null;
 
     final s = v.trim();
-    final durationRe = RegExp(r'^\s*\d+\s*(hrs?|hours?)\s*(\d+\s*mins?)?\s*$', caseSensitive: false);
+    final durationRe = RegExp(
+      r'^\s*\d+\s*(hrs?|hours?)\s*(\d+\s*mins?)?\s*$',
+      caseSensitive: false,
+    );
     final minutesRe = RegExp(r'^\s*\d+\s*mins?\s*$', caseSensitive: false);
     final timeRe = RegExp(r'^\s*\d{1,2}:\d{2}\s*(AM|PM|am|pm)?\s*$');
 
@@ -1013,614 +844,1074 @@ class _ExternalMaintenanceFormPageState
           _handleLogout(context);
         }
       },
-      body: _isLoadingData
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header & breadcrumb
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Task Management",
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
+      body:
+          _isLoadingData
+              ? const Center(child: CircularProgressIndicator())
+              : Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextButton(
-                      onPressed: () => context.go('/dashboard'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                      ),
-                      child: const Text('Dashboard'),
-                    ),
-                    const Icon(
-                      Icons.chevron_right,
-                      color: Colors.grey,
-                      size: 16,
-                    ),
-                    TextButton(
-                      onPressed: () => context.go('/work/maintenance'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                      ),
-                      child: const Text('Task Management'),
-                    ),
-                    const Icon(
-                      Icons.chevron_right,
-                      color: Colors.grey,
-                      size: 16,
-                    ),
-                    TextButton(
-                      onPressed: null,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                      ),
-                      child: const Text('Maintenance Tasks'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-
-            // Main form container
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(32),
-                child: Form(
-                  key: _formKey,
-                  autovalidateMode: _autoValidateMode,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildSectionHeader(
-                        "Basic Information",
-                        "General details about the maintenance task",
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Task Title + Task Code
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildTextField(
-                              label: "Task Title",
-                              controller: _taskTitleController,
-                              placeholder: "Enter Task Title",
-                              validator: _req,
-                            ),
+                    // Header & breadcrumb
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Task Management",
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
                           ),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: _buildTextField(
-                              label: "Task Code",
-                              controller: _taskCodeController,
-                              placeholder: "Auto-generated",
-                              enabled: false,
-                              validator: _req,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Created By + Date Created
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildTextField(
-                              label: "Created By",
-                              controller: _createdByController,
-                              placeholder: "Auto-filled",
-                              enabled: false,
-                              validator: _req,
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: _buildDateField(
-                              label: "Date Created",
-                              selectedDate: _dateCreated,
-                              placeholder: "DD / MM / YY",
-                              onDateSelected:
-                                  (d) => setState(() => _dateCreated = d),
-                              enabled: true,
-                              requiredField: true,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Priority only (Status auto-set to "New")
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildDropdownField(
-                              label: "Priority",
-                              value: _selectedPriority,
-                              placeholder: "Select Priority...",
-                              options: _priorityOptions,
-                              onChanged:
-                                  (v) => setState(() => _selectedPriority = v),
-                              validator: (v) => v == null ? 'Required' : null,
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          const Expanded(
-                            child: SizedBox(),
-                          ), // keep right column space
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      const Divider(
-                        color: Color(0xFFE2E8F0),
-                        height: 1,
-                        thickness: 1,
-                      ),
-                      const SizedBox(height: 32),
-
-                      // Task Scope & Description
-                      _buildSectionHeader(
-                        "Task Scope & Description",
-                        "Detailed description of what needs to be done",
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Location/Area on left, Service Category on right
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildDropdownField(
-                              label: "Location / Area",
-                              value: _selectedLocation,
-                              placeholder: "Select Location...",
-                              options: _locationOptions,
-                              onChanged: (v) {
-                                setState(() {
-                                  _selectedLocation = v;
-                                  _isOtherLocation = (v == 'Other');
-                                  if (!_isOtherLocation) {
-                                    _otherLocationController.clear();
-                                    _autoPopulateInventoryForLocation(v);
-                                  }
-                                });
-                              },
-                              validator: (v) => v == null ? 'Required' : null,
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: _buildDropdownField(
-                              label: "Service Category",
-                              value: _selectedServiceCategory,
-                              placeholder: "Select Category...",
-                              options: _serviceCategoryOptions,
-                              onChanged: (v) {
-                                setState(() {
-                                  _selectedServiceCategory = v;
-                                  _isOtherServiceCategory = (v == 'Other');
-                                  if (!_isOtherServiceCategory) {
-                                    _otherServiceCategoryController.clear();
-                                  }
-                                });
-                              },
-                              validator: (v) => v == null ? 'Required' : null,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 16),
-                      // Template selector - quick prototype hard-coded templates
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 8),
-                          const Text('Maintenance Template', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                          const SizedBox(height: 8),
-                          DropdownButtonFormField<String>(
-                            value: _selectedTemplateKey,
-                            decoration: _decoration('Select Template...'),
-                            items: MaintenanceTemplates.keys()
-                                .map((k) => DropdownMenuItem(value: k, child: Text(MaintenanceTemplates.displayName(k))))
-                                .toList(),
-                            onChanged: (v) {
-                              setState(() => _selectedTemplateKey = v);
-                              _applyTemplate(v);
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      if (_selectedInventoryItems.isNotEmpty) ...[
+                        ),
                         const SizedBox(height: 8),
-                        _buildSectionHeader('Template Items', 'Items that will be auto-assigned when this template is applied'),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey.shade200),
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () => context.go('/dashboard'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                              ),
+                              child: const Text('Dashboard'),
+                            ),
+                            const Icon(
+                              Icons.chevron_right,
+                              color: Colors.grey,
+                              size: 16,
+                            ),
+                            TextButton(
+                              onPressed: () => context.go('/work/maintenance'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                              ),
+                              child: const Text('Task Management'),
+                            ),
+                            const Icon(
+                              Icons.chevron_right,
+                              color: Colors.grey,
+                              size: 16,
+                            ),
+                            TextButton(
+                              onPressed: null,
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                              ),
+                              child: const Text('Maintenance Tasks'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+
+                    // Main form container
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
                           ),
+                        ],
+                      ),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(32),
+                        child: Form(
+                          key: _formKey,
+                          autovalidateMode: _autoValidateMode,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: _selectedInventoryItems.map((item) {
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 6.0),
-                                child: Row(
-                                  children: [
-                                    Expanded(child: Text('${item['item_name']} (${item['item_code']})')),
-                                    Text('Qty: ${item['quantity'] ?? 0}'),
-                                    const SizedBox(width: 12),
-                                    Text('Avail: ${item['available_stock'] ?? 0} ${item['unit'] ?? ''}'),
-                                    const SizedBox(width: 8),
-                                    // Show 'Reserved' indicator when resolved, else show 'Unresolved'
-                                    if (item['resolved'] == true) ...[
-                                      if ((item['reserved_stock'] ?? 0) > 0)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(6)),
-                                          child: Text('Reserved: ${item['reserved_stock'] ?? 0}', style: const TextStyle(fontSize: 12, color: Colors.green)),
-                                        ),
-                                    ] else ...[
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(6)),
-                                        child: const Text('Unresolved', style: TextStyle(fontSize: 12, color: Colors.red)),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      ],
-
-                      // Show custom location input if "Other" is selected
-                      if (_isOtherLocation) ...[
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildTextField(
-                                label: 'Specify Location',
-                                controller: _otherLocationController,
-                                placeholder: 'Enter custom location...',
-                                validator: _req,
+                            children: [
+                              _buildSectionHeader(
+                                "Basic Information",
+                                "General details about the maintenance task",
                               ),
-                            ),
-                            const SizedBox(width: 24),
-                            const Expanded(child: SizedBox()),
-                          ],
-                        ),
-                      ],
+                              const SizedBox(height: 24),
 
-                      // Show custom service category input if "Other" is selected
-                      if (_isOtherServiceCategory) ...[
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            const Expanded(child: SizedBox()),
-                            const SizedBox(width: 24),
-                            Expanded(
-                              child: _buildTextField(
-                                label: 'Specify Service Category',
-                                controller: _otherServiceCategoryController,
-                                placeholder: 'Enter custom category...',
-                                validator: _req,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 24),
-
-                      _buildTextAreaField(
-                        label: "Description",
-                        controller: _descriptionController,
-                        placeholder: "Enter Description...",
-                        validator: _req,
-                      ),
-                      const SizedBox(height: 24),
-                      const Divider(
-                        color: Color(0xFFE2E8F0),
-                        height: 1,
-                        thickness: 1,
-                      ),
-                      const SizedBox(height: 32),
-
-                      // Contractor Info
-                      _buildSectionHeader(
-                        "Contractor Information",
-                        "Details of the external contractor assigned to this task or a company",
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Contractor Name (left) + Contact Number (right)
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildTextField(
-                              label: "Contractor (Company) Name",
-                              controller: _contractorNameController,
-                              placeholder: "Enter Name",
-                              validator: _req,
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: _buildTextField(
-                              label: "Contact Number",
-                              controller: _contactNumberController,
-                              placeholder: "Input Contact Number",
-                              validator: _phoneValidator,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Email below aligned to the left (matches width of Contractor Name)
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildTextField(
-                              label: "Email",
-                              controller: _emailController,
-                              placeholder: "Input Email",
-                              validator: _emailValidator,
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          const Expanded(child: SizedBox()),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      const Divider(
-                        color: Color(0xFFE2E8F0),
-                        height: 1,
-                        thickness: 1,
-                      ),
-                      const SizedBox(height: 32),
-
-                      // Recurrence & Schedule
-                      _buildSectionHeader(
-                        "Recurrence & Schedule",
-                        "Define when and how often this maintenance task occurs",
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Row 1: Recurrence and Estimated Duration
-                      Row(
-                        children: [
-                          // Recurrence
-                          Expanded(
-                            child: _buildDropdownField(
-                              label: 'Recurrence Frequency',
-                              value: _selectedRecurrence,
-                              placeholder: 'Select frequency...',
-                              options: const [
-                                'Weekly',
-                                'Monthly',
-                                'Quarterly',
-                                'Annually',
-                              ],
-                              onChanged: _handleRecurrenceChange,
-                              validator: (v) => v == null ? 'Required' : null,
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-
-                          // Estimated Duration
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _fieldLabel('Estimated Duration'),
-                                _fieldBox(
-                                  child: TextFormField(
-                                    controller: _estimatedDurationController,
-                                    validator: _durationValidator,
-                                    decoration: _decoration(
-                                      'e.g., 3 hrs / 45 mins',
-                                    ).copyWith(
-                                      suffixIcon: IconButton(
-                                        icon: const Icon(Icons.access_time),
-                                        tooltip: 'Pick hours & minutes',
-                                        onPressed: () async {
-                                          final picked = await showTimePicker(
-                                            context: context,
-                                            // Use a neutral initial time for duration selection
-                                            initialTime: TimeOfDay(
-                                              hour: 0,
-                                              minute: 30,
+                              // Task Title + Task Code
+                              Row(
+                                children: [
+                                  // Task Type
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        _fieldBox(
+                                          child: DropdownButtonFormField<
+                                            String
+                                          >(
+                                            value: _selectedTaskType,
+                                            validator: _req,
+                                            decoration: _decoration(
+                                              'Select Task Type...',
                                             ),
-                                          );
-                                          if (picked != null) {
-                                            final h = picked.hour;
-                                            final m = picked.minute;
-                                            String formatted;
-                                            if (h > 0 && m > 0) {
-                                              formatted = '$h hrs $m mins';
-                                            } else if (h > 0) {
-                                              formatted = '$h hrs';
-                                            } else {
-                                              formatted = '$m mins';
-                                            }
-                                            setState(() {
-                                              _estimatedDurationController
-                                                  .text = formatted;
-                                            });
-                                          }
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Row 2: Start Date and Next Due Date
-                      Row(
-                        children: [
-                          // Start Date
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _fieldLabel('Start Date'),
-                                Container(
-                                  height: _kFieldHeight,
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                      color: Colors.grey[300]!,
-                                    ),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: TextFormField(
-                                    controller: _startDateController,
-                                    validator: _req,
-                                    readOnly: true,
-                                    onTap:
-                                        () => _pickDate(
-                                          initial: _startDate ?? DateTime.now(),
-                                          onPick: _handleStartDateChange,
+                                            items:
+                                                const [
+                                                      'Preventive Maintenance',
+                                                      'Corrective Maintenance',
+                                                      'Inspection',
+                                                      'Repair',
+                                                      'Others',
+                                                    ]
+                                                    .map(
+                                                      (type) =>
+                                                          DropdownMenuItem(
+                                                            value: type,
+                                                            child: Text(type),
+                                                          ),
+                                                    )
+                                                    .toList(),
+                                            onChanged: (value) {
+                                              setState(() {
+                                                _selectedTaskType = value;
+                                              });
+                                            },
+                                          ),
                                         ),
-                                    decoration: InputDecoration(
-                                      hintText: 'YYYY-MM-DD',
-                                      hintStyle: TextStyle(
-                                        color: Colors.grey[240],
-                                        fontSize: 14,
-                                      ),
-                                      border: InputBorder.none,
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 12,
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 24),
+                                  Expanded(
+                                    child: _buildTextField(
+                                      label: "Task Code",
+                                      controller: _taskCodeController,
+                                      placeholder: "Auto-generated",
+                                      enabled: false,
+                                      validator: _req,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Created By + Date Created
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildTextField(
+                                      label: "Created By",
+                                      controller: _createdByController,
+                                      placeholder: "Auto-filled",
+                                      enabled: false,
+                                      validator: _req,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 24),
+                                  Expanded(
+                                    child: _buildDateField(
+                                      label: "Date Created",
+                                      selectedDate: _dateCreated,
+                                      placeholder: "DD / MM / YY",
+                                      onDateSelected:
+                                          (d) =>
+                                              setState(() => _dateCreated = d),
+                                      enabled: true,
+                                      requiredField: true,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Priority only (Status auto-set to "New")
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildDropdownField(
+                                      label: "Priority",
+                                      value: _selectedPriority,
+                                      placeholder: "Select Priority...",
+                                      options: _priorityOptions,
+                                      onChanged:
+                                          (v) => setState(
+                                            () => _selectedPriority = v,
                                           ),
-                                      suffixIcon: const Icon(
-                                        Icons.calendar_today,
-                                        size: 18,
-                                      ),
+                                      validator:
+                                          (v) => v == null ? 'Required' : null,
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 24),
+                                  const SizedBox(width: 24),
+                                  const Expanded(
+                                    child: SizedBox(),
+                                  ), // keep right column space
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+                              const Divider(
+                                color: Color(0xFFE2E8F0),
+                                height: 1,
+                                thickness: 1,
+                              ),
+                              const SizedBox(height: 32),
 
-                          // Next Due Date
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _fieldLabel('Next Due Date'),
-                                Container(
-                                  height: _kFieldHeight,
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                      color: Colors.grey[300]!,
+                              // Task Scope & Description
+                              _buildSectionHeader(
+                                "Task Scope & Description",
+                                "Detailed description of what needs to be done",
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Location/Area on left, Service Category on right
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildDropdownField(
+                                      label: "Location / Area",
+                                      value: _selectedLocation,
+                                      placeholder: "Select Location...",
+                                      options: _locationOptions,
+                                      onChanged: (v) {
+                                        setState(() {
+                                          _selectedLocation = v;
+                                          _isOtherLocation = (v == 'Other');
+                                          if (!_isOtherLocation) {
+                                            _otherLocationController.clear();
+                                            _autoPopulateInventoryForLocation(
+                                              v,
+                                            );
+                                          }
+                                        });
+                                      },
+                                      validator:
+                                          (v) => v == null ? 'Required' : null,
                                     ),
-                                    borderRadius: BorderRadius.circular(8),
-                                    color: Colors.grey[50],
                                   ),
-                                  child: TextFormField(
-                                    controller: _nextDueDateController,
-                                    validator: _req,
-                                    readOnly: true,
-                                    decoration: InputDecoration(
-                                      hintText: 'YYYY-MM-DD',
-                                      hintStyle: TextStyle(
-                                        color: Colors.grey[240],
-                                        fontSize: 14,
-                                      ),
-                                      border: InputBorder.none,
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 12,
-                                          ),
-                                      suffixIcon: const Icon(
-                                        Icons.calendar_today,
-                                        size: 18,
-                                      ),
-                                      filled: true,
-                                      fillColor: Colors.grey[50],
+                                  const SizedBox(width: 24),
+                                  Expanded(
+                                    child: _buildDropdownField(
+                                      label: "Service Category",
+                                      value: _selectedServiceCategory,
+                                      placeholder: "Select Category...",
+                                      options: _serviceCategoryOptions,
+                                      onChanged: (v) {
+                                        setState(() {
+                                          _selectedServiceCategory = v;
+                                          _isOtherServiceCategory =
+                                              (v == 'Other');
+                                          if (!_isOtherServiceCategory) {
+                                            _otherServiceCategoryController
+                                                .clear();
+                                          }
+                                        });
+                                      },
+                                      validator:
+                                          (v) => v == null ? 'Required' : null,
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      _buildRecurrenceSummary(),
+                                ],
+                              ),
 
-                      const SizedBox(height: 40),
-
-                      // Place inventory UI on the right side
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Left column containing the Inventory section
-                          SizedBox(
-                            width: 520,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
+                              // Show custom location input if "Other" is selected
+                              if (_isOtherLocation) ...[
+                                const SizedBox(height: 16),
                                 Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Expanded(
-                                      child: _buildSectionHeader(
-                                        "Inventory Items",
-                                        "Request parts or supplies for the task",
+                                      child: _buildTextField(
+                                        label: 'Specify Location',
+                                        controller: _otherLocationController,
+                                        placeholder: 'Enter custom location...',
+                                        validator: _req,
                                       ),
                                     ),
-                                    ElevatedButton.icon(
-                                      onPressed: _addInventoryItem,
-                                      icon: const Icon(Icons.add, size: 18),
-                                      label: const Text("Add Item"),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(
-                                          0xFF2E7D32,
+                                    const SizedBox(width: 24),
+                                    const Expanded(child: SizedBox()),
+                                  ],
+                                ),
+                              ],
+
+                              // Show custom service category input if "Other" is selected
+                              if (_isOtherServiceCategory) ...[
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    const Expanded(child: SizedBox()),
+                                    const SizedBox(width: 24),
+                                    Expanded(
+                                      child: _buildTextField(
+                                        label: 'Specify Service Category',
+                                        controller:
+                                            _otherServiceCategoryController,
+                                        placeholder: 'Enter custom category...',
+                                        validator: _req,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              const SizedBox(height: 24),
+
+                              _buildTextAreaField(
+                                label: "Description",
+                                controller: _descriptionController,
+                                placeholder: "Enter Description...",
+                                validator: _req,
+                              ),
+                              const SizedBox(height: 24),
+                              const Divider(
+                                color: Color(0xFFE2E8F0),
+                                height: 1,
+                                thickness: 1,
+                              ),
+                              const SizedBox(height: 32),
+
+                              // Contractor Info
+                              _buildSectionHeader(
+                                "Contractor Information",
+                                "Details of the external contractor assigned to this task or a company",
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Contractor Name (left) + Contact Number (right)
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildTextField(
+                                      label: "Contractor (Company) Name",
+                                      controller: _contractorNameController,
+                                      placeholder: "Enter Name",
+                                      validator: _req,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 24),
+                                  Expanded(
+                                    child: _buildTextField(
+                                      label: "Contact Number",
+                                      controller: _contactNumberController,
+                                      placeholder: "Input Contact Number",
+                                      validator: _phoneValidator,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Email below aligned to the left (matches width of Contractor Name)
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildTextField(
+                                      label: "Email",
+                                      controller: _emailController,
+                                      placeholder: "Input Email",
+                                      validator: _emailValidator,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 24),
+                                  const Expanded(child: SizedBox()),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+                              const Divider(
+                                color: Color(0xFFE2E8F0),
+                                height: 1,
+                                thickness: 1,
+                              ),
+                              const SizedBox(height: 32),
+
+                              // Recurrence & Schedule
+                              _buildSectionHeader(
+                                "Recurrence & Schedule",
+                                "Define when and how often this maintenance task occurs",
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Row 1: Recurrence and Estimated Duration
+                              Row(
+                                children: [
+                                  // Recurrence
+                                  Expanded(
+                                    child: _buildDropdownField(
+                                      label: 'Recurrence Frequency',
+                                      value: _selectedRecurrence,
+                                      placeholder: 'Select frequency...',
+                                      options: const [
+                                        'Weekly',
+                                        'Monthly',
+                                        'Quarterly',
+                                        'Annually',
+                                      ],
+                                      onChanged: _handleRecurrenceChange,
+                                      validator:
+                                          (v) => v == null ? 'Required' : null,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 24),
+
+                                  // Estimated Duration
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        _fieldLabel('Estimated Duration'),
+                                        _fieldBox(
+                                          child: TextFormField(
+                                            controller:
+                                                _estimatedDurationController,
+                                            validator: _durationValidator,
+                                            decoration: _decoration(
+                                              'e.g., 3 hrs / 45 mins',
+                                            ).copyWith(
+                                              suffixIcon: IconButton(
+                                                icon: const Icon(
+                                                  Icons.access_time,
+                                                ),
+                                                tooltip: 'Pick hours & minutes',
+                                                onPressed: () async {
+                                                  final picked =
+                                                      await showTimePicker(
+                                                        context: context,
+                                                        // Use a neutral initial time for duration selection
+                                                        initialTime: TimeOfDay(
+                                                          hour: 0,
+                                                          minute: 30,
+                                                        ),
+                                                      );
+                                                  if (picked != null) {
+                                                    final h = picked.hour;
+                                                    final m = picked.minute;
+                                                    String formatted;
+                                                    if (h > 0 && m > 0) {
+                                                      formatted =
+                                                          '$h hrs $m mins';
+                                                    } else if (h > 0) {
+                                                      formatted = '$h hrs';
+                                                    } else {
+                                                      formatted = '$m mins';
+                                                    }
+                                                    setState(() {
+                                                      _estimatedDurationController
+                                                          .text = formatted;
+                                                    });
+                                                  }
+                                                },
+                                              ),
+                                            ),
+                                          ),
                                         ),
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 20,
-                                          vertical: 12,
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Row 2: Start Date and Next Due Date
+                              Row(
+                                children: [
+                                  // Start Date
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        _fieldLabel('Start Date'),
+                                        Container(
+                                          height: _kFieldHeight,
+                                          decoration: BoxDecoration(
+                                            border: Border.all(
+                                              color: Colors.grey[300]!,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                          child: TextFormField(
+                                            controller: _startDateController,
+                                            validator: _req,
+                                            readOnly: true,
+                                            onTap:
+                                                () => _pickDate(
+                                                  initial:
+                                                      _startDate ??
+                                                      DateTime.now(),
+                                                  onPick:
+                                                      _handleStartDateChange,
+                                                ),
+                                            decoration: InputDecoration(
+                                              hintText: 'YYYY-MM-DD',
+                                              hintStyle: TextStyle(
+                                                color: Colors.grey[240],
+                                                fontSize: 14,
+                                              ),
+                                              border: InputBorder.none,
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 12,
+                                                  ),
+                                              suffixIcon: const Icon(
+                                                Icons.calendar_today,
+                                                size: 18,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 24),
+
+                                  // Next Due Date
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        _fieldLabel('Next Due Date'),
+                                        Container(
+                                          height: _kFieldHeight,
+                                          decoration: BoxDecoration(
+                                            border: Border.all(
+                                              color: Colors.grey[300]!,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            color: Colors.grey[50],
+                                          ),
+                                          child: TextFormField(
+                                            controller: _nextDueDateController,
+                                            validator: _req,
+                                            readOnly: true,
+                                            decoration: InputDecoration(
+                                              hintText: 'YYYY-MM-DD',
+                                              hintStyle: TextStyle(
+                                                color: Colors.grey[240],
+                                                fontSize: 14,
+                                              ),
+                                              border: InputBorder.none,
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 12,
+                                                  ),
+                                              suffixIcon: const Icon(
+                                                Icons.calendar_today,
+                                                size: 18,
+                                              ),
+                                              filled: true,
+                                              fillColor: Colors.grey[50],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              _buildRecurrenceSummary(),
+
+                              const SizedBox(height: 40),
+
+                              // Place inventory UI on the right side
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Left column containing the Inventory section
+                                  SizedBox(
+                                    width: 520,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Expanded(
+                                              child: _buildSectionHeader(
+                                                "Inventory Items",
+                                                "Request parts or supplies for the task",
+                                              ),
+                                            ),
+                                            ElevatedButton.icon(
+                                              onPressed: _addInventoryItem,
+                                              icon: const Icon(
+                                                Icons.add,
+                                                size: 18,
+                                              ),
+                                              label: const Text("Add Item"),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: const Color(
+                                                  0xFF2E7D32,
+                                                ),
+                                                foregroundColor: Colors.white,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 20,
+                                                      vertical: 12,
+                                                    ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 24),
+
+                                        if (_selectedInventoryItems.isEmpty)
+                                          Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.all(16),
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey[50],
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: Colors.grey[200]!,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              'No inventory items added yet. Click "Add Item" to request inventory.',
+                                              style: TextStyle(
+                                                color: Colors.grey[600],
+                                              ),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          )
+                                        else
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              border: Border.all(
+                                                color: Colors.grey[300]!,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: ListView.separated(
+                                              shrinkWrap: true,
+                                              physics:
+                                                  const NeverScrollableScrollPhysics(),
+                                              itemCount:
+                                                  _selectedInventoryItems
+                                                      .length,
+                                              separatorBuilder:
+                                                  (context, index) => Divider(
+                                                    height: 1,
+                                                    color: Colors.grey[300],
+                                                  ),
+                                              itemBuilder: (context, index) {
+                                                final item =
+                                                    _selectedInventoryItems[index];
+                                                return Padding(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        vertical: 8,
+                                                        horizontal: 12,
+                                                      ),
+                                                  child: Row(
+                                                    children: [
+                                                      // Icon
+                                                      Container(
+                                                        width: 40,
+                                                        height: 40,
+                                                        decoration: BoxDecoration(
+                                                          color: const Color(
+                                                            0xFFE8F5E8,
+                                                          ),
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                8,
+                                                              ),
+                                                        ),
+                                                        child: const Icon(
+                                                          Icons.inventory_2,
+                                                          color: Color(
+                                                            0xFF2E7D32,
+                                                          ),
+                                                          size: 20,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 12),
+
+                                                      // Item details
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          children: [
+                                                            Text(
+                                                              item['item_name'] ??
+                                                                  'Unknown Item',
+                                                              style: const TextStyle(
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                                fontSize: 14,
+                                                              ),
+                                                            ),
+                                                            const SizedBox(
+                                                              height: 4,
+                                                            ),
+                                                            Text(
+                                                              'Code: ${item['item_code'] ?? 'N/A'}',
+                                                              style: TextStyle(
+                                                                fontSize: 12,
+                                                                color:
+                                                                    Colors
+                                                                        .grey[600],
+                                                              ),
+                                                            ),
+                                                            const SizedBox(
+                                                              height: 4,
+                                                            ),
+                                                            Text(
+                                                              'Available: ${item['available_stock']}',
+                                                              style: TextStyle(
+                                                                fontSize: 11,
+                                                                color:
+                                                                    Colors
+                                                                        .grey[600],
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+
+                                                      // Quantity controls (fixed increments/decrements and display)
+                                                      Container(
+                                                        decoration: BoxDecoration(
+                                                          border: Border.all(
+                                                            color:
+                                                                Colors
+                                                                    .grey[300]!,
+                                                          ),
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                8,
+                                                              ),
+                                                        ),
+                                                        child: Row(
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
+                                                          children: [
+                                                            // Decrement button
+                                                            IconButton(
+                                                              icon: const Icon(
+                                                                Icons.remove,
+                                                                size: 16,
+                                                              ),
+                                                              padding:
+                                                                  const EdgeInsets.all(
+                                                                    4,
+                                                                  ),
+                                                              constraints:
+                                                                  const BoxConstraints(
+                                                                    minWidth:
+                                                                        32,
+                                                                    minHeight:
+                                                                        32,
+                                                                  ),
+                                                              onPressed: () {
+                                                                setState(() {
+                                                                  final currentQtyRaw =
+                                                                      item['quantity'];
+                                                                  final currentQty =
+                                                                      (currentQtyRaw
+                                                                              is int)
+                                                                          ? currentQtyRaw
+                                                                          : int.tryParse(
+                                                                                currentQtyRaw?.toString() ??
+                                                                                    '',
+                                                                              ) ??
+                                                                              1;
+                                                                  if (currentQty >
+                                                                      1) {
+                                                                    _selectedInventoryItems[index]['quantity'] =
+                                                                        currentQty -
+                                                                        1;
+                                                                  }
+                                                                });
+                                                              },
+                                                              color:
+                                                                  Colors
+                                                                      .grey[700],
+                                                            ),
+
+                                                            // Quantity display (non-editable text to ensure updates reflect immediately)
+                                                            SizedBox(
+                                                              width: 50,
+                                                              child: Center(
+                                                                child: Text(
+                                                                  '${(item['quantity'] is int) ? item['quantity'] : (int.tryParse(item['quantity']?.toString() ?? '') ?? 1)}',
+                                                                  textAlign:
+                                                                      TextAlign
+                                                                          .center,
+                                                                  style: const TextStyle(
+                                                                    fontSize:
+                                                                        14,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ),
+
+                                                            // Increment button
+                                                            IconButton(
+                                                              icon: const Icon(
+                                                                Icons.add,
+                                                                size: 16,
+                                                              ),
+                                                              padding:
+                                                                  const EdgeInsets.all(
+                                                                    4,
+                                                                  ),
+                                                              constraints:
+                                                                  const BoxConstraints(
+                                                                    minWidth:
+                                                                        32,
+                                                                    minHeight:
+                                                                        32,
+                                                                  ),
+                                                              onPressed: () {
+                                                                setState(() {
+                                                                  final currentQtyRaw =
+                                                                      item['quantity'];
+                                                                  final availableRaw =
+                                                                      item['available_stock'];
+                                                                  final currentQty =
+                                                                      (currentQtyRaw
+                                                                              is int)
+                                                                          ? currentQtyRaw
+                                                                          : int.tryParse(
+                                                                                currentQtyRaw?.toString() ??
+                                                                                    '',
+                                                                              ) ??
+                                                                              1;
+                                                                  final availableStock =
+                                                                      (availableRaw
+                                                                              is int)
+                                                                          ? availableRaw
+                                                                          : int.tryParse(
+                                                                                availableRaw?.toString() ??
+                                                                                    '',
+                                                                              ) ??
+                                                                              0;
+
+                                                                  if (currentQty <
+                                                                      availableStock) {
+                                                                    _selectedInventoryItems[index]['quantity'] =
+                                                                        currentQty +
+                                                                        1;
+                                                                  } else {
+                                                                    ScaffoldMessenger.of(
+                                                                      context,
+                                                                    ).showSnackBar(
+                                                                      const SnackBar(
+                                                                        content:
+                                                                            Text(
+                                                                              'Cannot exceed available stock',
+                                                                            ),
+                                                                        duration: Duration(
+                                                                          seconds:
+                                                                              2,
+                                                                        ),
+                                                                      ),
+                                                                    );
+                                                                  }
+                                                                });
+                                                              },
+                                                              color:
+                                                                  const Color(
+                                                                    0xFF2E7D32,
+                                                                  ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+
+                                                      // Delete button
+                                                      IconButton(
+                                                        icon: const Icon(
+                                                          Icons.delete_outline,
+                                                          size: 20,
+                                                        ),
+                                                        color: Colors.red[400],
+                                                        onPressed:
+                                                            () =>
+                                                                _removeInventoryItem(
+                                                                  index,
+                                                                ),
+                                                        tooltip: 'Remove',
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Left spacer to push inventory to the right
+                                  const Expanded(child: SizedBox()),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+                              const Divider(
+                                color: Color(0xFFE2E8F0),
+                                height: 1,
+                                thickness: 1,
+                              ),
+                              const SizedBox(height: 32),
+
+                              // Post-Service Assessment Logging
+                              _buildSectionTitle(
+                                "Post-Service Assessment Logging",
+                              ),
+                              const SizedBox(height: 16),
+
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Colors.blue.shade200,
+                                  ),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(Icons.info, color: Colors.blue),
+                                    const SizedBox(width: 8),
+                                    const Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            "Information",
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.blue,
+                                            ),
+                                          ),
+                                          SizedBox(height: 4),
+                                          Text(
+                                            "These fields will be filled after the 3rd-party service visit is completed",
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.blue,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildDropdownField(
+                                      label: "Assessment Received",
+                                      value: _selectedAssessmentReceived,
+                                      placeholder: "Input",
+                                      options: _assessmentOptions,
+                                      onChanged:
+                                          (v) => setState(
+                                            () =>
+                                                _selectedAssessmentReceived = v,
+                                          ),
+                                      enabled: widget.isEditMode,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 24),
+                                  const Expanded(
+                                    child: SizedBox(),
+                                  ), // Left spacer
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildTextField(
+                                      label: "Logged By",
+                                      controller: _loggedByController,
+                                      placeholder: "Auto-filled",
+                                      readOnly: true,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 24),
+                                  Expanded(
+                                    child: _buildDateField(
+                                      label: "Logged Date",
+                                      selectedDate: _loggedDate,
+                                      placeholder: "Auto-generated",
+                                      onDateSelected:
+                                          (d) =>
+                                              setState(() => _loggedDate = d),
+                                      enabled: widget.isEditMode,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildTextAreaField(
+                                      label: "Assessment",
+                                      controller: _assessmentController,
+                                      placeholder: "Enter Assessment...",
+                                      readOnly: !widget.isEditMode,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 24),
+                                  Expanded(
+                                    child: _buildTextAreaField(
+                                      label: "Recommendation",
+                                      controller: _recommendationController,
+                                      placeholder: "Enter Recommendation...",
+                                      readOnly: !widget.isEditMode,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 32),
+
+                              // Actions
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  SizedBox(
+                                    width: 100,
+                                    height: 48,
+                                    child: OutlinedButton(
+                                      onPressed: _onCancel,
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: Colors.grey[700],
+                                        side: BorderSide(
+                                          color: Colors.grey[300]!,
+                                          width: 1.5,
                                         ),
                                         shape: RoundedRectangleBorder(
                                           borderRadius: BorderRadius.circular(
@@ -1628,478 +1919,50 @@ class _ExternalMaintenanceFormPageState
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 24),
-
-                                if (_selectedInventoryItems.isEmpty)
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[50],
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: Colors.grey[200]!,
+                                      child: const Text(
+                                        'Cancel',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
                                     ),
-                                    child: Text(
-                                      'No inventory items added yet. Click "Add Item" to request inventory.',
-                                      style: TextStyle(color: Colors.grey[600]),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  )
-                                else
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                        color: Colors.grey[300]!,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  SizedBox(
+                                    width: 100,
+                                    height: 48,
+                                    child: ElevatedButton(
+                                      onPressed: _onNext,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.blue,
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        elevation: 0,
                                       ),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: ListView.separated(
-                                      shrinkWrap: true,
-                                      physics:
-                                          const NeverScrollableScrollPhysics(),
-                                      itemCount: _selectedInventoryItems.length,
-                                      separatorBuilder:
-                                          (context, index) => Divider(
-                                            height: 1,
-                                            color: Colors.grey[300],
-                                          ),
-                                      itemBuilder: (context, index) {
-                                        final item =
-                                            _selectedInventoryItems[index];
-                                        return Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 8,
-                                            horizontal: 12,
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              // Icon
-                                              Container(
-                                                width: 40,
-                                                height: 40,
-                                                decoration: BoxDecoration(
-                                                  color: const Color(
-                                                    0xFFE8F5E8,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                ),
-                                                child: const Icon(
-                                                  Icons.inventory_2,
-                                                  color: Color(0xFF2E7D32),
-                                                  size: 20,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12),
-
-                                              // Item details
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      item['item_name'] ??
-                                                          'Unknown Item',
-                                                      style: const TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        fontSize: 14,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Row(
-                                                      children: [
-                                                        Expanded(
-                                                          child: Text(
-                                                            'Code: ${item['item_code'] ?? 'N/A'}',
-                                                            style: TextStyle(
-                                                              fontSize: 12,
-                                                              color: Colors.grey[600],
-                                                            ),
-                                                          ),
-                                                        ),
-                                                        const SizedBox(width: 8),
-                                                        if (item['resolved'] == true) ...[
-                                                          if ((item['reserved_stock'] ?? 0) > 0)
-                                                            Container(
-                                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                              decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(6)),
-                                                              child: Text('Reserved: ${item['reserved_stock'] ?? 0}', style: const TextStyle(fontSize: 12, color: Colors.green)),
-                                                            ),
-                                                        ] else ...[
-                                                          Container(
-                                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                            decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(6)),
-                                                            child: const Text('Unresolved', style: TextStyle(fontSize: 12, color: Colors.red)),
-                                                          ),
-                                                        ],
-                                                      ],
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Text(
-                                                      'Available: ${item['available_stock']}',
-                                                      style: TextStyle(
-                                                        fontSize: 11,
-                                                        color: Colors.grey[600],
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-
-                                              // Quantity controls (fixed increments/decrements and display)
-                                              Container(
-                                                decoration: BoxDecoration(
-                                                  border: Border.all(
-                                                    color: Colors.grey[300]!,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                ),
-                                                child: Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    // Decrement button
-                                                    IconButton(
-                                                      icon: const Icon(
-                                                        Icons.remove,
-                                                        size: 16,
-                                                      ),
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                            4,
-                                                          ),
-                                                      constraints:
-                                                          const BoxConstraints(
-                                                            minWidth: 32,
-                                                            minHeight: 32,
-                                                          ),
-                                                      onPressed: () {
-                                                        setState(() {
-                                                          final currentQtyRaw =
-                                                              item['quantity'];
-                                                          final currentQty =
-                                                              (currentQtyRaw
-                                                                      is int)
-                                                                  ? currentQtyRaw
-                                                                  : int.tryParse(
-                                                                        currentQtyRaw?.toString() ??
-                                                                            '',
-                                                                      ) ??
-                                                                      1;
-                                                          if (currentQty > 1) {
-                                                            _selectedInventoryItems[index]['quantity'] =
-                                                                currentQty - 1;
-                                                          }
-                                                        });
-                                                      },
-                                                      color: Colors.grey[700],
-                                                    ),
-
-                                                    // Quantity display (non-editable text to ensure updates reflect immediately)
-                                                    SizedBox(
-                                                      width: 50,
-                                                      child: Center(
-                                                        child: Text(
-                                                          '${(item['quantity'] is int) ? item['quantity'] : (int.tryParse(item['quantity']?.toString() ?? '') ?? 1)}',
-                                                          textAlign:
-                                                              TextAlign.center,
-                                                          style:
-                                                              const TextStyle(
-                                                                fontSize: 14,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w600,
-                                                              ),
-                                                        ),
-                                                      ),
-                                                    ),
-
-                                                    // Increment button
-                                                    IconButton(
-                                                      icon: const Icon(
-                                                        Icons.add,
-                                                        size: 16,
-                                                      ),
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                            4,
-                                                          ),
-                                                      constraints:
-                                                          const BoxConstraints(
-                                                            minWidth: 32,
-                                                            minHeight: 32,
-                                                          ),
-                                                      onPressed: () {
-                                                        setState(() {
-                                                          final currentQtyRaw =
-                                                              item['quantity'];
-                                                          final availableRaw =
-                                                              item['available_stock'];
-                                                          final currentQty =
-                                                              (currentQtyRaw
-                                                                      is int)
-                                                                  ? currentQtyRaw
-                                                                  : int.tryParse(
-                                                                        currentQtyRaw?.toString() ??
-                                                                            '',
-                                                                      ) ??
-                                                                      1;
-                                                          final availableStock =
-                                                              (availableRaw
-                                                                      is int)
-                                                                  ? availableRaw
-                                                                  : int.tryParse(
-                                                                        availableRaw?.toString() ??
-                                                                            '',
-                                                                      ) ??
-                                                                      0;
-
-                                                          if (currentQty <
-                                                              availableStock) {
-                                                            _selectedInventoryItems[index]['quantity'] =
-                                                                currentQty + 1;
-                                                          } else {
-                                                            ScaffoldMessenger.of(
-                                                              context,
-                                                            ).showSnackBar(
-                                                              const SnackBar(
-                                                                content: Text(
-                                                                  'Cannot exceed available stock',
-                                                                ),
-                                                                duration:
-                                                                    Duration(
-                                                                      seconds:
-                                                                          2,
-                                                                    ),
-                                                              ),
-                                                            );
-                                                          }
-                                                        });
-                                                      },
-                                                      color: const Color(
-                                                        0xFF2E7D32,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-
-                                              // Delete button
-                                              IconButton(
-                                                icon: const Icon(
-                                                  Icons.delete_outline,
-                                                  size: 20,
-                                                ),
-                                                color: Colors.red[400],
-                                                onPressed:
-                                                    () => _removeInventoryItem(
-                                                      index,
-                                                    ),
-                                                tooltip: 'Remove',
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          // Left spacer to push inventory to the right
-                          const Expanded(child: SizedBox()),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      const Divider(
-                        color: Color(0xFFE2E8F0),
-                        height: 1,
-                        thickness: 1,
-                      ),
-                      const SizedBox(height: 32),
-
-                      // Post-Service Assessment Logging
-                      _buildSectionTitle("Post-Service Assessment Logging"),
-                      const SizedBox(height: 16),
-
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue.shade200),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.info, color: Colors.blue),
-                            const SizedBox(width: 8),
-                            const Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "Information",
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.blue,
-                                    ),
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    "These fields will be filled after the 3rd-party service visit is completed",
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.blue,
+                                      child: Text(
+                                        widget.isEditMode ? 'Save' : 'Submit',
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 24),
-
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildDropdownField(
-                              label: "Assessment Received",
-                              value: _selectedAssessmentReceived,
-                              placeholder: "Input",
-                              options: _assessmentOptions,
-                              onChanged:
-                                  (v) => setState(
-                                    () => _selectedAssessmentReceived = v,
-                                  ),
-                              enabled: widget.isEditMode,
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          const Expanded(child: SizedBox()), // Left spacer
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildTextField(
-                              label: "Logged By",
-                              controller: _loggedByController,
-                              placeholder: "Auto-filled",
-                              readOnly: true,
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: _buildDateField(
-                              label: "Logged Date",
-                              selectedDate: _loggedDate,
-                              placeholder: "Auto-generated",
-                              onDateSelected:
-                                  (d) => setState(() => _loggedDate = d),
-                              enabled: widget.isEditMode,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildTextAreaField(
-                              label: "Assessment",
-                              controller: _assessmentController,
-                              placeholder: "Enter Assessment...",
-                              readOnly: !widget.isEditMode,
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: _buildTextAreaField(
-                              label: "Recommendation",
-                              controller: _recommendationController,
-                              placeholder: "Enter Recommendation...",
-                              readOnly: !widget.isEditMode,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 32),
-
-                      // Actions
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          SizedBox(
-                            width: 100,
-                            height: 48,
-                            child: OutlinedButton(
-                              onPressed: _onCancel,
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.grey[700],
-                                side: BorderSide(
-                                  color: Colors.grey[300]!,
-                                  width: 1.5,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              child: const Text(
-                                'Cancel',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            width: 100,
-                            height: 48,
-                            child: ElevatedButton(
-                              onPressed: _onNext,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: Text(
-                                widget.isEditMode ? 'Save' : 'Submit',
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -2112,7 +1975,10 @@ class _ExternalMaintenanceFormPageState
     final trimmed = duration.trim();
     if (trimmed.isEmpty) return null;
 
-    final reg = RegExp(r'(\d+)\s*(hrs?|hours?|mins?|minutes?)', caseSensitive: false);
+    final reg = RegExp(
+      r'(\d+)\s*(hrs?|hours?|mins?|minutes?)',
+      caseSensitive: false,
+    );
     final match = reg.firstMatch(trimmed);
     if (match != null) {
       final num = int.tryParse(match.group(1)!);
@@ -2191,11 +2057,16 @@ class _ExternalMaintenanceFormPageState
     final scheduledDateIso = _startDate!.toUtc().toIso8601String();
 
     // Parse estimated duration to minutes
-    final estimatedDurationMinutes = _parseDuration(_estimatedDurationController.text.trim());
-    if (estimatedDurationMinutes == null && _estimatedDurationController.text.trim().isNotEmpty) {
+    final estimatedDurationMinutes = _parseDuration(
+      _estimatedDurationController.text.trim(),
+    );
+    if (estimatedDurationMinutes == null &&
+        _estimatedDurationController.text.trim().isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter a valid estimated duration (e.g., 3 hrs or 45 mins)'),
+          content: Text(
+            'Please enter a valid estimated duration (e.g., 3 hrs or 45 mins)',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -2212,7 +2083,6 @@ class _ExternalMaintenanceFormPageState
       'priority': _selectedPriority ?? 'medium',
       'status': 'New', // Auto-set to "New" for external maintenance
       'location': actualLocation,
-      'template_id': _selectedTemplateKey ?? '',
 
       // Contractor Information
       'contractor_name': _contractorNameController.text.trim(),
@@ -2229,7 +2099,8 @@ class _ExternalMaintenanceFormPageState
 
       // Assessment and Tracking
       'assessment_received': _selectedAssessmentReceived,
-      'logged_by': _loggedByController.text.isNotEmpty ? _loggedByController.text : null,
+      'logged_by':
+          _loggedByController.text.isNotEmpty ? _loggedByController.text : null,
       'logged_date': _loggedDate != null ? formatDate(_loggedDate!) : null,
       'assessment': _assessmentController.text.trim(),
       'recommendation': _recommendationController.text.trim(),
@@ -2299,7 +2170,63 @@ class _ExternalMaintenanceFormPageState
         // Create inventory reservations for selected items
         if (createdId != null && _selectedInventoryItems.isNotEmpty) {
           try {
-            await _createInventoryReservations(createdId.toString());
+            final createdPairs = await _createInventoryReservations(
+              createdId.toString(),
+            );
+            // Attach reservation ids back to the maintenance task's parts_used
+            if (createdPairs.isNotEmpty) {
+              // Build a mapping from inventory_id -> reservation_id
+              final Map<String, String> reservationMap = {};
+              for (var p in createdPairs) {
+                final invId = p['inventory_id']?.toString() ?? '';
+                final rid = p['reservation_id']?.toString() ?? '';
+                if (invId.isNotEmpty && rid.isNotEmpty)
+                  reservationMap[invId] = rid;
+              }
+
+              final List<Map<String, dynamic>> updatedParts =
+                  _selectedInventoryItems.map((it) {
+                    final invId = it['inventory_id']?.toString() ?? '';
+                    final copy = Map<String, dynamic>.from(it);
+                    if (reservationMap.containsKey(invId)) {
+                      copy['reservation_id'] = reservationMap[invId];
+                    }
+                    return copy;
+                  }).toList();
+
+              // Also update the UI list with reservation ids
+              for (final it in _selectedInventoryItems) {
+                final inv = it['inventory_id']?.toString() ?? '';
+                if (reservationMap.containsKey(inv)) {
+                  it['reservation_id'] = reservationMap[inv];
+                }
+              }
+
+              // Update the maintenance task with reservation ids embedded in parts_used
+              try {
+                await _apiService.updateMaintenanceTask(createdId.toString(), {
+                  'parts_used': updatedParts,
+                });
+                // Notify inventory listeners for each created reservation / inventory id
+                try {
+                  final notifier = InventoryUpdateNotifier();
+                  reservationMap.forEach((inv, rid) {
+                    notifier.notifyItemUpdated(inv);
+                  });
+                } catch (e) {
+                  print(
+                    '[v0] Failed to notify inventory after attaching reservation ids: $e',
+                  );
+                }
+                print(
+                  '[v0] Updated maintenance task $createdId parts_used with reservation ids.',
+                );
+              } catch (e) {
+                print(
+                  '[v0] Failed to update maintenance task with reservation ids: $e',
+                );
+              }
+            }
           } catch (e) {
             print('[v0] Warning: Failed to create inventory reservations: $e');
             // Don't fail the whole task creation if reservations fail
@@ -2604,7 +2531,6 @@ class _ExternalMaintenanceFormPageState
     _estimatedDurationController.dispose();
     _startDateController.dispose();
     _nextDueDateController.dispose();
-    InventoryUpdateNotifier().removeListener(_onInventoryUpdate);
     super.dispose();
   }
 }

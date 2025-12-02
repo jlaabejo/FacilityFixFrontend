@@ -49,6 +49,8 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
     super.initState();
     // Auto-expand sections if current route is a child
     _autoExpandForCurrentRoute();
+    // Always expand work section by default
+    _expanded['work'] = true;
     _logHighlight(
       'initState -> currentRoute=${widget.currentRoute}, expanded=$_expanded',
     );
@@ -274,13 +276,13 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         title: 'User Management',
                         sectionKey: 'user',
                         children: [
+                          _subNavItem('Staff Availability & Scheduling', 'user_scheduling'),
                           _subNavItem('Users', 'user_users'),
-                          _subNavItem('Availability & Scheduling', 'user_scheduling'),
                         ],
                       ),
                       const SizedBox(height: 4),
 
-                      // Task Management dropdown
+                      // Task Management dropdownMaintenance Tasks
                       _dropdownNav(
                         icon: Icons.build_outlined,
                         title: 'Task Management',
@@ -288,6 +290,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         children: [
                           _subNavItem('Maintenance Tasks', 'work_maintenance'),
                           _subNavItem('Repair Tasks', 'work_repair'),
+                          _subNavItem('Task Types', 'work_task_types'),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -302,8 +305,8 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         title: 'Inventory Management',
                         sectionKey: 'inventory',
                         children: [
-                          _subNavItem('Equipment Registry', 'inventory_equipment'),
                           _subNavItem('Inventory Items', 'inventory_items'),
+                          _subNavItem('Equipment Registry', 'inventory_equipment'),
                           _subNavItem('Inventory Request', 'inventory_request'),
                         ],
                       ),
@@ -454,9 +457,24 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         opacity: 1, 
                       ),
                     ),
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(24),
-                      child: widget.body,
+                    // Use a LayoutBuilder + ConstrainedBox inside the SingleChildScrollView so
+                    // the child layout receives bounded height constraints. Without this,
+                    // any Expanded/Flexible children inside pages (e.g. DataTables with
+                    // Expanded rows) will cause: "RenderFlex children have non-zero flex but
+                    // incoming height constraints are unbounded" errors.
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final viewportHeight = constraints.maxHeight;
+                        return SingleChildScrollView(
+                          padding: const EdgeInsets.all(24),
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(minHeight: viewportHeight),
+                            child: IntrinsicHeight(
+                              child: widget.body,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -739,7 +757,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
             onTap: () => _handleNavigation(routeKey),
             borderRadius: BorderRadius.circular(6),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Text(
                 title,
                 style: TextStyle(

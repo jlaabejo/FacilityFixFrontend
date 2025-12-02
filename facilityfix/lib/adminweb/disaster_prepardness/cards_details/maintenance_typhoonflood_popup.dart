@@ -1,38 +1,39 @@
 import 'package:flutter/material.dart';
-import 'assignstaff_popup.dart';
+import 'package:go_router/go_router.dart';
+import '../../maintenance_task/pop_up/assignstaff_popup.dart';
 import '../../services/api_service.dart';
 
-class EarthquakeDialog extends StatefulWidget {
+class TyphoonFloodDialog extends StatefulWidget {
   final Map<String, dynamic> maintenanceData;
   final VoidCallback? onSaved;
 
-  const EarthquakeDialog({
+  const TyphoonFloodDialog({
     super.key,
     required this.maintenanceData,
     this.onSaved,
   });
 
   @override
-  State<EarthquakeDialog> createState() => _EarthquakeDialogState();
+  State<TyphoonFloodDialog> createState() => _TyphoonFloodDialogState();
 
   static void show(BuildContext context, Map<String, dynamic> data, {VoidCallback? onSaved}) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return EarthquakeDialog(maintenanceData: data, onSaved: onSaved);
+        return TyphoonFloodDialog(maintenanceData: data, onSaved: onSaved);
       },
     );
   }
 }
 
-class _EarthquakeDialogState extends State<EarthquakeDialog> {
+class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
   bool isEditMode = false;
   int? selectedTaskIndex;
   late List<Map<String, dynamic>> tasks;
   final ApiService _apiService = ApiService();
   bool _isSaving = false;
 
-  // Width for the new checkbox column to keep layout tidy
+  // NEW: narrow width for the checkbox column
   static const double _checkColWidth = 40;
 
   @override
@@ -60,25 +61,31 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
   List<Map<String, dynamic>> _getDefaultTasks() {
     return [
       {
-        'name': 'Inspect structural components (columns, beams, walls, parapets, stairs)',
+        'name': 'Electrical safety inspection',
         'assigned': null,
         'rotation': 'Annually',
         'status': 'In Progress',
       },
       {
-        'name': 'Inspect non-structural elements (ceilings, lights, piping, façade, racks)',
+        'name': 'Plumbing & drainage restoration',
         'assigned': null,
         'rotation': 'Annually',
         'status': null,
       },
       {
-        'name': 'Inspect anchorage of heavy equipment, tanks, UPS, gas cylinders',
+        'name': 'Building envelope & roof inspection',
         'assigned': null,
         'rotation': 'Annually',
         'status': null,
       },
       {
-        'name': 'Test critical systems (fire protection, water/gas lines, elevators, emergency power)',
+        'name': 'Generator & fuel system check',
+        'assigned': null,
+        'rotation': 'Annually',
+        'status': null,
+      },
+      {
+        'name': 'Mold & IAQ control',
         'assigned': null,
         'rotation': 'Annually',
         'status': null,
@@ -144,7 +151,7 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
       onAssignmentComplete: () async {
         // After assignment, refresh the task data
         try {
-          final response = await _apiService.getSpecialMaintenanceTask('earthquake');
+          final response = await _apiService.getSpecialMaintenanceTask('typhoon_flood');
           if (response['success'] == true && mounted) {
             final updatedTask = response['task'] as Map<String, dynamic>;
             final checklistCompleted = updatedTask['checklist_completed'] as List?;
@@ -235,7 +242,7 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
     }
   }
 
-  // Helper: determine if a task is completed based on its status
+  // NEW: helper to evaluate completion from status
   bool _isTaskCompleted(Map<String, dynamic> task) {
     final status = (task['status'] as String?)?.trim().toLowerCase();
     return status == 'completed';
@@ -309,7 +316,7 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'EARTHQUAKE SAFETY',
+                  'TYPHOON / FLOOD SAFETY',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w600,
@@ -329,7 +336,7 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
                 const SizedBox(height: 12),
                 Text(
                   widget.maintenanceData['description'] ??
-                      'Checklist for earthquake preparedness and safety inspections. Includes structural and non-structural evaluations, equipment anchorage, and critical systems testing to ensure facility resilience during seismic events.',
+                      'Checklist for typhoon and flood preparedness. Covers electrical safety, plumbing restoration, roof inspections, generator and fuel system checks, and mold/IAQ control to ensure building resilience against flooding and storms.',
                   style: TextStyle(
                     fontSize: 15,
                     height: 1.6,
@@ -368,10 +375,10 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
           ),
           child: Row(
             children: [
-              // Keep spacing for delete icon when in edit mode 
+              // Keep spacing for delete icon when in edit mode
               if (isEditMode) const SizedBox(width: 40),
 
-              // checkbox column  
+              // checkbox column 
               SizedBox(
                 width: _checkColWidth,
                 child: const Center(
@@ -410,7 +417,6 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
                       fontWeight: FontWeight.w600,
                       color: Colors.black87,
                     ),
-                    textAlign: TextAlign.center,
                   ),
                 ),
               ),
@@ -424,7 +430,6 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
                       fontWeight: FontWeight.w600,
                       color: Colors.black87,
                     ),
-                    textAlign: TextAlign.center,
                   ),
                 ),
               ),
@@ -438,7 +443,6 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
                       fontWeight: FontWeight.w600,
                       color: Colors.black87,
                     ),
-                    textAlign: TextAlign.center,
                   ),
                 ),
               ),
@@ -470,10 +474,7 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFFE3F2FD) : Colors.white,
           border: Border(
-            bottom: BorderSide(
-              color: Colors.grey[300]!,
-              width: 1,
-            ),
+            bottom: BorderSide(color: Colors.grey[300]!, width: 1),
             left: isSelected
                 ? const BorderSide(color: Color(0xFF1976D2), width: 3)
                 : BorderSide.none,
@@ -490,32 +491,28 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
                 constraints: const BoxConstraints(minWidth: 40),
               ),
 
-            // NEW: Auto-checking checkbox column linked to task status
+            // NEW: auto-checking checkbox linked to status
             SizedBox(
               width: _checkColWidth,
               child: Center(
                 child: Checkbox(
                   value: isCompleted,
-                  // In view mode, it's read-only; in edit mode, toggling updates status.
                   onChanged: isEditMode
                       ? (bool? value) {
                           setState(() {
                             if (value == true) {
                               tasks[index]['status'] = 'Completed';
                             } else {
-                              // Simple fallback when unchecked in edit mode
                               tasks[index]['status'] = 'Pending';
                             }
                           });
                         }
-                      : null,
+                      : null, // read-only when not editing
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
             ),
 
-            // Details/Task 
-            const SizedBox(width: 0),
             Expanded(
               flex: 3,
               child: isEditMode
@@ -547,7 +544,6 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
             ),
             const SizedBox(width: 16),
 
-            // Assigned 
             Expanded(
               flex: 1,
               child: isEditMode
@@ -557,16 +553,11 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
                       onChanged: (value) {
                         tasks[index]['assigned'] = value.isEmpty ? null : value;
                       },
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.black87,
-                      ),
+                      style: const TextStyle(fontSize: 14),
                       decoration: const InputDecoration(
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 8,
-                        ),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                         border: OutlineInputBorder(),
                         hintText: 'Null',
                       ),
@@ -584,7 +575,6 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
             ),
             const SizedBox(width: 16),
 
-            // Rotation 
             Expanded(
               flex: 1,
               child: isEditMode
@@ -628,17 +618,12 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
                   : Center(
                       child: Text(
                         task['rotation'],
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.black87,
-                        ),
-                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 14),
                       ),
                     ),
             ),
             const SizedBox(width: 16),
 
-            // Status 
             Expanded(
               flex: 1,
               child: Center(
@@ -697,20 +682,13 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          border: Border.all(
-            color: Colors.grey[300]!,
-            width: 1,
-          ),
+          border: Border.all(color: Colors.grey[300]!, width: 1),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: const [
-            Icon(
-              Icons.add_circle_outline,
-              color: Color(0xFF1976D2),
-              size: 24,
-            ),
+            Icon(Icons.add_circle_outline, color: Color(0xFF1976D2), size: 24),
             SizedBox(width: 8),
             Text(
               'Add New Task',
@@ -743,20 +721,42 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
                 });
               },
               style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 16,
-                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
               ),
               child: const Text(
                 'Cancel',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
               ),
             ),
           if (isEditMode) const SizedBox(width: 16),
+          ElevatedButton.icon(
+            onPressed: () => context.go('/admin/disaster-preparedness/create'),
+            icon: const Icon(
+              Icons.add,
+              size: 20,
+            ),
+            label: const Text(
+              'New Task',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4CAF50),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 32,
+                vertical: 16,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              elevation: 0,
+            ),
+          ),
+          const SizedBox(width: 16),
           ElevatedButton.icon(
             onPressed: isEditMode ? _saveChanges : _handleAssignTask,
             icon: Icon(
@@ -765,18 +765,13 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
             ),
             label: Text(
               isEditMode ? 'Save Changes' : 'Assign Task',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF1976D2),
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 32,
-                vertical: 16,
-              ),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -801,18 +796,13 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
           //   ),
           //   label: Text(
           //     isEditMode ? 'Done' : 'Edit Task',
-          //     style: const TextStyle(
-          //       fontSize: 16,
-          //       fontWeight: FontWeight.w500,
-          //     ),
+          //     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
           //   ),
           //   style: ElevatedButton.styleFrom(
           //     backgroundColor: const Color(0xFF1976D2),
           //     foregroundColor: Colors.white,
-          //     padding: const EdgeInsets.symmetric(
-          //       horizontal: 32,
-          //       vertical: 16,
-          //     ),
+          //     padding:
+          //         const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
           //     shape: RoundedRectangleBorder(
           //       borderRadius: BorderRadius.circular(8),
           //     ),

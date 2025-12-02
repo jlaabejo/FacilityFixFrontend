@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart'; 
 import '../../services/api_services.dart'; 
-import '../services/maintenance_inventory.dart';
 import '../../utils/ui_format.dart';
 import 'internalmaintenance_form.dart';
 import '../widgets/tags.dart';
@@ -140,7 +139,7 @@ void _handleLogout(BuildContext context) async {
 
       setState(() {
         // Update template display
-        _templateCtrl.text = MaintenanceTemplates.displayName(_taskData?['template_id']?.toString() ?? _taskData?['template']?.toString() ?? '');
+        _templateCtrl.text = _taskData?['template_id']?.toString() ?? _taskData?['template']?.toString() ?? '';
         _isLoading = false;
       });
     } catch (e) {
