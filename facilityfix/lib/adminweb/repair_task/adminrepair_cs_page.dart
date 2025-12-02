@@ -9,6 +9,10 @@ import '../popupwidgets/set_resolution_type_popup.dart';
 import '../services/api_service.dart';
 import 'package:facilityfix/adminweb/widgets/bulk_action_buttons.dart';
 import '../services/round_robin_assignment_service.dart';
+import '../report_files/concern_slip_report.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:universal_html/html.dart' as html;
+import 'package:intl/intl.dart';
 
 class AdminRepairPage extends StatefulWidget {
   const AdminRepairPage({super.key});
@@ -417,24 +421,23 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
 
   // Helper function to convert routeKey to actual route path
   static String? _getRoutePath(String routeKey) {
-      final Map<String, String> pathMap = {
-        'dashboard': '/dashboard',
-        'user_users': '/user/users',
-        'user_scheduling': '/user/scheduling',
-        'work_maintenance': '/work/maintenance',
-        'work_repair': '/work/repair',
-        'work_task_types': '/work/tasktypes',
-        'calendar': '/calendar',
-        'inventory_equipment': '/inventory/equipment',
-        'inventory_items': '/inventory/items',
-        'inventory_request': '/inventory/request',
-        'analytics': '/analytics',
-        'announcement': '/announcement',
-        'settings': '/settings',
-        'logout': '/logout',
-      };
-      return pathMap[routeKey];
-    }
+    final Map<String, String> pathMap = {
+      'dashboard': '/dashboard',
+      'user_users': '/user/users',
+      'user_scheduling': '/user/scheduling',
+      'work_maintenance': '/work/maintenance',
+      'work_repair': '/work/repair',
+      'calendar': '/calendar',
+      'inventory_equipment': '/inventory/equipment',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
+      'analytics': '/analytics',
+      'announcement': '/announcement',
+      'settings': '/settings',
+      'logout': '/logout',
+    };
+    return pathMap[routeKey];
+  }
 
   // Handle logout functionality
   void _handleLogout(BuildContext context) {
@@ -995,15 +998,15 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   }
 
   final List<double> _colW = <double>[
-    10, // CHECKBOX
-    100, // CONCERN ID
-    130, // TITLE
-    110, // DATE REQUESTED
-    90, // BUILDING & UNIT
-    60, // PRIORITY
-    100, // CLASSIFICTAION
-    80, // STATUS
-    38, // ACTION
+    25, // CHECKBOX
+    150, // CONCERN ID
+    200, // TITLE
+    140, // DATE REQUESTED
+    120, // BUILDING & UNIT
+    80, // PRIORITY
+    120, // CATEGORY
+    100, // STATUS
+    50, // ACTION
   ];
 
   Widget _fixedCell(
@@ -1280,12 +1283,12 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
               borderRadius: BorderRadius.circular(8),
             ),
             child: PopupMenuButton<String>(
-              onSelected: (value) {
-                // TODO: Implement export functionality
+              onSelected: (value) async {
+                // Export functionality for concern slips
                 if (value == 'pdf') {
-                  // Export to PDF
+                  await _exportConcernSlipsToPDF();
                 } else if (value == 'word') {
-                  // Export to Word
+                  await _exportConcernSlipsToWord();
                 }
               },
               itemBuilder:
@@ -1479,7 +1482,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                             scrollDirection: Axis.horizontal,
                             child: SingleChildScrollView(
                               child: DataTable(
-                                columnSpacing: 40,
+                                columnSpacing: 12,
                                 headingRowHeight: 56,
                                 dataRowHeight: 64,
                                 headingRowColor: WidgetStateProperty.all(
@@ -1599,7 +1602,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                                           ),
                                           DataCell(
                                             _fixedCell(
-                                              0,
+                                              1,
                                               _ellipsis(
                                                 task['id'],
                                                 style: TextStyle(
@@ -1611,19 +1614,19 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                                           ),
                                           DataCell(
                                             _fixedCell(
-                                              1,
+                                              2,
                                               _ellipsis(task['title']),
                                             ),
                                           ),
                                           DataCell(
                                             _fixedCell(
-                                              2,
+                                              3,
                                               _ellipsis(task['dateRequested']),
                                             ),
                                           ),
                                           DataCell(
                                             _fixedCell(
-                                              3,
+                                              4,
                                               _ellipsis(task['buildingUnit']),
                                             ),
                                           ),
@@ -1631,19 +1634,19 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                                           // Chips get a fixed box too (and aligned left)
                                           DataCell(
                                             _fixedCell(
-                                              4,
+                                              5,
                                               PriorityTag(task['priority']),
                                             ),
                                           ),
                                           DataCell(
                                             _fixedCell(
-                                              5,
+                                              6,
                                               DepartmentTag(task['department']),
                                             ),
                                           ),
                                           DataCell(
                                             _fixedCell(
-                                              6,
+                                              7,
                                               StatusTag(task['status']),
                                             ),
                                           ),
@@ -1651,28 +1654,41 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                                           // Action menu cell (narrow, centered)
                                           DataCell(
                                             _fixedCell(
-                                              7,
+                                              8,
                                               Builder(
                                                 builder: (context) {
-                                                  return IconButton(
-                                                    onPressed: () {
-                                                      final rbx =
-                                                          context.findRenderObject()
-                                                              as RenderBox;
-                                                      final position = rbx
-                                                          .localToGlobal(
-                                                            Offset.zero,
-                                                          );
-                                                      _showActionMenu(
-                                                        context,
-                                                        task,
-                                                        position,
-                                                      );
-                                                    },
-                                                    icon: Icon(
-                                                      Icons.more_vert,
-                                                      color: Colors.grey[400],
-                                                      size: 20,
+                                                  return Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          right: 8,
+                                                        ),
+                                                    child: IconButton(
+                                                      onPressed: () {
+                                                        final rbx =
+                                                            context.findRenderObject()
+                                                                as RenderBox;
+                                                        final position = rbx
+                                                            .localToGlobal(
+                                                              Offset.zero,
+                                                            );
+                                                        _showActionMenu(
+                                                          context,
+                                                          task,
+                                                          position,
+                                                        );
+                                                      },
+                                                      icon: Icon(
+                                                        Icons.more_vert,
+                                                        color: Colors.grey[400],
+                                                        size: 20,
+                                                      ),
+                                                      tooltip: 'Actions',
+                                                      padding: EdgeInsets.zero,
+                                                      constraints:
+                                                          const BoxConstraints(
+                                                            minWidth: 32,
+                                                            minHeight: 32,
+                                                          ),
                                                     ),
                                                   );
                                                 },
@@ -1842,5 +1858,359 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
         ],
       ),
     );
+  }
+
+  /// Export selected or filtered concern slips to PDF
+  Future<void> _exportConcernSlipsToPDF() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final userName = user?.displayName ?? user?.email ?? 'Admin User';
+
+      // If slips are selected, export only selected slips; otherwise export filtered slips
+      final slipsToExport =
+          _selectedTaskIds.isNotEmpty
+              ? _filteredTasks
+                  .where(
+                    (slip) => _selectedTaskIds.contains(slip['id'].toString()),
+                  )
+                  .toList()
+              : _filteredTasks;
+
+      if (slipsToExport.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No concern slips selected to export'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // If only one slip selected, export as a detailed single report
+      if (slipsToExport.length == 1) {
+        await ConcernSlipReport.generateAndDownloadSinglePDF(
+          concernSlipData: slipsToExport.first,
+          userName: userName,
+          location: 'Default Location',
+          contactNumber: '+1-234-567-8900',
+          email: 'admin@facilityfix.com',
+        );
+      } else {
+        // Export as bulk summary report
+        await ConcernSlipReport.generateAndDownloadBulkPDF(
+          concernSlips: slipsToExport,
+          userName: userName,
+          location: 'Default Location',
+          contactNumber: '+1-234-567-8900',
+          email: 'admin@facilityfix.com',
+        );
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Concern slip${slipsToExport.length > 1 ? 's' : ''} exported successfully',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('[v0] Error exporting concern slips to PDF: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error exporting concern slips: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Export concern slips to Word document format
+  Future<void> _exportConcernSlipsToWord() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final userName = user?.displayName ?? user?.email ?? 'Admin User';
+
+      // If slips are selected, export only selected slips; otherwise export filtered slips
+      final slipsToExport =
+          _selectedTaskIds.isNotEmpty
+              ? _filteredTasks
+                  .where(
+                    (slip) => _selectedTaskIds.contains(slip['id'].toString()),
+                  )
+                  .toList()
+              : _filteredTasks;
+
+      if (slipsToExport.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No concern slips selected to export'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      final now = DateTime.now();
+      final formattedDate = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
+
+      // Create HTML content with styling similar to PDF
+      String htmlContent = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Concern Slip Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 10px;
+            background-color: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #ccc;
+        }
+        .facility-name {
+            font-size: 12px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .location, .contact {
+            font-size: 11px;
+            color: #666;
+            margin: 5px 0;
+        }
+        .report-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .generated-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            margin-bottom: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            border: 1px solid #ccc;
+        }
+        th {
+            background-color: #1976d2;
+            color: white;
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        td {
+            padding: 10px 8px;
+            border: 1px solid #ddd;
+            font-size: 11px;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .summary {
+            margin-top: 30px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .summary-title {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        .summary-grid {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+        }
+        .summary-item {
+            text-align: center;
+            margin: 10px;
+        }
+        .summary-label {
+            font-size: 11px;
+            color: #666;
+        }
+        .summary-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .total-value { color: #1976d2; }
+        .pending-value { color: #ff9800; }
+        .assigned-value { color: #ffc107; }
+        .completed-value { color: #4caf50; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">[LOGO]</div>
+        <div class="facility-name">Facility: Smart Maintenance and Repair Analytics Management System</div>
+        <div class="location">Location: Default Location</div>
+        <div class="contact">Contact: +1-234-567-8900 | Email: admin@facilityfix.com</div>
+        <div class="report-title">Concern Slip Reports</div>
+        <div class="generated-info">
+            <span>Generated by: $userName</span>
+            <span>Generated at: $formattedDate</span>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Concern ID</th>
+                <th>Title/Description</th>
+                <th>Status</th>
+                <th>Priority</th>
+                <th>Category</th>
+                <th>Reported By</th>
+                <th>Assigned To</th>
+                <th>Resolution Type</th>
+            </tr>
+        </thead>
+        <tbody>
+''';
+
+      // Add rows for each concern slip
+      for (final slip in slipsToExport) {
+        final concernId =
+            slip['id'] ?? slip['formatted_id'] ?? slip['concernId'] ?? '';
+        final title = slip['title'] ?? slip['description'] ?? '';
+        final status = slip['status'] ?? 'Pending';
+        final priority = slip['priority'] ?? 'Medium';
+        final category = slip['category'] ?? slip['department'] ?? '';
+        final reportedBy =
+            slip['reported_by_name'] ?? slip['reported_by'] ?? 'Unknown';
+        final assignedTo =
+            slip['assigned_to_name'] ?? slip['assigned_to'] ?? 'Unassigned';
+        final resolutionType = slip['resolution_type'] ?? 'Pending';
+
+        htmlContent += '''
+            <tr>
+                <td>$concernId</td>
+                <td>$title</td>
+                <td>$status</td>
+                <td>$priority</td>
+                <td>$category</td>
+                <td>$reportedBy</td>
+                <td>$assignedTo</td>
+                <td>$resolutionType</td>
+            </tr>
+''';
+      }
+
+      // Add summary statistics
+      final totalSlips = slipsToExport.length;
+      final pendingCount =
+          slipsToExport
+              .where(
+                (slip) =>
+                    slip['status']?.toString().toLowerCase().contains(
+                      'pending',
+                    ) ??
+                    false,
+              )
+              .length;
+      final assignedCount =
+          slipsToExport
+              .where(
+                (slip) =>
+                    slip['status']?.toString().toLowerCase().contains(
+                      'assigned',
+                    ) ??
+                    false,
+              )
+              .length;
+      final completedCount =
+          slipsToExport
+              .where(
+                (slip) =>
+                    slip['status']?.toString().toLowerCase().contains(
+                      'completed',
+                    ) ??
+                    false,
+              )
+              .length;
+
+      htmlContent += '''
+        </tbody>
+    </table>
+
+    <div class="summary">
+        <div class="summary-title">Report Summary</div>
+        <div class="summary-grid">
+            <div class="summary-item">
+                <div class="summary-label">Total Concerns</div>
+                <div class="summary-value total-value">$totalSlips</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-label">Pending</div>
+                <div class="summary-value pending-value">$pendingCount</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-label">Assigned</div>
+                <div class="summary-value assigned-value">$assignedCount</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-label">Completed</div>
+                <div class="summary-value completed-value">$completedCount</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+''';
+
+      // Download as Word document
+      final blob = html.Blob([htmlContent], 'text/html');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      html.AnchorElement(href: url)
+        ..setAttribute(
+          'download',
+          'concern_slip_report_${DateTime.now().millisecondsSinceEpoch}.doc',
+        )
+        ..click();
+      html.Url.revokeObjectUrl(url);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Concern slips exported as document successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('[v0] Error exporting concern slips to Word: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error exporting concern slips: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

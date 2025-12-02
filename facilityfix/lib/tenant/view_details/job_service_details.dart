@@ -106,9 +106,11 @@ class _TenantJobServiceDetailPageState
     try {
       final apiService = APIService(roleOverride: AppRole.tenant);
       final data = await apiService.getJobServiceById(widget.jobServiceId);
-      
+
       print('[TENANT JOB SERVICE] Fetched data keys: ${data.keys.toList()}');
-      print('[TENANT JOB SERVICE] schedule_availability from API: ${data['schedule_availability']}');
+      print(
+        '[TENANT JOB SERVICE] schedule_availability from API: ${data['schedule_availability']}',
+      );
 
       // Enrich data with user names if we have user IDs
       await _enrichWithUserNames(data, apiService);
@@ -881,9 +883,9 @@ class _TenantJobServiceDetailPageState
                               _jobServiceData!['unit_id'] ??
                               '',
                           scheduleAvailability:
-                              _jobServiceData != null
-                                  ? _buildScheduleAvailability(_jobServiceData!)
-                                  : null,
+                              _jobServiceData!['schedule_availability'] ??
+                              _jobServiceData!['availability'] ??
+                              _jobServiceData!['scheduled_date'],
                           additionalNotes:
                               _jobServiceData!['additional_notes'] ??
                               _jobServiceData!['description'] ??

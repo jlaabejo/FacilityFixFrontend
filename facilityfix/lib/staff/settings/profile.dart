@@ -445,7 +445,17 @@ class _ProfilePageState extends State<ProfilePage> {
         return SectionCard(
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
-            child: const ScheduleAvailabilityWidget(),
+            child: Column(
+              children: [
+                const ScheduleAvailabilityWidget(),
+                const SizedBox(height: 16),
+                RealTimeStatusWidget(
+                  onStatusChanged: () {
+                    print('[Profile] Status changed, refreshing...');
+                  },
+                ),
+              ],
+            ),
           ),
         );
       case 'Day Off':
@@ -454,35 +464,107 @@ class _ProfilePageState extends State<ProfilePage> {
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Column(
               children: [
-              const DayOffRequestsWidget(),
-              const SizedBox(height: 16),
-              const DayOffRequestCard(
-                date: '2023-10-15',
-                timeAgo: '2 days ago',
-                status: DayOffStatus.approved,
-                reason: 'Family emergency',
-              ),
-              const SizedBox(height: 8),
-              const DayOffRequestCard(
-                date: '2023-10-20',
-                timeAgo: '1 week ago',
-                status: DayOffStatus.pending,
-                reason: 'Medical appointment',
-              ),
-              const SizedBox(height: 8),
-              const DayOffRequestCard(
-                date: '2023-11-05',
-                timeAgo: '3 weeks ago',
-                status: DayOffStatus.rejected,
-                reason: 'Vacation',
-                adminNote: 'Insufficient staffing for the requested date.',
-              ),
+                const DayOffRequestsWidget(),
+                const SizedBox(height: 16),
+                _buildDayOffRequestsList(),
               ],
             ),
           ),
         );
       default:
         return Container();
+    }
+  }
+
+  Widget _buildDayOffRequestsList() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: APIService(roleOverride: AppRole.staff).getMyDayOffRequests(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Text('Error loading requests: ${snapshot.error}'),
+            ),
+          );
+        }
+
+        final requests = snapshot.data ?? [];
+        if (requests.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Text('No day-off requests yet'),
+            ),
+          );
+        }
+
+        return Column(
+          children: List.generate(requests.length, (index) {
+            final request = requests[index];
+            final status = _parseDayOffStatus(request['status']);
+            return Column(
+              children: [
+                DayOffRequestCard(
+                  date:
+                      request['request_date'] ??
+                      request['requestDate'] ??
+                      'N/A',
+                  timeAgo: _formatTimeAgo(request['created_at']),
+                  status: status,
+                  reason: request['reason'] ?? 'N/A',
+                  adminNote: request['admin_notes'] ?? request['adminNotes'],
+                ),
+                if (index < requests.length - 1) const SizedBox(height: 8),
+              ],
+            );
+          }),
+        );
+      },
+    );
+  }
+
+  DayOffStatus _parseDayOffStatus(dynamic statusValue) {
+    final status = (statusValue ?? '').toString().toLowerCase();
+    switch (status) {
+      case 'approved':
+        return DayOffStatus.approved;
+      case 'rejected':
+        return DayOffStatus.rejected;
+      default:
+        return DayOffStatus.pending;
+    }
+  }
+
+  String _formatTimeAgo(dynamic createdAtValue) {
+    try {
+      if (createdAtValue == null) return 'Just now';
+      final createdAt = DateTime.parse(createdAtValue.toString());
+      final now = DateTime.now();
+      final difference = now.difference(createdAt);
+
+      if (difference.inSeconds < 60) {
+        return 'Just now';
+      } else if (difference.inMinutes < 60) {
+        return '${difference.inMinutes} minute(s) ago';
+      } else if (difference.inHours < 24) {
+        return '${difference.inHours} hour(s) ago';
+      } else if (difference.inDays < 7) {
+        return '${difference.inDays} day(s) ago';
+      } else {
+        return '${(difference.inDays / 7).floor()} week(s) ago';
+      }
+    } catch (_) {
+      return 'Recently';
     }
   }
 
@@ -627,10 +709,13 @@ class _ProfilePageState extends State<ProfilePage> {
                     SettingsOption(
                       text: 'Privacy & Security',
                       icon: Icons.lock,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()),
-                      ),
+                      onTap:
+                          () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const PrivacyPolicyPage(),
+                            ),
+                          ),
                     ),
                   ],
                 ),

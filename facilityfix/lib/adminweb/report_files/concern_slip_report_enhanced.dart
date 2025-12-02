@@ -1,0 +1,1310 @@
+import 'dart:typed_data';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:intl/intl.dart';
+import 'package:universal_html/html.dart' as html;
+import 'package:flutter/services.dart' show rootBundle;
+
+class ConcernSlipReport {
+  /// Generate and download a PDF report for a single concern slip
+  static Future<void> generateAndDownloadSinglePDF({
+    required Map<String, dynamic> concernSlipData,
+    required String userName,
+    String? location,
+    String? contactNumber,
+    String? email,
+  }) async {
+    final pdf = pw.Document();
+
+    // Load logo image
+    final logoBytes = await rootBundle.load('assets/images/logo.png');
+    final logo = pw.Container(
+      width: 80,
+      height: 80,
+      child: pw.Image(pw.MemoryImage(logoBytes.buffer.asUint8List())),
+    );
+
+    final now = DateTime.now();
+    final formattedDate = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
+
+    // Extract concern slip details
+    final concernId =
+        concernSlipData['id'] ??
+        concernSlipData['formatted_id'] ??
+        concernSlipData['concernId'] ??
+        'N/A';
+    final title =
+        concernSlipData['title'] ??
+        concernSlipData['description'] ??
+        'Concern Slip Report';
+    final status = concernSlipData['status'] ?? 'Pending';
+    final priority = concernSlipData['priority'] ?? 'Medium';
+    final category =
+        concernSlipData['category'] ??
+        concernSlipData['department'] ??
+        'General';
+    final reportedBy =
+        concernSlipData['reported_by_name'] ??
+        concernSlipData['reported_by'] ??
+        'Unknown';
+    final assignedTo =
+        concernSlipData['assigned_to_name'] ??
+        concernSlipData['assigned_to'] ??
+        'Unassigned';
+    final resolutionType =
+        concernSlipData['resolution_type'] ?? 'Pending Resolution';
+
+    // Parse dates
+    final createdAt = _parseDate(concernSlipData['created_at']);
+    final completedAt = _parseDate(
+      concernSlipData['completed_at'] ??
+          concernSlipData['assessed_at'] ??
+          concernSlipData['updated_at'],
+    );
+
+    // Calculate time spent
+    String timeSpent = 'N/A';
+    if (createdAt != null && completedAt != null) {
+      final duration = completedAt.difference(createdAt);
+      timeSpent = _formatDuration(duration);
+    }
+
+    // Get schedule tracker info if available
+    final scheduleTracker = concernSlipData['schedule_tracker'] ?? {};
+    final startTime = _parseDate(scheduleTracker['start_time']);
+    final endTime = _parseDate(scheduleTracker['end_time']);
+
+    String scheduleTimeSpent = 'N/A';
+    if (startTime != null && endTime != null) {
+      final duration = endTime.difference(startTime);
+      scheduleTimeSpent = _formatDuration(duration);
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat(
+          8.5 * PdfPageFormat.inch,
+          11 * PdfPageFormat.inch,
+        ),
+        margin: pw.EdgeInsets.all(20),
+        build: (pw.Context context) {
+          return [
+            // ===== HEADER SECTION =====
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                logo,
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'Facility: Smart Maintenance and Repair Analytics Management System',
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    fontWeight: pw.FontWeight.bold,
+                    fontFallback: [pw.Font.helvetica()],
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
+                pw.SizedBox(height: 10),
+                pw.Text(
+                  location ?? 'Location: Not Specified',
+                  style: pw.TextStyle(fontSize: 10),
+                ),
+                pw.SizedBox(height: 5),
+                pw.Text(
+                  '${contactNumber ?? 'Contact: N/A'} | ${email ?? 'Email: N/A'}',
+                  style: pw.TextStyle(fontSize: 10),
+                ),
+                pw.SizedBox(height: 8),
+                pw.Text(
+                  'Concern Slip Report - Job Receipt',
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'Final Job Receipt - Print Ready',
+                  style: pw.TextStyle(
+                    fontSize: 11,
+                    fontStyle: pw.FontStyle.italic,
+                    color: PdfColors.grey700,
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
+                pw.SizedBox(height: 16),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      'Generated by: $userName',
+                      style: pw.TextStyle(fontSize: 9),
+                    ),
+                    pw.Text(
+                      'Generated at: $formattedDate',
+                      style: pw.TextStyle(fontSize: 9),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 20),
+
+            // ===== CONCERN SLIP DETAILS SECTION =====
+            pw.Container(
+              padding: pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.blue700, width: 2),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'CONCERN SLIP DETAILS',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 12),
+
+            // ===== BASIC INFO GRID =====
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  flex: 1,
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      _buildInfoField('Concern ID', concernId),
+                      pw.SizedBox(height: 8),
+                      _buildInfoField('Status', _colorizedStatus(status)),
+                      pw.SizedBox(height: 8),
+                      _buildInfoField('Priority', priority.toUpperCase()),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(width: 12),
+                pw.Expanded(
+                  flex: 1,
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      _buildInfoField('Category', category),
+                      pw.SizedBox(height: 8),
+                      _buildInfoField('Reported By', reportedBy),
+                      pw.SizedBox(height: 8),
+                      _buildInfoField('Assigned To', assignedTo),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 12),
+
+            // ===== ISSUE DESCRIPTION =====
+            pw.Container(
+              padding: pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                borderRadius: pw.BorderRadius.circular(4),
+                border: pw.Border.all(color: PdfColors.grey300),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Issue Description',
+                    style: pw.TextStyle(
+                      fontSize: 10,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 6),
+                  pw.Text(
+                    title,
+                    style: pw.TextStyle(fontSize: 10, color: PdfColors.grey800),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            // ===== TIMELINE SECTION =====
+            pw.Container(
+              padding: pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey400, width: 1),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'TIMELINE & RESOLUTION',
+                    style: pw.TextStyle(
+                      fontSize: 11,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 10),
+                  pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Expanded(
+                        flex: 1,
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            _buildTimelineField(
+                              'Submission Time',
+                              _formatDateTime(createdAt),
+                            ),
+                            pw.SizedBox(height: 10),
+                            _buildTimelineField(
+                              'Completion Time',
+                              _formatDateTime(completedAt),
+                            ),
+                            pw.SizedBox(height: 10),
+                            _buildTimelineField('Total Time Spent', timeSpent),
+                          ],
+                        ),
+                      ),
+                      pw.SizedBox(width: 12),
+                      pw.Expanded(
+                        flex: 1,
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            _buildTimelineField(
+                              'Resolution Type',
+                              _formatResolutionType(resolutionType),
+                            ),
+                            pw.SizedBox(height: 10),
+                            _buildTimelineField(
+                              'Schedule Start',
+                              _formatDateTime(startTime),
+                            ),
+                            pw.SizedBox(height: 10),
+                            _buildTimelineField(
+                              'Schedule Time Spent',
+                              scheduleTimeSpent,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            // ===== SUMMARY TABLE =====
+            pw.Container(
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey400, width: 1),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Table.fromTextArray(
+                headers: ['Field', 'Value'],
+                data: [
+                  ['Concern ID', concernId],
+                  [
+                    'Title',
+                    title.substring(0, (title.length > 50 ? 50 : title.length)),
+                  ],
+                  ['Status', status],
+                  ['Priority', priority],
+                  ['Category', category],
+                  ['Reported By', reportedBy],
+                  ['Assigned To', assignedTo],
+                  ['Resolution Type', resolutionType],
+                  ['Time Spent', timeSpent],
+                  ['Schedule Time Spent', scheduleTimeSpent],
+                ],
+                headerStyle: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 10,
+                  color: PdfColors.white,
+                ),
+                headerDecoration: pw.BoxDecoration(
+                  color: PdfColors.blue700,
+                  borderRadius: pw.BorderRadius.only(
+                    topLeft: pw.Radius.circular(4),
+                    topRight: pw.Radius.circular(4),
+                  ),
+                ),
+                cellStyle: pw.TextStyle(fontSize: 9, color: PdfColors.grey900),
+                cellAlignment: pw.Alignment.topLeft,
+                cellPadding: pw.EdgeInsets.all(8),
+                columnWidths: {
+                  0: pw.FlexColumnWidth(1.2),
+                  1: pw.FlexColumnWidth(2.0),
+                },
+                border: pw.TableBorder(
+                  bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  left: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  right: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                ),
+                tableWidth: pw.TableWidth.max,
+                oddRowDecoration: pw.BoxDecoration(color: PdfColors.grey50),
+              ),
+            ),
+            pw.SizedBox(height: 20),
+
+            // ===== FOOTER SECTION =====
+            pw.Divider(color: PdfColors.grey400),
+            pw.SizedBox(height: 10),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'This is a confidential job receipt. Print date: ${_formatDateTime(now)}',
+                  style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+                ),
+                pw.Text(
+                  'Page 1 of 1',
+                  style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+                ),
+              ],
+            ),
+          ];
+        },
+      ),
+    );
+
+    // Download the PDF for web
+    final bytes = await pdf.save();
+    final blob = html.Blob([bytes], 'application/pdf');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.AnchorElement(href: url)
+      ..setAttribute('download', 'concern_slip_${concernId}.pdf')
+      ..click();
+    html.Url.revokeObjectUrl(url);
+  }
+
+  /// Generate and download an enhanced PDF report for multiple concern slips with analytics
+  static Future<void> generateAndDownloadBulkPDF({
+    List<Map<String, dynamic>>? concernSlips,
+    required String userName,
+    String? location,
+    String? contactNumber,
+    String? email,
+  }) async {
+    final pdf = pw.Document();
+    final slips = concernSlips ?? [];
+
+    // Load logo image
+    final logoBytes = await rootBundle.load('assets/images/logo.png');
+    final logo = pw.Container(
+      width: 80,
+      height: 80,
+      child: pw.Image(pw.MemoryImage(logoBytes.buffer.asUint8List())),
+    );
+
+    final now = DateTime.now();
+    final formattedDate = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
+
+    // Calculate all metrics upfront
+    final statusBreakdown = _calculateStatusBreakdown(slips);
+    final priorityDistribution = _calculatePriorityDistribution(slips);
+    final categoryBreakdown = _calculateCategoryBreakdown(slips);
+    final assignmentStatus = _calculateAssignmentStatus(slips);
+    final agingMetrics = _calculateAgingMetrics(slips, now);
+    final locationBreakdown = _calculateLocationBreakdown(slips);
+    final overdueConcerns = _getOverdueConcerns(slips, now);
+    final unassignedConcerns = _getUnassignedConcerns(slips);
+    final avgPendingDays = _calculateAveragePendingDays(slips, now);
+
+    // Get earliest and latest dates for report period
+    final dateRange = _getDateRange(slips);
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat(
+          8.5 * PdfPageFormat.inch,
+          11 * PdfPageFormat.inch,
+        ),
+        margin: pw.EdgeInsets.all(20),
+        build: (pw.Context context) {
+          return [
+            // ===== HEADER =====
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                logo,
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'Facility: Smart Maintenance and Repair Analytics Management System',
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    fontWeight: pw.FontWeight.bold,
+                    fontFallback: [pw.Font.helvetica()],
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
+                pw.SizedBox(height: 10),
+                pw.Text(
+                  location ?? 'Location: Not Specified',
+                  style: pw.TextStyle(fontSize: 10),
+                ),
+                pw.SizedBox(height: 5),
+                pw.Text(
+                  '${contactNumber ?? 'Contact: N/A'} | ${email ?? 'Email: N/A'}',
+                  style: pw.TextStyle(fontSize: 10),
+                ),
+                pw.SizedBox(height: 8),
+                pw.Text(
+                  'Concern Slip Analytics & Summary Report',
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
+                pw.SizedBox(height: 8),
+                pw.Text(
+                  dateRange,
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    fontStyle: pw.FontStyle.italic,
+                    color: PdfColors.grey700,
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
+                pw.SizedBox(height: 16),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      'Generated by: $userName',
+                      style: pw.TextStyle(fontSize: 9),
+                    ),
+                    pw.Text(
+                      'Generated at: $formattedDate',
+                      style: pw.TextStyle(fontSize: 9),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 20),
+
+            if (slips.isEmpty) ...[
+              pw.Container(
+                padding: pw.EdgeInsets.all(20),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.grey100,
+                  border: pw.Border.all(color: PdfColors.grey400),
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Text(
+                  'No concern slips to report',
+                  style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+                  textAlign: pw.TextAlign.center,
+                ),
+              ),
+            ] else ...[
+              // ===== EXECUTIVE SUMMARY =====
+              pw.Container(
+                padding: pw.EdgeInsets.all(12),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.blue700,
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Text(
+                  'EXECUTIVE SUMMARY - KEY PERFORMANCE INDICATORS',
+                  style: pw.TextStyle(
+                    fontSize: 12,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.white,
+                  ),
+                ),
+              ),
+              pw.SizedBox(height: 10),
+
+              // KPI Grid
+              pw.Container(
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey300),
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Table.fromTextArray(
+                  headers: ['Metric', 'Value', 'Status'],
+                  data: [
+                    ['Total Concern Slips', '${slips.length}', '📊'],
+                    [
+                      'Pending (>30 days)',
+                      '${agingMetrics['over30Days']}',
+                      agingMetrics['over30Days']! > 0 ? '🔴' : '🟢',
+                    ],
+                    [
+                      'Unassigned Items',
+                      '${unassignedConcerns.length}',
+                      unassignedConcerns.isNotEmpty ? '⚠️' : '✓',
+                    ],
+                    [
+                      'Average Days Pending',
+                      avgPendingDays.toStringAsFixed(1),
+                      avgPendingDays > 14 ? '🔴' : '🟢',
+                    ],
+                  ],
+                  headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 9,
+                    color: PdfColors.white,
+                  ),
+                  headerDecoration: pw.BoxDecoration(color: PdfColors.blue600),
+                  cellStyle: pw.TextStyle(fontSize: 9),
+                  cellPadding: pw.EdgeInsets.all(6),
+                  columnWidths: {
+                    0: pw.FlexColumnWidth(2),
+                    1: pw.FlexColumnWidth(1.2),
+                    2: pw.FlexColumnWidth(0.8),
+                  },
+                  border: pw.TableBorder(
+                    bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                    left: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                    right: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  ),
+                  oddRowDecoration: pw.BoxDecoration(color: PdfColors.grey50),
+                ),
+              ),
+              pw.SizedBox(height: 16),
+
+              // ===== STATUS BREAKDOWN =====
+              pw.Text(
+                'STATUS BREAKDOWN',
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Container(
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey300),
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Table.fromTextArray(
+                  headers: ['Status', 'Count', '%'],
+                  data:
+                      statusBreakdown.entries
+                          .map(
+                            (e) => [
+                              e.key,
+                              '${e.value}',
+                              '${((e.value / slips.length) * 100).toStringAsFixed(1)}%',
+                            ],
+                          )
+                          .toList(),
+                  headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 9,
+                    color: PdfColors.white,
+                  ),
+                  headerDecoration: pw.BoxDecoration(color: PdfColors.blue600),
+                  cellStyle: pw.TextStyle(fontSize: 8),
+                  cellPadding: pw.EdgeInsets.all(6),
+                  columnWidths: {
+                    0: pw.FlexColumnWidth(1.5),
+                    1: pw.FlexColumnWidth(0.8),
+                    2: pw.FlexColumnWidth(0.9),
+                  },
+                  border: pw.TableBorder(
+                    bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                    left: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                    right: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  ),
+                  oddRowDecoration: pw.BoxDecoration(color: PdfColors.grey50),
+                ),
+              ),
+              pw.SizedBox(height: 12),
+
+              // ===== PRIORITY DISTRIBUTION =====
+              pw.Text(
+                'PRIORITY DISTRIBUTION',
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Container(
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey300),
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Table.fromTextArray(
+                  headers: ['Priority', 'Count', '%'],
+                  data:
+                      priorityDistribution.entries
+                          .map(
+                            (e) => [
+                              e.key,
+                              '${e.value}',
+                              '${((e.value / slips.length) * 100).toStringAsFixed(1)}%',
+                            ],
+                          )
+                          .toList(),
+                  headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 9,
+                    color: PdfColors.white,
+                  ),
+                  headerDecoration: pw.BoxDecoration(color: PdfColors.blue600),
+                  cellStyle: pw.TextStyle(fontSize: 8),
+                  cellPadding: pw.EdgeInsets.all(6),
+                  columnWidths: {
+                    0: pw.FlexColumnWidth(1.5),
+                    1: pw.FlexColumnWidth(0.8),
+                    2: pw.FlexColumnWidth(0.9),
+                  },
+                  border: pw.TableBorder(
+                    bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                    left: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                    right: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  ),
+                  oddRowDecoration: pw.BoxDecoration(color: PdfColors.grey50),
+                ),
+              ),
+              pw.SizedBox(height: 12),
+
+              // ===== CATEGORY BREAKDOWN =====
+              pw.Text(
+                'CATEGORY BREAKDOWN',
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Container(
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey300),
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Table.fromTextArray(
+                  headers: ['Category', 'Count'],
+                  data:
+                      categoryBreakdown.entries
+                          .map((e) => [e.key, '${e.value}'])
+                          .toList(),
+                  headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 9,
+                    color: PdfColors.white,
+                  ),
+                  headerDecoration: pw.BoxDecoration(color: PdfColors.blue600),
+                  cellStyle: pw.TextStyle(fontSize: 8),
+                  cellPadding: pw.EdgeInsets.all(6),
+                  columnWidths: {
+                    0: pw.FlexColumnWidth(2),
+                    1: pw.FlexColumnWidth(1),
+                  },
+                  border: pw.TableBorder(
+                    bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                    left: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                    right: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  ),
+                  oddRowDecoration: pw.BoxDecoration(color: PdfColors.grey50),
+                ),
+              ),
+              pw.SizedBox(height: 12),
+
+              // ===== ASSIGNMENT STATUS =====
+              pw.Text(
+                'ASSIGNMENT STATUS',
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Container(
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey300),
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Table.fromTextArray(
+                  headers: ['Assignment', 'Count', '%'],
+                  data: [
+                    [
+                      'Assigned',
+                      '${assignmentStatus['assigned']}',
+                      '${((assignmentStatus['assigned']! / slips.length) * 100).toStringAsFixed(1)}%',
+                    ],
+                    [
+                      'Unassigned',
+                      '${assignmentStatus['unassigned']}',
+                      '${((assignmentStatus['unassigned']! / slips.length) * 100).toStringAsFixed(1)}%',
+                    ],
+                  ],
+                  headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 9,
+                    color: PdfColors.white,
+                  ),
+                  headerDecoration: pw.BoxDecoration(color: PdfColors.blue600),
+                  cellStyle: pw.TextStyle(fontSize: 8),
+                  cellPadding: pw.EdgeInsets.all(6),
+                  columnWidths: {
+                    0: pw.FlexColumnWidth(1.5),
+                    1: pw.FlexColumnWidth(0.8),
+                    2: pw.FlexColumnWidth(0.9),
+                  },
+                  border: pw.TableBorder(
+                    bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                    left: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                    right: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  ),
+                  oddRowDecoration: pw.BoxDecoration(color: PdfColors.grey50),
+                ),
+              ),
+              pw.SizedBox(height: 12),
+
+              // ===== AGING ANALYSIS =====
+              pw.Text(
+                'AGING ANALYSIS (Days Pending)',
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Container(
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey300),
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Table.fromTextArray(
+                  headers: ['Age Range', 'Count', 'Alert'],
+                  data: [
+                    ['0-7 days', '${agingMetrics['under7']}', '✓'],
+                    ['8-14 days', '${agingMetrics['under14']}', '✓'],
+                    ['15-30 days', '${agingMetrics['under30']}', '⚠️'],
+                    ['Over 30 days', '${agingMetrics['over30Days']}', '🔴'],
+                  ],
+                  headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 9,
+                    color: PdfColors.white,
+                  ),
+                  headerDecoration: pw.BoxDecoration(color: PdfColors.blue600),
+                  cellStyle: pw.TextStyle(fontSize: 8),
+                  cellPadding: pw.EdgeInsets.all(6),
+                  columnWidths: {
+                    0: pw.FlexColumnWidth(1.5),
+                    1: pw.FlexColumnWidth(0.9),
+                    2: pw.FlexColumnWidth(1),
+                  },
+                  border: pw.TableBorder(
+                    bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                    left: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                    right: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  ),
+                  oddRowDecoration: pw.BoxDecoration(color: PdfColors.grey50),
+                ),
+              ),
+              pw.SizedBox(height: 12),
+
+              // ===== LOCATION HOTSPOTS =====
+              if (locationBreakdown.isNotEmpty) ...[
+                pw.Text(
+                  'LOCATION HOTSPOTS (Maintenance Priorities)',
+                  style: pw.TextStyle(
+                    fontSize: 11,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 8),
+                pw.Container(
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.grey300),
+                    borderRadius: pw.BorderRadius.circular(4),
+                  ),
+                  child: pw.Table.fromTextArray(
+                    headers: ['Location/Unit', 'Concerns', 'Focus'],
+                    data:
+                        (locationBreakdown.entries.toList()
+                              ..sort((a, b) => b.value.compareTo(a.value)))
+                            .take(5)
+                            .map(
+                              (e) => [
+                                e.key,
+                                '${e.value}',
+                                e.value >= 5
+                                    ? '🔴 HIGH'
+                                    : e.value >= 3
+                                    ? '🟡 MED'
+                                    : '🟢 LOW',
+                              ],
+                            )
+                            .toList(),
+                    headerStyle: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      fontSize: 9,
+                      color: PdfColors.white,
+                    ),
+                    headerDecoration: pw.BoxDecoration(
+                      color: PdfColors.blue600,
+                    ),
+                    cellStyle: pw.TextStyle(fontSize: 8),
+                    cellPadding: pw.EdgeInsets.all(6),
+                    columnWidths: {
+                      0: pw.FlexColumnWidth(2),
+                      1: pw.FlexColumnWidth(0.9),
+                      2: pw.FlexColumnWidth(1.2),
+                    },
+                    border: pw.TableBorder(
+                      bottom: pw.BorderSide(
+                        color: PdfColors.grey300,
+                        width: 0.5,
+                      ),
+                      left: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                      right: pw.BorderSide(
+                        color: PdfColors.grey300,
+                        width: 0.5,
+                      ),
+                    ),
+                    oddRowDecoration: pw.BoxDecoration(color: PdfColors.grey50),
+                  ),
+                ),
+                pw.SizedBox(height: 12),
+              ],
+
+              // ===== CRITICAL ACTION ITEMS =====
+              pw.Container(
+                padding: pw.EdgeInsets.all(10),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.red50,
+                  border: pw.Border.all(color: PdfColors.red300),
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      '🔴 CRITICAL ACTION ITEMS',
+                      style: pw.TextStyle(
+                        fontSize: 11,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.red700,
+                      ),
+                    ),
+                    pw.SizedBox(height: 8),
+                    if (overdueConcerns.isNotEmpty)
+                      pw.Text(
+                        '• Address ${overdueConcerns.length} overdue concern(s) (>30 days pending)',
+                        style: pw.TextStyle(fontSize: 9),
+                      )
+                    else
+                      pw.Text(
+                        '✓ No overdue concerns',
+                        style: pw.TextStyle(
+                          fontSize: 9,
+                          color: PdfColors.green700,
+                        ),
+                      ),
+                    pw.SizedBox(height: 4),
+                    if (unassignedConcerns.isNotEmpty)
+                      pw.Text(
+                        '• Assign ${unassignedConcerns.length} unassigned concern(s)',
+                        style: pw.TextStyle(fontSize: 9),
+                      )
+                    else
+                      pw.Text(
+                        '✓ All concerns assigned',
+                        style: pw.TextStyle(
+                          fontSize: 9,
+                          color: PdfColors.green700,
+                        ),
+                      ),
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      '• Review bottlenecks: Average pending ${avgPendingDays.toStringAsFixed(1)} days',
+                      style: pw.TextStyle(fontSize: 9),
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 16),
+
+              // ===== DETAILED TABLE =====
+              pw.Text(
+                'DETAILED CONCERN SLIP LIST (Color-Coded by Severity)',
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Container(
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey400, width: 1),
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Table.fromTextArray(
+                  headers: [
+                    'ID',
+                    'Title',
+                    'Status',
+                    'Priority',
+                    'Days Pending',
+                    'Assigned To',
+                  ],
+                  data:
+                      slips.map((slip) {
+                        final createdAt = _parseDate(slip['created_at']);
+                        final daysPending =
+                            createdAt != null
+                                ? now.difference(createdAt).inDays
+                                : 0;
+                        final isOverdue = daysPending > 30;
+                        return [
+                          slip['id'] ??
+                              slip['formatted_id'] ??
+                              slip['concernId'] ??
+                              '',
+                          (slip['title'] ?? slip['description'] ?? '')
+                              .substring(
+                                0,
+                                ((slip['title'] ?? slip['description'] ?? '')
+                                            .length >
+                                        20
+                                    ? 20
+                                    : (slip['title'] ??
+                                            slip['description'] ??
+                                            '')
+                                        .length),
+                              ),
+                          slip['status'] ?? 'Pending',
+                          slip['priority'] ?? 'Medium',
+                          '$daysPending ${isOverdue
+                              ? '🔴'
+                              : daysPending > 14
+                              ? '⚠️'
+                              : ''}',
+                          slip['assigned_to_name'] ??
+                              slip['assigned_to'] ??
+                              '❌ UNASSIGNED',
+                        ];
+                      }).toList(),
+                  headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 8,
+                    color: PdfColors.white,
+                  ),
+                  headerDecoration: pw.BoxDecoration(color: PdfColors.blue700),
+                  cellStyle: pw.TextStyle(
+                    fontSize: 7,
+                    color: PdfColors.grey900,
+                  ),
+                  cellAlignment: pw.Alignment.topLeft,
+                  cellPadding: pw.EdgeInsets.all(4),
+                  columnWidths: {
+                    0: pw.FlexColumnWidth(0.8),
+                    1: pw.FlexColumnWidth(1.5),
+                    2: pw.FlexColumnWidth(0.9),
+                    3: pw.FlexColumnWidth(0.7),
+                    4: pw.FlexColumnWidth(1),
+                    5: pw.FlexColumnWidth(1.2),
+                  },
+                  border: pw.TableBorder(
+                    bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                    left: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                    right: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  ),
+                  tableWidth: pw.TableWidth.max,
+                  oddRowDecoration: pw.BoxDecoration(color: PdfColors.grey50),
+                ),
+              ),
+            ],
+          ];
+        },
+      ),
+    );
+
+    // Download the PDF
+    final bytes = await pdf.save();
+    final blob = html.Blob([bytes], 'application/pdf');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.AnchorElement(href: url)
+      ..setAttribute(
+        'download',
+        'concern_slip_summary_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      )
+      ..click();
+    html.Url.revokeObjectUrl(url);
+  }
+
+  // ===== HELPER METHODS FOR ANALYTICS =====
+
+  static Map<String, int> _calculateStatusBreakdown(
+    List<Map<String, dynamic>> slips,
+  ) {
+    final breakdown = <String, int>{};
+    for (final slip in slips) {
+      final status = slip['status']?.toString() ?? 'Unknown';
+      breakdown[status] = (breakdown[status] ?? 0) + 1;
+    }
+    return breakdown;
+  }
+
+  static Map<String, int> _calculatePriorityDistribution(
+    List<Map<String, dynamic>> slips,
+  ) {
+    final distribution = <String, int>{
+      'High': 0,
+      'Medium': 0,
+      'Low': 0,
+      'Critical': 0,
+    };
+    for (final slip in slips) {
+      final priority = slip['priority']?.toString() ?? 'Medium';
+      if (distribution.containsKey(priority)) {
+        distribution[priority] = distribution[priority]! + 1;
+      } else {
+        distribution[priority] = 1;
+      }
+    }
+    return distribution;
+  }
+
+  static Map<String, int> _calculateCategoryBreakdown(
+    List<Map<String, dynamic>> slips,
+  ) {
+    final breakdown = <String, int>{};
+    for (final slip in slips) {
+      final category =
+          slip['category']?.toString() ??
+          slip['department']?.toString() ??
+          'General';
+      breakdown[category] = (breakdown[category] ?? 0) + 1;
+    }
+    return breakdown;
+  }
+
+  static Map<String, int> _calculateAssignmentStatus(
+    List<Map<String, dynamic>> slips,
+  ) {
+    int assigned = 0, unassigned = 0;
+    for (final slip in slips) {
+      final assignedTo = slip['assigned_to_name'] ?? slip['assigned_to'];
+      if (assignedTo == null ||
+          assignedTo.toString().toLowerCase().contains('unassigned')) {
+        unassigned++;
+      } else {
+        assigned++;
+      }
+    }
+    return {'assigned': assigned, 'unassigned': unassigned};
+  }
+
+  static Map<String, int> _calculateAgingMetrics(
+    List<Map<String, dynamic>> slips,
+    DateTime now,
+  ) {
+    int under7 = 0, under14 = 0, under30 = 0, over30 = 0;
+    for (final slip in slips) {
+      final createdAt = _parseDate(slip['created_at']);
+      if (createdAt != null) {
+        final daysPending = now.difference(createdAt).inDays;
+        if (daysPending <= 7) {
+          under7++;
+        } else if (daysPending <= 14) {
+          under14++;
+        } else if (daysPending <= 30) {
+          under30++;
+        } else {
+          over30++;
+        }
+      }
+    }
+    return {
+      'under7': under7,
+      'under14': under14,
+      'under30': under30,
+      'over30Days': over30,
+    };
+  }
+
+  static Map<String, int> _calculateLocationBreakdown(
+    List<Map<String, dynamic>> slips,
+  ) {
+    final breakdown = <String, int>{};
+    for (final slip in slips) {
+      final location =
+          slip['buildingUnit'] ??
+          slip['location'] ??
+          slip['unit_id']?.toString() ??
+          'Unknown';
+      breakdown[location] = (breakdown[location] ?? 0) + 1;
+    }
+    return breakdown;
+  }
+
+  static List<Map<String, dynamic>> _getOverdueConcerns(
+    List<Map<String, dynamic>> slips,
+    DateTime now,
+  ) {
+    return slips.where((slip) {
+      final createdAt = _parseDate(slip['created_at']);
+      if (createdAt != null) {
+        final daysPending = now.difference(createdAt).inDays;
+        return daysPending > 30;
+      }
+      return false;
+    }).toList();
+  }
+
+  static List<Map<String, dynamic>> _getUnassignedConcerns(
+    List<Map<String, dynamic>> slips,
+  ) {
+    return slips.where((slip) {
+      final assignedTo = slip['assigned_to_name'] ?? slip['assigned_to'];
+      return assignedTo == null ||
+          assignedTo.toString().toLowerCase().contains('unassigned');
+    }).toList();
+  }
+
+  static double _calculateAveragePendingDays(
+    List<Map<String, dynamic>> slips,
+    DateTime now,
+  ) {
+    if (slips.isEmpty) return 0.0;
+    int totalDays = 0, count = 0;
+    for (final slip in slips) {
+      final createdAt = _parseDate(slip['created_at']);
+      if (createdAt != null) {
+        totalDays += now.difference(createdAt).inDays;
+        count++;
+      }
+    }
+    return count > 0 ? totalDays / count : 0.0;
+  }
+
+  static String _getDateRange(List<Map<String, dynamic>> slips) {
+    if (slips.isEmpty) return 'Report Period: N/A';
+    DateTime? earliest, latest;
+    for (final slip in slips) {
+      final createdAt = _parseDate(slip['created_at']);
+      if (createdAt != null) {
+        if (earliest == null || createdAt.isBefore(earliest))
+          earliest = createdAt;
+        if (latest == null || createdAt.isAfter(latest)) latest = createdAt;
+      }
+    }
+    if (earliest == null || latest == null) return 'Report Period: N/A';
+    final formatter = DateFormat('MMM dd, yyyy');
+    return 'Report Period: ${formatter.format(earliest)} to ${formatter.format(latest)}';
+  }
+
+  // ===== ORIGINAL HELPER METHODS =====
+
+  static pw.Widget _buildInfoField(String label, String value) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          label,
+          style: pw.TextStyle(
+            fontSize: 9,
+            fontWeight: pw.FontWeight.bold,
+            color: PdfColors.grey700,
+          ),
+        ),
+        pw.SizedBox(height: 2),
+        pw.Text(
+          value,
+          style: pw.TextStyle(fontSize: 10, color: PdfColors.black),
+        ),
+      ],
+    );
+  }
+
+  static pw.Widget _buildTimelineField(String label, String value) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          label,
+          style: pw.TextStyle(
+            fontSize: 9,
+            fontWeight: pw.FontWeight.bold,
+            color: PdfColors.blue700,
+          ),
+        ),
+        pw.SizedBox(height: 2),
+        pw.Text(
+          value,
+          style: pw.TextStyle(fontSize: 10, color: PdfColors.black),
+        ),
+      ],
+    );
+  }
+
+  static String _colorizedStatus(String status) {
+    final normalized = status.toLowerCase();
+    if (normalized.contains('pending')) return '🔵 Pending';
+    if (normalized.contains('assigned') || normalized.contains('to inspect'))
+      return '🟡 To Inspect';
+    if (normalized.contains('in progress')) return '🟠 In Progress';
+    if (normalized.contains('completed') || normalized.contains('done'))
+      return '🟢 Completed';
+    return status;
+  }
+
+  static String _formatResolutionType(String? resolutionType) {
+    if (resolutionType == null) return 'Pending Resolution';
+    final normalized = resolutionType.toLowerCase();
+    if (normalized.contains('job_service') ||
+        normalized.contains('job service'))
+      return 'Job Service';
+    if (normalized.contains('work_permit') ||
+        normalized.contains('work permit'))
+      return 'Work Permit';
+    if (normalized.contains('reject')) return 'Rejected';
+    return resolutionType;
+  }
+
+  static DateTime? _parseDate(dynamic dateValue) {
+    if (dateValue == null) return null;
+    try {
+      if (dateValue is DateTime) return dateValue;
+      if (dateValue is String && dateValue.isNotEmpty) {
+        return DateTime.parse(dateValue);
+      }
+    } catch (e) {
+      print('Error parsing date: $e');
+    }
+    return null;
+  }
+
+  static String _formatDateTime(DateTime? dateTime) {
+    if (dateTime == null) return 'N/A';
+    return DateFormat('MMM dd, yyyy h:mm a').format(dateTime);
+  }
+
+  static String _formatDuration(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final days = duration.inDays;
+
+    if (days > 0) {
+      return '$days day${days > 1 ? 's' : ''}, $hours hour${hours != 1 ? 's' : ''}';
+    } else if (hours > 0) {
+      return '$hours hour${hours != 1 ? 's' : ''} $minutes minute${minutes != 1 ? 's' : ''}';
+    } else {
+      return '$minutes minute${minutes != 1 ? 's' : ''}';
+    }
+  }
+}
