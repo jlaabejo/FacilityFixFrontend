@@ -466,6 +466,38 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
     return staff['user_id'] ?? staff['id'] ?? '';
   }
 
+  // Return just the person's name (no department/ID)
+  String _getStaffPersonName(Map<String, dynamic> staff) {
+    String name =
+        (((staff['first_name'] ?? '').toString().trim()) +
+                ' ' +
+                ((staff['last_name'] ?? '').toString().trim()))
+            .trim();
+    if (name.isEmpty || name == 'null') {
+      name =
+          (staff['name'] ?? staff['full_name'] ?? staff['display_name'] ?? '')
+              .toString()
+              .trim();
+    }
+    return name.isNotEmpty ? name : 'Staff Member';
+  }
+
+  bool _matchesStaffIdentifier(Map<String, dynamic> m, String token) {
+    final t = token.toString().trim();
+    if (t.isEmpty) return false;
+    bool eq(dynamic v) =>
+        v != null && v.toString().trim().toLowerCase() == t.toLowerCase();
+    return eq(m['user_id']) ||
+        eq(m['id']) ||
+        eq(m['employee_id']) ||
+        eq(m['staff_no']) ||
+        eq(m['staff_code']) ||
+        eq(m['code']) ||
+        eq(m['formatted_id']) ||
+        eq(m['staff_id']) ||
+        eq(m['uid']);
+  }
+
   String _getStaffInitials(Map<String, dynamic> staff) {
     final firstName = staff['first_name'] ?? '';
     final lastName = staff['last_name'] ?? '';
@@ -686,35 +718,30 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
       return;
     }
 
-    // If it's a string, decide if it's a name or an id
+    // If it's a string, attempt to resolve to a person name (even if it isn't numeric)
     if (assignedStaff is String) {
       final s = assignedStaff.trim();
-      final looksLikeId = RegExp(r'^[0-9]+$').hasMatch(s) || s.contains('_');
-      if (!looksLikeId) {
-        // It's a human-readable name
-        setState(() {
-          selectedStaffName = s;
-          selectedStaffId = explicitId?.toString();
-        });
-        return;
-      }
-
-      // Looks like id: try to resolve name
-      setState(() => selectedStaffId = s);
+      // Try resolve against known identifier fields
       try {
         final staffList = await _apiService.getStaffMembers();
         final found = staffList.firstWhere(
-          (m) => (m['user_id']?.toString() == s) || (m['id']?.toString() == s),
+          (m) => _matchesStaffIdentifier(m, s),
           orElse: () => {},
         );
         if (found.isNotEmpty) {
-          setState(() => selectedStaffName = _getStaffDisplayName(found));
+          setState(() {
+            selectedStaffId = _getStaffId(found);
+            selectedStaffName = _getStaffPersonName(found);
+          });
           return;
         }
       } catch (_) {}
 
-      // Fallback to showing raw id as name
-      setState(() => selectedStaffName = s);
+      // If no match, treat as already a human-readable string
+      setState(() {
+        selectedStaffName = s;
+        selectedStaffId = explicitId?.toString();
+      });
       return;
     }
 
@@ -725,12 +752,11 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
       try {
         final staffList = await _apiService.getStaffMembers();
         final found = staffList.firstWhere(
-          (m) =>
-              (m['user_id']?.toString() == sid) || (m['id']?.toString() == sid),
+          (m) => _matchesStaffIdentifier(m, sid),
           orElse: () => {},
         );
         if (found.isNotEmpty) {
-          setState(() => selectedStaffName = _getStaffDisplayName(found));
+          setState(() => selectedStaffName = _getStaffPersonName(found));
           return;
         }
       } catch (_) {}
@@ -1148,7 +1174,8 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
                               // Prioritize tenant's preferred schedule_availability
                               // Only fall back to other fields if schedule_availability is not set
                               final candidates = [
-                                widget.task['rawData']?['schedule_availability'],
+                                widget
+                                    .task['rawData']?['schedule_availability'],
                                 widget.task['schedule_availability'],
                                 widget.task['rawData']?['schedule'],
                                 widget.task['rawData']?['availability'],
@@ -1303,11 +1330,10 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
     String _resolveFromLoadedList(String id) {
       try {
         final found = _staffList.firstWhere(
-          (m) =>
-              (m['user_id']?.toString() == id) || (m['id']?.toString() == id),
+          (m) => _matchesStaffIdentifier(m, id),
           orElse: () => <String, dynamic>{},
         );
-        if (found.isNotEmpty) return _getStaffDisplayName(found);
+        if (found.isNotEmpty) return _getStaffPersonName(found);
       } catch (_) {}
       return '';
     }
@@ -1344,14 +1370,7 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
             staffName = s;
           }
         } else if (assignedStaff is Map<String, dynamic>) {
-          staffName =
-              assignedStaff['name'] ??
-              assignedStaff['full_name'] ??
-              ((assignedStaff['first_name'] ?? '') +
-                      ' ' +
-                      (assignedStaff['last_name'] ?? ''))
-                  .toString()
-                  .trim();
+          staffName = _getStaffPersonName(assignedStaff);
 
           // If map contains an id but no human name, try to resolve
           if ((staffName.isEmpty || staffName == 'null') &&

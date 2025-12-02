@@ -6,25 +6,30 @@ import 'package:facilityfix/services/auth_storage.dart';
 import 'package:file_picker/file_picker.dart';
 
 class APIService {
-    /// Mark inventory reservation as returned (staff returns the items)
-    Future<Map<String, dynamic>> returnInventoryReservation(String reservationId) async {
-      try {
-        await _refreshRoleLabelFromToken();
-        final token = await _requireToken();
-        final response = await patch(
-          '/inventory/reservations/$reservationId/return',
-          headers: _authHeaders(token),
+  /// Mark inventory reservation as returned (staff returns the items)
+  Future<Map<String, dynamic>> returnInventoryReservation(
+    String reservationId,
+  ) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+      final response = await patch(
+        '/inventory/reservations/$reservationId/return',
+        headers: _authHeaders(token),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        throw Exception(
+          'Failed to return reservation: \\${response.statusCode} \\${response.body}',
         );
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          return jsonDecode(response.body) as Map<String, dynamic>;
-        } else {
-          throw Exception('Failed to return reservation: \\${response.statusCode} \\${response.body}');
-        }
-      } catch (e) {
-        print('Error returning inventory reservation: $e');
-        rethrow;
       }
+    } catch (e) {
+      print('Error returning inventory reservation: $e');
+      rethrow;
     }
+  }
+
   /// The app-configured role used to pick a default base URL at construction.
   final AppRole role;
 
@@ -300,6 +305,35 @@ class APIService {
         return s;
       default:
         return s.isEmpty ? 'other' : s;
+    }
+  }
+
+  /// Convert reason text to standardized format_reason enum for API
+  String _formatReasonToEnum(String reason) {
+    final s = reason.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+    switch (s) {
+      case 'sick_leave':
+      case 'sick leave':
+        return 'sick_leave';
+      case 'vacation':
+      case 'annual_leave':
+      case 'annual leave':
+        return 'vacation';
+      case 'personal':
+      case 'personal_leave':
+      case 'personal leave':
+        return 'personal';
+      case 'emergency':
+      case 'emergency_leave':
+      case 'emergency leave':
+        return 'emergency';
+      case 'bereavement':
+      case 'bereavement_leave':
+      case 'bereavement leave':
+        return 'bereavement';
+      case 'other':
+      default:
+        return 'other';
     }
   }
 
@@ -1107,6 +1141,248 @@ class APIService {
     }
   }
 
+  // ===== Staff Scheduling =====
+
+  /// Get staff scheduling overview for admin dashboard
+  Future<Map<String, dynamic>> getStaffScheduleOverview({
+    String? buildingId,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final query =
+          buildingId != null
+              ? '?building_id=${Uri.encodeComponent(buildingId)}'
+              : '';
+      final response = await get(
+        '/staff-scheduling/overview$query',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get staff schedule overview: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error getStaffScheduleOverview: $e');
+      rethrow;
+    }
+  }
+
+  /// Get staff list with availability and real-time status (admin)
+  Future<List<Map<String, dynamic>>> getStaffListWithStatus({
+    String? department,
+    String? statusFilter,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final params = <String, String>{};
+      if (department != null) params['department'] = department;
+      if (statusFilter != null) params['status_filter'] = statusFilter;
+
+      final queryString =
+          params.isEmpty
+              ? ''
+              : '?${params.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}';
+
+      final response = await get(
+        '/staff-scheduling/staff-list$queryString',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data is List) return data.cast<Map<String, dynamic>>();
+        if (data is Map && data['staff'] is List)
+          return (data['staff'] as List).cast<Map<String, dynamic>>();
+        return <Map<String, dynamic>>[];
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get staff list: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error getStaffListWithStatus: $e');
+      rethrow;
+    }
+  }
+
+  /// Get day-off requests (admin or filtered)
+  Future<List<Map<String, dynamic>>> getDayOffRequests({
+    String? staffId,
+    String? status,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final params = <String, String>{};
+      if (staffId != null) params['staff_id'] = staffId;
+      if (status != null) params['status_filter'] = status;
+
+      final queryString =
+          params.isEmpty
+              ? ''
+              : '?${params.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}';
+
+      final response = await get(
+        '/staff-scheduling/day-off/requests$queryString',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data is List) return data.cast<Map<String, dynamic>>();
+        if (data is Map && data['requests'] is List)
+          return (data['requests'] as List).cast<Map<String, dynamic>>();
+        return <Map<String, dynamic>>[];
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get day-off requests: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error getDayOffRequests: $e');
+      rethrow;
+    }
+  }
+
+  /// Approve a day-off request (admin)
+  Future<Map<String, dynamic>> approveDayOffRequest(
+    String requestId, {
+    String? adminNotes,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = <String, dynamic>{};
+      if (adminNotes != null) body['admin_notes'] = adminNotes;
+
+      final response = await patch(
+        '/staff-scheduling/day-off/requests/$requestId/approve',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to approve request: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error approveDayOffRequest: $e');
+      rethrow;
+    }
+  }
+
+  /// Reject a day-off request (admin)
+  Future<Map<String, dynamic>> rejectDayOffRequest(
+    String requestId,
+    String rejectionReason,
+  ) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = {'rejection_reason': rejectionReason};
+
+      final response = await patch(
+        '/staff-scheduling/day-off/requests/$requestId/reject',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to reject request: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error rejectDayOffRequest: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> bulkApproveDayOffRequests(
+    List<String> requestIds, {
+    String? adminNotes,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = <String, dynamic>{'request_ids': requestIds};
+      if (adminNotes != null) body['admin_notes'] = adminNotes;
+
+      final response = await patch(
+        '/staff-scheduling/day-off/bulk/approve',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to bulk approve requests: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error bulkApproveDayOffRequests: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> bulkRejectDayOffRequests(
+    List<String> requestIds,
+    String rejectionReason,
+  ) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = <String, dynamic>{
+        'request_ids': requestIds,
+        'rejection_reason': rejectionReason,
+      };
+
+      final response = await patch(
+        '/staff-scheduling/day-off/bulk/reject',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to bulk reject requests: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error bulkRejectDayOffRequests: $e');
+      rethrow;
+    }
+  }
+
   Future<Map<String, dynamic>> updateConcernSlip({
     required String concernSlipId,
     String? title,
@@ -1603,20 +1879,39 @@ class APIService {
           '[API] getMyAssignedMaintenance - Error response: ${response.body}',
         );
         // If endpoint is missing (404) and staffId is provided, attempt fallback
-        if (response.statusCode == 404 && staffId != null && staffId.isNotEmpty) {
-          print('[API] getMyAssignedMaintenance - assigned-to-me not found; fallback to GET /maintenance/ and client-side filter');
-          final allResp = await get('/maintenance/', headers: _authHeaders(token));
+        if (response.statusCode == 404 &&
+            staffId != null &&
+            staffId.isNotEmpty) {
+          print(
+            '[API] getMyAssignedMaintenance - assigned-to-me not found; fallback to GET /maintenance/ and client-side filter',
+          );
+          final allResp = await get(
+            '/maintenance/',
+            headers: _authHeaders(token),
+          );
           if (allResp.statusCode >= 200 && allResp.statusCode < 300) {
             final List<dynamic> allData = jsonDecode(allResp.body);
-            final filtered = allData.where((e) {
-              final assigned = e['assigned_to'] ?? e['assigned_staff'] ?? e['assigned_staff_name'] ?? e['assignedTo'];
-              return assigned != null && assigned.toString() == staffId;
-            }).map((e) => Map<String, dynamic>.from(e)).toList();
-            print('[API] getMyAssignedMaintenance - Fallback filtered ${filtered.length} tasks for staff $staffId');
+            final filtered =
+                allData
+                    .where((e) {
+                      final assigned =
+                          e['assigned_to'] ??
+                          e['assigned_staff'] ??
+                          e['assigned_staff_name'] ??
+                          e['assignedTo'];
+                      return assigned != null && assigned.toString() == staffId;
+                    })
+                    .map((e) => Map<String, dynamic>.from(e))
+                    .toList();
+            print(
+              '[API] getMyAssignedMaintenance - Fallback filtered ${filtered.length} tasks for staff $staffId',
+            );
             return filtered.cast<Map<String, dynamic>>();
           } else {
             final errorBody = _tryDecode(allResp.body);
-            throw Exception('Failed to get all maintenance for fallback: ${errorBody['detail'] ?? allResp.body}');
+            throw Exception(
+              'Failed to get all maintenance for fallback: ${errorBody['detail'] ?? allResp.body}',
+            );
           }
         }
         final errorBody = _tryDecode(response.body);
@@ -2053,7 +2348,8 @@ class APIService {
       // If the request is created as part of a maintenance task, mark it
       // as 'reserved' so inventory UI can show the item as reserved until
       // the staff receives/fulfills it. Otherwise default to 'pending'.
-      final requestStatus = status ?? (maintenanceTaskId != null ? 'reserved' : 'pending');
+      final requestStatus =
+          status ?? (maintenanceTaskId != null ? 'reserved' : 'pending');
       final body = jsonEncode({
         'inventory_id': inventoryId,
         'building_id': buildingId,
@@ -2095,10 +2391,7 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      final body = jsonEncode({
-        'status': status,
-        'deduct_stock': deductStock,
-      });
+      final body = jsonEncode({'status': status, 'deduct_stock': deductStock});
 
       final response = await patch(
         '/inventory/requests/$requestId',
@@ -2137,13 +2430,20 @@ class APIService {
       } else {
         // If endpoint doesn't exist (404) fall back to querying requests via query param
         if (response.statusCode == 404) {
-          print('[API] getInventoryRequestsByMaintenanceTask - endpoint not found, falling back to /inventory/requests?maintenance_task_id=...');
-          final fallbackResp = await get('/inventory/requests?maintenance_task_id=$maintenanceTaskId', headers: _authHeaders(token));
+          print(
+            '[API] getInventoryRequestsByMaintenanceTask - endpoint not found, falling back to /inventory/requests?maintenance_task_id=...',
+          );
+          final fallbackResp = await get(
+            '/inventory/requests?maintenance_task_id=$maintenanceTaskId',
+            headers: _authHeaders(token),
+          );
           if (fallbackResp.statusCode >= 200 && fallbackResp.statusCode < 300) {
             return jsonDecode(fallbackResp.body);
           } else {
             final errorBody = _tryDecode(fallbackResp.body);
-            throw Exception('Failed to load inventory requests with fallback: ${errorBody['detail'] ?? fallbackResp.body}');
+            throw Exception(
+              'Failed to load inventory requests with fallback: ${errorBody['detail'] ?? fallbackResp.body}',
+            );
           }
         }
         final errorBody = _tryDecode(response.body);
@@ -2238,7 +2538,8 @@ class APIService {
 
       final queryParams = <String>[];
       if (buildingId != null) queryParams.add('building_id=$buildingId');
-      if (maintenanceTaskId != null) queryParams.add('maintenance_task_id=$maintenanceTaskId');
+      if (maintenanceTaskId != null)
+        queryParams.add('maintenance_task_id=$maintenanceTaskId');
 
       final query = queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
       final response = await get(
@@ -2298,7 +2599,9 @@ class APIService {
   }
 
   /// Mark inventory reservation as consumed (items used for completed task)
-  Future<Map<String, dynamic>> markReservationConsumed(String reservationId) async {
+  Future<Map<String, dynamic>> markReservationConsumed(
+    String reservationId,
+  ) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
@@ -2350,7 +2653,9 @@ class APIService {
   }
 
   /// Mark inventory reservation as received (staff has picked up the items)
-  Future<Map<String, dynamic>> markReservationReceived(String reservationId) async {
+  Future<Map<String, dynamic>> markReservationReceived(
+    String reservationId,
+  ) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
@@ -2385,9 +2690,7 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      final body = <String, dynamic>{
-        'reason': reason,
-      };
+      final body = <String, dynamic>{'reason': reason};
       if (quantityNeeded != null) {
         body['quantity_needed'] = quantityNeeded;
       }
@@ -2509,7 +2812,9 @@ class APIService {
   // ===== Additional Inventory Management Methods =====
 
   /// Create a new inventory item (Admin only)
-  Future<Map<String, dynamic>> createInventoryItem(Map<String, dynamic> itemData) async {
+  Future<Map<String, dynamic>> createInventoryItem(
+    Map<String, dynamic> itemData,
+  ) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
@@ -2535,7 +2840,10 @@ class APIService {
   }
 
   /// Update inventory item details (Admin only)
-  Future<Map<String, dynamic>> updateInventoryItem(String itemId, Map<String, dynamic> updateData) async {
+  Future<Map<String, dynamic>> updateInventoryItem(
+    String itemId,
+    Map<String, dynamic> updateData,
+  ) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
@@ -2561,7 +2869,10 @@ class APIService {
   }
 
   /// Patch inventory item (e.g., deduct stock)
-  Future<Map<String, dynamic>> patchInventoryItem(String itemId, Map<String, dynamic> updateData) async {
+  Future<Map<String, dynamic>> patchInventoryItem(
+    String itemId,
+    Map<String, dynamic> updateData,
+  ) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
@@ -2612,7 +2923,10 @@ class APIService {
   }
 
   /// Get all inventory items for a building
-  Future<Map<String, dynamic>> getBuildingInventory(String buildingId, {bool includeInactive = false}) async {
+  Future<Map<String, dynamic>> getBuildingInventory(
+    String buildingId, {
+    bool includeInactive = false,
+  }) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
@@ -2629,7 +2943,7 @@ class APIService {
           return {
             'success': true,
             'data': data['data'],
-            'message': data['message'] ?? 'Inventory loaded successfully'
+            'message': data['message'] ?? 'Inventory loaded successfully',
           };
         }
         return data;
@@ -2646,7 +2960,10 @@ class APIService {
   }
 
   /// Get inventory items by department
-  Future<List<Map<String, dynamic>>> getDepartmentInventory(String buildingId, String department) async {
+  Future<List<Map<String, dynamic>>> getDepartmentInventory(
+    String buildingId,
+    String department,
+  ) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
@@ -2675,7 +2992,10 @@ class APIService {
   }
 
   /// Search inventory items
-  Future<List<Map<String, dynamic>>> searchInventory(String buildingId, String searchTerm) async {
+  Future<List<Map<String, dynamic>>> searchInventory(
+    String buildingId,
+    String searchTerm,
+  ) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
@@ -2858,9 +3178,7 @@ class APIService {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
-      final body = <String, dynamic>{
-        'admin_notes': adminNotes,
-      };
+      final body = <String, dynamic>{'admin_notes': adminNotes};
 
       final response = await post(
         '/inventory/requests/$requestId/deny',
@@ -2909,7 +3227,10 @@ class APIService {
   }
 
   /// Update inventory request status and handle stock deduction
-  Future<Map<String, dynamic>> updateInventoryRequest(String requestId, Map<String, dynamic> updateData) async {
+  Future<Map<String, dynamic>> updateInventoryRequest(
+    String requestId,
+    Map<String, dynamic> updateData,
+  ) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
@@ -3008,7 +3329,8 @@ class APIService {
 
       final queryParams = <String>[];
       if (inventoryId != null) queryParams.add('inventory_id=$inventoryId');
-      if (transactionType != null) queryParams.add('transaction_type=$transactionType');
+      if (transactionType != null)
+        queryParams.add('transaction_type=$transactionType');
 
       final query = queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
       final response = await get(
@@ -3064,7 +3386,10 @@ class APIService {
   }
 
   /// Get usage analytics for inventory items (Admin only)
-  Future<Map<String, dynamic>> getUsageAnalytics(String buildingId, {String periodType = 'monthly'}) async {
+  Future<Map<String, dynamic>> getUsageAnalytics(
+    String buildingId, {
+    String periodType = 'monthly',
+  }) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
@@ -3093,7 +3418,9 @@ class APIService {
   }
 
   /// Get all inventory requests linked to a specific maintenance task
-  Future<List<Map<String, dynamic>>> getRequestsByMaintenanceTask(String taskId) async {
+  Future<List<Map<String, dynamic>>> getRequestsByMaintenanceTask(
+    String taskId,
+  ) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
@@ -4375,6 +4702,333 @@ class APIService {
       }
     } catch (e) {
       print('Error marking job service as completed: $e');
+      rethrow;
+    }
+  }
+
+  // ===== Staff Scheduling (Staff Side) =====
+
+  /// Submit weekly availability schedule (staff)
+  Future<Map<String, dynamic>> submitWeeklyAvailability({
+    required String weekStartDate,
+    required bool monday,
+    required bool tuesday,
+    required bool wednesday,
+    required bool thursday,
+    required bool friday,
+    required bool saturday,
+    required bool sunday,
+    String? mondayHours,
+    String? tuesdayHours,
+    String? wednesdayHours,
+    String? thursdayHours,
+    String? fridayHours,
+    String? saturdayHours,
+    String? sundayHours,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = <String, dynamic>{
+        'week_start_date': weekStartDate,
+        'monday': monday,
+        'tuesday': tuesday,
+        'wednesday': wednesday,
+        'thursday': thursday,
+        'friday': friday,
+        'saturday': saturday,
+        'sunday': sunday,
+        if (mondayHours != null) 'monday_hours': mondayHours,
+        if (tuesdayHours != null) 'tuesday_hours': tuesdayHours,
+        if (wednesdayHours != null) 'wednesday_hours': wednesdayHours,
+        if (thursdayHours != null) 'thursday_hours': thursdayHours,
+        if (fridayHours != null) 'friday_hours': fridayHours,
+        if (saturdayHours != null) 'saturday_hours': saturdayHours,
+        if (sundayHours != null) 'sunday_hours': sundayHours,
+      };
+
+      final response = await post(
+        '/staff-scheduling/availability/submit',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to submit availability: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error submitting weekly availability: $e');
+      rethrow;
+    }
+  }
+
+  /// Update real-time status (staff)
+  Future<Map<String, dynamic>> updateRealTimeStatus({
+    required String
+    status, // 'available', 'unavailable', 'on_break', 'busy', 'off_duty'
+    String? location,
+    String? notes,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final body = <String, dynamic>{
+        'status': status,
+        if (location != null) 'location': location,
+        if (notes != null) 'notes': notes,
+      };
+
+      final response = await post(
+        '/staff-scheduling/status/update',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to update status: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error updating real-time status: $e');
+      rethrow;
+    }
+  }
+
+  /// Get current staff's real-time status
+  Future<Map<String, dynamic>> getRealTimeStatus() async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final profile = await fetchCurrentUserProfile();
+      final staffId = profile?['staff_id'] ?? profile?['id'];
+
+      if (staffId == null) {
+        throw Exception('Could not determine staff ID from profile');
+      }
+
+      final response = await get(
+        '/staff-scheduling/status/$staffId',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else if (response.statusCode == 404) {
+        // Status not found, return default
+        return {
+          'current_status': 'available',
+          'workload_level': 'low',
+          'active_task_count': 0,
+        };
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get real-time status: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error getting real-time status: $e');
+      rethrow;
+    }
+  }
+
+  /// Submit day-off request (staff)
+  Future<Map<String, dynamic>> submitDayOffRequest({
+    required String requestDate, // YYYY-MM-DD
+    required String reason,
+    String? description,
+    String requestType = 'day_off',
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      // Validate inputs - trim and check for empty strings
+      final trimmedReason = reason.trim();
+      final trimmedDate = requestDate.trim();
+      final trimmedDescription = description?.trim();
+
+      if (trimmedReason.isEmpty) {
+        throw Exception('Reason field cannot be empty');
+      }
+
+      if (trimmedDate.isEmpty) {
+        throw Exception('Request date field cannot be empty');
+      }
+
+      // Convert reason to format_reason (standardized enum format)
+      final formatReason = _formatReasonToEnum(trimmedReason);
+
+      final body = <String, dynamic>{
+        'request_date': trimmedDate,
+        'reason': trimmedReason,
+        'format_reason': formatReason,
+        'request_type': requestType,
+        if (trimmedDescription != null && trimmedDescription.isNotEmpty)
+          'description': trimmedDescription,
+      };
+
+      print('[API] Submitting day-off request with body: $body');
+
+      final response = await post(
+        '/staff-scheduling/day-off/request',
+        headers: _authHeaders(token),
+        body: jsonEncode(body),
+      );
+
+      print(
+        '[API] Day-off request response: ${response.statusCode} ${response.body}',
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to submit day-off request: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error submitting day-off request: $e');
+      rethrow;
+    }
+  }
+
+  /// Get my day-off requests (staff)
+  Future<List<Map<String, dynamic>>> getMyDayOffRequests({
+    String? statusFilter,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final queryString =
+          statusFilter != null
+              ? '?status_filter=${Uri.encodeComponent(statusFilter)}'
+              : '';
+      final response = await get(
+        '/staff-scheduling/day-off/requests$queryString',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data is List) {
+          return data.cast<Map<String, dynamic>>();
+        } else if (data is Map && data['requests'] is List) {
+          return (data['requests'] as List).cast<Map<String, dynamic>>();
+        }
+        return [];
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get day-off requests: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error getting day-off requests: $e');
+      rethrow;
+    }
+  }
+
+  /// Get current staff's weekly availability
+  Future<Map<String, dynamic>> getMyWeeklyAvailability({
+    String? weekStartDate,
+  }) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      final profile = await fetchCurrentUserProfile();
+      final staffId = profile?['staff_id'] ?? profile?['id'];
+
+      if (staffId == null) {
+        throw Exception('Could not determine staff ID from profile');
+      }
+
+      final queryString =
+          weekStartDate != null
+              ? '?week_start=${Uri.encodeComponent(weekStartDate)}'
+              : '';
+      final response = await get(
+        '/staff-scheduling/availability/$staffId$queryString',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else if (response.statusCode == 404) {
+        // No availability submitted yet
+        return {};
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get availability: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error getting weekly availability: $e');
+      rethrow;
+    }
+  }
+
+  /// Get detailed staff availability for a specific week (admin)
+  /// New method to fetch detailed availability data for modal view
+  Future<Map<String, dynamic>> getStaffAvailabilityDetails(
+    String staffId,
+  ) async {
+    try {
+      await _refreshRoleLabelFromToken();
+      final token = await _requireToken();
+
+      // Get current week's availability
+      final today = DateTime.now();
+      final weekStart = today.subtract(Duration(days: today.weekday - 1));
+      final weekStartStr =
+          '${weekStart.year}-${weekStart.month.toString().padLeft(2, '0')}-${weekStart.day.toString().padLeft(2, '0')}';
+
+      final response = await get(
+        '/staff-scheduling/availability/$staffId?week_start=$weekStartStr',
+        headers: _authHeaders(token),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return data;
+      } else if (response.statusCode == 404) {
+        // No availability submitted yet
+        return {
+          'staff_id': staffId,
+          'week_start_date': weekStartStr,
+          'monday': true,
+          'tuesday': true,
+          'wednesday': true,
+          'thursday': true,
+          'friday': true,
+          'saturday': false,
+          'sunday': false,
+          'status': 'not_submitted',
+        };
+      } else {
+        final errorBody = _tryDecode(response.body);
+        throw Exception(
+          'Failed to get availability: ${errorBody['detail'] ?? response.body}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error getting staff availability details: $e');
       rethrow;
     }
   }

@@ -7,6 +7,7 @@ import 'dart:convert';
 import '../layout/facilityfix_layout.dart';
 import '../services/api_service.dart';
 import '../../services/auth_storage.dart';
+import '../report_files/analytics_report.dart';
 
 class AdminWebAnalyticsPage extends StatefulWidget {
   const AdminWebAnalyticsPage({super.key});
@@ -150,43 +151,55 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
     // Process dashboard stats
     if (_dashboardStats != null) {
       // Extract from overall_metrics which contains aggregated data
-    final overallMetricsSrc = _dashboardStats!['overall_metrics'];
-    final Map<String, dynamic>? overallMetrics = overallMetricsSrc == null
-      ? null
-      : (overallMetricsSrc is Map<String, dynamic>
-        ? overallMetricsSrc
-        : Map<String, dynamic>.from(overallMetricsSrc as Map));
+      final overallMetricsSrc = _dashboardStats!['overall_metrics'];
+      final Map<String, dynamic>? overallMetrics =
+          overallMetricsSrc == null
+              ? null
+              : (overallMetricsSrc is Map<String, dynamic>
+                  ? overallMetricsSrc
+                  : Map<String, dynamic>.from(overallMetricsSrc as Map));
       if (overallMetrics != null) {
         _totalRequests = overallMetrics['total_requests'] ?? 0;
         _openIssues = overallMetrics['pending_items'] ?? 0;
         _resolvedToday = overallMetrics['completed_today'] ?? 0;
-        _resolutionTime = (overallMetrics['average_resolution_time_days'] ?? 0.0).toDouble();
+        _resolutionTime =
+            (overallMetrics['average_resolution_time_days'] ?? 0.0).toDouble();
 
         // Extract comparison metrics if available
-    final comparisonsSrc = overallMetrics['comparisons'];
-    final Map<String, dynamic>? comparisons = comparisonsSrc == null
-      ? null
-      : (comparisonsSrc is Map<String, dynamic>
-        ? comparisonsSrc
-        : Map<String, dynamic>.from(comparisonsSrc as Map));
+        final comparisonsSrc = overallMetrics['comparisons'];
+        final Map<String, dynamic>? comparisons =
+            comparisonsSrc == null
+                ? null
+                : (comparisonsSrc is Map<String, dynamic>
+                    ? comparisonsSrc
+                    : Map<String, dynamic>.from(comparisonsSrc as Map));
         if (comparisons != null) {
-          _totalRequestsChange = (comparisons['total_requests_change'] ?? 0.0).toDouble();
-          _totalRequestsIncreasing = comparisons['total_requests_increasing'] ?? true;
-          _openIssuesChange = (comparisons['pending_items_change'] ?? 0.0).toDouble();
-          _openIssuesIncreasing = comparisons['pending_items_increasing'] ?? true;
-          _resolvedTodayChange = (comparisons['completed_today_change'] ?? 0.0).toDouble();
-          _resolvedTodayIncreasing = comparisons['completed_today_increasing'] ?? true;
-          _resolutionTimeChange = (comparisons['resolution_time_change'] ?? 0.0).toDouble();
-          _resolutionTimeImproving = comparisons['resolution_time_improving'] ?? true;
+          _totalRequestsChange =
+              (comparisons['total_requests_change'] ?? 0.0).toDouble();
+          _totalRequestsIncreasing =
+              comparisons['total_requests_increasing'] ?? true;
+          _openIssuesChange =
+              (comparisons['pending_items_change'] ?? 0.0).toDouble();
+          _openIssuesIncreasing =
+              comparisons['pending_items_increasing'] ?? true;
+          _resolvedTodayChange =
+              (comparisons['completed_today_change'] ?? 0.0).toDouble();
+          _resolvedTodayIncreasing =
+              comparisons['completed_today_increasing'] ?? true;
+          _resolutionTimeChange =
+              (comparisons['resolution_time_change'] ?? 0.0).toDouble();
+          _resolutionTimeImproving =
+              comparisons['resolution_time_improving'] ?? true;
         }
       } else {
         // Fallback: try to get from concern_slips directly
-    final concernSlipsSrc = _dashboardStats!['concern_slips'];
-    final Map<String, dynamic>? concernSlips = concernSlipsSrc == null
-      ? null
-      : (concernSlipsSrc is Map<String, dynamic>
-        ? concernSlipsSrc
-        : Map<String, dynamic>.from(concernSlipsSrc as Map));
+        final concernSlipsSrc = _dashboardStats!['concern_slips'];
+        final Map<String, dynamic>? concernSlips =
+            concernSlipsSrc == null
+                ? null
+                : (concernSlipsSrc is Map<String, dynamic>
+                    ? concernSlipsSrc
+                    : Map<String, dynamic>.from(concernSlipsSrc as Map));
         _totalRequests = concernSlips?['total_requests'] ?? 0;
         _openIssues = concernSlips?['pending_concerns'] ?? 0;
         _resolvedToday = 0;
@@ -197,44 +210,59 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
     // Process category breakdown
     if (_categoryBreakdown != null) {
       // Try to get from combined_overview first (aggregated data)
-    final combinedOverviewSrc = _categoryBreakdown!['combined_overview'];
-    final Map<String, dynamic>? combinedOverview = combinedOverviewSrc == null
-      ? null
-      : (combinedOverviewSrc is Map<String, dynamic>
-        ? combinedOverviewSrc
-        : Map<String, dynamic>.from(combinedOverviewSrc as Map));
-      final proper_categories = ['plumbing', 'electrical', 'HVAC', 'hvac', 'carpentry', 'masonry', 'pest control'];
+      final combinedOverviewSrc = _categoryBreakdown!['combined_overview'];
+      final Map<String, dynamic>? combinedOverview =
+          combinedOverviewSrc == null
+              ? null
+              : (combinedOverviewSrc is Map<String, dynamic>
+                  ? combinedOverviewSrc
+                  : Map<String, dynamic>.from(combinedOverviewSrc as Map));
+      final proper_categories = [
+        'plumbing',
+        'electrical',
+        'HVAC',
+        'hvac',
+        'carpentry',
+        'masonry',
+        'pest control',
+      ];
 
-      
-      
-      
       if (combinedOverview != null) {
-    final categoriesSrc = combinedOverview['categories'];
-    final Map<String, dynamic>? categories = categoriesSrc == null
-      ? null
-      : (categoriesSrc is Map<String, dynamic>
-        ? categoriesSrc
-        : Map<String, dynamic>.from(categoriesSrc as Map));
+        final categoriesSrc = combinedOverview['categories'];
+        final Map<String, dynamic>? categories =
+            categoriesSrc == null
+                ? null
+                : (categoriesSrc is Map<String, dynamic>
+                    ? categoriesSrc
+                    : Map<String, dynamic>.from(categoriesSrc as Map));
         if (categories != null) {
           _categoryData = Map.fromEntries(
-            categories.entries.where((entry) => proper_categories.contains(entry.key) || proper_categories.contains(entry.key.toLowerCase())).map((entry) => MapEntry(entry.key, entry.value as int)),
+            categories.entries
+                .where(
+                  (entry) =>
+                      proper_categories.contains(entry.key) ||
+                      proper_categories.contains(entry.key.toLowerCase()),
+                )
+                .map((entry) => MapEntry(entry.key, entry.value as int)),
           );
         }
       } else {
         // Fallback: try concern_slips categories
-    final concernSlipsSrc = _categoryBreakdown!['concern_slips'];
-    final Map<String, dynamic>? concernSlips = concernSlipsSrc == null
-      ? null
-      : (concernSlipsSrc is Map<String, dynamic>
-        ? concernSlipsSrc
-        : Map<String, dynamic>.from(concernSlipsSrc as Map));
+        final concernSlipsSrc = _categoryBreakdown!['concern_slips'];
+        final Map<String, dynamic>? concernSlips =
+            concernSlipsSrc == null
+                ? null
+                : (concernSlipsSrc is Map<String, dynamic>
+                    ? concernSlipsSrc
+                    : Map<String, dynamic>.from(concernSlipsSrc as Map));
         if (concernSlips != null) {
           final categoriesSrc = concernSlips['categories'];
-          final Map<String, dynamic>? categories = categoriesSrc == null
-              ? null
-              : (categoriesSrc is Map<String, dynamic>
-                  ? categoriesSrc
-                  : Map<String, dynamic>.from(categoriesSrc as Map));
+          final Map<String, dynamic>? categories =
+              categoriesSrc == null
+                  ? null
+                  : (categoriesSrc is Map<String, dynamic>
+                      ? categoriesSrc
+                      : Map<String, dynamic>.from(categoriesSrc as Map));
           if (categories != null) {
             _categoryData = categories.map(
               (key, value) => MapEntry(key, value as int),
@@ -253,12 +281,13 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
     if (_timeSeriesData != null) {
       final dataPoints = _timeSeriesData!['data_points'] as List<dynamic>?;
       if (dataPoints != null) {
-        _trendChartData = dataPoints.map((point) {
-          return {
-            'date': point['date'] as String,
-            'value': (point['value'] as num).toDouble(),
-          };
-        }).toList();
+        _trendChartData =
+            dataPoints.map((point) {
+              return {
+                'date': point['date'] as String,
+                'value': (point['value'] as num).toDouble(),
+              };
+            }).toList();
       }
     }
   }
@@ -332,37 +361,37 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
 
   // Helper function to convert routeKey to actual route path
   static String? _getRoutePath(String routeKey) {
-      final Map<String, String> pathMap = {
-        'dashboard': '/dashboard',
-        'user_users': '/user/users',
-        'user_scheduling': '/user/scheduling',
-        'work_maintenance': '/work/maintenance',
-        'work_repair': '/work/repair',
-        'calendar': '/calendar',
-        'inventory_equipment': '/inventory/equipment',
-        'inventory_items': '/inventory/items',
-        'inventory_request': '/inventory/request',
-        'analytics': '/analytics',
-        'announcement': '/announcement',
-        'settings': '/settings',
-        'logout': '/logout',
-      };
-      return pathMap[routeKey];
-    }
-
-// Logout functionality
-void _handleLogout(BuildContext context) async {
-  final result = await showDialog<bool>(
-    context: context,
-    builder: (BuildContext context) {
-      return const LogoutPopup();
-    },
-  );
-
-  if (result == true) {
-    context.go('/');
+    final Map<String, String> pathMap = {
+      'dashboard': '/dashboard',
+      'user_users': '/user/users',
+      'user_scheduling': '/user/scheduling',
+      'work_maintenance': '/work/maintenance',
+      'work_repair': '/work/repair',
+      'calendar': '/calendar',
+      'inventory_equipment': '/inventory/equipment',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
+      'analytics': '/analytics',
+      'announcement': '/announcement',
+      'settings': '/settings',
+      'logout': '/logout',
+    };
+    return pathMap[routeKey];
   }
-}
+
+  // Logout functionality
+  void _handleLogout(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return const LogoutPopup();
+      },
+    );
+
+    if (result == true) {
+      context.go('/');
+    }
+  }
 
   // Export analytics data
   Future<void> _exportData(String format) async {
@@ -380,7 +409,8 @@ void _handleLogout(BuildContext context) async {
             reportType: reportType,
             days: days,
           );
-          filename = 'facilityfix_analytics_${DateTime.now().millisecondsSinceEpoch}.csv';
+          filename =
+              'facilityfix_analytics_${DateTime.now().millisecondsSinceEpoch}.csv';
           mimeType = 'text/csv';
           break;
         case 'excel':
@@ -388,23 +418,49 @@ void _handleLogout(BuildContext context) async {
             reportType: reportType,
             days: days,
           );
-          filename = 'facilityfix_analytics_${DateTime.now().millisecondsSinceEpoch}.xlsx';
-          mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+          filename =
+              'facilityfix_analytics_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+          mimeType =
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
           break;
         case 'json':
           data = await _apiService.exportAnalyticsJSON(
             reportType: reportType,
             days: days,
           );
-          filename = 'facilityfix_analytics_${DateTime.now().millisecondsSinceEpoch}.json';
+          filename =
+              'facilityfix_analytics_${DateTime.now().millisecondsSinceEpoch}.json';
           mimeType = 'application/json';
           break;
+        case 'pdf':
+          final analyticsData = _dashboardStats ?? {};
+          final userName = 'Admin User';
+
+          await AnalyticsReport.generateAndDownloadPDF(
+            analyticsData: analyticsData,
+            userName: userName,
+            location: 'Default Location',
+            contactNumber: '+1-234-567-8900',
+            email: 'admin@facilityfix.com',
+          );
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Analytics PDF exported successfully'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+          return;
         case 'dashboard':
           data = await _apiService.exportDashboardSummary(
             format: 'csv',
             days: days,
           );
-          filename = 'facilityfix_dashboard_summary_${DateTime.now().millisecondsSinceEpoch}.csv';
+          filename =
+              'facilityfix_dashboard_summary_${DateTime.now().millisecondsSinceEpoch}.csv';
           mimeType = 'text/csv';
           break;
         default:
@@ -440,23 +496,24 @@ void _handleLogout(BuildContext context) async {
   void _downloadFile(String content, String filename, String mimeType) {
     print('[v0] Downloading file: $filename');
     print('[v0] Content length: ${content.length} bytes');
-    
+
     try {
       // Create a blob from the content
       final bytes = utf8.encode(content);
       final blob = html.Blob([bytes], mimeType);
-      
+
       // Create a download URL and trigger download
       final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute('download', filename)
-        ..click();
-      
+      final anchor =
+          html.AnchorElement(href: url)
+            ..setAttribute('download', filename)
+            ..click();
+
       // Clean up the URL
       html.Url.revokeObjectUrl(url);
-      
+
       print('[v0] Download triggered successfully');
-      
+
       // Show success message to user
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -897,40 +954,59 @@ void _handleLogout(BuildContext context) async {
               onSelected: (String format) {
                 _exportData(format);
               },
-              itemBuilder: (BuildContext context) => [
-                const PopupMenuItem(
-                  value: 'csv',
-                  child: Row(
-                    children: [
-                      Icon(Icons.table_chart, size: 18, color: Colors.green),
-                      SizedBox(width: 8),
-                      Text('📊 Enhanced CSV Report'),
-                    ],
-                  ),
-                ),
-              
-                const PopupMenuItem(
-                  value: 'json',
-                  child: Row(
-                    children: [
-                      Icon(Icons.code, size: 18, color: Colors.orange),
-                      SizedBox(width: 8),
-                      Text('⚡ JSON Data Export'),
-                    ],
-                  ),
-                ),
-                const PopupMenuDivider(),
-                const PopupMenuItem(
-                  value: 'dashboard',
-                  child: Row(
-                    children: [
-                      Icon(Icons.dashboard, size: 18, color: Colors.purple),
-                      SizedBox(width: 8),
-                      Text('📋 Executive Summary'),
-                    ],
-                  ),
-                ),
-              ],
+              itemBuilder:
+                  (BuildContext context) => [
+                    const PopupMenuItem(
+                      value: 'csv',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.table_chart,
+                            size: 18,
+                            color: Colors.green,
+                          ),
+                          SizedBox(width: 8),
+                          Text('Enhanced CSV Report'),
+                        ],
+                      ),
+                    ),
+
+                    const PopupMenuItem(
+                      value: 'pdf',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.picture_as_pdf,
+                            size: 18,
+                            color: Colors.red,
+                          ),
+                          SizedBox(width: 8),
+                          Text('PDF Report'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'json',
+                      child: Row(
+                        children: [
+                          Icon(Icons.code, size: 18, color: Colors.orange),
+                          SizedBox(width: 8),
+                          Text('JSON Data Export'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                      value: 'dashboard',
+                      child: Row(
+                        children: [
+                          Icon(Icons.dashboard, size: 18, color: Colors.purple),
+                          SizedBox(width: 8),
+                          Text('Executive Summary'),
+                        ],
+                      ),
+                    ),
+                  ],
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -1266,9 +1342,10 @@ void _handleLogout(BuildContext context) async {
       }
     }
 
-    final double maxY = spots.isEmpty
-        ? 10
-        : (spots.map((s) => s.y).reduce((a, b) => a > b ? a : b) * 1.2);
+    final double maxY =
+        spots.isEmpty
+            ? 10
+            : (spots.map((s) => s.y).reduce((a, b) => a > b ? a : b) * 1.2);
 
     return Container(
       decoration: BoxDecoration(
@@ -1336,104 +1413,119 @@ void _handleLogout(BuildContext context) async {
             // Area Chart
             SizedBox(
               height: 300,
-              child: spots.isEmpty
-                  ? const Center(child: Text('No data available'))
-                  : LineChart(
-                LineChartData(
-                  gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: false,
-                    horizontalInterval: maxY / 5,
-                    getDrawingHorizontalLine: (value) {
-                      return FlLine(color: Colors.grey[200]!, strokeWidth: 1);
-                    },
-                  ),
-                  titlesData: FlTitlesData(
-                    show: true,
-                    rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 30,
-                        interval: (spots.length / 5).ceilToDouble(),
-                        getTitlesWidget: (double value, TitleMeta meta) {
-                          if (value.toInt() >= _trendChartData.length) {
-                            return const Text('');
-                          }
-                          final date = _trendChartData.isNotEmpty &&
-                                  value.toInt() < _trendChartData.length
-                              ? _trendChartData[value.toInt()]['date'] as String
-                              : '';
-                          // Show only day (DD)
-                          final dayStr = date.split('-').length > 2
-                              ? date.split('-')[2]
-                              : value.toInt().toString();
-                          return SideTitleWidget(
-                            axisSide: meta.axisSide,
-                            child: Text(
-                              dayStr,
-                              style: const TextStyle(
-                                color: Colors.grey,
-                                fontWeight: FontWeight.w400,
-                                fontSize: 11,
+              child:
+                  spots.isEmpty
+                      ? const Center(child: Text('No data available'))
+                      : LineChart(
+                        LineChartData(
+                          gridData: FlGridData(
+                            show: true,
+                            drawVerticalLine: false,
+                            horizontalInterval: maxY / 5,
+                            getDrawingHorizontalLine: (value) {
+                              return FlLine(
+                                color: Colors.grey[200]!,
+                                strokeWidth: 1,
+                              );
+                            },
+                          ),
+                          titlesData: FlTitlesData(
+                            show: true,
+                            rightTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                            topTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                reservedSize: 30,
+                                interval: (spots.length / 5).ceilToDouble(),
+                                getTitlesWidget: (
+                                  double value,
+                                  TitleMeta meta,
+                                ) {
+                                  if (value.toInt() >= _trendChartData.length) {
+                                    return const Text('');
+                                  }
+                                  final date =
+                                      _trendChartData.isNotEmpty &&
+                                              value.toInt() <
+                                                  _trendChartData.length
+                                          ? _trendChartData[value
+                                                  .toInt()]['date']
+                                              as String
+                                          : '';
+                                  // Show only day (DD)
+                                  final dayStr =
+                                      date.split('-').length > 2
+                                          ? date.split('-')[2]
+                                          : value.toInt().toString();
+                                  return SideTitleWidget(
+                                    axisSide: meta.axisSide,
+                                    child: Text(
+                                      dayStr,
+                                      style: const TextStyle(
+                                        color: Colors.grey,
+                                        fontWeight: FontWeight.w400,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                             ),
-                          );
-                        },
-                      ),
-                    ),
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        interval: maxY / 5,
-                        getTitlesWidget: (double value, TitleMeta meta) {
-                          return Text(
-                            value.toInt().toString(),
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontWeight: FontWeight.w400,
-                              fontSize: 12,
+                            leftTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                interval: maxY / 5,
+                                getTitlesWidget: (
+                                  double value,
+                                  TitleMeta meta,
+                                ) {
+                                  return Text(
+                                    value.toInt().toString(),
+                                    style: const TextStyle(
+                                      color: Colors.grey,
+                                      fontWeight: FontWeight.w400,
+                                      fontSize: 12,
+                                    ),
+                                  );
+                                },
+                                reservedSize: 32,
+                              ),
                             ),
-                          );
-                        },
-                        reservedSize: 32,
-                      ),
-                    ),
-                  ),
-                  borderData: FlBorderData(show: false),
-                  minX: 0,
-                  maxX: (spots.length - 1).toDouble(),
-                  minY: 0,
-                  maxY: maxY,
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: spots,
-                      isCurved: true,
-                      color: Colors.blue,
-                      barWidth: 3,
-                      isStrokeCapRound: true,
-                      dotData: const FlDotData(show: true),
-                      belowBarData: BarAreaData(
-                        show: true,
-                        color: Colors.blue.withOpacity(0.15),
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.blue.withOpacity(0.3),
-                            Colors.blue.withOpacity(0.05),
+                          ),
+                          borderData: FlBorderData(show: false),
+                          minX: 0,
+                          maxX: (spots.length - 1).toDouble(),
+                          minY: 0,
+                          maxY: maxY,
+                          lineBarsData: [
+                            LineChartBarData(
+                              spots: spots,
+                              isCurved: true,
+                              color: Colors.blue,
+                              barWidth: 3,
+                              isStrokeCapRound: true,
+                              dotData: const FlDotData(show: true),
+                              belowBarData: BarAreaData(
+                                show: true,
+                                color: Colors.blue.withOpacity(0.15),
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.blue.withOpacity(0.3),
+                                    Colors.blue.withOpacity(0.05),
+                                  ],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
+                              ),
+                            ),
                           ],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
             ),
             const SizedBox(height: 16),
 
@@ -1455,10 +1547,7 @@ void _handleLogout(BuildContext context) async {
                       const SizedBox(width: 16),
                       Text(
                         'Avg: ${(_timeSeriesData!['summary']?['average'] ?? 0).toStringAsFixed(1)}/day',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 14,
-                        ),
+                        style: TextStyle(color: Colors.grey[600], fontSize: 14),
                       ),
                     ],
                   ),

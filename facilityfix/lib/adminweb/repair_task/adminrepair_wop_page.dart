@@ -165,23 +165,23 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
 
   // Helper function to convert routeKey to actual route path
   static String? _getRoutePath(String routeKey) {
-      final Map<String, String> pathMap = {
-        'dashboard': '/dashboard',
-        'user_users': '/user/users',
-        'user_scheduling': '/user/scheduling',
-        'work_maintenance': '/work/maintenance',
-        'work_repair': '/work/repair',
-        'calendar': '/calendar',
-        'inventory_equipment': '/inventory/equipment',
-        'inventory_items': '/inventory/items',
-        'inventory_request': '/inventory/request',
-        'analytics': '/analytics',
-        'announcement': '/announcement',
-        'settings': '/settings',
-        'logout': '/logout',
-      };
-      return pathMap[routeKey];
-    }
+    final Map<String, String> pathMap = {
+      'dashboard': '/dashboard',
+      'user_users': '/user/users',
+      'user_scheduling': '/user/scheduling',
+      'work_maintenance': '/work/maintenance',
+      'work_repair': '/work/repair',
+      'calendar': '/calendar',
+      'inventory_equipment': '/inventory/equipment',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
+      'analytics': '/analytics',
+      'announcement': '/announcement',
+      'settings': '/settings',
+      'logout': '/logout',
+    };
+    return pathMap[routeKey];
+  }
 
   // Handle logout functionality
   void _handleLogout(BuildContext context) {
@@ -224,7 +224,9 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     try {
       final permits = await _apiService.getAllWorkOrderPermits();
       print('[WOP] Fetched ${permits.length} permits from API');
-      print('[WOP] First permit (raw from API): ${permits.isNotEmpty ? permits[0] : "No permits"}');
+      print(
+        '[WOP] First permit (raw from API): ${permits.isNotEmpty ? permits[0] : "No permits"}',
+      );
 
       // Fetch concern slip data for each permit to get assessment and recommendation
       final tasks = <Map<String, dynamic>>[];
@@ -233,18 +235,27 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
         final rawPriority = permit['priority'] ?? 'low';
         final permitId = permit['formatted_id'] ?? permit['id'] ?? 'N/A';
         final permitStatus = permit['status'] ?? 'N/A';
-        
-        print('[WOP DEBUG] Permit $permitId: priority="$rawPriority", status="$permitStatus", workflowField="${permit['workflow'] ?? 'N/A'}');
-        
+
+        print(
+          '[WOP DEBUG] Permit $permitId: priority="$rawPriority", status="$permitStatus", workflowField="${permit['workflow'] ?? 'N/A'}',
+        );
+
         final mappedStatus = _mapStatus(permit['status'], permit['workflow']);
-        print('[WOP DEBUG] Status mapping: raw="${permit['status']}" -> mapped="$mappedStatus"');
+        print(
+          '[WOP DEBUG] Status mapping: raw="${permit['status']}" -> mapped="$mappedStatus"',
+        );
         print('[WOP DEBUG] All permit fields: ${permit.keys.join(", ")}');
         print('[WOP DEBUG] Full permit data: $permit');
-        
+
         Map<String, dynamic> taskData = {
           'serviceId': permit['formatted_id'] ?? permit['id'] ?? 'N/A',
-          'id': permit['formatted_id'] ?? permit['id'] ?? 'N/A', // PRIMARY ID for the work order permit (NOT concern slip)
-          'concernSlipId': permit['concern_slip_id'] ?? 'N/A', // Separate field for concern slip link
+          'id':
+              permit['formatted_id'] ??
+              permit['id'] ??
+              'N/A', // PRIMARY ID for the work order permit (NOT concern slip)
+          'concernSlipId':
+              permit['concern_slip_id'] ??
+              'N/A', // Separate field for concern slip link
           'internalId': permit['_doc_id'] ?? permit['id'] ?? 'N/A',
           'permitId': permit['id'] ?? 'N/A', // Add permit ID for actions
           'title': permit['title'] ?? 'Untitled Work Order',
@@ -267,8 +278,10 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
           'contractors': permit['contractors'] ?? [],
           'attachments': permit['attachments'] ?? [],
         };
-        
-        print('[WOP DEBUG] Mapped $permitId: priority="${taskData['priority']}"');
+
+        print(
+          '[WOP DEBUG] Mapped $permitId: priority="${taskData['priority']}"',
+        );
 
         // Fetch concern slip data if concern_slip_id exists
         final concernSlipId = permit['concern_slip_id'];
@@ -288,10 +301,16 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
             // NOTE: DO NOT override the permit priority with concern slip priority
             // The permit's priority field is what gets escalated by the auto-escalation service
             // The concern slip priority is the original assessment and should not override escalations
-            print('[WOP DEBUG] Concern slip $concernSlipId fetched (assessment and recommendation updated, priority NOT overridden)');
+            print(
+              '[WOP DEBUG] Concern slip $concernSlipId fetched (assessment and recommendation updated, priority NOT overridden)',
+            );
             print('[WOP DEBUG] Concern slip status: ${concernSlip['status']}');
-            print('[WOP DEBUG] Task status before concern slip fetch: ${taskData['status']}');
-            print('[WOP DEBUG] Task status after concern slip fetch: ${taskData['status']}');
+            print(
+              '[WOP DEBUG] Task status before concern slip fetch: ${taskData['status']}',
+            );
+            print(
+              '[WOP DEBUG] Task status after concern slip fetch: ${taskData['status']}',
+            );
             // If concern slip has a priority field, prefer that as the displayed priority
             final csPriority =
                 concernSlip['priority'] ??
@@ -327,10 +346,12 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
         _filteredTasks = List.from(tasks);
         _isLoading = false;
       });
-      
+
       print('[WOP] Updated UI with ${tasks.length} work order permits');
       for (final task in tasks) {
-        print('[WOP] - ${task['serviceId']}: priority="${task['priority']}", status="${task['status']}"');
+        print(
+          '[WOP] - ${task['serviceId']}: priority="${task['priority']}", status="${task['status']}"',
+        );
       }
     } catch (e) {
       setState(() {
@@ -447,7 +468,8 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     if (s == 'sent') return 'Sent to Client';
     if (s == 'sent to client') return 'Sent to Client';
     if (s == 'approved') return 'Approved';
-    if (s == 'inspected') return 'Completed'; // Map "inspected" to "Completed" for consistency
+    if (s == 'inspected')
+      return 'Completed'; // Map "inspected" to "Completed" for consistency
     if (s == 'done') return 'Completed';
     // fallback
     return s.isNotEmpty ? '${s[0].toUpperCase()}${s.substring(1)}' : 'Pending';
@@ -1117,14 +1139,14 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
 
   final List<double> _colW = <double>[
     30, // CHECKBOX
-    95, // WORK ORDER ID
-    150, // TITLE
-    120, // DATE REQUESTED
-    100, // BUILDING & UNIT
-    70, // PRIORITY
-    80, // DEPARTMENT
-    70, // STATUS
-    38, // ACTION
+    150, // WORK ORDER ID
+    200, // TITLE
+    140, // DATE REQUESTED
+    120, // BUILDING & UNIT
+    80, // PRIORITY
+    120, // DEPARTMENT
+    100, // STATUS
+    50, // ACTION
   ];
 
   Widget _fixedCell(
@@ -1583,7 +1605,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                             scrollDirection: Axis.horizontal,
                             child: SingleChildScrollView(
                               child: DataTable(
-                                columnSpacing: 50,
+                                columnSpacing: 12,
                                 headingRowHeight: 56,
                                 dataRowHeight: 64,
                                 headingRowColor: WidgetStateProperty.all(
@@ -1616,16 +1638,16 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                   ),
                                   DataColumn(
                                     label: _fixedCell(
-                                      0,
+                                      1,
                                       const Text("WORK ORDER ID"),
                                     ),
                                   ),
                                   DataColumn(
-                                    label: _fixedCell(1, const Text("TITLE")),
+                                    label: _fixedCell(2, const Text("TITLE")),
                                   ),
                                   DataColumn(
                                     label: _fixedCell(
-                                      2,
+                                      3,
                                       InkWell(
                                         onTap: _toggleSortOrder,
                                         child: Row(
@@ -1647,27 +1669,27 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                   ),
                                   DataColumn(
                                     label: _fixedCell(
-                                      3,
+                                      4,
                                       const Text("BUILDING / UNIT"),
                                     ),
                                   ),
                                   DataColumn(
                                     label: _fixedCell(
-                                      4,
+                                      5,
                                       const Text("PRIORITY"),
                                     ),
                                   ),
                                   DataColumn(
                                     label: _fixedCell(
-                                      5,
+                                      6,
                                       const Text("DEPARTMENT"),
                                     ),
                                   ),
                                   DataColumn(
-                                    label: _fixedCell(6, const Text("STATUS")),
+                                    label: _fixedCell(7, const Text("STATUS")),
                                   ),
                                   DataColumn(
-                                    label: _fixedCell(7, const Text("")),
+                                    label: _fixedCell(8, const Text("")),
                                   ),
                                 ],
                                 rows:
@@ -1701,7 +1723,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           // WORK ORDER ID
                                           DataCell(
                                             _fixedCell(
-                                              0,
+                                              1,
                                               _ellipsis(
                                                 task['serviceId'] ?? 'N/A',
                                               ),
@@ -1711,7 +1733,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           // TITLE
                                           DataCell(
                                             _fixedCell(
-                                              1,
+                                              2,
                                               _ellipsis(
                                                 task['title'] ?? 'Untitled',
                                               ),
@@ -1721,7 +1743,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           // DATE REQUESTED
                                           DataCell(
                                             _fixedCell(
-                                              2,
+                                              3,
                                               _ellipsis(
                                                 task['dateRequested'] ?? 'N/A',
                                               ),
@@ -1731,7 +1753,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           // BUILDING / UNIT
                                           DataCell(
                                             _fixedCell(
-                                              3,
+                                              4,
                                               _ellipsis(
                                                 task['buildingUnit'] ?? 'N/A',
                                               ),
@@ -1741,7 +1763,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           // PRIORITY (chip)
                                           DataCell(
                                             _fixedCell(
-                                              4,
+                                              5,
                                               PriorityTag(
                                                 task['priority'] ?? '',
                                               ),
@@ -1751,7 +1773,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           // DEPARTMENT (chip)
                                           DataCell(
                                             _fixedCell(
-                                              5,
+                                              6,
                                               DepartmentTag(
                                                 task['department'] ?? 'N/A',
                                               ),
@@ -1761,7 +1783,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           // STATUS (chip)
                                           DataCell(
                                             _fixedCell(
-                                              6,
+                                              7,
                                               StatusTag(
                                                 task['status'] ?? 'Pending',
                                               ),
@@ -1771,28 +1793,42 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           // ACTION (menu)
                                           DataCell(
                                             _fixedCell(
-                                              7,
+                                              8,
                                               Builder(
                                                 builder: (cellContext) {
-                                                  return IconButton(
-                                                    onPressed: () {
-                                                      final RenderBox box =
-                                                          cellContext
-                                                                  .findRenderObject()
-                                                              as RenderBox;
-                                                      final offset = box
-                                                          .localToGlobal(
-                                                            Offset.zero,
-                                                          );
-                                                      _showActionMenu(
-                                                        cellContext,
-                                                        task,
-                                                        offset,
-                                                      );
-                                                    },
-                                                    icon: const Icon(
-                                                      Icons.more_vert,
-                                                      size: 20,
+                                                  return Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          right: 8,
+                                                        ),
+                                                    child: IconButton(
+                                                      onPressed: () {
+                                                        final RenderBox box =
+                                                            cellContext
+                                                                    .findRenderObject()
+                                                                as RenderBox;
+                                                        final offset = box
+                                                            .localToGlobal(
+                                                              Offset.zero,
+                                                            );
+                                                        _showActionMenu(
+                                                          cellContext,
+                                                          task,
+                                                          offset,
+                                                        );
+                                                      },
+                                                      icon: Icon(
+                                                        Icons.more_vert,
+                                                        color: Colors.grey[400],
+                                                        size: 20,
+                                                      ),
+                                                      tooltip: 'Actions',
+                                                      padding: EdgeInsets.zero,
+                                                      constraints:
+                                                          const BoxConstraints(
+                                                            minWidth: 32,
+                                                            minHeight: 32,
+                                                          ),
                                                     ),
                                                   );
                                                 },
@@ -1870,10 +1906,17 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor:
                                                 canApprove
-                                                    ? Colors.green
-                                                    : Colors.grey[400],
+                                                    ? Colors.green[600]
+                                                    : Colors.grey[300],
                                             disabledBackgroundColor:
-                                                Colors.grey[400],
+                                                Colors.grey[300],
+                                            foregroundColor:
+                                                canApprove
+                                                    ? Colors.white
+                                                    : Colors.grey[600],
+                                            disabledForegroundColor:
+                                                Colors.grey[600],
+                                            elevation: canApprove ? 2 : 0,
                                             padding: const EdgeInsets.symmetric(
                                               horizontal: 24,
                                               vertical: 12,
@@ -1903,9 +1946,17 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                         backgroundColor:
                                             _selectedTaskIds.isNotEmpty
                                                 ? Colors.red[600]
-                                                : Colors.grey[400],
+                                                : Colors.grey[300],
                                         disabledBackgroundColor:
-                                            Colors.grey[400],
+                                            Colors.grey[300],
+                                        foregroundColor:
+                                            _selectedTaskIds.isNotEmpty
+                                                ? Colors.white
+                                                : Colors.grey[600],
+                                        disabledForegroundColor:
+                                            Colors.grey[600],
+                                        elevation:
+                                            _selectedTaskIds.isNotEmpty ? 2 : 0,
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 24,
                                           vertical: 12,

@@ -105,6 +105,20 @@ class _EquipmentViewDetailsContentState
             _equipmentData = Map<String, dynamic>.from(detailResp);
           }
         });
+
+        // Fetch user name for created_by
+        if (_equipmentData['created_by'] != null) {
+          try {
+            final userResp = await _api.getUser(_equipmentData['created_by'].toString());
+            if (userResp != null && userResp is Map) {
+              setState(() {
+                _equipmentData['created_by_name'] = userResp['name'] ?? userResp['displayName'] ?? userResp['username'] ?? _equipmentData['created_by'];
+              });
+            }
+          } catch (e) {
+            print('[EquipmentDetails] Failed to fetch user for created_by: $e');
+          }
+        }
       }
     } catch (e) {
       print('[EquipmentDetails] Error loading equipment details: $e');
@@ -213,7 +227,7 @@ class _EquipmentViewDetailsContentState
     final status = (_equipmentData['status'] ?? 'Operational').toString();
     final equipmentName =
         _equipmentData['name'] ?? _equipmentData['equipmentName'] ?? 'Equipment';
-    final equipmentId = _equipmentData['id'] ?? _equipmentData['equipmentId'] ?? _equipmentData['_doc_id'] ?? 'N/A';
+    final equipmentId = _equipmentData['formatted_id'] ?? 'N/A';
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -242,7 +256,7 @@ class _EquipmentViewDetailsContentState
               const SizedBox(height: 8),
               // Created by and Created at displayed in header
               Text(
-              _equipmentData['created_by'] ?? _equipmentData['createdBy'] ?? 'N/A',
+              _equipmentData['created_by'] ?? 'N/A',
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
               const SizedBox(height: 4),
@@ -489,41 +503,6 @@ class _EquipmentViewDetailsContentState
             label: const Text('View Maintenance History'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green[700],
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Reserve Inventory Button
-          ElevatedButton.icon(
-            onPressed: () async {
-              await _showCreateReservationDialog(context);
-            },
-            icon: const Icon(Icons.inventory_2_rounded),
-            label: const Text('Reserve Inventory'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange[700],
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Edit Button
-          ElevatedButton.icon(
-            onPressed: () {
-              final id = _equipmentData['id'] ?? _equipmentData['equipmentId'] ?? _equipmentData['_doc_id'];
-              if (id != null) {
-                Navigator.of(context).pop(_equipmentData);
-                // go to edit route
-                context.go('/adminweb/inventory_management/equipmentregisternew/$id?edit=1');
-              }
-            },
-            icon: const Icon(Icons.edit_outlined),
-            label: const Text('Edit Equipment'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue[700],
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),

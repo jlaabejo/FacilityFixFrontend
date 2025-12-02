@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import 'pop_up/createmaintenancedialogue_popup.dart';
-import 'pop_up/maintenance_firesafety_popup.dart';
-import 'pop_up/maintenance_earthquake_popup.dart';
-import 'pop_up/maintenance_typhoonflood_popup.dart';
+import '../disaster_prepardness/cards_details/maintenance_firesafety_popup.dart';
+import '../disaster_prepardness/cards_details/maintenance_earthquake_popup.dart';
+import '../disaster_prepardness/cards_details/maintenance_typhoonflood_popup.dart';
 import '../services/api_service.dart';
 import 'package:facilityfix/adminweb/widgets/pop_up_dialog.dart';
 import 'internalmaintenance_form.dart';
@@ -301,6 +301,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
         'user_scheduling': '/user/scheduling',
         'work_maintenance': '/work/maintenance',
         'work_repair': '/work/repair',
+        'work_task_types': '/work/tasktypes',
         'calendar': '/calendar',
         'inventory_equipment': '/inventory/equipment',
         'inventory_items': '/inventory/items',
