@@ -795,9 +795,9 @@ class _InventoryManagementItemsPageState
 
     final blob = html.Blob([htmlContent], 'text/html');
     final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor = html.AnchorElement(href: url)
+    (html.AnchorElement(href: url)
       ..setAttribute('download', 'inventory_report.doc')
-      ..click();
+      ..click());
     html.Url.revokeObjectUrl(url);
   }
 

@@ -349,27 +349,54 @@ class _RequestFormState extends State<RequestForm> {
   }
 
   // Date picking only (for Work Order Valid From/To)
-  Future<void> _pickDateOnly(TextEditingController controller) async {
+  Future<void> _pickDateOnly(TextEditingController controller, {VoidCallback? onComplete}) async {
+    print('[DEBUG _pickDateOnly] Starting date picker');
+    print('[DEBUG _pickDateOnly] controller: $controller');
+    
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    var today = DateTime(now.year, now.month, now.day);
+
+    print('[DEBUG _pickDateOnly] today: $today (weekday: ${today.weekday})');
+    
+    // Find the next selectable day (Monday-Saturday, no Sundays)
+    // weekday: 1=Monday, 7=Sunday
+    while (today.weekday > DateTime.saturday || today.weekday < DateTime.monday) {
+      print('[DEBUG _pickDateOnly] Today is not selectable (Sunday), moving to next day');
+      today = today.add(const Duration(days: 1));
+    }
+    
+    print('[DEBUG _pickDateOnly] Adjusted initial date: $today (weekday: ${today.weekday})');
+    print('[DEBUG _pickDateOnly] Calling showDatePicker...');
 
     // Only allow selecting Monday (1) to Saturday (6) and no past dates
     final DateTime? pickedDate = await showDatePicker(
       context: context,
-      initialDate: today.isAfter(DateTime(2020)) ? today : DateTime(2020),
+      initialDate: today,
       firstDate: today,
       lastDate: DateTime(2100),
       selectableDayPredicate: (date) {
-        return date.weekday >= DateTime.monday && date.weekday <= DateTime.saturday;
+        final isSelectable = date.weekday >= DateTime.monday && date.weekday <= DateTime.saturday;
+        return isSelectable;
       },
     );
-    if (pickedDate == null) return;
+    
+    print('[DEBUG _pickDateOnly] pickedDate: $pickedDate');
+    
+    if (pickedDate == null) {
+      print('[DEBUG _pickDateOnly] Date picker cancelled');
+      return;
+    }
 
     setState(() {
-      controller.text = DateFormat('MMM d, yyyy').format(pickedDate);
+      final formattedDate = DateFormat('MMM d, yyyy').format(pickedDate);
+      print('[DEBUG _pickDateOnly] Setting controller text to: $formattedDate');
+      controller.text = formattedDate;
       // Recompute inline errors after picking a date
       _formKey.currentState?.validate();
     });
+    
+    // Call the completion callback (e.g., to open the next date picker)
+    onComplete?.call();
   }
 
   // Helper method to format TimeOfDay
@@ -1480,43 +1507,51 @@ class _RequestFormState extends State<RequestForm> {
                   Row(
                   children: [
                     Expanded(
-                    child: GestureDetector(
-                      onTap: () => _pickDateOnly(validFromController),
-                      child: AbsorbPointer(
                       child: InputField(
                         label: 'Valid From',
                         controller: validFromController,
                         hintText: 'Select date',
                         isRequired: true,
+                        readOnly: true,
+                        onSuffixIconTap: () {
+                          print('[DEBUG] Valid From date icon tapped!!!');
+                          _pickDateOnly(
+                            validFromController,
+                            onComplete: () {
+                              print('[DEBUG] Valid From date selected, opening Valid To picker');
+                              Future.delayed(const Duration(milliseconds: 300), () {
+                                _pickDateOnly(validToController);
+                              });
+                            },
+                          );
+                        },
                         suffixIcon: const Icon(
-                        Icons.calendar_today_rounded,
-                        size: 20,
-                        color: Color(0xFF005CE7),
+                          Icons.calendar_today_rounded,
+                          size: 20,
+                          color: Color(0xFF005CE7),
                         ),
                         errorText: _errWO('from'),
                       ),
-                      ),
-                    ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                    child: GestureDetector(
-                      onTap: () => _pickDateOnly(validToController),
-                      child: AbsorbPointer(
                       child: InputField(
                         label: 'Valid To',
                         controller: validToController,
                         hintText: 'Select date',
                         isRequired: true,
+                        readOnly: true,
+                        onSuffixIconTap: () {
+                          print('[DEBUG] Valid To date icon tapped!!!');
+                          _pickDateOnly(validToController);
+                        },
                         suffixIcon: const Icon(
-                        Icons.calendar_today_rounded,
-                        size: 20,
-                        color: Color(0xFF005CE7),
+                          Icons.calendar_today_rounded,
+                          size: 20,
+                          color: Color(0xFF005CE7),
                         ),
                         errorText: _errWO('to'),
                       ),
-                      ),
-                    ),
                     ),
                   ],
                   ),

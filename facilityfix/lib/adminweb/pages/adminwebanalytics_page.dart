@@ -504,11 +504,18 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
 
       // Create a download URL and trigger download
       final url = html.Url.createObjectUrlFromBlob(blob);
+<<<<<<< Updated upstream
       final anchor =
           html.AnchorElement(href: url)
             ..setAttribute('download', filename)
             ..click();
 
+=======
+      (html.AnchorElement(href: url)
+        ..setAttribute('download', filename)
+        ..click());
+      
+>>>>>>> Stashed changes
       // Clean up the URL
       html.Url.revokeObjectUrl(url);
 

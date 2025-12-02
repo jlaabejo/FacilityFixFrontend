@@ -15,6 +15,7 @@ class InputField extends StatelessWidget {
   final int maxLines;
   final bool readOnly;
   final VoidCallback? onTap;
+  final VoidCallback? onSuffixIconTap;
   final String? errorText;
   final List<TextInputFormatter>? inputFormatters;
 
@@ -45,6 +46,7 @@ class InputField extends StatelessWidget {
     this.maxLines = 1,
     this.readOnly = false,
     this.onTap,
+    this.onSuffixIconTap,
     this.errorText,
     this.inputFormatters, // now optional
   });
@@ -67,7 +69,19 @@ class InputField extends StatelessWidget {
             obscureText: obscureText,
             maxLines: maxLines,
             readOnly: readOnly,
-            onTap: onTap,
+            onTap: () {
+              print('[DEBUG InputField.onTap] Field tapped: $label, readOnly=$readOnly, hasSuffixTap=${onSuffixIconTap != null}');
+              // If this is a readonly field with suffix icon tap, use that instead
+              if (readOnly && onSuffixIconTap != null) {
+                print('[DEBUG InputField.onTap] Calling onSuffixIconTap for $label');
+                onSuffixIconTap?.call();
+              } else if (onTap != null) {
+                print('[DEBUG InputField.onTap] Calling regular onTap for $label');
+                onTap?.call();
+              } else {
+                print('[DEBUG InputField.onTap] No callback for $label');
+              }
+            },
             inputFormatters: inputFormatters, // forwarded if provided
             showCursor: !readOnly, // Hide cursor when readonly
             enableInteractiveSelection: !readOnly, // Disable text selection when readonly
@@ -119,6 +133,10 @@ class InputField extends StatelessWidget {
               ),
 
               suffixIcon: suffixIcon,
+              suffixIconConstraints: const BoxConstraints(
+                minWidth: 48,
+                minHeight: 48,
+              ),
               prefixIcon: prefixIcon,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,

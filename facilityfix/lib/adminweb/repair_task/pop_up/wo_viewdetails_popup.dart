@@ -104,7 +104,7 @@ class _WorkOrderConcernSlipDialogState
 
       final id = csId.toString();
       final cs = await _apiService.getConcernSlipById(id);
-      if (cs != null || true) {
+      if (cs != null) {
         try {
           // attach to local task copy
           _taskData ??= Map<String, dynamic>.from(widget.task);
@@ -747,15 +747,6 @@ class _WorkOrderConcernSlipDialogState
         task['contractors']?[0]?['email_address'] ??
         task['rawData']?['email_address'] ??
         'N/A';
-    final additionalNotes =
-        task['additionalNotes'] ??
-        task['additional_notes'] ??
-        task['specificInstructions'] ??
-        task['specific_instructions'] ??
-        task['description'] ??
-        task['rawData']?['additional_notes'] ??
-        task['rawData']?['description'] ??
-        'No additional notes provided';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

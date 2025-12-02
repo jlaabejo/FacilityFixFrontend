@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../widgets/tags.dart';
 import '../../services/api_service.dart';
 import 'maintenance_history_details_popup.dart';
 import '../../../services/auth_storage.dart';
@@ -515,7 +514,6 @@ class _EquipmentViewDetailsContentState
 
   Future<void> _showCreateReservationDialog(BuildContext context) async {
     String? selectedInventoryId;
-    int qty = 1;
     final TextEditingController qtyController = TextEditingController(text: '1');
     final TextEditingController taskIdController = TextEditingController();
 
@@ -549,7 +547,6 @@ class _EquipmentViewDetailsContentState
                   controller: qtyController,
                   decoration: const InputDecoration(labelText: 'Quantity'),
                   keyboardType: TextInputType.number,
-                  onChanged: (v) { qty = int.tryParse(v) ?? 1; },
                 ),
                 const SizedBox(height: 12),
                 TextFormField(

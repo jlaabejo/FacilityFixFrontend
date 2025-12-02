@@ -169,7 +169,6 @@ class ConcernSlipDetails extends StatelessWidget {
     } catch (_) {
       return null;
     }
-    return null;
   }
 
   @override

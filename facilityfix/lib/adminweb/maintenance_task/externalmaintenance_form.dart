@@ -392,6 +392,30 @@ class _ExternalMaintenanceFormPageState
     }
   }
 
+
+  /// Returns the total reserved quantity for the given inventory id across reservations
+  Future<int> _getReservedQty(String inventoryId) async {
+    try {
+      final resp = await _apiService.getInventoryReservations();
+      if (resp['success'] == true && resp['data'] != null) {
+        final reservations = List<Map<String, dynamic>>.from(resp['data']);
+        int reservedTotal = 0;
+        for (var r in reservations) {
+          if ((r['inventory_id']?.toString() ?? '') == inventoryId) {
+            final status = (r['status'] ?? r['request_status'] ?? 'reserved').toString().toLowerCase();
+            if (status == 'reserved' || status == 'approved' || status == 'pending') {
+              reservedTotal += (r['quantity'] ?? 0) as int;
+            }
+          }
+        }
+        return reservedTotal;
+      }
+    } catch (e) {
+      print('[v0] Error computing reserved qty for $inventoryId: $e');
+    }
+    return 0;
+  }
+
   void _populateFormFields(Map<String, dynamic> data) {
     setState(() {
       // Basic fields
