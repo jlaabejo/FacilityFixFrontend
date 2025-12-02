@@ -1211,12 +1211,7 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(child: _editableRow('Template', _templateCtrl)),
-            ],
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           _editableRow('Location / Area', _locationCtrl, validator: _req),
           const SizedBox(height: 16),
           Text(

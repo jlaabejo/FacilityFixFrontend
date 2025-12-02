@@ -1333,7 +1333,7 @@ class APIService {
       final response = await patch(
         '/staff-scheduling/day-off/bulk/approve',
         headers: _authHeaders(token),
-        body: jsonEncode(body),
+        body: jsonEncode(body), 
       );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
