@@ -5,10 +5,10 @@ import 'package:intl/intl.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:flutter/services.dart' show rootBundle;
 
-class ConcernSlipReport {
-  /// Generate and download a PDF report for a single concern slip
+class JobServiceReport {
+  /// Generate and download a PDF report for a single job service
   static Future<void> generateAndDownloadSinglePDF({
-    required Map<String, dynamic> concernSlipData,
+    required Map<String, dynamic> jobServiceData,
     required String userName,
     String? location,
     String? contactNumber,
@@ -27,39 +27,48 @@ class ConcernSlipReport {
     final now = DateTime.now();
     final formattedDate = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
 
-    // Extract concern slip details
-    final concernId =
-        concernSlipData['id'] ??
-        concernSlipData['formatted_id'] ??
-        concernSlipData['concernId'] ??
+    // Extract job service details
+    final serviceId =
+        jobServiceData['serviceId'] ??
+        jobServiceData['formatted_id'] ??
+        jobServiceData['id'] ??
         'N/A';
     final title =
-        concernSlipData['title'] ??
-        concernSlipData['description'] ??
-        'Concern Slip Report';
-    final status = concernSlipData['status'] ?? 'Pending';
-    final priority = concernSlipData['priority'] ?? 'Medium';
+        jobServiceData['title'] ??
+        jobServiceData['description'] ??
+        'Job Service Request';
+    final status = jobServiceData['status'] ?? 'Pending';
+    final priority = jobServiceData['priority'] ?? 'Medium';
     final category =
-        concernSlipData['category'] ??
-        concernSlipData['department'] ??
-        'General';
-    final reportedBy =
-        concernSlipData['reported_by_name'] ??
-        concernSlipData['reported_by'] ??
+        jobServiceData['category'] ?? jobServiceData['department'] ?? 'General';
+    final requestedBy =
+        jobServiceData['requestedBy'] ??
+        jobServiceData['requested_by_name'] ??
+        jobServiceData['created_by'] ??
         'Unknown';
     final assignedTo =
-        concernSlipData['assigned_to_name'] ??
-        concernSlipData['assigned_to'] ??
+        jobServiceData['assigned_to_name'] ??
+        jobServiceData['assigned_to'] ??
         'Unassigned';
-    final resolutionType =
-        concernSlipData['resolution_type'] ?? 'Pending Resolution';
+    final buildingUnit =
+        jobServiceData['buildingUnit'] ??
+        jobServiceData['location'] ??
+        jobServiceData['unit_id'] ??
+        'N/A';
 
     // Parse dates
-    final createdAt = _parseDate(concernSlipData['created_at']);
+    final createdAt = _parseDate(
+      jobServiceData['dateRequested'] ??
+          jobServiceData['created_at'] ??
+          jobServiceData['date_requested'],
+    );
+    final scheduledDate = _parseDate(
+      jobServiceData['schedule'] ??
+          jobServiceData['scheduled_date'] ??
+          jobServiceData['date_scheduled'],
+    );
     final completedAt = _parseDate(
-      concernSlipData['completed_at'] ??
-          concernSlipData['assessed_at'] ??
-          concernSlipData['updated_at'],
+      jobServiceData['completed_at'] ?? jobServiceData['updated_at'],
     );
 
     // Calculate time spent
@@ -69,16 +78,14 @@ class ConcernSlipReport {
       timeSpent = _formatDuration(duration);
     }
 
-    // Get schedule tracker info if available
-    final scheduleTracker = concernSlipData['schedule_tracker'] ?? {};
-    final startTime = _parseDate(scheduleTracker['start_time']);
-    final endTime = _parseDate(scheduleTracker['end_time']);
-
-    String scheduleTimeSpent = 'N/A';
-    if (startTime != null && endTime != null) {
-      final duration = endTime.difference(startTime);
-      scheduleTimeSpent = _formatDuration(duration);
-    }
+    // Get additional details from raw data
+    final rawData = jobServiceData['rawData'] ?? jobServiceData;
+    final description = rawData['description'] ?? title;
+    final additionalNotes =
+        jobServiceData['additionalNotes'] ??
+        rawData['additional_notes'] ??
+        rawData['notes'] ??
+        'No additional notes';
 
     pdf.addPage(
       pw.MultiPage(
@@ -116,7 +123,7 @@ class ConcernSlipReport {
                 ),
                 pw.SizedBox(height: 8),
                 pw.Text(
-                  'Concern Slip Report - Job Receipt',
+                  'Job Service Report - Work Order',
                   style: pw.TextStyle(
                     fontSize: 16,
                     fontWeight: pw.FontWeight.bold,
@@ -125,7 +132,7 @@ class ConcernSlipReport {
                 ),
                 pw.SizedBox(height: 4),
                 pw.Text(
-                  'Final Job Receipt - Print Ready',
+                  'Official Job Service Documentation',
                   style: pw.TextStyle(
                     fontSize: 11,
                     fontStyle: pw.FontStyle.italic,
@@ -151,25 +158,20 @@ class ConcernSlipReport {
             ),
             pw.SizedBox(height: 20),
 
-            // ===== CONCERN SLIP DETAILS SECTION =====
+            // ===== JOB SERVICE DETAILS SECTION =====
             pw.Container(
               padding: pw.EdgeInsets.all(12),
               decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: PdfColors.blue700, width: 2),
+                color: PdfColors.blue700,
                 borderRadius: pw.BorderRadius.circular(4),
               ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    'CONCERN SLIP DETAILS',
-                    style: pw.TextStyle(
-                      fontSize: 12,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.white,
-                    ),
-                  ),
-                ],
+              child: pw.Text(
+                'JOB SERVICE DETAILS',
+                style: pw.TextStyle(
+                  fontSize: 12,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.white,
+                ),
               ),
             ),
             pw.SizedBox(height: 12),
@@ -183,11 +185,13 @@ class ConcernSlipReport {
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      _buildInfoField('Concern ID', concernId),
+                      _buildInfoField('Job Service ID', serviceId),
                       pw.SizedBox(height: 8),
                       _buildInfoField('Status', _colorizedStatus(status)),
                       pw.SizedBox(height: 8),
                       _buildInfoField('Priority', priority.toUpperCase()),
+                      pw.SizedBox(height: 8),
+                      _buildInfoField('Category', category),
                     ],
                   ),
                 ),
@@ -197,11 +201,16 @@ class ConcernSlipReport {
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      _buildInfoField('Category', category),
+                      _buildInfoField('Building & Unit', buildingUnit),
                       pw.SizedBox(height: 8),
-                      _buildInfoField('Reported By', reportedBy),
+                      _buildInfoField('Requested By', requestedBy),
                       pw.SizedBox(height: 8),
                       _buildInfoField('Assigned To', assignedTo),
+                      pw.SizedBox(height: 8),
+                      _buildInfoField(
+                        'Scheduled Date',
+                        _formatDateTime(scheduledDate),
+                      ),
                     ],
                   ),
                 ),
@@ -209,7 +218,7 @@ class ConcernSlipReport {
             ),
             pw.SizedBox(height: 12),
 
-            // ===== ISSUE DESCRIPTION =====
+            // ===== JOB DESCRIPTION =====
             pw.Container(
               padding: pw.EdgeInsets.all(10),
               decoration: pw.BoxDecoration(
@@ -221,7 +230,7 @@ class ConcernSlipReport {
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   pw.Text(
-                    'Issue Description',
+                    'Job Service Title',
                     style: pw.TextStyle(
                       fontSize: 10,
                       fontWeight: pw.FontWeight.bold,
@@ -231,6 +240,47 @@ class ConcernSlipReport {
                   pw.Text(
                     title,
                     style: pw.TextStyle(fontSize: 10, color: PdfColors.grey800),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 12),
+
+            // ===== DESCRIPTION & NOTES =====
+            pw.Container(
+              padding: pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                borderRadius: pw.BorderRadius.circular(4),
+                border: pw.Border.all(color: PdfColors.grey300),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Description',
+                    style: pw.TextStyle(
+                      fontSize: 10,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 6),
+                  pw.Text(
+                    description,
+                    style: pw.TextStyle(fontSize: 9, color: PdfColors.grey800),
+                  ),
+                  pw.SizedBox(height: 10),
+                  pw.Text(
+                    'Additional Notes',
+                    style: pw.TextStyle(
+                      fontSize: 10,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 6),
+                  pw.Text(
+                    additionalNotes,
+                    style: pw.TextStyle(fontSize: 9, color: PdfColors.grey800),
                   ),
                 ],
               ),
@@ -248,7 +298,7 @@ class ConcernSlipReport {
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   pw.Text(
-                    'TIMELINE & RESOLUTION',
+                    'TIMELINE & TRACKING',
                     style: pw.TextStyle(
                       fontSize: 11,
                       fontWeight: pw.FontWeight.bold,
@@ -264,13 +314,13 @@ class ConcernSlipReport {
                           crossAxisAlignment: pw.CrossAxisAlignment.start,
                           children: [
                             _buildTimelineField(
-                              'Submission Time',
+                              'Date Requested',
                               _formatDateTime(createdAt),
                             ),
                             pw.SizedBox(height: 10),
                             _buildTimelineField(
-                              'Completion Time',
-                              _formatDateTime(completedAt),
+                              'Scheduled Date',
+                              _formatDateTime(scheduledDate),
                             ),
                             pw.SizedBox(height: 10),
                             _buildTimelineField('Total Time Spent', timeSpent),
@@ -284,18 +334,18 @@ class ConcernSlipReport {
                           crossAxisAlignment: pw.CrossAxisAlignment.start,
                           children: [
                             _buildTimelineField(
-                              'Resolution Type',
-                              _formatResolutionType(resolutionType),
+                              'Completion Date',
+                              _formatDateTime(completedAt),
                             ),
                             pw.SizedBox(height: 10),
                             _buildTimelineField(
-                              'Schedule Start',
-                              _formatDateTime(startTime),
+                              'Current Status',
+                              status.toUpperCase(),
                             ),
                             pw.SizedBox(height: 10),
                             _buildTimelineField(
-                              'Schedule Time Spent',
-                              scheduleTimeSpent,
+                              'Priority Level',
+                              priority.toUpperCase(),
                             ),
                           ],
                         ),
@@ -316,19 +366,20 @@ class ConcernSlipReport {
               child: pw.Table.fromTextArray(
                 headers: ['Field', 'Value'],
                 data: [
-                  ['Concern ID', concernId],
+                  ['Job Service ID', serviceId],
                   [
                     'Title',
-                    title.substring(0, (title.length > 50 ? 50 : title.length)),
+                    title.length > 50 ? '${title.substring(0, 50)}...' : title,
                   ],
                   ['Status', status],
                   ['Priority', priority],
                   ['Category', category],
-                  ['Reported By', reportedBy],
+                  ['Building & Unit', buildingUnit],
+                  ['Requested By', requestedBy],
                   ['Assigned To', assignedTo],
-                  ['Resolution Type', resolutionType],
+                  ['Date Requested', _formatDateTime(createdAt)],
+                  ['Scheduled Date', _formatDateTime(scheduledDate)],
                   ['Time Spent', timeSpent],
-                  ['Schedule Time Spent', scheduleTimeSpent],
                 ],
                 headerStyle: pw.TextStyle(
                   fontWeight: pw.FontWeight.bold,
@@ -367,7 +418,7 @@ class ConcernSlipReport {
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
                 pw.Text(
-                  'This is a confidential job receipt. Print date: ${_formatDateTime(now)}',
+                  'This is a confidential job service report. Print date: ${_formatDateTime(now)}',
                   style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
                 ),
                 pw.Text(
@@ -386,14 +437,14 @@ class ConcernSlipReport {
     final blob = html.Blob([bytes], 'application/pdf');
     final url = html.Url.createObjectUrlFromBlob(blob);
     html.AnchorElement(href: url)
-      ..setAttribute('download', 'concern_slip_${concernId}.pdf')
+      ..setAttribute('download', 'job_service_${serviceId}.pdf')
       ..click();
     html.Url.revokeObjectUrl(url);
   }
 
-  /// Generate and download a PDF report for multiple concern slips
+  /// Generate and download a PDF report for multiple job services
   static Future<void> generateAndDownloadBulkPDF({
-    List<Map<String, dynamic>>? concernSlips,
+    List<Map<String, dynamic>>? jobServices,
     required String userName,
     String? location,
     String? contactNumber,
@@ -401,8 +452,8 @@ class ConcernSlipReport {
   }) async {
     final pdf = pw.Document();
 
-    // Use empty list if no slips provided
-    final slips = concernSlips ?? [];
+    // Use empty list if no services provided
+    final services = jobServices ?? [];
 
     // Load logo image
     final logoBytes = await rootBundle.load('assets/images/logo.png');
@@ -414,7 +465,7 @@ class ConcernSlipReport {
 
     final now = DateTime.now();
     final formattedDate = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
-    final summaryStats = _calculateSummaryStatistics(slips);
+    final summaryStats = _calculateSummaryStatistics(services);
 
     pdf.addPage(
       pw.MultiPage(
@@ -452,7 +503,7 @@ class ConcernSlipReport {
                 ),
                 pw.SizedBox(height: 8),
                 pw.Text(
-                  'Concern Slip Summary Report',
+                  'Job Service Summary Report',
                   style: pw.TextStyle(
                     fontSize: 16,
                     fontWeight: pw.FontWeight.bold,
@@ -477,6 +528,7 @@ class ConcernSlipReport {
             ),
             pw.SizedBox(height: 30),
 
+            // ===== SUMMARY SECTION =====
             pw.Container(
               padding: pw.EdgeInsets.all(10),
               decoration: pw.BoxDecoration(
@@ -497,7 +549,7 @@ class ConcernSlipReport {
                   ),
                   pw.SizedBox(height: 8),
                   pw.Text(
-                    'Total Number of Concern Slips: ${slips.length}',
+                    'Total Number of Job Service or Repair Tasks: ${services.length}',
                     style: pw.TextStyle(fontSize: 10),
                   ),
                   pw.SizedBox(height: 6),
@@ -512,7 +564,7 @@ class ConcernSlipReport {
                   ),
                   pw.SizedBox(height: 6),
                   pw.Text(
-                    'Outstanding Actions: ${summaryStats['outstandingActions']} task(s) requiring follow-up',
+                    'Outstanding Actions: ${summaryStats['outstandingActions']} task(s) requiring immediate attention or follow-up',
                     style: pw.TextStyle(fontSize: 10),
                   ),
                 ],
@@ -520,6 +572,7 @@ class ConcernSlipReport {
             ),
             pw.SizedBox(height: 16),
 
+            // ===== TASK STATUS BREAKDOWN =====
             pw.Text(
               'Task Status Breakdown',
               style: pw.TextStyle(
@@ -567,6 +620,7 @@ class ConcernSlipReport {
             ),
             pw.SizedBox(height: 16),
 
+            // ===== PRIORITY DISTRIBUTION =====
             pw.Text(
               'Priority Distribution',
               style: pw.TextStyle(
@@ -616,6 +670,7 @@ class ConcernSlipReport {
             ),
             pw.SizedBox(height: 16),
 
+            // ===== CATEGORY OVERVIEW =====
             pw.Text(
               'Category Overview',
               style: pw.TextStyle(
@@ -663,8 +718,9 @@ class ConcernSlipReport {
             ),
             pw.SizedBox(height: 16),
 
+            // ===== CORE REPORT CONTENTS =====
             pw.Text(
-              'CONCERN SLIP DETAILS',
+              'JOB SERVICE DETAILS',
               style: pw.TextStyle(
                 fontSize: 12,
                 fontWeight: pw.FontWeight.bold,
@@ -679,39 +735,43 @@ class ConcernSlipReport {
               ),
               child: pw.Table.fromTextArray(
                 headers: [
-                  'ID',
-                  'Title',
+                  'Job Service ID',
+                  'Job Service Title',
                   'Date Requested',
                   'Building & Unit',
-                  'Priority',
+                  'Priority Level',
                   'Category',
                   'Status',
                 ],
                 data:
-                    slips
+                    services
                         .map(
-                          (slip) => [
-                            slip['id'] ??
-                                slip['formatted_id'] ??
-                                slip['concernId'] ??
+                          (service) => [
+                            service['serviceId'] ??
+                                service['formatted_id'] ??
+                                service['id'] ??
                                 '',
-                            (slip['title'] ?? slip['description'] ?? '')
+                            (service['title'] ?? service['description'] ?? '')
                                         .length >
-                                    25
-                                ? '${(slip['title'] ?? slip['description'] ?? '').substring(0, 25)}...'
-                                : slip['title'] ?? slip['description'] ?? '',
+                                    30
+                                ? '${(service['title'] ?? service['description'] ?? '').substring(0, 30)}...'
+                                : service['title'] ??
+                                    service['description'] ??
+                                    '',
                             _formatDateTime(
                               _parseDate(
-                                slip['created_at'] ?? slip['date_requested'],
+                                service['dateRequested'] ??
+                                    service['created_at'] ??
+                                    service['date_requested'],
                               ),
                             ),
-                            slip['building'] ??
-                                slip['unit'] ??
-                                slip['location'] ??
+                            service['buildingUnit'] ??
+                                service['location'] ??
+                                service['unit_id'] ??
                                 'N/A',
-                            slip['priority'] ?? 'Medium',
-                            slip['category'] ?? slip['department'] ?? '',
-                            slip['status'] ?? 'Pending',
+                            service['priority'] ?? 'Medium',
+                            service['department'] ?? service['category'] ?? '',
+                            service['status'] ?? 'Pending',
                           ],
                         )
                         .toList(),
@@ -731,11 +791,11 @@ class ConcernSlipReport {
                 cellAlignment: pw.Alignment.topLeft,
                 cellPadding: pw.EdgeInsets.all(5),
                 columnWidths: {
-                  0: pw.FlexColumnWidth(0.9),
-                  1: pw.FlexColumnWidth(1.1),
+                  0: pw.FlexColumnWidth(1),
+                  1: pw.FlexColumnWidth(1.2),
                   2: pw.FlexColumnWidth(1),
                   3: pw.FlexColumnWidth(0.9),
-                  4: pw.FlexColumnWidth(0.8),
+                  4: pw.FlexColumnWidth(0.7),
                   5: pw.FlexColumnWidth(0.9),
                   6: pw.FlexColumnWidth(0.9),
                 },
@@ -760,7 +820,7 @@ class ConcernSlipReport {
     html.AnchorElement(href: url)
       ..setAttribute(
         'download',
-        'concern_slip_summary_${DateTime.now().millisecondsSinceEpoch}.pdf',
+        'job_service_summary_${DateTime.now().millisecondsSinceEpoch}.pdf',
       )
       ..click();
     html.Url.revokeObjectUrl(url);
@@ -769,9 +829,9 @@ class ConcernSlipReport {
   // ===== HELPER METHODS =====
 
   static Map<String, dynamic> _calculateSummaryStatistics(
-    List<Map<String, dynamic>> slips,
+    List<Map<String, dynamic>> services,
   ) {
-    if (slips.isEmpty) {
+    if (services.isEmpty) {
       return {
         'dateRange': 'N/A',
         'locationCoverage': 0,
@@ -790,10 +850,13 @@ class ConcernSlipReport {
 
     // Calculate date range
     final dates =
-        slips
+        services
             .map(
-              (slip) =>
-                  _parseDate(slip['created_at'] ?? slip['date_requested']),
+              (service) => _parseDate(
+                service['dateRequested'] ??
+                    service['created_at'] ??
+                    service['date_requested'],
+              ),
             )
             .whereType<DateTime>()
             .toList();
@@ -807,15 +870,20 @@ class ConcernSlipReport {
 
     // Calculate location coverage
     final locations =
-        slips
-            .map((slip) => slip['building'] ?? slip['unit'] ?? slip['location'])
+        services
+            .map(
+              (service) =>
+                  service['buildingUnit'] ??
+                  service['location'] ??
+                  service['unit_id'],
+            )
             .toSet()
             .length;
 
     // Calculate outstanding actions (non-completed tasks)
     final outstanding =
-        slips.where((slip) {
-          final status = (slip['status'] ?? '').toString().toLowerCase();
+        services.where((service) {
+          final status = (service['status'] ?? '').toString().toLowerCase();
           return !status.contains('completed') &&
               !status.contains('done') &&
               !status.contains('resolved');
@@ -823,8 +891,8 @@ class ConcernSlipReport {
 
     // Status breakdown
     final statusMap = <String, int>{};
-    for (final slip in slips) {
-      final status = slip['status'] ?? 'Unknown';
+    for (final service in services) {
+      final status = service['status'] ?? 'Unknown';
       statusMap[status] = (statusMap[status] ?? 0) + 1;
     }
     final statusBreakdown =
@@ -833,15 +901,15 @@ class ConcernSlipReport {
               (e) => [
                 e.key,
                 e.value.toString(),
-                '${((e.value / slips.length) * 100).toStringAsFixed(1)}%',
+                '${((e.value / services.length) * 100).toStringAsFixed(1)}%',
               ],
             )
             .toList();
 
     // Priority distribution
     final priorityMap = <String, int>{};
-    for (final slip in slips) {
-      final priority = slip['priority'] ?? 'Medium';
+    for (final service in services) {
+      final priority = service['priority'] ?? 'Medium';
       priorityMap[priority] = (priorityMap[priority] ?? 0) + 1;
     }
     final priorityDistribution =
@@ -850,16 +918,16 @@ class ConcernSlipReport {
               (e) => [
                 e.key,
                 e.value.toString(),
-                '${((e.value / slips.length) * 100).toStringAsFixed(1)}%',
+                '${((e.value / services.length) * 100).toStringAsFixed(1)}%',
               ],
             )
             .toList();
 
     // Category overview
     final categoryMap = <String, int>{};
-    for (final slip in slips) {
+    for (final service in services) {
       final category =
-          slip['category'] ?? slip['department'] ?? 'Uncategorized';
+          service['department'] ?? service['category'] ?? 'Uncategorized';
       categoryMap[category] = (categoryMap[category] ?? 0) + 1;
     }
     final categoryOverview =
@@ -868,7 +936,7 @@ class ConcernSlipReport {
               (e) => [
                 e.key,
                 e.value.toString(),
-                '${((e.value / slips.length) * 100).toStringAsFixed(1)}%',
+                '${((e.value / services.length) * 100).toStringAsFixed(1)}%',
               ],
             )
             .toList();
@@ -928,25 +996,14 @@ class ConcernSlipReport {
   static String _colorizedStatus(String status) {
     final normalized = status.toLowerCase();
     if (normalized.contains('pending')) return '🔵 Pending';
-    if (normalized.contains('assigned') || normalized.contains('to inspect'))
+    if (normalized.contains('to inspect') || normalized.contains('assigned'))
       return '🟡 To Inspect';
     if (normalized.contains('in progress')) return '🟠 In Progress';
+    if (normalized.contains('assessed')) return '🟣 Assessed';
+    if (normalized.contains('approved')) return '🟢 Approved';
     if (normalized.contains('completed') || normalized.contains('done'))
-      return '🟢 Completed';
+      return '✅ Completed';
     return status;
-  }
-
-  static String _formatResolutionType(String? resolutionType) {
-    if (resolutionType == null) return 'Pending Resolution';
-    final normalized = resolutionType.toLowerCase();
-    if (normalized.contains('job_service') ||
-        normalized.contains('job service'))
-      return 'Job Service';
-    if (normalized.contains('work_permit') ||
-        normalized.contains('work permit'))
-      return 'Work Permit';
-    if (normalized.contains('reject')) return 'Rejected';
-    return resolutionType;
   }
 
   static DateTime? _parseDate(dynamic dateValue) {
@@ -964,7 +1021,7 @@ class ConcernSlipReport {
 
   static String _formatDateTime(DateTime? dateTime) {
     if (dateTime == null) return 'N/A';
-    return DateFormat('MMM dd, yyyy h:mm a').format(dateTime);
+    return DateFormat('MMM dd, yyyy').format(dateTime);
   }
 
   static String _formatDuration(Duration duration) {

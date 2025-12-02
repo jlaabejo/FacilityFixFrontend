@@ -117,23 +117,23 @@ class _InternalMaintenanceFormPageState
 
   // -------------------- NAV --------------------
   static String? _getRoutePath(String routeKey) {
-      final Map<String, String> pathMap = {
-        'dashboard': '/dashboard',
-        'user_users': '/user/users',
-        'user_scheduling': '/user/scheduling',
-        'work_maintenance': '/work/maintenance',
-        'work_repair': '/work/repair',
-        'calendar': '/calendar',
-        'inventory_equipment': '/inventory/equipment',
-        'inventory_items': '/inventory/items',
-        'inventory_request': '/inventory/request',
-        'analytics': '/analytics',
-        'announcement': '/announcement',
-        'settings': '/settings',
-        'logout': '/logout',
-      };
-      return pathMap[routeKey];
-    }
+    final Map<String, String> pathMap = {
+      'dashboard': '/dashboard',
+      'user_users': '/user/users',
+      'user_scheduling': '/user/scheduling',
+      'work_maintenance': '/work/maintenance',
+      'work_repair': '/work/repair',
+      'calendar': '/calendar',
+      'inventory_equipment': '/inventory/equipment',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
+      'analytics': '/analytics',
+      'announcement': '/announcement',
+      'settings': '/settings',
+      'logout': '/logout',
+    };
+    return pathMap[routeKey];
+  }
 
   // Logout functionality
   void _handleLogout(BuildContext context) async {
@@ -216,7 +216,13 @@ class _InternalMaintenanceFormPageState
 
     // Load inventory items
     // Save building id and use it when loading inventory
-    _buildingId = profile != null ? (profile['building_id'] ?? profile['buildingId'] ?? profile['building'])?.toString() : null;
+    _buildingId =
+        profile != null
+            ? (profile['building_id'] ??
+                    profile['buildingId'] ??
+                    profile['building'])
+                ?.toString()
+            : null;
     await _loadInventoryItems();
   }
 
@@ -229,53 +235,80 @@ class _InternalMaintenanceFormPageState
 
     for (final t in items) {
       final found = _availableInventoryItems.firstWhere(
-            (it) => (it['item_code']?.toString() ?? it['itemCode']?.toString() ?? it['code']?.toString() ?? '').toString().toLowerCase() == t.sku.toLowerCase(),
+        (it) =>
+            (it['item_code']?.toString() ??
+                    it['itemCode']?.toString() ??
+                    it['code']?.toString() ??
+                    '')
+                .toString()
+                .toLowerCase() ==
+            t.sku.toLowerCase(),
         orElse: () => <String, dynamic>{},
       );
       Map<String, dynamic> fuzzyFound = {};
       if (found.isEmpty) {
         // try fuzzy match by item name or item_code containing the template sku (case-insensitive)
-        fuzzyFound = _availableInventoryItems.firstWhere(
-            (it) {
-              final itemName = (it['item_name'] ?? it['name'] ?? '').toString().toLowerCase();
-              final itemCode = (it['item_code'] ?? it['itemCode'] ?? it['code'] ?? '').toString().toLowerCase();
-              final s = t.sku.toLowerCase();
-              return itemName.contains(s) || itemCode.contains(s);
-            },
-            orElse: () => <String, dynamic>{},
-        );
+        fuzzyFound = _availableInventoryItems.firstWhere((it) {
+          final itemName =
+              (it['item_name'] ?? it['name'] ?? '').toString().toLowerCase();
+          final itemCode =
+              (it['item_code'] ?? it['itemCode'] ?? it['code'] ?? '')
+                  .toString()
+                  .toLowerCase();
+          final s = t.sku.toLowerCase();
+          return itemName.contains(s) || itemCode.contains(s);
+        }, orElse: () => <String, dynamic>{});
       }
 
-        String? inventoryId;
-        if (found.isNotEmpty || fuzzyFound.isNotEmpty) {
-          final src = found.isNotEmpty ? found : fuzzyFound;
-          inventoryId = (src['id'] ?? src['_doc_id'] ?? src['item_code'] ?? src['itemCode'])?.toString();
-        } else {
-          inventoryId = await _inventoryResolver.resolveSku(t.sku, _buildingId ?? 'default_building_id');
-          if (inventoryId != null && inventoryId.isNotEmpty) {
-            try {
-              final itemResp = await _apiService.getInventoryItem(inventoryId);
-              if (itemResp != null && itemResp['success'] == true && itemResp['data'] is Map) {
-                final data = Map<String, dynamic>.from(itemResp['data']);
-                found.addAll(data);
-              }
-            } catch (e) {
-              print('[v0] Failed to fetch inventory item for resolved id $inventoryId: $e');
+      String? inventoryId;
+      if (found.isNotEmpty || fuzzyFound.isNotEmpty) {
+        final src = found.isNotEmpty ? found : fuzzyFound;
+        inventoryId =
+            (src['id'] ?? src['_doc_id'] ?? src['item_code'] ?? src['itemCode'])
+                ?.toString();
+      } else {
+        inventoryId = await _inventoryResolver.resolveSku(
+          t.sku,
+          _buildingId ?? 'default_building_id',
+        );
+        if (inventoryId != null && inventoryId.isNotEmpty) {
+          try {
+            final itemResp = await _apiService.getInventoryItem(inventoryId);
+            if (itemResp != null &&
+                itemResp['success'] == true &&
+                itemResp['data'] is Map) {
+              final data = Map<String, dynamic>.from(itemResp['data']);
+              found.addAll(data);
             }
+          } catch (e) {
+            print(
+              '[v0] Failed to fetch inventory item for resolved id $inventoryId: $e',
+            );
           }
         }
+      }
 
-        final reservedQty = (inventoryId != null && inventoryId.toString().isNotEmpty)
-          ? await _getReservedQty(inventoryId.toString())
-          : 0;
-        final resolved = inventoryId != null && inventoryId.toString().isNotEmpty && inventoryId.toString() != t.sku;
+      final reservedQty =
+          (inventoryId != null && inventoryId.toString().isNotEmpty)
+              ? await _getReservedQty(inventoryId.toString())
+              : 0;
+      final resolved =
+          inventoryId != null &&
+          inventoryId.toString().isNotEmpty &&
+          inventoryId.toString() != t.sku;
 
-        mapped.add({
+      mapped.add({
         'inventory_id': inventoryId,
         'item_name': t.name,
         'item_code': t.sku,
         'quantity': t.qty,
-        'available_stock': found.isNotEmpty ? (found['current_stock'] ?? found['available_stock'] ?? found['stock'] ?? 0) : 0,
+        'available_stock':
+            found.isNotEmpty
+                ? (found['current_stock'] ??
+                    found['available_stock'] ??
+                    found['stock'] ??
+                    0)
+                : 0,
         'reserved_stock': reservedQty,
         'unit': t.unit,
         'autoReserve': t.autoReserve,
@@ -287,18 +320,29 @@ class _InternalMaintenanceFormPageState
       _selectedInventoryItems = mapped;
     });
 
-    final unmatched = items.where((t) => !_availableInventoryItems.any(
-          (it) => (it['item_code']?.toString() ?? it['itemCode']?.toString() ?? it['code']?.toString() ?? '') == t.sku,
-        ));
+    final unmatched = items.where(
+      (t) =>
+          !_availableInventoryItems.any(
+            (it) =>
+                (it['item_code']?.toString() ??
+                    it['itemCode']?.toString() ??
+                    it['code']?.toString() ??
+                    '') ==
+                t.sku,
+          ),
+    );
 
     if (unmatched.isNotEmpty) {
       final names = unmatched.map((u) => u.name).join(', ');
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Some template items are not found in inventory: $names. They will use SKU fallback.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Some template items are not found in inventory: $names. They will use SKU fallback.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
     }
   }
 
@@ -310,8 +354,13 @@ class _InternalMaintenanceFormPageState
         int reservedTotal = 0;
         for (var r in reservations) {
           if ((r['inventory_id']?.toString() ?? '') == inventoryId) {
-            final status = (r['status'] ?? r['request_status'] ?? 'reserved').toString().toLowerCase();
-            if (status == 'reserved' || status == 'approved' || status == 'pending') {
+            final status =
+                (r['status'] ?? r['request_status'] ?? 'reserved')
+                    .toString()
+                    .toLowerCase();
+            if (status == 'reserved' ||
+                status == 'approved' ||
+                status == 'pending') {
               reservedTotal += (r['quantity'] ?? 0) as int;
             }
           }
@@ -327,7 +376,9 @@ class _InternalMaintenanceFormPageState
   Future<void> _loadInventoryItems() async {
     try {
       // TODO: Replace with actual building ID from user session
-      final response = await _mainApiService.getBuildingInventory(_buildingId ?? 'default_building_id');
+      final response = await _mainApiService.getBuildingInventory(
+        _buildingId ?? 'default_building_id',
+      );
 
       if (response['success'] == true && response['data'] != null) {
         setState(() {
@@ -418,8 +469,15 @@ class _InternalMaintenanceFormPageState
             availableItems: filteredItems,
             selectedLocation: _selectedLocation,
             onItemSelected: (item, quantity) async {
-              final inventoryId = item['id'] ?? item['_doc_id'] ?? item['item_code'] ?? item['itemCode'];
-              final reservedQty = (inventoryId != null) ? await _getReservedQty(inventoryId.toString()) : 0;
+              final inventoryId =
+                  item['id'] ??
+                  item['_doc_id'] ??
+                  item['item_code'] ??
+                  item['itemCode'];
+              final reservedQty =
+                  (inventoryId != null)
+                      ? await _getReservedQty(inventoryId.toString())
+                      : 0;
               setState(() {
                 _selectedInventoryItems.add({
                   'inventory_id': inventoryId,
@@ -429,7 +487,8 @@ class _InternalMaintenanceFormPageState
                   'available_stock': item['current_stock'],
                   'unit': item['unit'] ?? '',
                   'reserved_stock': reservedQty,
-                  'autoReserve': false, // manually-added items should not auto-reserve
+                  'autoReserve':
+                      false, // manually-added items should not auto-reserve
                 });
               });
             },
@@ -625,7 +684,9 @@ class _InternalMaintenanceFormPageState
       for (final item in _selectedInventoryItems) {
         // Only create reservations for items marked as autoReserve
         if (!(item['autoReserve'] == true || item['reserve'] == true)) {
-          print('[v0] Skipping reservation for ${item['item_name']} as autoReserve is false');
+          print(
+            '[v0] Skipping reservation for ${item['item_name']} as autoReserve is false',
+          );
           continue;
         }
         final qty = item['quantity'];
@@ -636,21 +697,31 @@ class _InternalMaintenanceFormPageState
           continue;
         }
         // Resolve inventoryId if it's a SKU or not resolved yet
-          String? inventoryId = item['inventory_id']?.toString();
-          if (inventoryId == null || inventoryId.isEmpty) {
-            inventoryId = await _inventoryResolver.resolveSku(item['item_code']?.toString() ?? '', _buildingId ?? 'default_building_id');
+        String? inventoryId = item['inventory_id']?.toString();
+        if (inventoryId == null || inventoryId.isEmpty) {
+          inventoryId = await _inventoryResolver.resolveSku(
+            item['item_code']?.toString() ?? '',
+            _buildingId ?? 'default_building_id',
+          );
         } else {
           // If it looks like a SKU (uppercase + underscores) try resolve
-              final looksLikeSku = RegExp(r'^[A-Z0-9_-]+$') // SKU-like (uppercase, digits, underscore, dash)
-              .hasMatch(inventoryId);
+          final looksLikeSku = RegExp(
+            r'^[A-Z0-9_-]+$',
+          ) // SKU-like (uppercase, digits, underscore, dash)
+          .hasMatch(inventoryId);
           if (looksLikeSku) {
-            final resolved = await _inventoryResolver.resolveSku(item['item_code']?.toString() ?? inventoryId, _buildingId ?? 'default_building_id');
+            final resolved = await _inventoryResolver.resolveSku(
+              item['item_code']?.toString() ?? inventoryId,
+              _buildingId ?? 'default_building_id',
+            );
             if (resolved != null && resolved.isNotEmpty) inventoryId = resolved;
           }
         }
 
         if (inventoryId == null || inventoryId.isEmpty) {
-          print('[v0] Skipping reservation for ${item['item_name']} - unresolved inventory id');
+          print(
+            '[v0] Skipping reservation for ${item['item_name']} - unresolved inventory id',
+          );
           continue;
         }
 
@@ -663,7 +734,9 @@ class _InternalMaintenanceFormPageState
         // Extract the reservation ID from the response
         if (response['success'] == true && response['reservation_id'] != null) {
           createdReservationIds.add(response['reservation_id']);
-          print('[v0] Created inventory reservation: ${response['reservation_id']}');
+          print(
+            '[v0] Created inventory reservation: ${response['reservation_id']}',
+          );
           try {
             InventoryUpdateNotifier().notifyItemUpdated(inventoryId.toString());
           } catch (_) {}
@@ -1096,7 +1169,8 @@ class _InternalMaintenanceFormPageState
       }
 
       // Populate template (if present)
-      final templateKey = data['template_id'] ?? data['templateId'] ?? data['template'];
+      final templateKey =
+          data['template_id'] ?? data['templateId'] ?? data['template'];
       if (templateKey != null) {
         _selectedTemplateKey = templateKey.toString();
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1198,7 +1272,11 @@ class _InternalMaintenanceFormPageState
             'quantity': item['quantity'] ?? 0,
             'available_stock': item['available_stock'] ?? item['stock'] ?? '',
             'unit': item['unit'] ?? '',
-            'autoReserve': item['reserve'] ?? item['reserved'] ?? item['autoReserve'] ?? true,
+            'autoReserve':
+                item['reserve'] ??
+                item['reserved'] ??
+                item['autoReserve'] ??
+                true,
           });
         }
       }
@@ -1547,13 +1625,22 @@ class _InternalMaintenanceFormPageState
                                 _fieldBox(
                                   child: DropdownButtonFormField<String>(
                                     value: _selectedTemplateKey,
-                                    decoration: _decoration('Select Template...'),
-                                    items: MaintenanceTemplates.keys()
-                                        .map((k) => DropdownMenuItem(
-                                              value: k,
-                                              child: Text(MaintenanceTemplates.displayName(k)),
-                                            ))
-                                        .toList(),
+                                    decoration: _decoration(
+                                      'Select Template...',
+                                    ),
+                                    items:
+                                        MaintenanceTemplates.keys()
+                                            .map(
+                                              (k) => DropdownMenuItem(
+                                                value: k,
+                                                child: Text(
+                                                  MaintenanceTemplates.displayName(
+                                                    k,
+                                                  ),
+                                                ),
+                                              ),
+                                            )
+                                            .toList(),
                                     onChanged: (v) {
                                       setState(() => _selectedTemplateKey = v);
                                       _applyTemplate(v);
@@ -2356,51 +2443,99 @@ class _InternalMaintenanceFormPageState
                                                   crossAxisAlignment:
                                                       CrossAxisAlignment.start,
                                                   children: [
-                                                  Row(
-                                                    children: [
-                                                      Expanded(
-                                                        child: Text(
-                                                          item['item_name'] ??
-                                                            'Unknown Item',
-                                                          style: const TextStyle(
-                                                          fontWeight:
-                                                            FontWeight.w600,
-                                                          fontSize: 14,
+                                                    Row(
+                                                      children: [
+                                                        Expanded(
+                                                          child: Text(
+                                                            item['item_name'] ??
+                                                                'Unknown Item',
+                                                            style:
+                                                                const TextStyle(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                  fontSize: 14,
+                                                                ),
                                                           ),
                                                         ),
-                                                      ),
-                                                      const SizedBox(width: 8),
-                                                      if (item['resolved'] == true) ...[
-                                                        if ((item['reserved_stock'] ?? 0) > 0)
+                                                        const SizedBox(
+                                                          width: 8,
+                                                        ),
+                                                        if (item['resolved'] ==
+                                                            true) ...[
+                                                          if ((item['reserved_stock'] ??
+                                                                  0) >
+                                                              0)
+                                                            Container(
+                                                              padding:
+                                                                  const EdgeInsets.symmetric(
+                                                                    horizontal:
+                                                                        8,
+                                                                    vertical: 4,
+                                                                  ),
+                                                              decoration: BoxDecoration(
+                                                                color:
+                                                                    Colors
+                                                                        .green[50],
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      6,
+                                                                    ),
+                                                              ),
+                                                              child: Text(
+                                                                'Reserved: ${item['reserved_stock'] ?? 0}',
+                                                                style: const TextStyle(
+                                                                  fontSize: 12,
+                                                                  color:
+                                                                      Colors
+                                                                          .green,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                        ] else ...[
                                                           Container(
-                                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                            decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(6)),
-                                                            child: Text('Reserved: ${item['reserved_stock'] ?? 0}', style: const TextStyle(fontSize: 12, color: Colors.green)),
+                                                            padding:
+                                                                const EdgeInsets.symmetric(
+                                                                  horizontal: 8,
+                                                                  vertical: 4,
+                                                                ),
+                                                            decoration: BoxDecoration(
+                                                              color:
+                                                                  Colors
+                                                                      .red[50],
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                    6,
+                                                                  ),
+                                                            ),
+                                                            child: const Text(
+                                                              'Unresolved',
+                                                              style: TextStyle(
+                                                                fontSize: 12,
+                                                                color:
+                                                                    Colors.red,
+                                                              ),
+                                                            ),
                                                           ),
-                                                      ] else ...[
-                                                        Container(
-                                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                          decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(6)),
-                                                          child: const Text('Unresolved', style: TextStyle(fontSize: 12, color: Colors.red)),
-                                                        ),
+                                                        ],
                                                       ],
-                                                    ],
-                                                  ),
-                                                  const SizedBox(height: 6),
-                                                  const SizedBox(height: 4),
-                                                  Text(
-                                                    '${item['item_code'] ?? 'N/A'}',
-                                                    style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: Colors.grey[600],
                                                     ),
-                                                  ),
-                                                  const SizedBox(height: 4),
-                                                  Text(
-                                                    'Stock: ${item['available_stock']} ${item['unit'] ?? ''} (Reserved: ${item['reserved_stock'] ?? 0})',
-                                                    style: TextStyle(
-                                                    fontSize: 11,
-                                                    color: Colors.grey[600],
+                                                    const SizedBox(height: 6),
+                                                    const SizedBox(height: 4),
+                                                    Text(
+                                                      '${item['item_code'] ?? 'N/A'}',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: Colors.grey[600],
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    Text(
+                                                      'Stock: ${item['available_stock']} ${item['unit'] ?? ''} (Reserved: ${item['reserved_stock'] ?? 0})',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: Colors.grey[600],
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
@@ -2827,7 +2962,6 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                             ),
                           ),
                         ),
-                        
                     ],
                   ),
                 ),

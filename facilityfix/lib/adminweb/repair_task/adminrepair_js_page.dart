@@ -8,7 +8,7 @@ import '../services/api_service.dart';
 import '../widgets/delete_popup.dart';
 import 'pop_up/js_viewdetails_popup.dart';
 import 'pop_up/edit_popup.dart';
-import '../report_files/concern_slip_report.dart';
+import '../report_files/job_service_report.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:intl/intl.dart';
@@ -119,29 +119,9 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
 
   // Helper function to convert routeKey to actual route path
   static String? _getRoutePath(String routeKey) {
-<<<<<<< Updated upstream
-      final Map<String, String> pathMap = {
-        'dashboard': '/dashboard',
-        'user_users': '/user/users',
-        'user_scheduling': '/user/scheduling',
-        'work_maintenance': '/work/maintenance',
-        'work_repair': '/work/repair',
-        'calendar': '/calendar',
-        'inventory_equipment': '/inventory/equipment',
-        'inventory_items': '/inventory/items',
-        'inventory_request': '/inventory/request',
-        'analytics': '/analytics',
-        'announcement': '/announcement',
-        'settings': '/settings',
-        'logout': '/logout',
-      };
-      return pathMap[routeKey];
-    }
-=======
     final Map<String, String> pathMap = {
       'dashboard': '/dashboard',
       'user_users': '/user/users',
-      // 'user_roles': '/user/roles',
       'user_scheduling': '/user/scheduling',
       'work_maintenance': '/work/maintenance',
       'work_repair': '/work/repair',
@@ -156,7 +136,6 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     };
     return pathMap[routeKey];
   }
->>>>>>> Stashed changes
 
   // Handle logout functionality
   void _handleLogout(BuildContext context) {
@@ -1972,16 +1951,16 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
           }).toList();
 
       if (mapped.length == 1) {
-        await ConcernSlipReport.generateAndDownloadSinglePDF(
-          concernSlipData: mapped.first,
+        await JobServiceReport.generateAndDownloadSinglePDF(
+          jobServiceData: mapped.first,
           userName: userName,
           location: 'Default Location',
           contactNumber: '+1-234-567-8900',
           email: 'admin@facilityfix.com',
         );
       } else {
-        await ConcernSlipReport.generateAndDownloadBulkPDF(
-          concernSlips: mapped,
+        await JobServiceReport.generateAndDownloadBulkPDF(
+          jobServices: mapped,
           userName: userName,
           location: 'Default Location',
           contactNumber: '+1-234-567-8900',

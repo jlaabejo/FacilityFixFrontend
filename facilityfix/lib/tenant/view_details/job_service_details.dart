@@ -106,9 +106,11 @@ class _TenantJobServiceDetailPageState
     try {
       final apiService = APIService(roleOverride: AppRole.tenant);
       final data = await apiService.getJobServiceById(widget.jobServiceId);
-      
+
       print('[TENANT JOB SERVICE] Fetched data keys: ${data.keys.toList()}');
-      print('[TENANT JOB SERVICE] schedule_availability from API: ${data['schedule_availability']}');
+      print(
+        '[TENANT JOB SERVICE] schedule_availability from API: ${data['schedule_availability']}',
+      );
 
       // Enrich data with user names if we have user IDs
       await _enrichWithUserNames(data, apiService);
@@ -851,7 +853,45 @@ class _TenantJobServiceDetailPageState
                           id:
                               _jobServiceData!['job_service_id']?.toString() ??
                               _jobServiceData!['js_id']?.toString() ??
-                              _jobSe                          // Staff - Use assigned_to_name (enriched from getUserById)
+                              _jobServiceData!['formatted_id'] ??
+                              _jobServiceData!['id'] ??
+                              '',
+                          formattedId: _jobServiceData!['formatted_id'],
+                          concernSlipId:
+                              _jobServiceData!['concern_slip_id']?.toString() ??
+                              '',
+                          createdAt:
+                              _parseDateTime(_jobServiceData!['created_at']) ??
+                              DateTime.now(),
+                          updatedAt: _parseDateTime(
+                            _jobServiceData!['updated_at'],
+                          ),
+                          requestTypeTag:
+                              _jobServiceData!['request_type'] ?? 'Job Service',
+                          priority: _jobServiceData!['priority'],
+                          statusTag: _jobServiceData!['status'] ?? 'pending',
+                          resolutionType: _jobServiceData!['resolution_type'],
+                          departmentTag: _jobServiceData!['category'],
+
+                          // Tenant / Requester - Use name fields, fallback to IDs
+                          requestedBy:
+                              _jobServiceData!['requested_by_name'] ??
+                              _jobServiceData!['requested_by'] ??
+                              '',
+                          unitId:
+                              _jobServiceData!['location'] ??
+                              _jobServiceData!['unit_id'] ??
+                              '',
+                          scheduleAvailability:
+                              _jobServiceData!['schedule_availability'] ??
+                              _jobServiceData!['availability'] ??
+                              _jobServiceData!['scheduled_date'],
+                          additionalNotes:
+                              _jobServiceData!['additional_notes'] ??
+                              _jobServiceData!['description'] ??
+                              _jobServiceData!['notes'],
+
+                          // Staff - Use assigned_to_name (enriched from getUserById)
                           assignedStaff:
                               _jobServiceData!['assigned_to_name'] ??
                               _jobServiceData!['assigned_to'],

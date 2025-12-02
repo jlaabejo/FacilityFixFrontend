@@ -1,5 +1,8 @@
 import 'package:facilityfix/widgets/modals.dart';
+import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/config/env.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class AvailabilityTabWidget extends StatefulWidget {
   const AvailabilityTabWidget({
@@ -113,6 +116,52 @@ class _ScheduleAvailabilityWidgetState
     'Sat': false,
   };
 
+  bool _isLoading = false;
+  final APIService _api = APIService(roleOverride: AppRole.staff);
+  String _weekStartDate = '';
+  String _weekEndDate = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _calculateWeekDates();
+    _loadCurrentAvailability();
+  }
+
+  void _calculateWeekDates() {
+    final now = DateTime.now();
+    // Find the Monday of this week
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    final sunday = monday.add(const Duration(days: 6));
+
+    setState(() {
+      _weekStartDate =
+          '${monday.year}-${monday.month.toString().padLeft(2, '0')}-${monday.day.toString().padLeft(2, '0')}';
+      _weekEndDate =
+          '${sunday.year}-${sunday.month.toString().padLeft(2, '0')}-${sunday.day.toString().padLeft(2, '0')}';
+    });
+  }
+
+  Future<void> _loadCurrentAvailability() async {
+    try {
+      final availability = await _api.getMyWeeklyAvailability(
+        weekStartDate: _weekStartDate,
+      );
+      if (availability.isNotEmpty && mounted) {
+        setState(() {
+          _dayAvailability['Mon'] = availability['monday'] ?? true;
+          _dayAvailability['Tue'] = availability['tuesday'] ?? true;
+          _dayAvailability['Wed'] = availability['wednesday'] ?? true;
+          _dayAvailability['Thu'] = availability['thursday'] ?? true;
+          _dayAvailability['Fri'] = availability['friday'] ?? true;
+          _dayAvailability['Sat'] = availability['saturday'] ?? false;
+        });
+      }
+    } catch (e) {
+      print('[ScheduleAvailability] Error loading availability: $e');
+    }
+  }
+
   void _toggleDay(String day) {
     setState(() {
       _dayAvailability[day] = !_dayAvailability[day]!;
@@ -136,9 +185,55 @@ class _ScheduleAvailabilityWidgetState
     });
   }
 
-  void _submitAvailability() {
-    // TODO: Implement submit logic
-    print('Submitting availability: $_dayAvailability');
+  String _getFormattedWeekDates() {
+    if (_weekStartDate.isEmpty) return 'Loading...';
+    try {
+      final monday = DateTime.parse(_weekStartDate);
+      final sunday = DateTime.parse(_weekEndDate);
+      final monthName = DateFormat('MMM').format(monday);
+      return '$monthName ${monday.day} - ${DateFormat('MMM').format(sunday)} ${sunday.day}, ${monday.year}';
+    } catch (e) {
+      return 'This Week';
+    }
+  }
+
+  void _submitAvailability() async {
+    if (_weekStartDate.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Week dates not set, please try again')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await _api.submitWeeklyAvailability(
+        weekStartDate: _weekStartDate,
+        monday: _dayAvailability['Mon'] ?? true,
+        tuesday: _dayAvailability['Tue'] ?? true,
+        wednesday: _dayAvailability['Wed'] ?? true,
+        thursday: _dayAvailability['Thu'] ?? true,
+        friday: _dayAvailability['Fri'] ?? true,
+        saturday: _dayAvailability['Sat'] ?? false,
+        sunday: false,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Availability submitted successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -203,9 +298,9 @@ class _ScheduleAvailabilityWidgetState
                             ],
                           ),
                           const SizedBox(height: 4),
-                          const Text(
-                            'Nov 18 - Nov 24, 2024',
-                            style: TextStyle(
+                          Text(
+                            _getFormattedWeekDates(),
+                            style: const TextStyle(
                               color: Color(0xFF626C70),
                               fontSize: 12,
                               fontFamily: 'Inter',
@@ -292,29 +387,44 @@ class _ScheduleAvailabilityWidgetState
             ],
           ),
           const SizedBox(height: 16),
-          // Submit button
+          // Submit button with loading state
           GestureDetector(
-            onTap: _submitAvailability,
+            onTap: _isLoading ? null : _submitAvailability,
             child: Container(
               width: containerWidth,
               height: 56,
               decoration: ShapeDecoration(
-                color: const Color(0xFF005CE7),
+                color:
+                    _isLoading
+                        ? const Color(0xFFCCCCCC)
+                        : const Color(0xFF005CE7),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              child: const Center(
-                child: Text(
-                  'Submit Availability',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.w700,
-                    height: 1.50,
-                  ),
-                ),
+              child: Center(
+                child:
+                    _isLoading
+                        ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                            strokeWidth: 2,
+                          ),
+                        )
+                        : const Text(
+                          'Submit Availability',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w700,
+                            height: 1.50,
+                          ),
+                        ),
               ),
             ),
           ),
@@ -471,8 +581,42 @@ class _ScheduleAvailabilityWidgetState
 }
 
 // Day Off Requests Card
-class DayOffRequestsWidget extends StatelessWidget {
+class DayOffRequestsWidget extends StatefulWidget {
   const DayOffRequestsWidget({Key? key}) : super(key: key);
+
+  @override
+  State<DayOffRequestsWidget> createState() => _DayOffRequestsWidgetState();
+}
+
+class _DayOffRequestsWidgetState extends State<DayOffRequestsWidget> {
+  late APIService _api;
+  List<Map<String, dynamic>> _dayOffRequests = [];
+  bool _isLoadingRequests = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _api = APIService(roleOverride: AppRole.staff);
+    _loadDayOffRequests();
+  }
+
+  Future<void> _loadDayOffRequests() async {
+    setState(() => _isLoadingRequests = true);
+    try {
+      final requests = await _api.getMyDayOffRequests();
+      if (mounted) {
+        setState(() => _dayOffRequests = requests);
+      }
+    } catch (e) {
+      print('[DayOffRequests] Error loading requests: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingRequests = false);
+    }
+  }
+
+  void _refreshRequests() {
+    _loadDayOffRequests();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -548,24 +692,27 @@ class DayOffRequestsWidget extends StatelessWidget {
                     child: InkWell(
                       borderRadius: BorderRadius.circular(8),
                       onTap: () async {
-                        final DayOffResult? res =
-                            await showModalBottomSheet<DayOffResult>(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (ctx) => const DayOffRequest(),
-                            );
-
-                        if (res != null && context.mounted) {
-                          final days = res.selectedDates.length;
-                          final reason = res.reason;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Day off request submitted: $days day(s) — $reason',
+                        final result = await showModalBottomSheet<bool>(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder:
+                              (ctx) => DayOffRequestForm(
+                                api: _api,
+                                onSubmitSuccess: _refreshRequests,
                               ),
+                        );
+
+                        if (result == true && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Day off request submitted successfully!',
+                              ),
+                              backgroundColor: Colors.green,
                             ),
                           );
+                          _refreshRequests();
                         }
                       },
                       child: Container(
@@ -607,6 +754,342 @@ class DayOffRequestsWidget extends StatelessWidget {
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Day Off Request Form (new component for submitting requests)
+class DayOffRequestForm extends StatefulWidget {
+  final APIService api;
+  final VoidCallback onSubmitSuccess;
+
+  const DayOffRequestForm({
+    Key? key,
+    required this.api,
+    required this.onSubmitSuccess,
+  }) : super(key: key);
+
+  @override
+  State<DayOffRequestForm> createState() => _DayOffRequestFormState();
+}
+
+class _DayOffRequestFormState extends State<DayOffRequestForm> {
+  final TextEditingController _dateController = TextEditingController();
+  final TextEditingController _reasonController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+  bool _isSubmitting = false;
+
+  Future<void> _selectDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().add(const Duration(days: 1)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) {
+      setState(() {
+        _dateController.text =
+            '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+      });
+    }
+  }
+
+  Future<void> _submitRequest() async {
+    final trimmedReason = _reasonController.text.trim();
+    if (_dateController.text.isEmpty || trimmedReason.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in all required fields')),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    try {
+      await widget.api.submitDayOffRequest(
+        requestDate: _dateController.text.trim(),
+        reason: trimmedReason,
+        description:
+            _descriptionController.text.trim().isNotEmpty
+                ? _descriptionController.text.trim()
+                : null,
+      );
+      widget.onSubmitSuccess();
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      print('[DayOffRequestForm] Error submitting day-off request: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _dateController.dispose();
+    _reasonController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: SafeArea(
+        top: false,
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          child: Material(
+            color: Colors.white,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 44,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Request Day Off',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Request Date',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: _selectDate,
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey[300]!),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              _dateController.text.isEmpty
+                                  ? 'Select a date'
+                                  : _dateController.text,
+                              style: TextStyle(
+                                color:
+                                    _dateController.text.isEmpty
+                                        ? Colors.grey
+                                        : Colors.black,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Reason',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _reasonController,
+                          decoration: InputDecoration(
+                            hintText: 'e.g., Sick leave, Vacation, Personal',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Description (Optional)',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _descriptionController,
+                          maxLines: 3,
+                          decoration: InputDecoration(
+                            hintText: 'Additional details...',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _isSubmitting ? null : _submitRequest,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF005CE7),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              disabledBackgroundColor: Colors.grey[400],
+                            ),
+                            child:
+                                _isSubmitting
+                                    ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
+                                            ),
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                    : const Text(
+                                      'Submit Request',
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Real-time Status Update Widget
+class RealTimeStatusWidget extends StatefulWidget {
+  final VoidCallback onStatusChanged;
+
+  const RealTimeStatusWidget({Key? key, required this.onStatusChanged})
+    : super(key: key);
+
+  @override
+  State<RealTimeStatusWidget> createState() => _RealTimeStatusWidgetState();
+}
+
+class _RealTimeStatusWidgetState extends State<RealTimeStatusWidget> {
+  final APIService _api = APIService(roleOverride: AppRole.staff);
+  String _currentStatus = 'available';
+  bool _isUpdating = false;
+  final Map<String, String> _statusLabels = {
+    'available': 'Available',
+    'busy': 'Busy',
+    'on_break': 'On Break',
+    'unavailable': 'Unavailable',
+    'off_duty': 'Off Duty',
+  };
+
+  final Map<String, Color> _statusColors = {
+    'available': const Color(0xFF0FAF62),
+    'busy': const Color(0xFFFFA500),
+    'on_break': const Color(0xFF005CE7),
+    'unavailable': const Color(0xFFE84545),
+    'off_duty': const Color(0xFF626C70),
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentStatus();
+  }
+
+  Future<void> _loadCurrentStatus() async {
+    try {
+      final status = await _api.getRealTimeStatus();
+      if (mounted) {
+        setState(
+          () => _currentStatus = status['current_status'] ?? 'available',
+        );
+      }
+    } catch (e) {
+      print('[RealTimeStatus] Error loading status: $e');
+    }
+  }
+
+  Future<void> _updateStatus(String newStatus) async {
+    setState(() => _isUpdating = true);
+    try {
+      await _api.updateRealTimeStatus(status: newStatus);
+      if (mounted) {
+        setState(() => _currentStatus = newStatus);
+        widget.onStatusChanged();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Status updated to ${_statusLabels[newStatus]}'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUpdating = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'My Status',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children:
+                _statusLabels.keys.map((status) {
+                  final isSelected = _currentStatus == status;
+                  return ChoiceChip(
+                    label: Text(_statusLabels[status]!),
+                    selected: isSelected,
+                    onSelected:
+                        _isUpdating ? null : (_) => _updateStatus(status),
+                    backgroundColor: Colors.white,
+                    selectedColor: _statusColors[status],
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : Colors.black,
+                    ),
+                  );
+                }).toList(),
           ),
         ],
       ),

@@ -400,6 +400,39 @@ class _JobServiceConcernSlipDialogState
     return staff['user_id'] ?? staff['id'] ?? '';
   }
 
+  // Clean person name (no id/department suffixes)
+  String _getStaffPersonName(Map<String, dynamic> staff) {
+    String name =
+        (((staff['first_name'] ?? '').toString().trim()) +
+                ' ' +
+                ((staff['last_name'] ?? '').toString().trim()))
+            .trim();
+    if (name.isEmpty || name == 'null') {
+      name =
+          (staff['name'] ?? staff['full_name'] ?? staff['display_name'] ?? '')
+              .toString()
+              .trim();
+    }
+    return name.isNotEmpty ? name : 'Staff Member';
+  }
+
+  // Match a token (id or code like S-0023) against common identifier fields
+  bool _matchesStaffIdentifier(Map<String, dynamic> m, String token) {
+    final t = token.toString().trim();
+    if (t.isEmpty) return false;
+    bool eq(dynamic v) =>
+        v != null && v.toString().trim().toLowerCase() == t.toLowerCase();
+    return eq(m['user_id']) ||
+        eq(m['id']) ||
+        eq(m['employee_id']) ||
+        eq(m['staff_no']) ||
+        eq(m['staff_code']) ||
+        eq(m['code']) ||
+        eq(m['formatted_id']) ||
+        eq(m['staff_id']) ||
+        eq(m['uid']);
+  }
+
   String _extractStaffName() {
     try {
       final s = task['staffName'];
@@ -474,18 +507,21 @@ class _JobServiceConcernSlipDialogState
     if (dateString == null || dateString.isEmpty) return 'N/A';
     try {
       final s = dateString.trim();
-      
+
       // If it looks like an already-formatted schedule availability string, return as-is
       // Format: "Dec 10 | 11:45 am - 3:00 pm" or "December 10, 2-4 PM"
-      if (s.contains('|') && s.contains(' am') || s.contains('|') && s.contains(' pm')) {
+      if (s.contains('|') && s.contains(' am') ||
+          s.contains('|') && s.contains(' pm')) {
         print('[SCHEDULE_FORMAT] Returning already-formatted schedule: $s');
         return s;
       }
-      if (s.contains(',') && (s.contains(' am') || s.contains(' pm')) && s.contains('-')) {
+      if (s.contains(',') &&
+          (s.contains(' am') || s.contains(' pm')) &&
+          s.contains('-')) {
         print('[SCHEDULE_FORMAT] Returning already-formatted schedule: $s');
         return s;
       }
-      
+
       if (s.contains(' - ')) {
         final parts = s.split(' - ');
         final left = parts[0].trim();
@@ -921,6 +957,18 @@ class _JobServiceConcernSlipDialogState
   Widget _buildAutoAssignedStaffDisplay() {
     // Use assigned staff or fallback to selectedStaffName
     String staffName = selectedStaffName ?? '';
+
+    String _resolveFromLoadedList(String id) {
+      try {
+        final found = _staffList.firstWhere(
+          (m) => _matchesStaffIdentifier(m, id),
+          orElse: () => <String, dynamic>{},
+        );
+        if (found.isNotEmpty) return _getStaffPersonName(found);
+      } catch (_) {}
+      return '';
+    }
+
     if (staffName.isEmpty) {
       final data = task;
       dynamic assignedStaff =
@@ -928,24 +976,38 @@ class _JobServiceConcernSlipDialogState
           data['rawData']?['assigned_to'] ??
           data['assigned_staff'] ??
           data['assigned_to'] ??
-          data['assigned_staff_name'];
+          data['assigned_staff_name'] ??
+          data['assigned_staff_id'];
 
       if (assignedStaff != null) {
         if (assignedStaff is String) {
-          staffName = assignedStaff;
+          final s = assignedStaff.trim();
+          final fromList = _resolveFromLoadedList(s);
+          if (fromList.isNotEmpty) {
+            staffName = fromList;
+          } else {
+            staffName = s; // treat as already-human name
+          }
         } else if (assignedStaff is Map<String, dynamic>) {
-          staffName =
-              assignedStaff['name'] ??
-              assignedStaff['full_name'] ??
-              ((assignedStaff['first_name'] ?? '') +
-                      ' ' +
-                      (assignedStaff['last_name'] ?? ''))
-                  .trim();
+          staffName = _getStaffPersonName(assignedStaff);
+          if (staffName.isEmpty || staffName == 'Staff Member') {
+            final id =
+                (assignedStaff['user_id'] ??
+                        assignedStaff['id'] ??
+                        assignedStaff['employee_id'] ??
+                        assignedStaff['staff_id'])
+                    ?.toString();
+            if (id != null && id.isNotEmpty) {
+              final fromList = _resolveFromLoadedList(id);
+              if (fromList.isNotEmpty) staffName = fromList;
+            }
+          }
         } else {
           staffName = assignedStaff.toString();
         }
       }
     }
+
     if (staffName.isEmpty) staffName = 'Staff Member';
 
     return Column(
@@ -1125,7 +1187,10 @@ class _JobServiceConcernSlipDialogState
                 'SCHEDULE DATE',
                 selectedDate != null
                     ? UiDateUtils.dateTimeRange(selectedDate!, selectedEndDate)
-                    : _formatScheduleDate(task['schedule_availability'] ?? task['rawData']?['schedule_availability']),
+                    : _formatScheduleDate(
+                      task['schedule_availability'] ??
+                          task['rawData']?['schedule_availability'],
+                    ),
               ),
             ),
           ],

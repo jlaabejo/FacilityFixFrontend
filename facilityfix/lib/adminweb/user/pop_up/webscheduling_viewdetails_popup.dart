@@ -99,16 +99,15 @@ class _WebSchedulingViewDetailsContentState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                    // Header title
-                    _buildScheduleHeader(),
-                    const SizedBox(height: 12),
-                    _buildStaffAvailabilityOverview(),
+                // Header title
+                _buildScheduleHeader(),
+                const SizedBox(height: 12),
+                _buildStaffAvailabilityOverview(),
                 const SizedBox(height: 24),
                 Divider(color: Colors.grey[200], thickness: 1, height: 1),
                 const SizedBox(height: 24),
 
                 // Basic Info removed (now available in the overview above to avoid redundancy)
-
                 Divider(color: Colors.grey[200], thickness: 1, height: 1),
                 const SizedBox(height: 24),
 
@@ -194,21 +193,24 @@ class _WebSchedulingViewDetailsContentState
           children: [
             Text(
               'ID: $id',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
             ),
             const SizedBox(width: 12),
             // Add Availability ID if present and different from ID
-            Builder(builder: (ctx) {
-              final availId = _scheduleData['availability_id'] ?? _scheduleData['availabilityId'] ?? _scheduleData['avail_id'];
-              if (availId == null || availId.toString().trim().isEmpty) return const SizedBox.shrink();
-              return Text(
-                'Availability ID: $availId',
-                style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-              );
-            })
+            Builder(
+              builder: (ctx) {
+                final availId =
+                    _scheduleData['availability_id'] ??
+                    _scheduleData['availabilityId'] ??
+                    _scheduleData['avail_id'];
+                if (availId == null || availId.toString().trim().isEmpty)
+                  return const SizedBox.shrink();
+                return Text(
+                  'Availability ID: $availId',
+                  style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                );
+              },
+            ),
           ],
         ),
       ],
@@ -217,11 +219,14 @@ class _WebSchedulingViewDetailsContentState
 
   // Small overview panel that summarizes the staff's availability
   Widget _buildStaffAvailabilityOverview() {
-    final staffName = _scheduleData['staffName'] ?? _scheduleData['name'] ?? 'Staff Member';
+    final staffName =
+        _scheduleData['staffName'] ?? _scheduleData['name'] ?? 'Staff Member';
     final department = _scheduleData['department'] ?? 'N/A';
     final weekDates = _formatWeekDates();
     final availability = _getAvailabilityStatus();
-    final lastUpdated = _formatDate(_scheduleData['lastUpdated'] ?? _scheduleData['updated_at']);
+    final lastUpdated = _formatDate(
+      _scheduleData['lastUpdated'] ?? _scheduleData['updated_at'],
+    );
 
     return Container(
       width: double.infinity,
@@ -239,11 +244,23 @@ class _WebSchedulingViewDetailsContentState
             children: [
               Expanded(
                 flex: 3,
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(staffName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 6),
-                  Text(department, style: const TextStyle(fontSize: 13, color: Colors.grey)),
-                ]),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      staffName,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      department,
+                      style: const TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
+                  ],
+                ),
               ),
               Expanded(
                 flex: 2,
@@ -253,12 +270,19 @@ class _WebSchedulingViewDetailsContentState
                 flex: 2,
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: _statusChipWidget(availability['text'] ?? '', availability['color'] as Color),
+                  child: _statusChipWidget(
+                    availability['text'] ?? '',
+                    availability['color'] as Color,
+                  ),
                 ),
               ),
               Expanded(
                 flex: 2,
-                child: Text(lastUpdated, textAlign: TextAlign.right, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                child: Text(
+                  lastUpdated,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(fontSize: 13, color: Colors.grey),
+                ),
               ),
             ],
           ),
@@ -269,9 +293,13 @@ class _WebSchedulingViewDetailsContentState
 
   Widget _buildPerDayAvailability() {
     // Determine availability map per day if present in payload
-    final candidate = _scheduleData['dayAvailability'] ?? _scheduleData['per_day'] ?? _scheduleData['days'] ?? _scheduleData['dailyAvailability'] ?? _scheduleData['availability'] ?? null;
     Map<String, dynamic>? daysMap;
-    if (candidate == null) return const SizedBox.shrink();
+    // Try multiple possible field names
+    final candidate =
+        _scheduleData['per_day'] ??
+        _scheduleData['dayAvailability'] ??
+        _scheduleData['availability'] ??
+        _scheduleData['availabilityData'];
 
     if (candidate is Map<String, dynamic>) {
       daysMap = candidate;
@@ -281,7 +309,8 @@ class _WebSchedulingViewDetailsContentState
       for (final el in candidate) {
         if (el is Map) {
           final day = (el['day'] ?? el['name'])?.toString();
-          final available = el['available'] ?? el['isAvailable'] ?? el['status'];
+          final available =
+              el['available'] ?? el['isAvailable'] ?? el['status'];
           if (day != null) daysMap[day] = available;
         }
       }
@@ -289,57 +318,117 @@ class _WebSchedulingViewDetailsContentState
       return const SizedBox.shrink();
     }
 
+    if (daysMap == null || daysMap.isEmpty) return const SizedBox.shrink();
+
     // Normalize keys: allow 'Monday'/'monday'/'MON' etc
     final normalized = <String, dynamic>{};
     daysMap.forEach((k, v) {
       try {
-        final keyStr = k.toString();
-        if (keyStr.length > 3) {
-          final short = keyStr.substring(0, 3);
-          normalized[short[0].toUpperCase() + short.substring(1).toLowerCase()] = v;
-        } else {
-          normalized[keyStr[0].toUpperCase() + keyStr.substring(1).toLowerCase()] = v;
+        final keyStr = k.toString().toLowerCase();
+        final dayNames = [
+          'monday',
+          'tuesday',
+          'wednesday',
+          'thursday',
+          'friday',
+          'saturday',
+          'sunday',
+        ];
+        final shortNames = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+        String normalizedKey = keyStr;
+        for (int i = 0; i < dayNames.length; i++) {
+          if (keyStr == dayNames[i] || keyStr == shortNames[i]) {
+            normalizedKey = dayNames[i];
+            break;
+          }
         }
+        normalized[normalizedKey] = v;
       } catch (e) {
-        normalized[k.toString()] = v;
+        normalized[k.toString().toLowerCase()] = v;
       }
     });
 
-    final ordered = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    final dayNames = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    final dayKeys = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+    ];
     final widgets = <Widget>[];
-    for (final d in ordered) {
-      final val = normalized[d] ?? normalized[d.toLowerCase()] ?? normalized[d.substring(0,1).toLowerCase()] ?? null;
+    for (int i = 0; i < dayNames.length; i++) {
+      final val = normalized[dayKeys[i]];
       bool isAvail = false;
       String label = 'Unavailable';
+
       if (val is bool) {
         isAvail = val;
         label = isAvail ? 'Available' : 'Unavailable';
       } else if (val is String) {
         final low = val.toLowerCase();
-        isAvail = low.contains('avail') || low == 'true' || low == '1';
+        isAvail =
+            low.contains('avail') ||
+            low == 'true' ||
+            low == '1' ||
+            low == 'yes';
         label = isAvail ? 'Available' : 'Unavailable';
       }
-      widgets.add(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        margin: const EdgeInsets.only(right: 8, bottom: 8),
-        decoration: BoxDecoration(
-          color: isAvail ? const Color(0xFFE7F7EF) : const Color(0xFFF5F6F7),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: isAvail ? const Color(0xFF0FAF62) : const Color(0xFFE5E6E8)),
+
+      widgets.add(
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          margin: const EdgeInsets.only(right: 8, bottom: 8),
+          decoration: BoxDecoration(
+            color: isAvail ? const Color(0xFFE7F7EF) : const Color(0xFFF5F6F7),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color:
+                  isAvail ? const Color(0xFF0FAF62) : const Color(0xFFE5E6E8),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                dayNames[i].substring(0, 3),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color:
+                      isAvail
+                          ? const Color(0xFF0FAF62)
+                          : const Color(0xFF9AA0A6),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(color: Color(0xFF626C70), fontSize: 13),
+              ),
+            ],
+          ),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Text(d, style: TextStyle(fontWeight: FontWeight.w700, color: isAvail ? const Color(0xFF0FAF62) : const Color(0xFF9AA0A6))),
-          const SizedBox(width: 8),
-          Text(label, style: const TextStyle(color: Color(0xFF626C70))),
-        ]),
-      ));
+      );
     }
+
+    if (widgets.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 12),
-        _buildSectionTitle('Per Day Availability'),
+        _buildSectionTitle('Weekly Availability'),
         const SizedBox(height: 8),
         Wrap(children: widgets),
         const SizedBox(height: 12),
@@ -377,30 +466,30 @@ class _WebSchedulingViewDetailsContentState
   Widget _buildRequestDetailsGrid() {
     final availabilityStatus = _getAvailabilityStatus();
     final weekDates = _formatWeekDates();
+    final perDay = _buildPerDayAvailability();
 
     // Keep schedule details minimal to avoid duplication with the overview
     // Show supplemental fields (notes/remarks) or other non-duplicated info
-    final note = (_scheduleData['notes'] ?? _scheduleData['remarks'] ?? '').toString();
+    final note =
+        (_scheduleData['notes'] ?? _scheduleData['remarks'] ?? '').toString();
     final extraFields = <Widget>[];
     if (note.trim().isNotEmpty) {
       extraFields.add(_buildInfoTile('Notes', note));
     }
 
-    if (extraFields.isEmpty) {
+    if (extraFields.isEmpty && perDay.runtimeType == SizedBox) {
       // Nothing extra to show — keep a minimal placeholder
       extraFields.add(
-        const Text('No additional schedule details available', style: TextStyle(color: Colors.grey)),
+        const Text(
+          'No additional schedule details available',
+          style: TextStyle(color: Colors.grey),
+        ),
       );
     }
 
-    // Add per-day availability block if present
-    final perDay = _buildPerDayAvailability();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ...extraFields,
-        perDay,
-      ],
+      children: [...extraFields, perDay],
     );
   }
 
@@ -548,9 +637,16 @@ class _WebSchedulingViewDetailsContentState
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
           const SizedBox(width: 8),
-          Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+          Text(
+            text,
+            style: TextStyle(color: color, fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     );

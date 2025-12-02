@@ -60,7 +60,9 @@ class ApiService {
   // ============================================
 
   /// Register new equipment (Admin only)
-  Future<Map<String, dynamic>> registerEquipment(Map<String, dynamic> equipmentData) async {
+  Future<Map<String, dynamic>> registerEquipment(
+    Map<String, dynamic> equipmentData,
+  ) async {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.post(
@@ -75,8 +77,10 @@ class ApiService {
         String err = response.body;
         try {
           final Map<String, dynamic> eBody = json.decode(response.body);
-          if (eBody.containsKey('detail')) err = eBody['detail'].toString();
-          else if (eBody.containsKey('message')) err = eBody['message'].toString();
+          if (eBody.containsKey('detail'))
+            err = eBody['detail'].toString();
+          else if (eBody.containsKey('message'))
+            err = eBody['message'].toString();
         } catch (_) {}
         throw Exception('Failed to register equipment: $err');
       }
@@ -97,7 +101,8 @@ class ApiService {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return json.decode(response.body) as Map<String, dynamic>;
       } else {
-        final error = 'Failed to fetch equipment details: ${response.statusCode} ${response.body}';
+        final error =
+            'Failed to fetch equipment details: ${response.statusCode} ${response.body}';
         throw Exception(error);
       }
     } catch (e) {
@@ -107,7 +112,10 @@ class ApiService {
   }
 
   /// Update equipment by id (Admin only)
-  Future<Map<String, dynamic>> updateEquipment(String equipmentId, Map<String, dynamic> updateData) async {
+  Future<Map<String, dynamic>> updateEquipment(
+    String equipmentId,
+    Map<String, dynamic> updateData,
+  ) async {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.put(
@@ -119,7 +127,9 @@ class ApiService {
         return json.decode(response.body) as Map<String, dynamic>;
       } else {
         String err = response.body;
-        try { err = json.decode(response.body)['detail'] ?? err; } catch (_) {}
+        try {
+          err = json.decode(response.body)['detail'] ?? err;
+        } catch (_) {}
         throw Exception('Failed to update equipment: $err');
       }
     } catch (e) {
@@ -139,7 +149,8 @@ class ApiService {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return json.decode(response.body) as Map<String, dynamic>;
       } else {
-        final error = 'Failed to delete equipment: ${response.statusCode} ${response.body}';
+        final error =
+            'Failed to delete equipment: ${response.statusCode} ${response.body}';
         throw Exception(error);
       }
     } catch (e) {
@@ -149,17 +160,24 @@ class ApiService {
   }
 
   /// List all equipment for a building (Admin only)
-  Future<List<Map<String, dynamic>>> listEquipmentByBuilding(String buildingId, {bool includeInactive = false}) async {
+  Future<List<Map<String, dynamic>>> listEquipmentByBuilding(
+    String buildingId, {
+    bool includeInactive = false,
+  }) async {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.get(
-        Uri.parse('$baseUrl/equipment/buildings/$buildingId?include_inactive=$includeInactive'),
+        Uri.parse(
+          '$baseUrl/equipment/buildings/$buildingId?include_inactive=$includeInactive',
+        ),
         headers: headers,
       );
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final decoded = json.decode(response.body);
         // Backend returns {'success': True, 'data': items, 'count': N}
-        if (decoded is Map && decoded.containsKey('data') && decoded['data'] is List) {
+        if (decoded is Map &&
+            decoded.containsKey('data') &&
+            decoded['data'] is List) {
           return List<Map<String, dynamic>>.from(decoded['data']);
         }
         // fallback: assume the response is already a list
@@ -168,7 +186,8 @@ class ApiService {
         }
         return [];
       } else {
-        final error = 'Failed to list equipment: ${response.statusCode} ${response.body}';
+        final error =
+            'Failed to list equipment: ${response.statusCode} ${response.body}';
         throw Exception(error);
       }
     } catch (e) {
@@ -178,16 +197,23 @@ class ApiService {
   }
 
   /// Search equipment for a building
-  Future<List<Map<String, dynamic>>> searchEquipment(String buildingId, String q) async {
+  Future<List<Map<String, dynamic>>> searchEquipment(
+    String buildingId,
+    String q,
+  ) async {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.get(
-        Uri.parse('$baseUrl/equipment/buildings/$buildingId/search?q=${Uri.encodeQueryComponent(q)}'),
+        Uri.parse(
+          '$baseUrl/equipment/buildings/$buildingId/search?q=${Uri.encodeQueryComponent(q)}',
+        ),
         headers: headers,
       );
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final decoded = json.decode(response.body);
-        if (decoded is Map && decoded.containsKey('data') && decoded['data'] is List) {
+        if (decoded is Map &&
+            decoded.containsKey('data') &&
+            decoded['data'] is List) {
           return List<Map<String, dynamic>>.from(decoded['data']);
         }
         if (decoded is List) {
@@ -195,7 +221,8 @@ class ApiService {
         }
         return [];
       } else {
-        final error = 'Failed to search equipment: ${response.statusCode} ${response.body}';
+        final error =
+            'Failed to search equipment: ${response.statusCode} ${response.body}';
         throw Exception(error);
       }
     } catch (e) {
@@ -3628,6 +3655,79 @@ class ApiService {
       }
     } catch (e) {
       print('[v0] Error fetching building statistics: $e');
+      rethrow;
+    }
+  }
+
+  /// Bulk approve day-off requests
+  Future<Map<String, dynamic>> bulkApproveDayOffRequests(
+    List<String> requestIds, {
+    String? adminNotes,
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final body = json.encode({
+        'request_ids': requestIds,
+        if (adminNotes != null && adminNotes.isNotEmpty)
+          'admin_notes': adminNotes,
+      });
+
+      print(
+        '[ApiService] Bulk approving ${requestIds.length} day-off requests',
+      );
+      final response = await http.patch(
+        Uri.parse('$baseUrl/staff-scheduling/day-off/bulk/approve'),
+        headers: headers,
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        final result = json.decode(response.body);
+        print('[ApiService] Bulk approve result: $result');
+        return result;
+      } else {
+        throw Exception(
+          'Failed to bulk approve day-off requests: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error bulk approving day-off requests: $e');
+      rethrow;
+    }
+  }
+
+  /// Bulk reject day-off requests
+  Future<Map<String, dynamic>> bulkRejectDayOffRequests(
+    List<String> requestIds,
+    String rejectionReason,
+  ) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final body = json.encode({
+        'request_ids': requestIds,
+        'rejection_reason': rejectionReason,
+      });
+
+      print(
+        '[ApiService] Bulk rejecting ${requestIds.length} day-off requests',
+      );
+      final response = await http.patch(
+        Uri.parse('$baseUrl/staff-scheduling/day-off/bulk/reject'),
+        headers: headers,
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        final result = json.decode(response.body);
+        print('[ApiService] Bulk reject result: $result');
+        return result;
+      } else {
+        throw Exception(
+          'Failed to bulk reject day-off requests: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      print('[API] Error bulk rejecting day-off requests: $e');
       rethrow;
     }
   }

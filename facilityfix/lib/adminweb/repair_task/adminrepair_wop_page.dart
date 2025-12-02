@@ -165,29 +165,9 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
 
   // Helper function to convert routeKey to actual route path
   static String? _getRoutePath(String routeKey) {
-<<<<<<< Updated upstream
-      final Map<String, String> pathMap = {
-        'dashboard': '/dashboard',
-        'user_users': '/user/users',
-        'user_scheduling': '/user/scheduling',
-        'work_maintenance': '/work/maintenance',
-        'work_repair': '/work/repair',
-        'calendar': '/calendar',
-        'inventory_equipment': '/inventory/equipment',
-        'inventory_items': '/inventory/items',
-        'inventory_request': '/inventory/request',
-        'analytics': '/analytics',
-        'announcement': '/announcement',
-        'settings': '/settings',
-        'logout': '/logout',
-      };
-      return pathMap[routeKey];
-    }
-=======
     final Map<String, String> pathMap = {
       'dashboard': '/dashboard',
       'user_users': '/user/users',
-      // 'user_roles': '/user/roles',
       'user_scheduling': '/user/scheduling',
       'work_maintenance': '/work/maintenance',
       'work_repair': '/work/repair',
@@ -202,7 +182,6 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     };
     return pathMap[routeKey];
   }
->>>>>>> Stashed changes
 
   // Handle logout functionality
   void _handleLogout(BuildContext context) {
@@ -245,7 +224,9 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     try {
       final permits = await _apiService.getAllWorkOrderPermits();
       print('[WOP] Fetched ${permits.length} permits from API');
-      print('[WOP] First permit (raw from API): ${permits.isNotEmpty ? permits[0] : "No permits"}');
+      print(
+        '[WOP] First permit (raw from API): ${permits.isNotEmpty ? permits[0] : "No permits"}',
+      );
 
       // Fetch concern slip data for each permit to get assessment and recommendation
       final tasks = <Map<String, dynamic>>[];
@@ -254,18 +235,27 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
         final rawPriority = permit['priority'] ?? 'low';
         final permitId = permit['formatted_id'] ?? permit['id'] ?? 'N/A';
         final permitStatus = permit['status'] ?? 'N/A';
-        
-        print('[WOP DEBUG] Permit $permitId: priority="$rawPriority", status="$permitStatus", workflowField="${permit['workflow'] ?? 'N/A'}');
-        
+
+        print(
+          '[WOP DEBUG] Permit $permitId: priority="$rawPriority", status="$permitStatus", workflowField="${permit['workflow'] ?? 'N/A'}',
+        );
+
         final mappedStatus = _mapStatus(permit['status'], permit['workflow']);
-        print('[WOP DEBUG] Status mapping: raw="${permit['status']}" -> mapped="$mappedStatus"');
+        print(
+          '[WOP DEBUG] Status mapping: raw="${permit['status']}" -> mapped="$mappedStatus"',
+        );
         print('[WOP DEBUG] All permit fields: ${permit.keys.join(", ")}');
         print('[WOP DEBUG] Full permit data: $permit');
-        
+
         Map<String, dynamic> taskData = {
           'serviceId': permit['formatted_id'] ?? permit['id'] ?? 'N/A',
-          'id': permit['formatted_id'] ?? permit['id'] ?? 'N/A', // PRIMARY ID for the work order permit (NOT concern slip)
-          'concernSlipId': permit['concern_slip_id'] ?? 'N/A', // Separate field for concern slip link
+          'id':
+              permit['formatted_id'] ??
+              permit['id'] ??
+              'N/A', // PRIMARY ID for the work order permit (NOT concern slip)
+          'concernSlipId':
+              permit['concern_slip_id'] ??
+              'N/A', // Separate field for concern slip link
           'internalId': permit['_doc_id'] ?? permit['id'] ?? 'N/A',
           'permitId': permit['id'] ?? 'N/A', // Add permit ID for actions
           'title': permit['title'] ?? 'Untitled Work Order',
@@ -288,8 +278,10 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
           'contractors': permit['contractors'] ?? [],
           'attachments': permit['attachments'] ?? [],
         };
-        
-        print('[WOP DEBUG] Mapped $permitId: priority="${taskData['priority']}"');
+
+        print(
+          '[WOP DEBUG] Mapped $permitId: priority="${taskData['priority']}"',
+        );
 
         // Fetch concern slip data if concern_slip_id exists
         final concernSlipId = permit['concern_slip_id'];
@@ -309,10 +301,16 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
             // NOTE: DO NOT override the permit priority with concern slip priority
             // The permit's priority field is what gets escalated by the auto-escalation service
             // The concern slip priority is the original assessment and should not override escalations
-            print('[WOP DEBUG] Concern slip $concernSlipId fetched (assessment and recommendation updated, priority NOT overridden)');
+            print(
+              '[WOP DEBUG] Concern slip $concernSlipId fetched (assessment and recommendation updated, priority NOT overridden)',
+            );
             print('[WOP DEBUG] Concern slip status: ${concernSlip['status']}');
-            print('[WOP DEBUG] Task status before concern slip fetch: ${taskData['status']}');
-            print('[WOP DEBUG] Task status after concern slip fetch: ${taskData['status']}');
+            print(
+              '[WOP DEBUG] Task status before concern slip fetch: ${taskData['status']}',
+            );
+            print(
+              '[WOP DEBUG] Task status after concern slip fetch: ${taskData['status']}',
+            );
             // If concern slip has a priority field, prefer that as the displayed priority
             final csPriority =
                 concernSlip['priority'] ??
@@ -348,10 +346,12 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
         _filteredTasks = List.from(tasks);
         _isLoading = false;
       });
-      
+
       print('[WOP] Updated UI with ${tasks.length} work order permits');
       for (final task in tasks) {
-        print('[WOP] - ${task['serviceId']}: priority="${task['priority']}", status="${task['status']}"');
+        print(
+          '[WOP] - ${task['serviceId']}: priority="${task['priority']}", status="${task['status']}"',
+        );
       }
     } catch (e) {
       setState(() {
@@ -468,7 +468,8 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     if (s == 'sent') return 'Sent to Client';
     if (s == 'sent to client') return 'Sent to Client';
     if (s == 'approved') return 'Approved';
-    if (s == 'inspected') return 'Completed'; // Map "inspected" to "Completed" for consistency
+    if (s == 'inspected')
+      return 'Completed'; // Map "inspected" to "Completed" for consistency
     if (s == 'done') return 'Completed';
     // fallback
     return s.isNotEmpty ? '${s[0].toUpperCase()}${s.substring(1)}' : 'Pending';
@@ -1905,10 +1906,17 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor:
                                                 canApprove
-                                                    ? Colors.green
-                                                    : Colors.grey[400],
+                                                    ? Colors.green[600]
+                                                    : Colors.grey[300],
                                             disabledBackgroundColor:
-                                                Colors.grey[400],
+                                                Colors.grey[300],
+                                            foregroundColor:
+                                                canApprove
+                                                    ? Colors.white
+                                                    : Colors.grey[600],
+                                            disabledForegroundColor:
+                                                Colors.grey[600],
+                                            elevation: canApprove ? 2 : 0,
                                             padding: const EdgeInsets.symmetric(
                                               horizontal: 24,
                                               vertical: 12,
@@ -1938,9 +1946,17 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                                         backgroundColor:
                                             _selectedTaskIds.isNotEmpty
                                                 ? Colors.red[600]
-                                                : Colors.grey[400],
+                                                : Colors.grey[300],
                                         disabledBackgroundColor:
-                                            Colors.grey[400],
+                                            Colors.grey[300],
+                                        foregroundColor:
+                                            _selectedTaskIds.isNotEmpty
+                                                ? Colors.white
+                                                : Colors.grey[600],
+                                        disabledForegroundColor:
+                                            Colors.grey[600],
+                                        elevation:
+                                            _selectedTaskIds.isNotEmpty ? 2 : 0,
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 24,
                                           vertical: 12,
