@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/config/env.dart';
 import '../layout/facilityfix_layout.dart';
 import 'userwidgets/stat_card_widget.dart';
 import 'userwidgets/dayoffrequest_view.dart';
@@ -15,97 +17,27 @@ class StaffSchedulingPage extends StatefulWidget {
 
 class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
   // ---- Controllers and State Variables ----
-  String _selectedView = 'Staff List'; // Toggle between Staff List and Day Off Request
+  String _selectedView =
+      'Staff List'; // Toggle between Staff List and Day Off Request
   String _selectedDepartment = 'All Departments';
   String _selectedWeek = 'Current Week';
   String _searchQuery = '';
+  bool _isLoading = false;
 
   // ---- Pagination ----
   int _currentPage = 1;
   final int _itemsPerPage = 7;
 
-  // ---- Sample Data  ----
-  // TODO: Replace with actual API calls
-  final Map<String, dynamic> _statsData = {
-    'totalStaff': 24,
-    'availableThisWeek': 18,
-    'unavailable': 6,
-    'pendingSubmissions': 3,
+  // Data fetched from server
+  Map<String, dynamic> _statsData = {
+    'totalStaff': 0,
+    'availableThisWeek': 0,
+    'unavailable': 0,
+    'pendingSubmissions': 0,
   };
 
-  // Sample staff members with enhanced data for Staff List view
-  List<Map<String, dynamic>> _staffMembers = [
-    {
-      'id': '1',
-      'name': 'Noel Cruz',
-      'department': 'HVAC',
-      'role': 'Admin',
-      'thisWeek': '5/7 days',
-      'status': 'Available',
-      'nextWeek': 'Submitted',
-      'lastUpdated': '2 hours ago',
-    },
-    {
-      'id': '2',
-      'name': 'Juan Dela Cruz',
-      'department': 'Maintenance',
-      'role': 'Staff',
-      'thisWeek': '4/7 days',
-      'status': 'Available',
-      'nextWeek': 'Submitted',
-      'lastUpdated': '5 hours ago',
-    },
-    {
-      'id': '3',
-      'name': 'Maria Santos',
-      'department': 'HVAC',
-      'role': 'Staff',
-      'thisWeek': '6/7 days',
-      'status': 'Available',
-      'nextWeek': 'Pending',
-      'lastUpdated': '1 day ago',
-    },
-    {
-      'id': '4',
-      'name': 'Erika De Guzman',
-      'department': 'HVAC',
-      'role': 'Staff',
-      'thisWeek': '0/7 days',
-      'status': 'Unavailable',
-      'nextWeek': 'Pending',
-      'lastUpdated': '1 day ago',
-    },
-    {
-      'id': '5',
-      'name': 'Pedro Reyes',
-      'department': 'Maintenance',
-      'role': 'Staff',
-      'thisWeek': '5/7 days',
-      'status': 'Available',
-      'nextWeek': 'Submitted',
-      'lastUpdated': '3 hours ago',
-    },
-    {
-      'id': '6',
-      'name': 'Ana Garcia',
-      'department': 'Electrical',
-      'role': 'Staff',
-      'thisWeek': '5/7 days',
-      'status': 'Available',
-      'nextWeek': 'Submitted',
-      'lastUpdated': '4 hours ago',
-    },
-    {
-      'id': '7',
-      'name': 'Carlos Mendoza',
-      'department': 'Plumbing',
-      'role': 'Staff',
-      'thisWeek': '5/7 days',
-      'status': 'Available',
-      'nextWeek': 'Submitted',
-      'lastUpdated': '6 hours ago',
-    },
-  ];
+  List<Map<String, dynamic>> _staffMembers = [];
+  final APIService _api = APIService(roleOverride: AppRole.admin);
 
   // ---- Department List ----
   final List<String> _departments = [
@@ -119,31 +51,40 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
   ];
 
   // ---- Week Filter Options ----
-  final List<String> _weekOptions = [
-    'Current Week',
-    'Next Week',
-    'Last Week',
-  ];
+  final List<String> _weekOptions = ['Current Week', 'Next Week', 'Last Week'];
 
   // ---- Filtered Staff List ----
   List<Map<String, dynamic>> get _filteredStaff {
     var filtered = _staffMembers;
 
-    // Filter by department
+    // Filter by department (case-insensitive comparison)
     if (_selectedDepartment != 'All Departments') {
-      filtered = filtered
-          .where((staff) => staff['department'] == _selectedDepartment)
-          .toList();
+      filtered =
+          filtered.where((staff) {
+            final staffDept =
+                (staff['department'] ?? '').toString().trim().toLowerCase();
+            final selectedDept = _selectedDepartment.trim().toLowerCase();
+            return staffDept == selectedDept;
+          }).toList();
     }
 
     // Filter by search query
     if (_searchQuery.isNotEmpty) {
-      filtered = filtered
-          .where((staff) =>
-              staff['name'].toLowerCase().contains(_searchQuery.toLowerCase()) ||
-              staff['department'].toLowerCase().contains(_searchQuery.toLowerCase()) ||
-              staff['role'].toLowerCase().contains(_searchQuery.toLowerCase()))
-          .toList();
+      filtered =
+          filtered
+              .where(
+                (staff) =>
+                    (staff['name'] ?? '').toLowerCase().contains(
+                      _searchQuery.toLowerCase(),
+                    ) ||
+                    (staff['department'] ?? '').toLowerCase().contains(
+                      _searchQuery.toLowerCase(),
+                    ) ||
+                    (staff['role'] ?? '').toLowerCase().contains(
+                      _searchQuery.toLowerCase(),
+                    ),
+              )
+              .toList();
     }
 
     return filtered;
@@ -152,8 +93,67 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
   @override
   void initState() {
     super.initState();
-    // TODO: Fetch staff data from backend
-    // _fetchStaffSchedule();
+    _fetchOverviewAndStaff();
+  }
+
+  Future<void> _fetchOverviewAndStaff() async {
+    setState(() => _isLoading = true);
+    try {
+      final overview = await _api.getStaffScheduleOverview();
+      final staff = await _api.getStaffListWithStatus();
+
+      setState(() {
+        _statsData = {
+          'totalStaff': overview['total_staff'] ?? 0,
+          'availableThisWeek': overview['available_this_week'] ?? 0,
+          'unavailable': overview['unavailable_count'] ?? 0,
+          'pendingSubmissions': overview['pending_day_off_requests'] ?? 0,
+        };
+
+        // Normalize staff entries to expected fields used by the UI
+        _staffMembers =
+            staff.map((s) {
+              // Extract availability info from API response
+              final daysAvailableThisWeek =
+                  s['days_available_this_week'] ?? 'Unknown';
+              final availabilityStatus =
+                  s['availability_status'] ?? 'not_submitted';
+              final overallStatus = s['overall_status'] ?? 'Unavailable';
+              final lastActivityAt =
+                  s['last_activity'] ?? s['last_activity_at'] ?? '';
+
+              return {
+                'id':
+                    s['staff_id'] ??
+                    s['id'] ??
+                    s['user_id'] ??
+                    s['staffId'] ??
+                    '',
+                'name':
+                    '${s['first_name'] ?? ''} ${s['last_name'] ?? ''}'.trim(),
+                'department':
+                    (s['departments'] != null &&
+                            s['departments'] is List &&
+                            (s['departments'] as List).isNotEmpty)
+                        ? (s['departments'] as List).join(', ')
+                        : (s['department'] ?? 'Unknown'),
+                'role': s['role'] ?? s['user_role'] ?? 'Staff',
+                'thisWeek': daysAvailableThisWeek,
+                'status': overallStatus,
+                'nextWeek': s['next_week'] ?? s['nextWeek'] ?? 'Unknown',
+                'lastUpdated': lastActivityAt,
+                // Store additional data for modal
+                'availabilityData': s,
+              };
+            }).toList();
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading staff scheduling: $e')),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   // ---- Navigation Helper ----
@@ -201,37 +201,43 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
   }
 
   // ---- Handle Staff Row Click ----
-  void _handleStaffClick(Map<String, dynamic> staff) {
-    // TODO: Show staff details or edit dialog
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(staff['name']),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Department: ${staff['department']}'),
-            Text('Role: ${staff['role']}'),
-            Text('This Week: ${staff['thisWeek']}'),
-            Text('Status: ${staff['status']}'),
-            Text('Next Week: ${staff['nextWeek']}'),
-            Text('Last Updated: ${staff['lastUpdated']}'),
-            const SizedBox(height: 16),
-            const Text(
-              'This feature will be implemented with backend integration.',
-              style: TextStyle(fontStyle: FontStyle.italic),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
+  void _handleStaffClick(Map<String, dynamic> staff) async {
+    try {
+      final staffId = staff['id'];
+      final availabilityData = await _api.getStaffAvailabilityDetails(staffId);
+
+      if (!mounted) return;
+
+      // Merge the fetched availability data with staff info for the modal
+      final scheduleData = {
+        ...staff,
+        'availabilityData': availabilityData,
+        'per_day': _convertAvailabilityToDaysMap(availabilityData),
+      };
+
+      // Import and use the detailed schedule dialog
+      await WebSchedulingViewDetailsDialog.show(context, scheduleData);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading availability details: $e')),
+        );
+      }
+    }
+  }
+
+  Map<String, dynamic> _convertAvailabilityToDaysMap(
+    Map<String, dynamic> availData,
+  ) {
+    return {
+      'monday': availData['monday'] ?? true,
+      'tuesday': availData['tuesday'] ?? true,
+      'wednesday': availData['wednesday'] ?? true,
+      'thursday': availData['thursday'] ?? true,
+      'friday': availData['friday'] ?? true,
+      'saturday': availData['saturday'] ?? false,
+      'sunday': availData['sunday'] ?? false,
+    };
   }
 
   // ---- User Actions Menu ----
@@ -355,23 +361,11 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
         break;
 
       case 'approve':
-        // TODO: Implement approve functionality
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Approved ${staff['name']}\'s availability'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        _confirmAndApprove(staff);
         break;
 
       case 'reject':
-        // TODO: Implement reject functionality
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Rejected ${staff['name']}\'s availability'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+        _promptRejectReason(staff);
         break;
 
       case 'edit':
@@ -393,6 +387,114 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
           ),
         );
         break;
+    }
+  }
+
+  void _confirmAndApprove(Map<String, dynamic> staff) async {
+    final requestId = staff['day_off_request_id'] ?? staff['id'];
+    if (requestId == null || requestId.toString().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No request id available')));
+      return;
+    }
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Approve Request'),
+            content: Text('Approve day-off request for ${staff['name']}?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Approve'),
+              ),
+            ],
+          ),
+    );
+
+    if (ok != true) return;
+
+    try {
+      setState(() => _isLoading = true);
+      await _api.approveDayOffRequest(requestId.toString());
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Approved ${staff['name']}')));
+      await _fetchOverviewAndStaff();
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Approve failed: $e')));
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _promptRejectReason(Map<String, dynamic> staff) async {
+    final requestId = staff['day_off_request_id'] ?? staff['id'];
+    if (requestId == null || requestId.toString().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No request id available')));
+      return;
+    }
+
+    final TextEditingController _reasonController = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Reject Request'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Provide rejection reason for ${staff['name']}'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _reasonController,
+                  decoration: const InputDecoration(
+                    hintText: 'Rejection reason',
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Reject'),
+              ),
+            ],
+          ),
+    );
+
+    if (ok != true) return;
+
+    try {
+      setState(() => _isLoading = true);
+      await _api.rejectDayOffRequest(
+        requestId.toString(),
+        _reasonController.text.trim(),
+      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Rejected ${staff['name']}')));
+      await _fetchOverviewAndStaff();
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Reject failed: $e')));
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -467,10 +569,10 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
   List<Map<String, dynamic>> _getPaginatedStaff() {
     final startIndex = (_currentPage - 1) * _itemsPerPage;
     final endIndex = startIndex + _itemsPerPage;
-    
+
     final filteredStaff = _filteredStaff;
     if (startIndex >= filteredStaff.length) return [];
-    
+
     return filteredStaff.sublist(
       startIndex,
       endIndex > filteredStaff.length ? filteredStaff.length : endIndex,
@@ -479,7 +581,9 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
 
   int get _totalPages {
     final filteredStaff = _filteredStaff;
-    return filteredStaff.isEmpty ? 1 : (filteredStaff.length / _itemsPerPage).ceil();
+    return filteredStaff.isEmpty
+        ? 1
+        : (filteredStaff.length / _itemsPerPage).ceil();
   }
 
   void _goToPage(int page) {
@@ -508,23 +612,23 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
 
   List<Widget> _buildPageNumbers() {
     List<Widget> pageButtons = [];
-    
+
     // Show max 5 page numbers at a time
     int startPage = _currentPage - 2;
     int endPage = _currentPage + 2;
-    
+
     if (startPage < 1) {
       startPage = 1;
       endPage = 5;
     }
-    
+
     if (endPage > _totalPages) {
       endPage = _totalPages;
       startPage = _totalPages - 4;
     }
-    
+
     if (startPage < 1) startPage = 1;
-    
+
     for (int i = startPage; i <= endPage; i++) {
       pageButtons.add(
         GestureDetector(
@@ -534,7 +638,10 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
             height: 32,
             margin: const EdgeInsets.symmetric(horizontal: 2),
             decoration: BoxDecoration(
-              color: i == _currentPage ? const Color(0xFF1976D2) : Colors.grey[100],
+              color:
+                  i == _currentPage
+                      ? const Color(0xFF1976D2)
+                      : Colors.grey[100],
               borderRadius: BorderRadius.circular(6),
             ),
             child: Center(
@@ -551,7 +658,7 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
         ),
       );
     }
-    
+
     return pageButtons;
   }
 
@@ -582,6 +689,10 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
                   color: Colors.black87,
                 ),
               ),
+              const SizedBox(height: 8),
+
+              // Loading indicator
+              if (_isLoading) const LinearProgressIndicator(),
               const SizedBox(height: 8),
 
               // ---- Breadcrumb Navigation ----
@@ -673,8 +784,14 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _buildViewToggleButton('Staff List', _selectedView == 'Staff List'),
-                    _buildViewToggleButton('Day Off Request', _selectedView == 'Day Off Request'),
+                    _buildViewToggleButton(
+                      'Staff List',
+                      _selectedView == 'Staff List',
+                    ),
+                    _buildViewToggleButton(
+                      'Day Off Request',
+                      _selectedView == 'Day Off Request',
+                    ),
                   ],
                 ),
               ),
@@ -701,7 +818,10 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
                         padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
                           border: Border(
-                            bottom: BorderSide(color: Colors.grey[200]!, width: 1),
+                            bottom: BorderSide(
+                              color: Colors.grey[200]!,
+                              width: 1,
+                            ),
                           ),
                         ),
                         child: Row(
@@ -749,6 +869,48 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
                               ),
                             ),
                             const SizedBox(width: 16),
+                            // Department Filter Dropdown
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
+                              ),
+                              margin: const EdgeInsets.only(right: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                border: Border.all(color: Colors.grey[300]!),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _selectedDepartment,
+                                  icon: const Icon(
+                                    Icons.keyboard_arrow_down,
+                                    size: 20,
+                                  ),
+                                  items:
+                                      _departments.map((String dept) {
+                                        return DropdownMenuItem<String>(
+                                          value: dept,
+                                          child: Text(
+                                            dept,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                  onChanged: (String? newValue) {
+                                    if (newValue != null) {
+                                      setState(() {
+                                        _selectedDepartment = newValue;
+                                        _currentPage = 1; // Reset to first page
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
                             // Week Filter Dropdown
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -763,16 +925,22 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<String>(
                                   value: _selectedWeek,
-                                  icon: const Icon(Icons.keyboard_arrow_down, size: 20),
-                                  items: _weekOptions.map((String week) {
-                                    return DropdownMenuItem<String>(
-                                      value: week,
-                                      child: Text(
-                                        week,
-                                        style: const TextStyle(fontSize: 14),
-                                      ),
-                                    );
-                                  }).toList(),
+                                  icon: const Icon(
+                                    Icons.keyboard_arrow_down,
+                                    size: 20,
+                                  ),
+                                  items:
+                                      _weekOptions.map((String week) {
+                                        return DropdownMenuItem<String>(
+                                          value: week,
+                                          child: Text(
+                                            week,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
                                   onChanged: (String? newValue) {
                                     if (newValue != null) {
                                       setState(() {
@@ -888,139 +1056,145 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
                       // Table Body
                       _filteredStaff.isEmpty
                           ? Padding(
-                              padding: const EdgeInsets.all(48),
-                              child: Center(
-                                child: Column(
-                                  children: [
-                                    Icon(
-                                      Icons.people_outline,
-                                      size: 64,
-                                      color: Colors.grey[400],
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      'No staff members found',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.grey[600],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )
-                          : ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: _getPaginatedStaff().length,
-                              itemBuilder: (context, index) {
-                                final staff = _getPaginatedStaff()[index];
-                                return InkWell(
-                                  onTap: () => _handleStaffClick(staff),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 24,
-                                      vertical: 20,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      border: Border(
-                                        bottom: BorderSide(
-                                          color: Colors.grey[200]!,
-                                          width: 1,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        // Staff Name
-                                        Expanded(
-                                          flex: 3,
-                                          child: Text(
-                                            staff['name'],
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ),
-                                        // Role
-                                        Expanded(
-                                          flex: 2,
-                                          child: Align(
-                                            alignment: Alignment.centerLeft,
-                                            child: _buildRoleBadge(staff['role']),
-                                          ),
-                                        ),
-                                        // Department
-                                        Expanded(
-                                          flex: 2,
-                                          child: Text(
-                                            staff['department'],
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                        ),
-                                        // This Week
-                                        Expanded(
-                                          flex: 2,
-                                          child: Text(
-                                            staff['thisWeek'],
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                        ),
-                                        // Status
-                                        Expanded(
-                                          flex: 2,
-                                          child: Align(
-                                            alignment: Alignment.centerLeft,
-                                            child: _buildStatusBadge(staff['status']),
-                                          ),
-                                        ),
-                                        // Next Week
-                                        Expanded(
-                                          flex: 2,
-                                          child: Align(
-                                            alignment: Alignment.centerLeft,
-                                            child: _buildNextWeekBadge(staff['nextWeek']),
-                                          ),
-                                        ),
-                                        // Last Updated
-                                        Expanded(
-                                          flex: 2,
-                                          child: Text(
-                                            staff['lastUpdated'],
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.grey[600],
-                                            ),
-                                          ),
-                                        ),
-                                        // Menu Icon
-                                        Builder(
-                                          builder: (BuildContext buttonContext) {
-                                            return IconButton(
-                                              icon: const Icon(Icons.more_vert),
-                                              iconSize: 20,
-                                              color: Colors.grey[600],
-                                              onPressed: () {
-                                                final RenderBox button =
-                                                    buttonContext.findRenderObject() as RenderBox;
-                                                final position =
-                                                    button.localToGlobal(Offset.zero);
-                                                _showActionMenu(context, staff, position);
-                                              },
-                                            );
-                                          },
-                                        ),
-                                      ],
+                            padding: const EdgeInsets.all(48),
+                            child: Center(
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.people_outline,
+                                    size: 64,
+                                    color: Colors.grey[400],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No staff members found',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.grey[600],
                                     ),
                                   ),
-                                );
-                              },
+                                ],
+                              ),
                             ),
+                          )
+                          : ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _getPaginatedStaff().length,
+                            itemBuilder: (context, index) {
+                              final staff = _getPaginatedStaff()[index];
+                              return InkWell(
+                                onTap: () => _handleStaffClick(staff),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 20,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: Colors.grey[200]!,
+                                        width: 1,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      // Staff Name
+                                      Expanded(
+                                        flex: 3,
+                                        child: Text(
+                                          staff['name'],
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                      // Role
+                                      Expanded(
+                                        flex: 2,
+                                        child: Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: _buildRoleBadge(staff['role']),
+                                        ),
+                                      ),
+                                      // Department
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          staff['department'],
+                                          style: const TextStyle(fontSize: 14),
+                                        ),
+                                      ),
+                                      // This Week
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          staff['thisWeek'],
+                                          style: const TextStyle(fontSize: 14),
+                                        ),
+                                      ),
+                                      // Status
+                                      Expanded(
+                                        flex: 2,
+                                        child: Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: _buildStatusBadge(
+                                            staff['status'],
+                                          ),
+                                        ),
+                                      ),
+                                      // Next Week
+                                      Expanded(
+                                        flex: 2,
+                                        child: Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: _buildNextWeekBadge(
+                                            staff['nextWeek'],
+                                          ),
+                                        ),
+                                      ),
+                                      // Last Updated
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          staff['lastUpdated'],
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                      ),
+                                      // Menu Icon
+                                      Builder(
+                                        builder: (BuildContext buttonContext) {
+                                          return IconButton(
+                                            icon: const Icon(Icons.more_vert),
+                                            iconSize: 20,
+                                            color: Colors.grey[600],
+                                            onPressed: () {
+                                              final RenderBox button =
+                                                  buttonContext
+                                                          .findRenderObject()
+                                                      as RenderBox;
+                                              final position = button
+                                                  .localToGlobal(Offset.zero);
+                                              _showActionMenu(
+                                                context,
+                                                staff,
+                                                position,
+                                              );
+                                            },
+                                          );
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
 
                       // Footer with Pagination
                       Divider(height: 1, thickness: 1, color: Colors.grey[400]),
@@ -1033,23 +1207,36 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
                               _filteredStaff.isEmpty
                                   ? "No staff members found"
                                   : "Showing ${(_currentPage - 1) * _itemsPerPage + 1} to ${(_currentPage * _itemsPerPage) > _filteredStaff.length ? _filteredStaff.length : _currentPage * _itemsPerPage} of ${_filteredStaff.length} staff members",
-                              style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 14,
+                              ),
                             ),
                             Row(
                               children: [
                                 IconButton(
-                                  onPressed: _currentPage > 1 ? _previousPage : null,
+                                  onPressed:
+                                      _currentPage > 1 ? _previousPage : null,
                                   icon: Icon(
                                     Icons.chevron_left,
-                                    color: _currentPage > 1 ? Colors.grey[600] : Colors.grey[400],
+                                    color:
+                                        _currentPage > 1
+                                            ? Colors.grey[600]
+                                            : Colors.grey[400],
                                   ),
                                 ),
                                 ..._buildPageNumbers(),
                                 IconButton(
-                                  onPressed: _currentPage < _totalPages ? _nextPage : null,
+                                  onPressed:
+                                      _currentPage < _totalPages
+                                          ? _nextPage
+                                          : null,
                                   icon: Icon(
                                     Icons.chevron_right,
-                                    color: _currentPage < _totalPages ? Colors.grey[600] : Colors.grey[400],
+                                    color:
+                                        _currentPage < _totalPages
+                                            ? Colors.grey[600]
+                                            : Colors.grey[400],
                                   ),
                                 ),
                               ],
@@ -1063,8 +1250,7 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
               ],
 
               // ---- Day Off Request View (Placeholder) ----
-              if (_selectedView == 'Day Off Request')
-                const DayOffRequestView(),
+              if (_selectedView == 'Day Off Request') const DayOffRequestView(),
             ],
           ),
         ),
