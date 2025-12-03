@@ -851,7 +851,6 @@ class _TenantJobServiceDetailPageState
                           id:
                               _jobServiceData!['job_service_id']?.toString() ??
                               _jobServiceData!['js_id']?.toString() ??
-<<<<<<< Updated upstream
                               _jobServiceData!['formatted_id'] ??
                               _jobServiceData!['id'] ??
                               '',
@@ -890,22 +889,6 @@ class _TenantJobServiceDetailPageState
                               _jobServiceData!['description'] ??
                               _jobServiceData!['notes'],
 
-=======
-                              _jobServiceData!['formatted_id']?.toString() ??
-                              'N/A',
-                          concernSlipId:
-                              _jobServiceData!['concern_slip_id']?.toString() ??
-                              _jobServiceData!['concern_slip_id']?.toString() ??
-                              '',
-                          createdAt: _parseDateTime(
-                            _jobServiceData!['created_at'] ??
-                                _jobServiceData!['date_requested'],
-                          ) ?? DateTime.now(),
-                          requestTypeTag: _jobServiceData!['request_type'] ?? 'Unknown',
-                          statusTag: _jobServiceData!['status'] ?? 'Unknown',
-                          requestedBy: _jobServiceData!['tenant_name'] ?? 'Unknown',
-                          unitId: _jobServiceData!['unit_id']?.toString() ?? 'Unknown',
->>>>>>> Stashed changes
                           // Staff - Use assigned_to_name (enriched from getUserById)
                           assignedStaff:
                               _jobServiceData!['assigned_to_name'] ??

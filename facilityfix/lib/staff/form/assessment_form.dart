@@ -231,6 +231,10 @@ class _AssessmentFormState extends State<AssessmentForm> {
       if (widget.showResolutionType) {
         // This is a concern slip assessment
         endpoint = '/concern-slips/${widget.concernSlipId}/submit-assessment';
+      } else if (widget.requestType?.contains('Maintenance') ?? false) {
+        // This is an internal maintenance task assessment
+        endpoint =
+            '/maintenance/${widget.concernSlipId}/submit-assessment';
       } else {
         // This is a job service completion assessment
         endpoint =
@@ -247,6 +251,7 @@ class _AssessmentFormState extends State<AssessmentForm> {
       final APIService api = APIService(roleOverride: AppRole.staff);
 
       final entity_id = widget.concernSlipId;
+      final isMaintenance = widget.requestType?.contains('Maintenance') ?? false;
 
       print('Uploading ${attachments?.length ?? 0} attachments...');
       print(entity_id);
@@ -258,6 +263,8 @@ class _AssessmentFormState extends State<AssessmentForm> {
             'entity_type':
                 widget.showResolutionType
                     ? 'concern_slip_assessment'
+                    : isMaintenance
+                    ? 'maintenance_assessment'
                     : 'job_service_assessment',
             'entity_id': entity_id!,
             'file_type': 'any',

@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import '../../widgets/tags.dart';
 import '../../../services/api_services.dart';
 import '../../../utils/ui_format.dart';
+import '../../services/round_robin_assignment_service.dart';
+import '../../services/api_service.dart' as admin_api;
 import 'package:intl/intl.dart';
 
 class JobServiceConcernSlipDialog extends StatefulWidget {
@@ -41,6 +43,9 @@ class _JobServiceConcernSlipDialogState
     extends State<JobServiceConcernSlipDialog> {
   final _formKey = GlobalKey<FormState>();
   final APIService _apiService = APIService();
+  final admin_api.ApiService _adminApiService = admin_api.ApiService();
+  final RoundRobinAssignmentService _roundRobinService =
+      RoundRobinAssignmentService();
 
   bool _formValid = false;
   bool _isLoading = false;
@@ -49,6 +54,7 @@ class _JobServiceConcernSlipDialogState
 
   String? selectedStaffId;
   String? selectedStaffName;
+  String? roundRobinAssignedStaffId; // Track the round-robin assigned staff
   DateTime? selectedDate;
   DateTime? selectedEndDate;
   final TextEditingController notesController = TextEditingController();
@@ -329,9 +335,6 @@ class _JobServiceConcernSlipDialogState
         case 'masonry':
           department = 'masonry';
           break;
-        case 'house keeping':
-          department = 'house_keeping';
-          break;
         default:
           department = null;
       }
@@ -347,7 +350,7 @@ class _JobServiceConcernSlipDialogState
       });
 
       _autoAssignStaff();
-      print('[JobServiceDialog] Loaded ${_staffList.length} staff members');
+      print('[JobServiceDialog] Loaded ${_staffList.length} staff members for department: $department');
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -362,24 +365,108 @@ class _JobServiceConcernSlipDialogState
   }
 
   void _autoAssignStaff() {
-    if (_staffList.isEmpty) return;
+    // Auto-assign staff using round-robin algorithm
+    if (_staffList.isEmpty) {
+      print('[JobServiceDialog] No staff available for auto-assignment');
+      return;
+    }
 
-    _staffList.sort((a, b) {
-      final workloadA = a['current_workload'] ?? 0;
-      final workloadB = b['current_workload'] ?? 0;
-      return workloadA.compareTo(workloadB);
-    });
+    _performRoundRobinAssignment();
+  }
 
-    final autoSelectedStaff = _staffList.first;
-    setState(() {
-      selectedStaffId = _getStaffId(autoSelectedStaff);
-      selectedStaffName = _getStaffDisplayName(autoSelectedStaff);
-    });
-    _revalidate();
+  Future<void> _performRoundRobinAssignment() async {
+    try {
+      String? taskCategory = task['department']?.toString().toLowerCase();
+      String? department;
 
-    print(
-      '[JobServiceDialog] Auto-assigned staff: $selectedStaffName (ID: $selectedStaffId)',
-    );
+      switch (taskCategory) {
+        case 'electrical':
+          department = 'electrical';
+          break;
+        case 'plumbing':
+          department = 'plumbing';
+          break;
+        case 'carpentry':
+          department = 'carpentry';
+          break;
+        case 'masonry':
+          department = 'masonry';
+          break;
+        case 'hvac':
+          department = 'electrical';
+          break;
+        case 'house keeping':
+        case 'house_keeping':
+          department = 'housekeeping';
+          break;
+        case 'pest control':
+        case 'pest_control':
+          department = 'masonry';
+          break;
+        default:
+          department = null;
+      }
+
+      if (department == null) {
+        // Fallback to first staff if department cannot be determined
+        if (_staffList.isNotEmpty) {
+          final firstStaff = _staffList.first;
+          setState(() {
+            selectedStaffId = _getStaffId(firstStaff);
+            selectedStaffName = _getStaffDisplayName(firstStaff);
+            roundRobinAssignedStaffId = selectedStaffId;
+          });
+          _revalidate();
+        }
+        return;
+      }
+
+      final nextStaff = await _roundRobinService.getNextStaffForDepartment(
+        department,
+      );
+
+      if (nextStaff != null) {
+        setState(() {
+          selectedStaffId = _getStaffId(nextStaff);
+          selectedStaffName = _getStaffDisplayName(nextStaff);
+          roundRobinAssignedStaffId = selectedStaffId;
+        });
+
+        print(
+          '[JobServiceDialog] Round-robin assigned staff: $selectedStaffName (ID: $selectedStaffId) for department: $department',
+        );
+        
+        // Trigger validation after state update
+        WidgetsBinding.instance.addPostFrameCallback((_) => _revalidate());
+      } else {
+        print(
+          '[JobServiceDialog] No staff available from round-robin service for department: $department, falling back to first staff',
+        );
+        if (_staffList.isNotEmpty) {
+          final firstStaff = _staffList.first;
+          setState(() {
+            selectedStaffId = _getStaffId(firstStaff);
+            selectedStaffName = _getStaffDisplayName(firstStaff);
+            roundRobinAssignedStaffId = selectedStaffId;
+          });
+          _revalidate();
+        }
+      }
+    } catch (e) {
+      print('[JobServiceDialog] Error in round-robin assignment: $e');
+      // Fallback to first staff
+      if (_staffList.isNotEmpty) {
+        final firstStaff = _staffList.first;
+        setState(() {
+          selectedStaffId = _getStaffId(firstStaff);
+          selectedStaffName = _getStaffDisplayName(firstStaff);
+          roundRobinAssignedStaffId = selectedStaffId;
+        });
+        
+        // Trigger validation after state update
+        WidgetsBinding.instance.addPostFrameCallback((_) => _revalidate());
+      }
+    }
   }
 
   @override
@@ -391,9 +478,13 @@ class _JobServiceConcernSlipDialogState
   String _getStaffDisplayName(Map<String, dynamic> staff) {
     final firstName = staff['first_name'] ?? '';
     final lastName = staff['last_name'] ?? '';
+    final department =
+        staff['staff_department'] ?? staff['department'] ?? 'General';
+    final userId = staff['user_id'] ?? staff['id'] ?? '';
     String name = '$firstName $lastName'.trim();
     if (name.isEmpty) name = 'Staff Member';
-    return name;
+
+    return '$name - $department ($userId)';
   }
 
   String _getStaffId(Map<String, dynamic> staff) {
@@ -1061,6 +1152,202 @@ class _JobServiceConcernSlipDialogState
     );
   }
 
+  Widget _buildStaffSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'ASSIGNED STAFF',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[600],
+                letterSpacing: 0.5,
+              ),
+            ),
+            if (selectedStaffId != null &&
+                selectedStaffId == roundRobinAssignedStaffId)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.blue[100],
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Auto-assigned',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.blue[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        FormField<String>(
+          validator: (_) {
+            if (selectedStaffId == null || selectedStaffId!.isEmpty)
+              return 'Please select a staff member';
+            return null;
+          },
+          builder:
+              (state) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: selectedStaffId,
+                    decoration: InputDecoration(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 14,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color:
+                              state.hasError ? Colors.red : Colors.grey[300]!,
+                        ),
+                      ),
+                    ),
+                    hint: const Text('Select staff member'),
+                    selectedItemBuilder: (BuildContext context) {
+                      // Must return one widget per item in the dropdown list
+                      return _staffList.map<Widget>((m) {
+                        // Show the selected staff with avatar and name
+                        if (selectedStaffId != null && selectedStaffId!.isNotEmpty) {
+                          if (_getStaffId(m) == selectedStaffId) {
+                            return Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildSimpleAvatar(
+                                    selectedStaffName ?? 'S',
+                                    size: 24,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    selectedStaffName ?? 'Select staff member',
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                        }
+                        // Return empty/placeholder for non-selected items
+                        return const SizedBox.shrink();
+                      }).toList();
+                    },
+                    items:
+                        _staffList.isNotEmpty
+                            ? _staffList.map((m) {
+                              final id = _getStaffId(m);
+                              final name = _getStaffDisplayName(m);
+                              final isRoundRobinSelected =
+                                  (id == roundRobinAssignedStaffId);
+                              return DropdownMenuItem<String>(
+                                value: id,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _buildSimpleAvatar(name, size: 28),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  name,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ),
+                                              if (isRoundRobinSelected)
+                                                Container(
+                                                  margin: const EdgeInsets.only(
+                                                    left: 8,
+                                                  ),
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.blue[100],
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          3,
+                                                        ),
+                                                  ),
+                                                  child: Text(
+                                                    'RR',
+                                                    style: TextStyle(
+                                                      fontSize: 9,
+                                                      color: Colors.blue[700],
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList()
+                            : [],
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() {
+                          selectedStaffId = v;
+                          try {
+                            final found = _staffList.firstWhere(
+                              (m) => (_getStaffId(m) == v),
+                              orElse: () => {},
+                            );
+                            if (found.isNotEmpty) {
+                              selectedStaffName = _getStaffDisplayName(found);
+                            }
+                          } catch (_) {}
+                          _revalidate();
+                        });
+                      }
+                    },
+                  ),
+                  if (state.hasError) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      state.errorText!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ],
+                ],
+              ),
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
   // Step 1: Job Service Details
   Widget _buildJobServiceDetails() {
     return Column(
@@ -1322,11 +1609,11 @@ class _JobServiceConcernSlipDialogState
         ),
         const SizedBox(height: 32),
 
-        // Assign Staff and Inspection Schedule in one row
+        // Assign Staff and Work Schedule in one row
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: _buildAutoAssignedStaffDisplay()),
+            Expanded(child: _buildStaffSelector()),
             const SizedBox(width: 24),
             Expanded(child: _buildDatePicker()),
           ],
@@ -1512,8 +1799,10 @@ class _JobServiceConcernSlipDialogState
                   _currentStep = 2;
                   _initializeScheduleDate(); // Populate selectedDate for step 2
                 });
-                await _loadStaffMembers();
-                _autoAssignStaff();
+                // Staff was already loaded in initState, so only assign if needed
+                if (selectedStaffId == null || selectedStaffId!.isEmpty) {
+                  _autoAssignStaff();
+                }
               },
               icon: const Icon(Icons.arrow_forward, size: 16),
               label: const Text('Next'),

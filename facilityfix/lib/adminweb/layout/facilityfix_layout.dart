@@ -469,9 +469,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                           padding: const EdgeInsets.all(24),
                           child: ConstrainedBox(
                             constraints: BoxConstraints(minHeight: viewportHeight),
-                            child: IntrinsicHeight(
-                              child: widget.body,
-                            ),
+                            child: widget.body,
                           ),
                         );
                       },

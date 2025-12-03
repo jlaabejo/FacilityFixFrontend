@@ -80,7 +80,9 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
       final response = await adminApiService.getInventoryReservations(maintenanceTaskId: taskId);
       if (response['success'] == true && response['data'] != null) {
         final reservations = List<Map<String, dynamic>>.from(response['data']);
-        print('DEBUG: Raw reservation data: ${reservations.first}');
+        if (reservations.isNotEmpty) {
+          print('DEBUG: Raw reservation data: ${reservations.first}');
+        }
         // Enrich with item details
         for (var r in reservations) {
           if (r['inventory_id'] != null) {
@@ -115,7 +117,9 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
             _inventoryRequests = reservations; // Show reservations as requests in UI
           });
           print('DEBUG: Loaded ${reservations.length} admin inventory reservations for staff view');
-          print('DEBUG: First reservation type: ${reservations.first['type']}');
+          if (reservations.isNotEmpty) {
+            print('DEBUG: First reservation type: ${reservations.first['type']}');
+          }
           return; // data found, no need to check requests
         }
       }
@@ -740,7 +744,6 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
 
       if (action == 'receive') {
         final requestStatus = (request['status'] ?? '').toString().toLowerCase();
-        final requestTypeStr = (request['type'] ?? '').toString().toLowerCase();
         final hasReservationId = (request['reservation_id'] ?? '').toString().isNotEmpty;
 
         // Treat maintenance items as reservations too, or if reserve-like markers exist
