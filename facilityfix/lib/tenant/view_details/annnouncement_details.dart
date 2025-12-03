@@ -6,7 +6,7 @@ import 'package:facilityfix/tenant/repair_management.dart';
 import 'package:facilityfix/widgets/view_details.dart';
 import 'package:flutter/material.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
-import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/services/api_services_mobile.dart';
 import 'package:intl/intl.dart';
 
 class AnnouncementDetailsPage extends StatefulWidget {

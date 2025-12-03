@@ -1,5 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'api_service.dart';
+import 'api_service_web.dart';
 
 /// Round-robin assignment service for automatic staff assignment
 /// Maintains a pointer/index per department to ensure fair distribution of tasks

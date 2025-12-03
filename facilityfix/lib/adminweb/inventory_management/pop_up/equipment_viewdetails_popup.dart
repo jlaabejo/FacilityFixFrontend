@@ -1,8 +1,7 @@
+import 'package:facilityfix/adminweb/services/api_service_web.dart';
 import 'package:flutter/material.dart';
-import '../../services/api_service.dart';
 import 'maintenance_history_details_popup.dart';
 import '../../../services/auth_storage.dart';
-import 'package:go_router/go_router.dart';
 
 class EquipmentViewDetailsDialog {
   static Future<Map<String, dynamic>?> show(

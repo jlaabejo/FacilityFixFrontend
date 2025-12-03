@@ -1,15 +1,16 @@
 import 'dart:math' as math;
 import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:flutter/material.dart';
+import 'package:facilityfix/utils/inventory_notifier.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
-import '../services/api_service.dart';
+import '../services/api_service_web.dart';
 import '../services/round_robin_assignment_service.dart';
 import '../../services/auth_storage.dart';
 import '../../utils/inventory_notifier.dart';
-import '../../services/api_services.dart' as main_api;
+import '../../services/api_services_mobile.dart' as main_api;
 import 'package:file_picker/file_picker.dart';
-import 'package:facilityfix/services/api_services.dart' as SecondaryAPI;
+import 'package:facilityfix/services/api_services_mobile.dart' as SecondaryAPI;
 
 class InternalMaintenanceFormPage extends StatefulWidget {
   final Map<String, dynamic>? maintenanceData;
@@ -71,6 +72,8 @@ class _InternalMaintenanceFormPageState
   final _nextDueDateController = TextEditingController(); // read-only
   final _checklistItemController =
       TextEditingController(); // For checklist input
+  final _tasklocationController =
+      TextEditingController(); // For custom location input
 
   // -------------------- STATE --------------------
   String? _selectedPriority;
@@ -79,7 +82,8 @@ class _InternalMaintenanceFormPageState
   String? _selectedRecurrence;
   String? _selectedDepartment;
   String? _selectedStaffUserId; // Store the actual staff UID
-
+  String? _selectedTaskType;
+  String? _selectedTaskTypeId; // For task type dropdown integration
   DateTime? _dateCreated;
   DateTime? _startDate;
   DateTime? _nextDueDate;
@@ -101,8 +105,7 @@ class _InternalMaintenanceFormPageState
 
   List<Map<String, dynamic>> _availableInventoryItems = [];
   List<Map<String, dynamic>> _selectedInventoryItems = [];
-  String? _selectedTemplateKey;
-  String? _buildingId;
+  List<Map<String, String>> _taskTypeOptions = []; // For task type dropdown
   final _apiService = ApiService();
   final _mainApiService = main_api.APIService();
   final _roundRobinService = RoundRobinAssignmentService();
@@ -119,6 +122,7 @@ class _InternalMaintenanceFormPageState
       'user_users': '/user/users',
       'user_scheduling': '/user/scheduling',
       'work_maintenance': '/work/maintenance',
+      'work_task_type': '/work/task_type',
       'work_repair': '/work/repair',
       'calendar': '/calendar',
       'inventory_equipment': '/inventory/equipment',
@@ -212,67 +216,166 @@ class _InternalMaintenanceFormPageState
     await _loadStaffMembers();
 
     // Load inventory items
-    // Save building id and use it when loading inventory
-    _buildingId =
-        profile != null
-            ? (profile['building_id'] ??
-                    profile['buildingId'] ??
-                    profile['building'])
-                ?.toString()
-            : null;
     await _loadInventoryItems();
-  }
 
-  // Template functionality removed - templates service no longer available
-  Future<void> _applyTemplate(String? key) async {
-    // This method is now a no-op since MaintenanceTemplates service was removed
-    return;
-  }
-
-  Future<int> _getReservedQty(String inventoryId) async {
-    try {
-      final resp = await _apiService.getInventoryReservations();
-      if (resp['success'] == true && resp['data'] != null) {
-        final reservations = List<Map<String, dynamic>>.from(resp['data']);
-        int reservedTotal = 0;
-        for (var r in reservations) {
-          if ((r['inventory_id']?.toString() ?? '') == inventoryId) {
-            final status =
-                (r['status'] ?? r['request_status'] ?? 'reserved')
-                    .toString()
-                    .toLowerCase();
-            if (status == 'reserved' ||
-                status == 'approved' ||
-                status == 'pending') {
-              reservedTotal += (r['quantity'] ?? 0) as int;
-            }
-          }
-        }
-        return reservedTotal;
-      }
-    } catch (e) {
-      print('[v0] Error computing reserved qty for $inventoryId: $e');
-    }
-    return 0;
+    // Load task types for dropdown
+    await _loadTaskTypes();
   }
 
   Future<void> _loadInventoryItems() async {
     try {
-      // TODO: Replace with actual building ID from user session
-      final response = await _mainApiService.getBuildingInventory(
-        _buildingId ?? 'default_building_id',
+      print('[DEBUG] _loadInventoryItems called');
+      print('[v0] Loading inventory items...');
+      // Use admin API service to get inventory items
+      final response = await _apiService.getInventoryItems(
+        buildingId: 'default_building_id',
       );
 
+      print('[v0] Inventory response: $response');
+      print('[DEBUG] Response type: ${response.runtimeType}');
+      print('[DEBUG] Response success: ${response['success']}');
+      print('[DEBUG] Response data: ${response['data']}');
+
       if (response['success'] == true && response['data'] != null) {
+        final inventoryData = response['data'];
+        print('[DEBUG] Inventory data type: ${inventoryData.runtimeType}');
+        print(
+          '[DEBUG] Inventory data length: ${inventoryData is List ? inventoryData.length : 'not a list'}',
+        );
+
         setState(() {
-          _availableInventoryItems = List<Map<String, dynamic>>.from(
-            response['data'],
-          );
+          _availableInventoryItems =
+              List<Map<String, dynamic>>.from(response['data']).map((item) {
+                // Ensure consistent ID field mapping for inventory items
+                final itemMap = Map<String, dynamic>.from(item);
+
+                // Handle formatted_id field by mapping it to inventory_id if needed
+                if (itemMap['formatted_id'] != null &&
+                    itemMap['inventory_id'] == null) {
+                  itemMap['inventory_id'] = itemMap['formatted_id'];
+                }
+                if (itemMap['id'] != null && itemMap['inventory_id'] == null) {
+                  itemMap['inventory_id'] = itemMap['id'];
+                }
+
+                // Normalize stock field names - try multiple possible field names
+                final stockValue =
+                    itemMap['current_stock'] ??
+                    itemMap['available_stock'] ??
+                    itemMap['stock'] ??
+                    itemMap['quantity_on_hand'] ??
+                    itemMap['qty_on_hand'] ??
+                    0;
+
+                print(
+                  '[DEBUG] Processed inventory item: ${itemMap['item_name']} - ID: ${itemMap['inventory_id']}, Stock: $stockValue',
+                );
+                return itemMap;
+              }).toList();
         });
+        print('[v0] Loaded ${_availableInventoryItems.length} inventory items');
+        print(
+          '[DEBUG] First few items: ${_availableInventoryItems.take(3).toList()}',
+        );
+
+        if (_availableInventoryItems.isEmpty) {
+          print('[DEBUG] WARNING: Inventory items list is empty after loading');
+        }
+      } else {
+        print('[v0] No inventory data returned or unsuccessful response');
+        print('[DEBUG] Response structure: ${response.keys.toList()}');
       }
     } catch (e) {
       print('[v0] Error loading inventory items: $e');
+      print('[DEBUG] Exception type: ${e.runtimeType}');
+      print('[DEBUG] Exception details: ${e.toString()}');
       // Don't fail the whole form if inventory loading fails
+    }
+  }
+
+  Future<void> _loadTaskTypes() async {
+    try {
+      print('[DEBUG] _loadTaskTypes called');
+      print('[DEBUG] API Service instance: $_apiService');
+      print('[v0] Loading task types...');
+
+      // Check if token is set
+      final token = await AuthStorage.getToken();
+      print('[DEBUG] Auth token available: ${token != null}');
+
+      final taskTypes = await _apiService.getTaskTypesForDropdown();
+      print('[v0] Loaded ${taskTypes.length} task types: $taskTypes');
+      print('[DEBUG] Raw task types data: $taskTypes');
+      print('[DEBUG] Task types type: ${taskTypes.runtimeType}');
+
+      // If we get empty data, try the fallback method
+      if (taskTypes.isEmpty) {
+        print('[DEBUG] Got empty task types, trying fallback method...');
+        throw Exception('Empty task types returned, triggering fallback');
+      }
+
+      setState(() {
+        _taskTypeOptions =
+            taskTypes.map((taskType) {
+              final taskTypeId =
+                  taskType['id']?.toString() ??
+                  taskType['formatted_id']?.toString() ??
+                  taskType['task_type_id']?.toString() ??
+                  '';
+              final taskTypeName =
+                  taskType['name']?.toString() ??
+                  taskType['task_name']?.toString() ??
+                  'Unknown Task Type';
+              print(
+                '[DEBUG] Processing task type: id=$taskTypeId, name=$taskTypeName, raw=$taskType',
+              );
+              return {'id': taskTypeId, 'name': taskTypeName};
+            }).toList();
+      });
+      print('[v0] Task type options set: $_taskTypeOptions');
+      print('[DEBUG] _taskTypeOptions.isEmpty: ${_taskTypeOptions.isEmpty}');
+      print(
+        '[DEBUG] Task types loaded successfully, dropdown should now be enabled',
+      );
+    } catch (e) {
+      print('[v0] Error loading task types: $e');
+      print('[DEBUG] Exception details: ${e.toString()}');
+      print('[DEBUG] Exception type: ${e.runtimeType}');
+
+      // Try alternative API method as fallback
+      try {
+        print('[DEBUG] Attempting fallback API call...');
+        // If getTaskTypesForDropdown fails, try a more basic approach
+        final fallbackData = await _apiService.listTaskTypes();
+        print('[DEBUG] Fallback data: $fallbackData');
+
+        if (fallbackData.isNotEmpty) {
+          setState(() {
+            _taskTypeOptions =
+                fallbackData.map((item) {
+                  final taskTypeId =
+                      item['id']?.toString() ??
+                      item['formatted_id']?.toString() ??
+                      item['task_type_id']?.toString() ??
+                      '';
+                  final taskTypeName =
+                      item['name']?.toString() ??
+                      item['task_name']?.toString() ??
+                      'Unknown Task Type';
+                  print(
+                    '[DEBUG] Processing fallback task type: id=$taskTypeId, name=$taskTypeName, raw=$item',
+                  );
+                  return {'id': taskTypeId, 'name': taskTypeName};
+                }).toList();
+          });
+          print('[DEBUG] Fallback task types loaded: $_taskTypeOptions');
+          return;
+        }
+      } catch (fallbackError) {
+        print('[DEBUG] Fallback also failed: $fallbackError');
+        // If both API calls fail, leave the task type options empty
+        // The dropdown will be disabled and show appropriate error state
+      }
     }
   }
 
@@ -290,6 +393,252 @@ class _InternalMaintenanceFormPageState
           SnackBar(content: Text('Failed to load staff members: $e')),
         );
       }
+    }
+  }
+
+  Future<void> _handleTaskTypeChange(String? taskTypeId) async {
+    if (taskTypeId == null || taskTypeId.isEmpty) {
+      setState(() {
+        _selectedTaskTypeId = null;
+      });
+      return;
+    }
+
+    print('[v0] Task type changed to: $taskTypeId');
+    print('[DEBUG] Task type options available: $_taskTypeOptions');
+    print(
+      '[DEBUG] Selected task type matches available options: ${_taskTypeOptions.any((opt) => opt['id'] == taskTypeId)}',
+    );
+
+    setState(() {
+      _selectedTaskTypeId = taskTypeId;
+    });
+
+    // Automatically populate inventory items associated with this task type
+    try {
+      print('[v0] Fetching inventory items for task type: $taskTypeId');
+
+      // WORKAROUND: The inventory endpoint is not working correctly, so let's get the full task type
+      print('[DEBUG] Calling API for task type inventory with ID: $taskTypeId');
+      print(
+        '[DEBUG] Using workaround: getting full task type instead of inventory endpoint',
+      );
+
+      List<dynamic> taskTypeInventory = [];
+
+      try {
+        // Get the full task type document which contains inventory_items
+        final taskTypeResponse = await _apiService.getTaskType(taskTypeId);
+        print('[DEBUG] Full task type response: $taskTypeResponse');
+
+        // Extract inventory items from the task type document
+        if (taskTypeResponse.containsKey('inventory_items')) {
+          taskTypeInventory = List<Map<String, dynamic>>.from(
+            taskTypeResponse['inventory_items'] ?? [],
+          );
+          print(
+            '[DEBUG] Found ${taskTypeInventory.length} inventory items in task type document',
+          );
+        } else {
+          print('[DEBUG] No inventory_items field found in task type document');
+          taskTypeInventory = [];
+        }
+      } catch (e) {
+        print('[DEBUG] Error getting task type: $e');
+        // Fallback to the original inventory endpoint (even though it returns empty)
+        taskTypeInventory = await _apiService.getTaskTypeInventoryItems(
+          taskTypeId,
+        );
+        print(
+          '[DEBUG] Fallback inventory endpoint returned: $taskTypeInventory',
+        );
+      }
+
+      print('[v0] Task type inventory response: $taskTypeInventory');
+      print(
+        '[DEBUG] Final inventory array length: ${taskTypeInventory.length}',
+      );
+
+      if (taskTypeInventory.isEmpty) {
+        print('[DEBUG] No inventory items found for task type: $taskTypeId');
+        print('[DEBUG] This could mean:');
+        print(
+          '[DEBUG] 1. The task type exists but has no inventory items configured',
+        );
+        print('[DEBUG] 2. The backend inventory association is not set up');
+        print('[DEBUG] 3. The API is working but returning empty data');
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(
+                    Icons.inventory_2_outlined,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Task type "${_selectedTaskType ?? taskTypeId}" has no inventory items configured. You can manually add items below.',
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Merge new inventory items with existing selections (avoid duplicates)
+      final existingIds =
+          _selectedInventoryItems
+              .map(
+                (item) =>
+                    item['inventory_id']?.toString() ??
+                    item['id']?.toString() ??
+                    item['item_id']?.toString(),
+              )
+              .where((id) => id != null && id.isNotEmpty)
+              .toSet();
+
+      final newItems = <Map<String, dynamic>>[];
+      for (final item in taskTypeInventory) {
+        print('[DEBUG] Processing inventory item: $item');
+
+        // Try multiple possible ID field names
+        final inventoryId =
+            item['inventory_id']?.toString() ??
+            item['id']?.toString() ??
+            item['item_id']?.toString() ??
+            item['_id']?.toString();
+
+        print('[DEBUG] Extracted inventory ID: $inventoryId');
+
+        if (inventoryId != null &&
+            inventoryId.isNotEmpty &&
+            !existingIds.contains(inventoryId)) {
+          // Handle multiple possible field names from backend
+          final defaultQuantity =
+              item['default_quantity'] ?? item['quantity'] ?? 1;
+          final currentStock =
+              item['current_stock'] ??
+              item['available_stock'] ??
+              item['stock'] ??
+              item['quantity_on_hand'] ??
+              item['qty_on_hand'] ??
+              0;
+          final itemName = item['item_name'] ?? item['name'] ?? 'Unknown Item';
+          final itemCode =
+              item['item_code'] ??
+              item['code'] ??
+              item['itemCode'] ??
+              inventoryId;
+          final unit =
+              item['unit'] ?? item['uom'] ?? item['unit_of_measure'] ?? 'pcs';
+
+          print(
+            '[DEBUG] Inventory item details: name=$itemName, code=$itemCode, id=$inventoryId, qty=$defaultQuantity',
+          );
+
+          // Try to find the full inventory item details from available items
+          Map<String, dynamic>? fullItemDetails;
+          for (final availableItem in _availableInventoryItems) {
+            final availableId =
+                availableItem['inventory_id'] ??
+                availableItem['formatted_id'] ??
+                availableItem['id'] ??
+                '';
+            if (availableId == inventoryId) {
+              fullItemDetails = availableItem;
+              break;
+            }
+          }
+
+          // Use full details if found, otherwise use basic task type data
+          final actualStock =
+              fullItemDetails?['current_stock'] ??
+              fullItemDetails?['available_stock'] ??
+              fullItemDetails?['stock'] ??
+              currentStock;
+          final formattedId = fullItemDetails?['formatted_id'] ?? inventoryId;
+          final actualItemCode = fullItemDetails?['item_code'] ?? itemCode;
+
+          print(
+            '[DEBUG] Enhanced inventory details: formatted_id=$formattedId, actual_stock=$actualStock',
+          );
+
+          newItems.add({
+            'inventory_id': inventoryId,
+            'formatted_id': formattedId,
+            'item_name': itemName,
+            'item_code': actualItemCode,
+            'quantity': defaultQuantity, // Use default quantity from task type
+            'available_stock': actualStock,
+            'current_stock': actualStock,
+            'unit': unit, 'unit_of_measure': unit,
+            'from_task_type': true, // Mark as coming from task type
+          });
+
+          print(
+            '[v0] Added task type inventory item: $itemName (ID: $inventoryId, Qty: $defaultQuantity)',
+          );
+        }
+      }
+      if (newItems.isNotEmpty) {
+        setState(() {
+          _selectedInventoryItems.addAll(newItems);
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Added ${newItems.length} inventory item(s) for selected task type',
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('[v0] Error loading task type inventory: $e');
+
+      // Show user-friendly message for 404 errors (backend endpoint not implemented)
+      if (e.toString().contains('404') || e.toString().contains('Not Found')) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.white, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Automatic inventory loading not available yet. You can manually add inventory items below.',
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.blue,
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'OK',
+                textColor: Colors.white,
+                onPressed: () {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                },
+              ),
+            ),
+          );
+        }
+      }
+      // Don't fail if task type inventory loading fails
     }
   }
 
@@ -323,9 +672,38 @@ class _InternalMaintenanceFormPageState
   }
 
   void _addInventoryItem() {
+    print('[DEBUG] _addInventoryItem called');
+    print(
+      '[DEBUG] Available inventory items count: ${_availableInventoryItems.length}',
+    );
+    print('[DEBUG] Available inventory items: $_availableInventoryItems');
+
     if (_availableInventoryItems.isEmpty) {
+      print('[DEBUG] No inventory items available, showing message');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No inventory items available')),
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.inventory_outlined, color: Colors.white),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'No inventory items loaded. Please check your inventory data or try refreshing.',
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Refresh',
+            textColor: Colors.white,
+            onPressed: () async {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              await _loadInventoryItems();
+            },
+          ),
+        ),
       );
       return;
     }
@@ -345,34 +723,56 @@ class _InternalMaintenanceFormPageState
           }).toList();
     }
 
+    print('[DEBUG] Filtered items count: ${filteredItems.length}');
+    print('[DEBUG] Selected location: $_selectedLocation');
+    print('[DEBUG] Opening inventory selection dialog');
+
     showDialog(
       context: context,
       builder:
           (context) => _InventorySelectionDialog(
             availableItems: filteredItems,
             selectedLocation: _selectedLocation,
-            onItemSelected: (item, quantity) async {
-              final inventoryId =
-                  item['id'] ??
-                  item['_doc_id'] ??
-                  item['item_code'] ??
-                  item['itemCode'];
-              final reservedQty =
-                  (inventoryId != null)
-                      ? await _getReservedQty(inventoryId.toString())
-                      : 0;
+            onItemSelected: (item, quantity) {
+              print(
+                '[DEBUG] Item selected: ${item['item_name']} with quantity: $quantity',
+              );
               setState(() {
-                _selectedInventoryItems.add({
-                  'inventory_id': inventoryId,
-                  'item_name': item['item_name'],
-                  'item_code': item['item_code'],
-                  'quantity': quantity,
-                  'available_stock': item['current_stock'],
-                  'unit': item['unit'] ?? '',
-                  'reserved_stock': reservedQty,
-                  'autoReserve':
-                      false, // manually-added items should not auto-reserve
-                });
+                // Get stock value using multiple field names
+                  final stockValue = item['current_stock'] ?? 
+                                    item['available_stock'] ?? 
+                                    item['stock'] ?? 
+                                    item['quantity_on_hand'] ?? 0;
+                  
+                  final newItem = {
+                    'inventory_id':
+                        item['inventory_id'] ??
+                        item['id'] ??
+                        item['item_code'] ??
+                        item['itemCode'] ??
+                        item['_doc_id'],
+                    'formatted_id': item['formatted_id'] ?? item['inventory_id'] ?? item['id'] ?? '',
+                    'item_name': item['item_name'],
+                    'item_code':
+                        item['formatted_id'] ?? 
+                        item['item_code'] ??
+                        item['inventory_id'] ??
+                        item['id'] ??
+                        '',
+                    'quantity': quantity,
+                    'available_stock': stockValue,
+                    'current_stock': stockValue,
+                    'unit':
+                        item['unit'] ??
+                        item['uom'] ??
+                        item['unit_of_measure'] ??
+                        '',
+                  };
+                  _selectedInventoryItems.add(newItem);
+                  print('[DEBUG] Added inventory item: $newItem');
+                print(
+                  '[DEBUG] Total selected items now: ${_selectedInventoryItems.length}',
+                );
               });
             },
           ),
@@ -423,7 +823,6 @@ class _InternalMaintenanceFormPageState
           departmentKey = 'general_maintenance';
       }
 
-      // Fix: Pass departmentKey as a positional argument to getNextStaffForDepartment
       final nextStaff = await _roundRobinService.getNextStaffForDepartment(
         departmentKey,
       );
@@ -432,7 +831,6 @@ class _InternalMaintenanceFormPageState
         final firstName = nextStaff['first_name'] ?? '';
         final lastName = nextStaff['last_name'] ?? '';
         final staffName = '$firstName $lastName'.trim();
-        // Use Firebase UID or staff_id from auto-assigned staff
         final staffId = nextStaff['user_id'] ?? nextStaff['id'];
 
         // Update the text field and selected staff ID
@@ -525,20 +923,22 @@ class _InternalMaintenanceFormPageState
 
     // Add recommended items that aren't already selected
     for (final item in recommendedItems) {
-      final itemCode = item['item_code'] ?? item['itemCode'];
+      final inventoryId = item['inventory_id'] ?? item['id'] ?? '';
+      final itemCode = item['item_code'] ?? item['itemCode'] ?? inventoryId;
       final alreadyAdded = _selectedInventoryItems.any(
-        (selected) => selected['inventory_id'] == itemCode,
+        (selected) => selected['inventory_id'] == inventoryId,
       );
 
       if (!alreadyAdded) {
         setState(() {
           _selectedInventoryItems.add({
-            'inventory_id': itemCode,
+            'inventory_id': inventoryId,
             'item_name': item['item_name'],
-            'item_code': item['item_code'],
+            'item_code': itemCode,
             'quantity': 0, // Default quantity
             'available_stock': item['current_stock'],
-            'unit': item['unit'] ?? '',
+            'unit':
+                item['unit'] ?? item['uom'] ?? item['unit_of_measure'] ?? '',
           });
         });
       }
@@ -558,83 +958,102 @@ class _InternalMaintenanceFormPageState
     }
   }
 
-  Future<List<String>> _createInventoryReservations(String taskId) async {
+  Future<List<Map<String, String>>> _createInventoryReservations(
+    String taskId,
+  ) async {
     if (_selectedInventoryItems.isEmpty) return [];
 
-    final List<String> createdReservationIds = [];
+    final List<Map<String, String>> createdReservations = [];
 
     try {
       for (final item in _selectedInventoryItems) {
-        // Only create reservations for items marked as autoReserve
-        if (!(item['autoReserve'] == true || item['reserve'] == true)) {
-          print(
-            '[v0] Skipping reservation for ${item['item_name']} as autoReserve is false',
-          );
-          continue;
-        }
         final qty = item['quantity'];
+        final fromTaskType = item['from_task_type'] == true;
+        final itemName = item['item_name'] ?? 'Unknown Item';
+
+        // Use multiple possible ID field names including formatted_id
+        final inventoryId =
+            item['inventory_id']?.toString() ??
+            item['formatted_id']?.toString() ??
+            item['id']?.toString() ??
+            item['item_id']?.toString() ??
+            '';
+
         if (qty == null || qty <= 0) {
           print(
-            '[v0] Skipping reservation for ${item['item_name']} due to invalid quantity: $qty',
-          );
-          continue;
-        }
-        // Use inventory_id directly - no resolution needed
-        String? inventoryId = item['inventory_id']?.toString();
-        if (inventoryId == null || inventoryId.isEmpty) {
-          inventoryId = item['item_code']?.toString();
-        }
-
-        if (inventoryId == null || inventoryId.isEmpty) {
-          print(
-            '[v0] Skipping reservation for ${item['item_name']} - unresolved inventory id',
+            '[v0] Skipping reservation for $itemName due to invalid quantity: $qty',
           );
           continue;
         }
 
-        final response = await _apiService.createInventoryReservation(
-          inventoryId: inventoryId,
-          quantity: qty,
-          maintenanceTaskId: taskId,
-        );
-
-        // Extract the reservation ID from the response
-        if (response['success'] == true && response['reservation_id'] != null) {
-          createdReservationIds.add(response['reservation_id']);
+        if (inventoryId.isEmpty) {
           print(
-            '[v0] Created inventory reservation: ${response['reservation_id']}',
+            '[v0] Skipping reservation for $itemName due to missing inventory ID',
           );
-          try {
-            InventoryUpdateNotifier().notifyItemUpdated(inventoryId.toString());
-          } catch (_) {}
-          // Refresh local reserved counts immediately after creating each reservation
-          try {
-            await _refreshSelectedReservedCounts();
-          } catch (_) {}
+          continue;
+        }
+
+        try {
+          print(
+            '[v0] Creating reservation for $itemName (ID: $inventoryId, Qty: $qty)${fromTaskType ? ' [FROM TASK TYPE]' : ''}',
+          );
+
+          final response = await _apiService.createInventoryReservation(
+            inventoryId: inventoryId,
+            quantity: qty,
+            maintenanceTaskId: taskId,
+          );
+
+          print('[v0] Reservation API response: $response');
+
+          // Extract the reservation ID from the response - handle multiple possible response formats
+          if (response != null && response is Map<String, dynamic>) {
+            final reservationId =
+                response['reservation_id']?.toString() ??
+                response['id']?.toString() ??
+                response['_id']?.toString();
+
+            if (reservationId != null && reservationId.isNotEmpty) {
+              createdReservations.add({
+                'inventory_id': inventoryId,
+                'reservation_id': reservationId,
+              });
+              print(
+                '[v0] Successfully created reservation: $reservationId for $itemName',
+              );
+            } else if (response['success'] == true) {
+              // Sometimes backend returns success but no ID - reservation may still be created
+              print(
+                '[v0] Reservation API returned success for $itemName but no reservation ID',
+              );
+            }
+          }
+        } catch (reservationError) {
+          print(
+            '[v0] Error creating reservation for $itemName: $reservationError',
+          );
+
+          // Note: Backend sometimes returns 500 error but still creates the reservation
+          // This is a known backend issue - check if error message indicates success
+          final errorStr = reservationError.toString().toLowerCase();
+          if (errorStr.contains('500') ||
+              errorStr.contains('internal server error')) {
+            print(
+              '[v0] Backend 500 error - reservation may have been created despite error',
+            );
+          }
+          // Continue with other items instead of failing completely
         }
       }
+
       print(
-        '[v0] Created ${createdReservationIds.length} inventory reservations linked to task $taskId',
+        '[v0] Processed ${_selectedInventoryItems.length} items, created ${createdReservations.length} confirmed reservations',
       );
-      return createdReservationIds;
+      return createdReservations;
     } catch (e) {
-      print('[v0] Error creating inventory reservations: $e');
-      throw Exception('Failed to create inventory reservations: $e');
-    }
-  }
-
-  // Refresh reserved counts for the selected inventory items.
-  Future<void> _refreshSelectedReservedCounts() async {
-    if (_selectedInventoryItems.isEmpty) return;
-    for (int i = 0; i < _selectedInventoryItems.length; i++) {
-      final item = _selectedInventoryItems[i];
-      final invId = item['inventory_id']?.toString();
-      if (invId != null && invId.isNotEmpty) {
-        final qty = await _getReservedQty(invId);
-        setState(() {
-          _selectedInventoryItems[i]['reserved_stock'] = qty;
-        });
-      }
+      print('[v0] Error in reservation process: $e');
+      // Return partial results instead of throwing exception
+      return createdReservations;
     }
   }
 
@@ -799,15 +1218,20 @@ class _InternalMaintenanceFormPageState
   @override
   void initState() {
     super.initState();
+    print('[DEBUG] InternalMaintenanceForm initState called');
     _initialize();
   }
 
   Future<void> _initialize() async {
+    print('[DEBUG] Starting initialization...');
     await _initAutoFields();
+    print('[DEBUG] Auto fields initialized');
     if (widget.isEditMode && widget.maintenanceData != null) {
+      print('[DEBUG] Loading edit mode data...');
       await _fetchAndPopulateMaintenanceData();
       await _loadReservedInventoryItems();
     }
+    print('[DEBUG] Initialization complete');
   }
 
   Future<void> _fetchAndPopulateMaintenanceData() async {
@@ -863,7 +1287,11 @@ class _InternalMaintenanceFormPageState
                     'quantity': res['quantity'] ?? 0,
                     'available_stock':
                         item['current_stock'] ?? item['stock'] ?? '',
-                    'unit': item['unit'] ?? '',
+                    'unit':
+                        item['unit'] ??
+                        item['uom'] ??
+                        item['unit_of_measure'] ??
+                        '',
                   });
                 }
               } catch (e) {
@@ -1007,6 +1435,9 @@ class _InternalMaintenanceFormPageState
                 : null;
       }
 
+      // Task type ID for automatic inventory population
+      _selectedTaskTypeId = data['task_type_id']?.toString();
+
       // Department: validate against department options
       final department = data['department'];
       final validDepartments = [
@@ -1033,16 +1464,6 @@ class _InternalMaintenanceFormPageState
         }
         _assignedStaffController.text =
             (data['assigned_staff_name'] ?? 'Staff Name').toString();
-      }
-
-      // Populate template (if present)
-      final templateKey =
-          data['template_id'] ?? data['templateId'] ?? data['template'];
-      if (templateKey != null) {
-        _selectedTemplateKey = templateKey.toString();
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _applyTemplate(_selectedTemplateKey);
-        });
       }
 
       // Dates - parse flexibly (accept ISO strings or integer timestamps)
@@ -1132,20 +1553,31 @@ class _InternalMaintenanceFormPageState
         print('[Form] Populating inventory from data: ${data['parts_used']}');
         _selectedInventoryItems.clear();
         for (var item in data['parts_used']) {
+          // Handle multiple possible ID field names including formatted_id
+          final inventoryId =
+              item['inventory_id']?.toString() ??
+              item['formatted_id']?.toString() ??
+              item['id']?.toString() ??
+              item['item_code']?.toString() ??
+              '';
+
+          print(
+            '[Form] Processing inventory item: ${item['item_name']} - ID fields: inventory_id=${item['inventory_id']}, formatted_id=${item['formatted_id']}, id=${item['id']}, final_id=$inventoryId',
+          );
+
           _selectedInventoryItems.add({
-            'inventory_id': item['inventory_id'] ?? item['item_code'] ?? '',
+            'inventory_id': inventoryId,
             'item_name': item['item_name'] ?? item['name'] ?? '',
-            'item_code': item['item_code'] ?? item['code'] ?? '',
+            'item_code': item['item_code'] ?? item['code'] ?? inventoryId,
             'quantity': item['quantity'] ?? 0,
             'available_stock': item['available_stock'] ?? item['stock'] ?? '',
-            'unit': item['unit'] ?? '',
-            'autoReserve':
-                item['reserve'] ??
-                item['reserved'] ??
-                item['autoReserve'] ??
-                true,
+            'unit':
+                item['unit'] ?? item['uom'] ?? item['unit_of_measure'] ?? '',
           });
         }
+        print(
+          '[Form] Populated ${_selectedInventoryItems.length} inventory items',
+        );
       }
 
       // Created by - keep as current user, don't override from data
@@ -1248,7 +1680,7 @@ class _InternalMaintenanceFormPageState
       'scheduled_date': scheduledDateIso ?? _startDateController.text,
       'category': 'preventive',
       'task_type': 'internal',
-      'template_id': _selectedTemplateKey ?? '',
+      'task_type_id': _selectedTaskTypeId, // Include selected task type ID
       'recurrence_type':
           _selectedRecurrence != null
               ? _selectedRecurrence!.toLowerCase()
@@ -1270,9 +1702,16 @@ class _InternalMaintenanceFormPageState
 
     try {
       if (widget.isEditMode && widget.maintenanceData != null) {
-        // UPDATE existing task
-        final taskId = widget.maintenanceData!['id']?.toString() ?? id;
+        // UPDATE existing task - try multiple ID field names
+        final taskId =
+            widget.maintenanceData!['id']?.toString() ??
+            widget.maintenanceData!['formatted_id']?.toString() ??
+            widget.maintenanceData!['task_id']?.toString() ??
+            id;
         print('[v0] Updating maintenance task: $taskId');
+        print(
+          '[DEBUG] Available ID fields in maintenance data: ${widget.maintenanceData!.keys.where((k) => k.toString().toLowerCase().contains('id')).toList()}',
+        );
 
         final result = await _apiService.updateMaintenanceTask(
           taskId,
@@ -1314,29 +1753,85 @@ class _InternalMaintenanceFormPageState
         print('[v0] Maintenance task saved successfully');
         print('[v0] Backend response: $result');
 
-        // Extract the actual task ID from the response
+        // Extract the actual task ID from the response - try multiple field names
         String actualTaskId = id;
         if (result['task'] != null) {
           actualTaskId =
-              result['task']['id'] ?? result['task']['formatted_id'] ?? id;
+              result['task']['id']?.toString() ??
+              result['task']['formatted_id']?.toString() ??
+              result['task']['task_id']?.toString() ??
+              result['task']['IPM']?.toString() ??
+              id;
         }
         print('[v0] Using task ID for inventory requests: $actualTaskId');
+        print('[DEBUG] Task data structure: ${result['task']?.keys?.toList()}');
 
         // NOTE: Staff assignment is already included in the maintenance object sent to createAdminMaintenanceTask()
         // No need to call assignStaffToMaintenanceTask() again as it would send a duplicate notification
 
         // Create inventory reservations for selected items with the correct task ID
-        final inventoryReservationIds = await _createInventoryReservations(
-          actualTaskId,
-        );
+        List<Map<String, String>> createdPairs = [];
+        try {
+          createdPairs = await _createInventoryReservations(actualTaskId);
+          print(
+            '[v0] Reservation creation completed: ${createdPairs.length} reservations confirmed',
+          );
+        } catch (reservationError) {
+          print(
+            '[v0] Reservation process had errors, but task was created successfully: $reservationError',
+          );
+          // Continue with the flow - the task is created, reservations may have been created despite errors
+        }
 
-        // Update the maintenance task with the inventory reservation IDs
-        if (inventoryReservationIds.isNotEmpty) {
+        // Update the maintenance task with the inventory reservation IDs and attach reservation IDs to parts_used
+        if (createdPairs.isNotEmpty) {
           try {
-            final response = await _apiService.updateMaintenanceTask(
-              actualTaskId,
-              {'inventory_reservation_ids': inventoryReservationIds},
-            );
+            final reservationIds =
+                createdPairs
+                    .map((m) => m['reservation_id']?.toString() ?? '')
+                    .where((s) => s.isNotEmpty)
+                    .toList();
+
+            // Build mapping and updated parts
+            final Map<String, String> reservationMap = {};
+            for (final p in createdPairs) {
+              final inv = p['inventory_id']?.toString() ?? '';
+              final rid = p['reservation_id']?.toString() ?? '';
+              if (inv.isNotEmpty && rid.isNotEmpty) reservationMap[inv] = rid;
+            }
+
+            final List<Map<String, dynamic>> updatedPartsUsed =
+                (_selectedInventoryItems.map((it) {
+                  final copy = Map<String, dynamic>.from(it);
+                  final inv = it['inventory_id']?.toString() ?? '';
+                  if (reservationMap.containsKey(inv))
+                    copy['reservation_id'] = reservationMap[inv];
+                  return copy;
+                })).toList();
+
+            // Also update the UI list with reservation ids
+            for (final it in _selectedInventoryItems) {
+              final inv = it['inventory_id']?.toString() ?? '';
+              if (reservationMap.containsKey(inv))
+                it['reservation_id'] = reservationMap[inv];
+            }
+
+            final response = await _apiService
+                .updateMaintenanceTask(actualTaskId, {
+                  'inventory_reservation_ids': reservationIds,
+                  'parts_used': updatedPartsUsed,
+                });
+            // Notify registry of inventory updates
+            try {
+              final notifier = InventoryUpdateNotifier();
+              reservationMap.forEach((inv, rid) {
+                notifier.notifyItemUpdated(inv);
+              });
+            } catch (e) {
+              print(
+                '[v0] Failed to notify inventory after attaching reservation ids: $e',
+              );
+            }
 
             final result = response;
 
@@ -1357,7 +1852,7 @@ class _InternalMaintenanceFormPageState
             }
 
             print(
-              '[v0] Updated maintenance task with inventory reservation IDs: $inventoryReservationIds',
+              '[v0] Updated maintenance task with inventory reservation IDs: $reservationIds',
             );
           } catch (e) {
             print(
@@ -1385,6 +1880,10 @@ class _InternalMaintenanceFormPageState
   // -------------------- UI --------------------
   @override
   Widget build(BuildContext context) {
+    print(
+      '[DEBUG] Build called - Task type options count: ${_taskTypeOptions.length}',
+    );
+    print('[DEBUG] Task type options: $_taskTypeOptions');
     return FacilityFixLayout(
       currentRoute: 'work_maintenance',
       onNavigate: (routeKey) {
@@ -1484,22 +1983,108 @@ class _InternalMaintenanceFormPageState
                       ),
                       const SizedBox(height: 24),
 
-                      // maintenance template selector
-                      // Template dropdown removed - service no longer available
                       Row(
                         children: [
-                          // Task Title
+                          // Task Type
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _fieldLabel('Task Title'),
+                                _fieldLabel('Task Type'),
                                 _fieldBox(
-                                  child: TextFormField(
-                                    controller: _taskTitleController,
-                                    validator: _req,
-                                    decoration: _decoration('Enter Task Title'),
-                                  ),
+                                  child:
+                                      _taskTypeOptions.isEmpty
+                                          ? Container(
+                                            height: 48,
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 14,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              border: Border.all(
+                                                color: Colors.grey[300]!,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: const Row(
+                                              children: [
+                                                SizedBox(
+                                                  width: 16,
+                                                  height: 16,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                      ),
+                                                ),
+                                                SizedBox(width: 12),
+                                                Text(
+                                                  'Loading task types...',
+                                                  style: TextStyle(
+                                                    color: Colors.grey,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          )
+                                          : DropdownButtonFormField<String>(
+                                            value: _selectedTaskTypeId,
+                                            validator: _reqDropdown,
+                                            decoration: _decoration(
+                                              'Select Task Type...',
+                                            ),
+                                            isExpanded:
+                                                true, // Allow dropdown to expand full width
+                                            items:
+                                                _taskTypeOptions.map((
+                                                  taskType,
+                                                ) {
+                                                  final taskName =
+                                                      taskType['name'] ??
+                                                      'Unknown Task Type';
+                                                  return DropdownMenuItem<
+                                                    String
+                                                  >(
+                                                    value: taskType['id'],
+                                                    child: Tooltip(
+                                                      message: taskName,
+                                                      child: Text(
+                                                        taskName,
+                                                        overflow:
+                                                            TextOverflow
+                                                                .ellipsis,
+                                                        maxLines: 1,
+                                                        style: const TextStyle(
+                                                          fontSize: 14,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  );
+                                                }).toList(),
+                                            onChanged: (value) {
+                                              print(
+                                                '[DEBUG] Task type dropdown changed to: $value',
+                                              );
+                                              setState(() {
+                                                _selectedTaskTypeId = value;
+                                                // Find the selected task type name for display
+                                                final selectedTaskType =
+                                                    _taskTypeOptions.firstWhere(
+                                                      (taskType) =>
+                                                          taskType['id'] ==
+                                                          value,
+                                                      orElse:
+                                                          () => {
+                                                            'name': 'Unknown',
+                                                          },
+                                                    );
+                                                _selectedTaskType =
+                                                    selectedTaskType['name'];
+                                              });
+                                              // Automatically populate inventory items for this task type
+                                              _handleTaskTypeChange(value);
+                                            },
+                                          ),
                                 ),
                               ],
                             ),
@@ -1533,6 +2118,33 @@ class _InternalMaintenanceFormPageState
                               ],
                             ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      Row(
+                        children: [
+                          if (_selectedTaskType == 'Other')
+                            // Task Title
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _fieldLabel('Task Title'),
+                                  _fieldBox(
+                                    child: TextFormField(
+                                      controller: _taskTitleController,
+                                      validator: _req,
+                                      decoration: _decoration(
+                                        'Enter Task Title...',
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          // Right side spacer
+                          const Expanded(child: SizedBox()),
                         ],
                       ),
                       const SizedBox(height: 24),
@@ -1652,12 +2264,12 @@ class _InternalMaintenanceFormPageState
                           ),
                           const SizedBox(width: 24),
 
-                          // Location/Area - right
+                          // Location - right
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _fieldLabel('Location / Area'),
+                                _fieldLabel('Location'),
                                 _fieldBox(
                                   child: DropdownButtonFormField<String>(
                                     value: _selectedLocation,
@@ -1676,20 +2288,19 @@ class _InternalMaintenanceFormPageState
                                               'Halls',
                                               'Garden',
                                               'Corridors',
-                                              'Others',
+                                              'Other',
                                             ]
                                             .map(
-                                              (v) => DropdownMenuItem(
-                                                value: v,
-                                                child: Text(v),
+                                              (type) => DropdownMenuItem(
+                                                value: type,
+                                                child: Text(type),
                                               ),
                                             )
                                             .toList(),
-                                    onChanged: (v) {
+                                    onChanged: (value) {
                                       setState(() {
-                                        _selectedLocation = v;
+                                        _selectedLocation = value;
                                       });
-                                      _autoPopulateInventoryForLocation(v);
                                     },
                                   ),
                                 ),
@@ -1700,36 +2311,32 @@ class _InternalMaintenanceFormPageState
                       ),
                       const SizedBox(height: 24),
 
-                      // Specify Location (only shown when "Others" is selected, on the right)
-                      if (_selectedLocation == 'Others')
-                        Row(
-                          children: [
-                            const Expanded(child: SizedBox()), // Left spacer
-                            const SizedBox(width: 24),
+                      Row(
+                        children: [
+                          const Expanded(child: SizedBox()), // Left spacer
+                          const SizedBox(height: 24),
+                          if (_selectedLocation == 'Other')
+                            // Location
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _fieldLabel('Specify Location'),
+                                  _fieldLabel('Location'),
                                   _fieldBox(
                                     child: TextFormField(
+                                      controller: _tasklocationController,
                                       validator: _req,
                                       decoration: _decoration(
-                                        'Enter custom location...',
+                                        'Enter Location...',
                                       ),
-                                      onChanged: (value) {
-                                        // Store custom location value
-                                      },
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                          ],
-                        ),
-
-                      if (_selectedLocation == 'Others')
-                        const SizedBox(height: 24),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
 
                       // Description
                       _fieldLabel('Description'),
@@ -2156,14 +2763,12 @@ class _InternalMaintenanceFormPageState
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 40),
 
                       // Place inventory UI on the right side
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Left column containing the Inventory section
                           SizedBox(
                             width: 520,
                             child: Column(
@@ -2273,84 +2878,15 @@ class _InternalMaintenanceFormPageState
                                                   crossAxisAlignment:
                                                       CrossAxisAlignment.start,
                                                   children: [
-                                                    Row(
-                                                      children: [
-                                                        Expanded(
-                                                          child: Text(
-                                                            item['item_name'] ??
-                                                                'Unknown Item',
-                                                            style:
-                                                                const TextStyle(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                  fontSize: 14,
-                                                                ),
-                                                          ),
-                                                        ),
-                                                        const SizedBox(
-                                                          width: 8,
-                                                        ),
-                                                        if (item['resolved'] ==
-                                                            true) ...[
-                                                          if ((item['reserved_stock'] ??
-                                                                  0) >
-                                                              0)
-                                                            Container(
-                                                              padding:
-                                                                  const EdgeInsets.symmetric(
-                                                                    horizontal:
-                                                                        8,
-                                                                    vertical: 4,
-                                                                  ),
-                                                              decoration: BoxDecoration(
-                                                                color:
-                                                                    Colors
-                                                                        .green[50],
-                                                                borderRadius:
-                                                                    BorderRadius.circular(
-                                                                      6,
-                                                                    ),
-                                                              ),
-                                                              child: Text(
-                                                                'Reserved: ${item['reserved_stock'] ?? 0}',
-                                                                style: const TextStyle(
-                                                                  fontSize: 12,
-                                                                  color:
-                                                                      Colors
-                                                                          .green,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                        ] else ...[
-                                                          Container(
-                                                            padding:
-                                                                const EdgeInsets.symmetric(
-                                                                  horizontal: 8,
-                                                                  vertical: 4,
-                                                                ),
-                                                            decoration: BoxDecoration(
-                                                              color:
-                                                                  Colors
-                                                                      .red[50],
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    6,
-                                                                  ),
-                                                            ),
-                                                            child: const Text(
-                                                              'Unresolved',
-                                                              style: TextStyle(
-                                                                fontSize: 12,
-                                                                color:
-                                                                    Colors.red,
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ],
+                                                    Text(
+                                                      item['item_name'] ??
+                                                          'Unknown Item',
+                                                      style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        fontSize: 14,
+                                                      ),
                                                     ),
-                                                    const SizedBox(height: 6),
                                                     const SizedBox(height: 4),
                                                     Text(
                                                       '${item['item_code'] ?? 'N/A'}',
@@ -2361,7 +2897,7 @@ class _InternalMaintenanceFormPageState
                                                     ),
                                                     const SizedBox(height: 4),
                                                     Text(
-                                                      'Stock: ${item['available_stock']} ${item['unit'] ?? ''} (Reserved: ${item['reserved_stock'] ?? 0})',
+                                                      'Unit: ${item['unit'] ?? item['uom'] ?? item['unit_of_measure'] ?? '—'}',
                                                       style: TextStyle(
                                                         fontSize: 11,
                                                         color: Colors.grey[600],
@@ -2704,7 +3240,7 @@ class _InternalMaintenanceFormPageState
       SizedBox(height: _kFieldHeight, child: child);
 }
 
-// Inventory Selection Dialog
+// Inventory Selection Dialog (copied from internalmaintenance_form)
 class _InventorySelectionDialog extends StatefulWidget {
   final List<Map<String, dynamic>> availableItems;
   final String? selectedLocation;
@@ -2723,7 +3259,7 @@ class _InventorySelectionDialog extends StatefulWidget {
 
 class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
   Map<String, dynamic>? _selectedItem;
-  final _quantityController = TextEditingController(text: '0');
+  final _quantityController = TextEditingController(text: '1');
   String _searchQuery = '';
 
   @override
@@ -2770,28 +3306,6 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      if (widget.selectedLocation != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.blue[50],
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              'Filtered for: ${widget.selectedLocation}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.blue[700],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ),
                     ],
                   ),
                 ),
@@ -2840,9 +3354,19 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                         itemBuilder: (context, index) {
                           final item = _filteredItems[index];
                           final isSelected = _selectedItem == item;
-                          final currentStock = item['current_stock'] ?? 0;
+                          // Try multiple stock field names with fallback
+                          final currentStock =
+                              item['current_stock'] ??
+                              item['available_stock'] ??
+                              item['stock'] ??
+                              item['quantity_on_hand'] ??
+                              item['qty_on_hand'] ??
+                              0;
                           final isLowStock =
-                              currentStock <= (item['reorder_level'] ?? 0);
+                              currentStock <=
+                              (item['reorder_level'] ??
+                                  item['minimum_stock'] ??
+                                  0);
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 8),
@@ -2878,28 +3402,50 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                                 children: [
                                   const SizedBox(height: 4),
                                   Text(
-                                    'ID: ${item['item_code'] ?? 'N/A'}',
+                                    'Code: ${item['formatted_id'] ?? item['item_code'] ?? 'N/A'}',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey[600],
                                     ),
                                   ),
                                   Text(
-                                    'Stock Available: $currentStock',
+                                    'Unit: ${item['unit'] ?? item['uom'] ?? item['unit_of_measure'] ?? 'pcs'}',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey[600],
                                     ),
                                   ),
-                                  if (item['unit'] != null &&
-                                      item['unit'].toString().isNotEmpty)
-                                    Text(
-                                      'Unit: ${item['unit']}',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[600],
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color:
+                                              isLowStock
+                                                  ? Colors.orange[100]
+                                                  : Colors.green[100],
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'Stock: $currentStock',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                            color:
+                                                isLowStock
+                                                    ? Colors.orange[900]
+                                                    : Colors.green[900],
+                                          ),
+                                        ),
                                       ),
-                                    ),
+                                    ],
+                                  ),
                                 ],
                               ),
                               trailing:
@@ -2926,7 +3472,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                       controller: _quantityController,
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(
-                        labelText: 'Reserved Quantity',
+                        labelText: 'Quantity Needed',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -2939,7 +3485,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                   ),
                   const SizedBox(width: 16),
                   Text(
-                    'Stock: ${_selectedItem!['current_stock'] ?? 0}',
+                    'Available: ${_selectedItem!['current_stock'] ?? 0}',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[700],
@@ -2991,113 +3537,6 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                       vertical: 12,
                     ),
                   ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// Add Location Dialog
-class _AddLocationDialog extends StatefulWidget {
-  final Function(String location) onLocationAdded;
-
-  const _AddLocationDialog({required this.onLocationAdded});
-
-  @override
-  State<_AddLocationDialog> createState() => _AddLocationDialogState();
-}
-
-class _AddLocationDialogState extends State<_AddLocationDialog> {
-  final _locationController = TextEditingController();
-
-  @override
-  void dispose() {
-    _locationController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        width: 400,
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Add Custom Location',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Location input
-            TextField(
-              controller: _locationController,
-              decoration: InputDecoration(
-                labelText: 'Location Name',
-                hintText: 'Enter custom location...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-              ),
-              autofocus: true,
-            ),
-
-            const SizedBox(height: 24),
-
-            // Actions
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    final location = _locationController.text.trim();
-                    if (location.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Please enter a location name'),
-                        ),
-                      );
-                      return;
-                    }
-                    widget.onLocationAdded(location);
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                  ),
-                  child: const Text('Add'),
                 ),
               ],
             ),

@@ -10,7 +10,7 @@ import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/buttons.dart';
 import 'package:facilityfix/widgets/cards.dart';
 import 'package:facilityfix/staff/notification.dart';
-import 'package:facilityfix/services/api_services.dart';
+import 'package:facilityfix/services/api_services_mobile.dart';
 import 'package:facilityfix/config/env.dart';
 
 class InventoryItem {

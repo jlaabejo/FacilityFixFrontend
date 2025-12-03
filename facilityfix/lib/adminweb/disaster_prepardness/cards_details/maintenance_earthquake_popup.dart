@@ -2,7 +2,7 @@ import 'package:facilityfix/adminweb/disaster_prepardness/disasterpreparedness_p
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../maintenance_task/pop_up/assignstaff_popup.dart';
-import '../../services/api_service.dart';
+import '../../services/api_service_web.dart';
 // Add import for ViewFileDialog if it's in a different file, e.g., import '../../path/to/view_file_dialog.dart';
 
 class EarthquakeDialog extends StatefulWidget {

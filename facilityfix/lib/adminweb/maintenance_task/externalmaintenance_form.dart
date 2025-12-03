@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:facilityfix/utils/inventory_notifier.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
-import '../services/api_service.dart';
+import '../services/api_service_web.dart';
 import '../../services/auth_storage.dart';
-import '../../services/api_services.dart' as main_api;
+import '../../services/api_services_mobile.dart' as main_api;
 
 class ExternalMaintenanceFormPage extends StatefulWidget {
   final Map<String, dynamic>? maintenanceData;
@@ -77,6 +77,8 @@ class _ExternalMaintenanceFormPageState
   bool _isOtherServiceCategory = false;
   // Inventory selections (basic local state for UI)
   List<Map<String, dynamic>> _selectedInventoryItems = [];
+  // Task type related state
+  String? _selectedTaskTypeId;
   // Estimated time for service (used by estimated duration field)
   TimeOfDay? _estimatedTime;
 
@@ -107,6 +109,20 @@ class _ExternalMaintenanceFormPageState
     'Pest Control',
     'Other',
   ];
+
+  // Task types loaded dynamically from AdminTaskTypePage
+  List<Map<String, String>> _taskTypeOptions = [];
+
+  void _handleServiceCategoryChange(String? category) {
+    setState(() {
+      _selectedServiceCategory = category;
+      _isOtherServiceCategory = (category == 'Other');
+      if (!_isOtherServiceCategory) {
+        _otherServiceCategoryController.clear();
+      }
+    });
+  }
+
   final List<String> _priorityOptions = ['Low', 'Medium', 'High'];
   final List<String> _locationOptions = [
     'Swimming pool',
@@ -330,34 +346,48 @@ class _ExternalMaintenanceFormPageState
   }
 
   // ---------- Routing helpers ----------
-  String? _getRoutePath(String routeKey) {
+  static String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
       'dashboard': '/dashboard',
       'user_users': '/user/users',
-      'user_roles': '/user/roles',
+      'user_scheduling': '/user/scheduling',
       'work_maintenance': '/work/maintenance',
+      'work_task_type': '/work/task_type',
       'work_repair': '/work/repair',
       'calendar': '/calendar',
+      'inventory_equipment': '/inventory/equipment',
       'inventory_items': '/inventory/items',
       'inventory_request': '/inventory/request',
       'analytics': '/analytics',
       'announcement': '/announcement',
       'settings': '/settings',
+      //'logout': '/logout',
     };
     return pathMap[routeKey];
   }
 
   // Logout functionality
   void _handleLogout(BuildContext context) async {
+    print('[DEBUG] _handleLogout called');
+    // Ensure we're not already navigating
+    if (!mounted) return;
+    
     final result = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
+      barrierDismissible: false, // Prevent accidental dismissal
+      builder: (dialogContext) {
+        print('[DEBUG] Dialog builder called');
         return const LogoutPopup();
       },
     );
-
-    if (result == true) {
+    print('[DEBUG] Dialog result: $result');
+    
+    if (result == true && mounted) {
+      // Perform logout
+      print('[DEBUG] Logging out...');
       context.go('/');
+    } else {
+      print('[DEBUG] Logout cancelled or dialog dismissed');
     }
   }
 
@@ -375,15 +405,9 @@ class _ExternalMaintenanceFormPageState
     _dateCreated = DateTime.now(); // prefill but user can change
     _selectedAssessmentReceived = 'No'; // Auto-set to "No" when task is created
 
-    // Add listener for other location text changes
-    _otherLocationController.addListener(() {
-      if (_isOtherLocation) {
-        _autoPopulateInventoryForLocation(_otherLocationController.text.trim());
-      }
-    });
-
     _initAutoFields();
-    // load inventory items in background
+    // load task types and inventory items in background
+    _loadTaskTypes();
     _loadInventoryItems();
 
     // If in edit mode, fetch the full task data
@@ -492,6 +516,19 @@ class _ExternalMaintenanceFormPageState
 
       _selectedAdminNotifications = data['admin_notification'];
 
+      // Task type
+      // Task type ID for automatic inventory population
+      _selectedTaskTypeId = data['task_type_id']?.toString();
+      
+      // Find task type name from loaded options
+      if (_selectedTaskTypeId != null) {
+        final selectedTaskType = _taskTypeOptions.firstWhere(
+          (taskType) => taskType['id'] == _selectedTaskTypeId,
+          orElse: () => {'name': ''},
+        );
+        _selectedTaskType = selectedTaskType['name'];
+      }
+
       _loggedByController.text = data['logged_by'] ?? _loggedByController.text;
 
       // Dates
@@ -554,6 +591,8 @@ class _ExternalMaintenanceFormPageState
                 item['inventory_id'] ?? item['id'] ?? item['_doc_id'],
             'item_name': item['item_name'] ?? item['name'] ?? '',
             'item_code': item['item_code'] ?? item['code'] ?? '',
+            'unit':
+                item['unit'] ?? item['uom'] ?? item['unit_of_measure'] ?? 'pcs',
             'quantity': item['quantity'] ?? 1,
             'available_stock':
                 item['available_stock'] ??
@@ -607,6 +646,11 @@ class _ExternalMaintenanceFormPageState
                   'inventory_id': item['id'] ?? item['_doc_id'],
                   'item_name': item['item_name'] ?? item['name'] ?? 'Unknown',
                   'item_code': item['item_code'] ?? item['code'] ?? 'N/A',
+                  'unit':
+                      item['unit'] ??
+                      item['uom'] ??
+                      item['unit_of_measure'] ??
+                      'pcs',
                   'available_stock':
                       item['current_stock'] ?? item['available_stock'] ?? 0,
                   'quantity': quantity,
@@ -625,21 +669,225 @@ class _ExternalMaintenanceFormPageState
     });
   }
 
-  Future<void> _loadInventoryItems() async {
+  /// Load available task types from API
+  Future<void> _loadTaskTypes() async {
     try {
-      final response = await _mainApiService.getBuildingInventory(
-        'default_building_id',
+      print('[DEBUG] _loadTaskTypes called');
+      print('[DEBUG] API Service instance: $_apiService');
+      print('[v0] Loading task types...');
+      
+      // Check if token is set
+      final token = await AuthStorage.getToken();
+      print('[DEBUG] Auth token available: ${token != null}');
+      
+      final taskTypes = await _apiService.getTaskTypesForDropdown();
+      print('[v0] Loaded ${taskTypes.length} task types: $taskTypes');
+      print('[DEBUG] Raw task types data: $taskTypes');
+      print('[DEBUG] Task types type: ${taskTypes.runtimeType}');
+      
+      // If we get empty data, try the fallback method
+      if (taskTypes.isEmpty) {
+        print('[DEBUG] Got empty task types, trying fallback method...');
+        throw Exception('Empty task types returned, triggering fallback');
+      }
+      
+      setState(() {
+        _taskTypeOptions =
+            taskTypes
+                .map(
+                  (taskType) => {
+                    'id': taskType['id']?.toString() ?? '',
+                    'name': taskType['name']?.toString() ?? '',
+                  },
+                )
+                .toList();
+      });
+      print('[v0] Task type options set: $_taskTypeOptions');
+      print('[DEBUG] _taskTypeOptions.isEmpty: ${_taskTypeOptions.isEmpty}');
+      print('[DEBUG] Task types loaded successfully, dropdown should now be enabled');
+    } catch (e) {
+      print('[v0] Error loading task types: $e');
+      print('[DEBUG] Exception details: ${e.toString()}');
+      print('[DEBUG] Exception type: ${e.runtimeType}');
+      
+      // Try alternative API method as fallback
+      try {
+        print('[DEBUG] Attempting fallback API call...');
+        // If getTaskTypesForDropdown fails, try a more basic approach
+        final fallbackData = await _apiService.listTaskTypes();
+        print('[DEBUG] Fallback data: $fallbackData');
+        
+        if (fallbackData != null && fallbackData.isNotEmpty) {
+          setState(() {
+            _taskTypeOptions = fallbackData
+                .map((item) => {
+                      'id': item['id']?.toString() ?? item['formatted_id']?.toString() ?? '',
+                      'name': '${item['category']?.toString() ?? 'Unknown'} - ${item['description']?.toString() ?? 'No Description'}',
+                    })
+                .toList();
+          });
+          print('[DEBUG] Fallback task types loaded: $_taskTypeOptions');
+          return;
+        }
+      } catch (fallbackError) {
+        print('[DEBUG] Fallback also failed: $fallbackError');
+      }
+      
+      // Add a fallback with some test options if all loading fails
+      setState(() {
+        _taskTypeOptions = [
+          {'id': 'TT-2025-00015', 'name': 'Corrective - Fixing plumbing leaks (From DB)'},
+          {'id': 'temp_1', 'name': 'Corrective Maintenance (Temporary)'},
+          {'id': 'temp_2', 'name': 'Preventive Maintenance (Temporary)'},
+          {'id': 'temp_3', 'name': 'Emergency Repair (Temporary)'},
+          {'id': '', 'name': 'API Error - Using fallback options'},
+        ];
+      });
+      
+      print('[DEBUG] Using fallback task types, dropdown should now work!');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Using fallback task types due to API error')));
+      }
+    }
+  }
+
+  /// Handle task type selection and populate associated inventory
+  Future<void> _handleTaskTypeChange(String? taskTypeId) async {
+    setState(() {
+      _selectedTaskTypeId = taskTypeId;
+    });
+
+    if (taskTypeId != null) {
+      try {
+        print('[v0] Task type changed to: $taskTypeId');
+        print('[v0] Fetching inventory items for task type: $taskTypeId');
+        
+        // Check if this is a temporary/fallback task type ID
+        if (taskTypeId.startsWith('temp_') || taskTypeId.isEmpty) {
+          print('[DEBUG] Skipping inventory fetch for temporary task type: $taskTypeId');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('This is a temporary task type. No inventory items available.'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+          return;
+        }
+        
+        final taskTypeInventory = await _apiService.getTaskTypeInventoryItems(
+          taskTypeId,
+        );
+        print('[v0] Task type inventory response: $taskTypeInventory');
+
+        // Merge new inventory items with existing selections (avoid duplicates)
+        final existingIds =
+            _selectedInventoryItems
+                .map((item) => item['inventory_id']?.toString())
+                .where((id) => id != null)
+                .toSet();
+
+        final newItems = <Map<String, dynamic>>[];
+        for (final item in taskTypeInventory) {
+          final inventoryId = item['inventory_id']?.toString();
+          if (inventoryId != null && !existingIds.contains(inventoryId)) {
+            // Handle multiple possible field names from backend
+            final defaultQuantity =
+                item['default_quantity'] ?? item['quantity'] ?? 1;
+            final currentStock =
+                item['current_stock'] ??
+                item['available_stock'] ??
+                item['stock'] ??
+                0;
+            final itemName = item['item_name'] ?? item['name'] ?? '';
+            final itemCode = item['item_code'] ?? item['code'] ?? '';
+            final unit =
+                item['unit'] ?? item['uom'] ?? item['unit_of_measure'] ?? 'pcs';
+
+            newItems.add({
+              'inventory_id': inventoryId,
+              'item_name': itemName,
+              'item_code': itemCode,
+              'quantity':
+                  defaultQuantity, // Use default quantity from task type
+              'available_stock': currentStock,
+              'unit': unit,
+              'from_task_type': true, // Mark as coming from task type
+            });
+
+            print(
+              '[v0] Added task type inventory item: $itemName (ID: $inventoryId, Qty: $defaultQuantity)',
+            );
+          }
+        }
+
+        if (newItems.isNotEmpty) {
+          setState(() {
+            _selectedInventoryItems.addAll(newItems);
+          });
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Added ${newItems.length} inventory item(s) for selected task type',
+                ),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        print('[v0] Error loading task type inventory: $e');
+        print('[DEBUG] Task type inventory error details: ${e.toString()}');
+        
+        // Show user-friendly error message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not load inventory for this task type. You can still add items manually.'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 3),
+              action: SnackBarAction(
+                label: 'Add Manually',
+                textColor: Colors.white,
+                onPressed: () {
+                  _addInventoryItem();
+                },
+              ),
+            ),
+          );
+        }
+        // Don't fail if task type inventory loading fails
+      }
+    }
+  }  Future<void> _loadInventoryItems() async {
+    try {
+      print('[v0] Loading inventory items...');
+      // Use admin API service to get inventory items
+      final response = await _apiService.getInventoryItems(
+        buildingId: 'default_building_id',
       );
+
+      print('[v0] Inventory response: $response');
       if (response['success'] == true && response['data'] != null) {
         setState(() {
           _availableInventoryItems = List<Map<String, dynamic>>.from(
             response['data'],
           );
         });
+        print('[v0] Loaded ${_availableInventoryItems.length} inventory items');
+      } else {
+        print('[v0] No inventory data returned or unsuccessful response');
       }
     } catch (e) {
       print('[v0] Error loading inventory items: $e');
-      // ignore: no-op
+      // Don't fail the whole form if inventory loading fails
     }
   }
 
@@ -653,12 +901,19 @@ class _ExternalMaintenanceFormPageState
     try {
       for (final item in _selectedInventoryItems) {
         final qty = item['quantity'];
+        final fromTaskType = item['from_task_type'] == true;
+        final itemName = item['item_name'] ?? 'Unknown Item';
+
         if (qty == null || qty <= 0) {
           print(
-            '[v0] Skipping reservation for ${item['item_name']} due to invalid quantity: $qty',
+            '[v0] Skipping reservation for $itemName due to invalid quantity: $qty',
           );
           continue;
         }
+
+        print(
+          '[v0] Creating reservation for $itemName (Qty: $qty)${fromTaskType ? ' [FROM TASK TYPE]' : ''}',
+        );
         final response = await _apiService.createInventoryReservation(
           inventoryId: item['inventory_id'],
           quantity: qty,
@@ -687,55 +942,15 @@ class _ExternalMaintenanceFormPageState
     }
   }
 
-  // Auto-populate recommended inventory items for selected location
-  void _autoPopulateInventoryForLocation(String? location) {
-    if (location == null || location.isEmpty) return;
-    if (_availableInventoryItems.isEmpty) return;
-
-    // Find items recommended for this location
-    final recommendedItems =
-        _availableInventoryItems.where((item) {
-          final recommendedOn = item['recommended_on'];
-          if (recommendedOn == null) return false;
-          if (recommendedOn is List) {
-            return recommendedOn.contains(location);
-          }
-          return false;
-        }).toList();
-
-    // Add recommended items that aren't already selected
-    for (final item in recommendedItems) {
-      final itemCode = item['item_code'] ?? item['itemCode'];
-      final alreadyAdded = _selectedInventoryItems.any(
-        (selected) => selected['inventory_id'] == itemCode,
-      );
-
-      if (!alreadyAdded) {
-        setState(() {
-          _selectedInventoryItems.add({
-            'inventory_id': itemCode,
-            'item_name': item['item_name'],
-            'item_code': item['item_code'],
-            'quantity': 0, // Default quantity
-            'available_stock': item['current_stock'],
-            'unit': item['unit'] ?? '',
-          });
-        });
+  // Keep location field but remove auto-population
+  void _handleLocationChange(String? location) {
+    setState(() {
+      _selectedLocation = location;
+      _isOtherLocation = (location == 'Other');
+      if (!_isOtherLocation) {
+        _otherLocationController.clear();
       }
-    }
-
-    // Show feedback to user
-    if (recommendedItems.isNotEmpty && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Added ${recommendedItems.length} recommended item(s) for $location',
-          ),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
+    });
   }
 
   Future<void> _initAutoFields() async {
@@ -782,24 +997,40 @@ class _ExternalMaintenanceFormPageState
           widget.maintenanceData!['id']?.toString() ??
           widget.maintenanceData!['task_code']?.toString() ??
           widget.maintenanceData!['taskCode']?.toString();
+
       if (taskId == null) {
         print('[v0] No task ID found in maintenanceData');
+        _populateFormFields(widget.maintenanceData!);
         return;
       }
 
-      final taskData = await _apiService.getMaintenanceTaskById(taskId);
-      if (taskData['success'] == true && taskData['data'] != null) {
-        _populateFormFields(taskData['data']);
-      } else {
-        print(
-          '[v0] Failed to fetch task data: ${taskData['message'] ?? 'Unknown error'}',
-        );
-        // Fallback to passed data
+      // Try to get full task details from API
+      try {
+        final taskData = await _apiService.getMaintenanceTaskById(taskId);
+        if (taskData['success'] == true && taskData['data'] != null) {
+          // Use API data which should be more complete
+          final completeData = taskData['data'] as Map<String, dynamic>;
+
+          // Merge with passed data to ensure we don't lose any fields
+          final mergedData = Map<String, dynamic>.from(widget.maintenanceData!);
+          mergedData.addAll(completeData);
+
+          _populateFormFields(mergedData);
+        } else {
+          print(
+            '[v0] Failed to fetch complete task data: ${taskData['message'] ?? 'Unknown error'}',
+          );
+          // Use passed data as fallback
+          _populateFormFields(widget.maintenanceData!);
+        }
+      } catch (apiError) {
+        print('[v0] API error fetching task data: $apiError');
+        // Use passed data as fallback
         _populateFormFields(widget.maintenanceData!);
       }
     } catch (e) {
-      print('[v0] Error fetching task data: $e');
-      // Fallback to passed data
+      print('[v0] Error in _fetchTaskData: $e');
+      // Always populate with available data
       _populateFormFields(widget.maintenanceData!);
     } finally {
       setState(() => _isLoadingData = false);
@@ -861,11 +1092,16 @@ class _ExternalMaintenanceFormPageState
     return FacilityFixLayout(
       currentRoute: 'work_maintenance',
       onNavigate: (routeKey) {
+        print('[DEBUG] onNavigate called with routeKey: $routeKey');
         final routePath = _getRoutePath(routeKey);
         if (routePath != null) {
+          print('[DEBUG] Navigating to route: $routePath');
           context.go(routePath);
         } else if (routeKey == 'logout') {
+          print('[DEBUG] Logout route detected, calling _handleLogout');
           _handleLogout(context);
+        } else {
+          print('[DEBUG] Unknown routeKey: $routeKey');
         }
       },
       body:
@@ -967,45 +1203,27 @@ class _ExternalMaintenanceFormPageState
                               // Task Title + Task Code
                               Row(
                                 children: [
-                                  // Task Type
+                                  // Task Type (Dynamic from AdminTaskTypePage)
                                   Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        _fieldBox(
-                                          child: DropdownButtonFormField<
-                                            String
-                                          >(
-                                            value: _selectedTaskType,
-                                            validator: _req,
-                                            decoration: _decoration(
-                                              'Select Task Type...',
-                                            ),
-                                            items:
-                                                const [
-                                                      'Preventive Maintenance',
-                                                      'Corrective Maintenance',
-                                                      'Inspection',
-                                                      'Repair',
-                                                      'Others',
-                                                    ]
-                                                    .map(
-                                                      (type) =>
-                                                          DropdownMenuItem(
-                                                            value: type,
-                                                            child: Text(type),
-                                                          ),
-                                                    )
-                                                    .toList(),
-                                            onChanged: (value) {
-                                              setState(() {
-                                                _selectedTaskType = value;
-                                              });
-                                            },
-                                          ),
-                                        ),
-                                      ],
+                                    child: _buildDropdownField(
+                                      label: 'Task Type',
+                                      value: _selectedTaskTypeId,
+                                      placeholder: 'Select Task Type...',
+                                      options: _taskTypeOptions,
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _selectedTaskTypeId = value;
+                                          // Find the selected task type name for display
+                                          final selectedTaskType = _taskTypeOptions.firstWhere(
+                                            (taskType) => taskType['id'] == value,
+                                            orElse: () => {'name': 'Unknown'},
+                                          );
+                                          _selectedTaskType = selectedTaskType['name'];
+                                        });
+                                        // Automatically populate inventory items for this task type
+                                        _handleTaskTypeChange(value);
+                                      },
+                                      validator: _req,
                                     ),
                                   ),
                                   const SizedBox(width: 24),
@@ -1089,7 +1307,7 @@ class _ExternalMaintenanceFormPageState
                               ),
                               const SizedBox(height: 24),
 
-                              // Location/Area on left, Service Category on right
+                              // First row: Always show dropdowns for Location/Area and Service Category
                               Row(
                                 children: [
                                   Expanded(
@@ -1098,18 +1316,7 @@ class _ExternalMaintenanceFormPageState
                                       value: _selectedLocation,
                                       placeholder: "Select Location...",
                                       options: _locationOptions,
-                                      onChanged: (v) {
-                                        setState(() {
-                                          _selectedLocation = v;
-                                          _isOtherLocation = (v == 'Other');
-                                          if (!_isOtherLocation) {
-                                            _otherLocationController.clear();
-                                            _autoPopulateInventoryForLocation(
-                                              v,
-                                            );
-                                          }
-                                        });
-                                      },
+                                      onChanged: _handleLocationChange,
                                       validator:
                                           (v) => v == null ? 'Required' : null,
                                     ),
@@ -1121,63 +1328,48 @@ class _ExternalMaintenanceFormPageState
                                       value: _selectedServiceCategory,
                                       placeholder: "Select Category...",
                                       options: _serviceCategoryOptions,
-                                      onChanged: (v) {
-                                        setState(() {
-                                          _selectedServiceCategory = v;
-                                          _isOtherServiceCategory =
-                                              (v == 'Other');
-                                          if (!_isOtherServiceCategory) {
-                                            _otherServiceCategoryController
-                                                .clear();
-                                          }
-                                        });
-                                      },
+                                      onChanged: _handleServiceCategoryChange,
                                       validator:
                                           (v) => v == null ? 'Required' : null,
                                     ),
                                   ),
                                 ],
                               ),
-
-                              // Show custom location input if "Other" is selected
-                              if (_isOtherLocation) ...[
-                                const SizedBox(height: 16),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _buildTextField(
-                                        label: 'Specify Location',
-                                        controller: _otherLocationController,
-                                        placeholder: 'Enter custom location...',
-                                        validator: _req,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 24),
-                                    const Expanded(child: SizedBox()),
-                                  ],
-                                ),
-                              ],
-
-                              // Show custom service category input if "Other" is selected
-                              if (_isOtherServiceCategory) ...[
-                                const SizedBox(height: 16),
-                                Row(
-                                  children: [
-                                    const Expanded(child: SizedBox()),
-                                    const SizedBox(width: 24),
-                                    Expanded(
-                                      child: _buildTextField(
-                                        label: 'Specify Service Category',
-                                        controller:
-                                            _otherServiceCategoryController,
-                                        placeholder: 'Enter custom category...',
-                                        validator: _req,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
                               const SizedBox(height: 24),
+
+                              // Second row: Show input fields only if "Other" is selected for either
+                              if (_isOtherLocation || _isOtherServiceCategory)
+                                Row(
+                                  children: [
+                                    if (_isOtherLocation)
+                                      Expanded(
+                                        child: _buildTextField(
+                                          label: "Location / Area",
+                                          controller: _otherLocationController,
+                                          placeholder: "Enter Location...",
+                                          validator: _req,
+                                        ),
+                                      )
+                                    else
+                                      const Expanded(child: SizedBox()),
+                                    const SizedBox(width: 24),
+                                    if (_isOtherServiceCategory)
+                                      Expanded(
+                                        child: _buildTextField(
+                                          label: "Service Category",
+                                          controller:
+                                              _otherServiceCategoryController,
+                                          placeholder:
+                                              "Enter Service Category...",
+                                          validator: _req,
+                                        ),
+                                      )
+                                    else
+                                      const Expanded(child: SizedBox()),
+                                  ],
+                                ),
+                              if (_isOtherLocation || _isOtherServiceCategory)
+                                const SizedBox(height: 24),
 
                               _buildTextAreaField(
                                 label: "Description",
@@ -1278,57 +1470,36 @@ class _ExternalMaintenanceFormPageState
 
                                   // Estimated Duration
                                   Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        _fieldLabel('Estimated Duration'),
-                                        _fieldBox(
-                                          child: TextFormField(
-                                            controller:
-                                                _estimatedDurationController,
-                                            validator: _durationValidator,
-                                            decoration: _decoration(
-                                              'e.g., 3 hrs / 45 mins',
-                                            ).copyWith(
-                                              suffixIcon: IconButton(
-                                                icon: const Icon(
-                                                  Icons.access_time,
-                                                ),
-                                                tooltip: 'Pick hours & minutes',
-                                                onPressed: () async {
-                                                  final picked =
-                                                      await showTimePicker(
-                                                        context: context,
-                                                        // Use a neutral initial time for duration selection
-                                                        initialTime: TimeOfDay(
-                                                          hour: 0,
-                                                          minute: 30,
-                                                        ),
-                                                      );
-                                                  if (picked != null) {
-                                                    final h = picked.hour;
-                                                    final m = picked.minute;
-                                                    String formatted;
-                                                    if (h > 0 && m > 0) {
-                                                      formatted =
-                                                          '$h hrs $m mins';
-                                                    } else if (h > 0) {
-                                                      formatted = '$h hrs';
-                                                    } else {
-                                                      formatted = '$m mins';
-                                                    }
-                                                    setState(() {
-                                                      _estimatedDurationController
-                                                          .text = formatted;
-                                                    });
-                                                  }
-                                                },
-                                              ),
-                                            ),
+                                    child: _buildTextField(
+                                      label: 'Estimated Duration',
+                                      controller: _estimatedDurationController,
+                                      placeholder: 'e.g., 3 hrs / 45 mins',
+                                      validator: _durationValidator,
+                                      onTap: () async {
+                                        final picked = await showTimePicker(
+                                          context: context,
+                                          initialTime: const TimeOfDay(
+                                            hour: 0,
+                                            minute: 30,
                                           ),
-                                        ),
-                                      ],
+                                        );
+                                        if (picked != null) {
+                                          final h = picked.hour;
+                                          final m = picked.minute;
+                                          String formatted;
+                                          if (h > 0 && m > 0) {
+                                            formatted = '$h hrs $m mins';
+                                          } else if (h > 0) {
+                                            formatted = '$h hrs';
+                                          } else {
+                                            formatted = '$m mins';
+                                          }
+                                          setState(() {
+                                            _estimatedDurationController.text =
+                                                formatted;
+                                          });
+                                        }
+                                      },
                                     ),
                                   ),
                                 ],
@@ -1599,7 +1770,19 @@ class _ExternalMaintenanceFormPageState
                                                               height: 4,
                                                             ),
                                                             Text(
-                                                              'Available: ${item['available_stock']}',
+                                                              'Stock: ${item['available_stock']}',
+                                                              style: TextStyle(
+                                                                fontSize: 11,
+                                                                color:
+                                                                    Colors
+                                                                        .grey[600],
+                                                              ),
+                                                            ),
+                                                            const SizedBox(
+                                                              height: 4,
+                                                            ),
+                                                            Text(
+                                                              'Unit: ${item['unit'] ?? item['uom'] ?? item['unit_of_measure'] ?? '—'}',
                                                               style: TextStyle(
                                                                 fontSize: 11,
                                                                 color:
@@ -2135,6 +2318,7 @@ class _ExternalMaintenanceFormPageState
       // System Fields
       'building_id': 'default_building',
       'task_type': 'external',
+      'task_type_id': _selectedTaskTypeId, // Include selected task type ID
       'category': actualServiceCategory,
       'assigned_to': _contractorNameController.text.trim(),
 
@@ -2148,7 +2332,9 @@ class _ExternalMaintenanceFormPageState
                       it['inventory_id'] ?? it['id'] ?? it['_doc_id'],
                   'item_name': it['item_name'],
                   'item_code': it['item_code'],
+                  'unit': it['unit'] ?? 'pcs',
                   'quantity': it['quantity'] ?? 1,
+                  'available_stock': it['available_stock'] ?? 0,
                   'reserve': it['reserve'] ?? true,
                 },
               )
@@ -2410,7 +2596,7 @@ class _ExternalMaintenanceFormPageState
     required String label,
     required String? value,
     required String placeholder,
-    required List<String> options,
+    required List<dynamic> options,
     required Function(String?) onChanged,
     String? Function(String?)? validator,
     bool fullWidth = false,
@@ -2432,11 +2618,20 @@ class _ExternalMaintenanceFormPageState
             ),
             dropdownColor: Colors.white,
             items:
-                options
-                    .map(
-                      (opt) => DropdownMenuItem(value: opt, child: Text(opt)),
-                    )
-                    .toList(),
+                options.map((opt) {
+                  if (opt is String) {
+                    return DropdownMenuItem<String>(
+                      value: opt,
+                      child: Text(opt),
+                    );
+                  } else if (opt is Map<String, String>) {
+                    return DropdownMenuItem<String>(
+                      value: opt['id'],
+                      child: Text(opt['name'] ?? ''),
+                    );
+                  }
+                  return null;
+                }).whereType<DropdownMenuItem<String>>().toList(),
             onChanged: enabled ? onChanged : null,
             icon: Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
           ),
@@ -2740,7 +2935,7 @@ class _InventorySelectionDialogState extends State<_InventorySelectionDialog> {
                                     ),
                                   ),
                                   Text(
-                                    'Department: ${item['department'] ?? 'N/A'}',
+                                    'Unit: ${item['unit'] ?? item['uom'] ?? item['unit_of_measure'] ?? 'pcs'}',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey[600],

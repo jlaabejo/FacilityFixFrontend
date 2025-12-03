@@ -4,10 +4,12 @@ import 'package:go_router/go_router.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import '../layout/facilityfix_layout.dart';
-import '../services/api_service.dart';
+import '../services/api_service_web.dart';
 
 class CreateAnnouncementPage extends StatefulWidget {
-  const CreateAnnouncementPage({super.key});
+  final String? announcementId;
+
+  const CreateAnnouncementPage({super.key, this.announcementId});
 
   @override
   State<CreateAnnouncementPage> createState() => _CreateAnnouncementPageState();
@@ -96,39 +98,65 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
     'Others',
   ];
 
+  // Editing / loading state
+  bool _isLoading = false;
+  String? _errorMessage;
+  String? _announcementId;
+  List<String> _existingAttachments = [];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.announcementId != null) {
+      _loadAnnouncementData();
+    }
+  }
+
   // Route mapping helper function
   static String? _getRoutePath(String routeKey) {
-      final Map<String, String> pathMap = {
-        'dashboard': '/dashboard',
-        'user_users': '/user/users',
-        'user_scheduling': '/user/scheduling',
-        'work_maintenance': '/work/maintenance',
-        'work_repair': '/work/repair',
-        'calendar': '/calendar',
-        'inventory_equipment': '/inventory/equipment',
-        'inventory_items': '/inventory/items',
-        'inventory_request': '/inventory/request',
-        'analytics': '/analytics',
-        'announcement': '/announcement',
-        'settings': '/settings',
-        'logout': '/logout',
-      };
-      return pathMap[routeKey];
-    }
-
-// Logout functionality
-void _handleLogout(BuildContext context) async {
-  final result = await showDialog<bool>(
-    context: context,
-    builder: (BuildContext context) {
-      return const LogoutPopup();
-    },
-  );
-
-  if (result == true) {
-    context.go('/');
+    final Map<String, String> pathMap = {
+      'dashboard': '/dashboard',
+      'user_users': '/user/users',
+      'user_scheduling': '/user/scheduling',
+      'work_maintenance': '/work/maintenance',
+      'work_task_type': '/work/task_type',
+      'work_repair': '/work/repair',
+      'calendar': '/calendar',
+      'inventory_equipment': '/inventory/equipment',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
+      'analytics': '/analytics',
+      'announcement': '/announcement',
+      'settings': '/settings',
+      // 'logout' intentionally omitted so logout triggers the confirmation popup
+    };
+    return pathMap[routeKey];
   }
-}
+
+  // Logout functionality
+  void _handleLogout(BuildContext context) async {
+    print('[DEBUG] _handleLogout called');
+    // Ensure we're not already navigating
+    if (!mounted) return;
+    
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false, // Prevent accidental dismissal
+      builder: (dialogContext) {
+        print('[DEBUG] Dialog builder called');
+        return const LogoutPopup();
+      },
+    );
+    print('[DEBUG] Dialog result: $result');
+    
+    if (result == true && mounted) {
+      // Perform logout
+      print('[DEBUG] Logging out...');
+      context.go('/');
+    } else {
+      print('[DEBUG] Logout cancelled or dialog dismissed');
+    }
+  }
 
 
   // File picker functionality
@@ -310,6 +338,83 @@ void _handleLogout(BuildContext context) async {
     }
   }
 
+  // Load existing announcement when editing
+  Future<void> _loadAnnouncementData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final id = widget.announcementId!;
+      final response = await _apiService.getAnnouncement(id);
+
+      setState(() {
+        _announcementId = response['formatted_id'] ?? response['announcement']?['formatted_id'] ?? response['id'] ?? id;
+        _titleController.text = response['title'] ?? '';
+        _detailsController.text = response['content'] ?? '';
+
+        final audience = response['audience']?.toString().toLowerCase();
+        if (audience == 'tenant' || audience == 'tenants') {
+          _selectedAudience = 'Tenants';
+        } else if (audience == 'staff') {
+          _selectedAudience = 'Staff';
+        } else {
+          _selectedAudience = 'All';
+        }
+
+        final backendType = response['type']?.toString();
+        final knownTypeValues = _typeOptions.map((t) => t['value'] as String).toList();
+        if (backendType != null && backendType.isNotEmpty && !knownTypeValues.contains(backendType)) {
+          _selectedType = 'Others';
+          _showCustomType = true;
+          _customTypeController.text = backendType;
+        } else {
+          _selectedType = backendType ?? 'General Announcement';
+          _showCustomType = _selectedType == 'Others';
+        }
+
+        final backendLocation = response['location_affected']?.toString();
+        if (backendLocation != null && backendLocation.isNotEmpty && !_locationOptions.contains(backendLocation)) {
+          _selectedLocation = 'Others';
+          _showCustomLocation = true;
+          _customLocationController.text = backendLocation;
+        } else {
+          _selectedLocation = backendLocation;
+          _showCustomLocation = _selectedLocation == 'Others';
+        }
+
+        if (response['scheduled_publish_date'] != null) {
+          _startDateController.text = _convertDateToDisplay(response['scheduled_publish_date']);
+        }
+        if (response['expiry_date'] != null) {
+          _endDateController.text = _convertDateToDisplay(response['expiry_date']);
+        }
+
+        if (response['attachments'] is List) {
+          _existingAttachments = List<String>.from(response['attachments'].map((a) => a.toString()));
+        }
+
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to load announcement: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  String _convertDateToDisplay(dynamic date) {
+    if (date == null) return '';
+    try {
+      DateTime dt = date is String ? DateTime.parse(date) : date as DateTime;
+      return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+    } catch (_) {
+      return date.toString();
+    }
+  }
+
   // Submit form - ready for backend integration
   void _submitForm() async {
     if (!_validateForm()) return;
@@ -338,9 +443,9 @@ void _handleLogout(BuildContext context) async {
               ? _convertDateToISO(_endDateController.text) 
               : null,
       'is_pinned': _pinToDashboard,
-      'is_published': true, // Publish immediately
-      'building_id': 'building_001', // TODO: Get from user session
-      'created_by': 'admin_user', // TODO: Get from user session
+      'is_published': true,
+      'building_id': 'building_001',
+      'created_by': 'admin_user',
     };
 
     // Show loading indicator
@@ -351,9 +456,16 @@ void _handleLogout(BuildContext context) async {
     );
 
     try {
-      final response = await _apiService.createAnnouncement(announcementData);
-
-      print('[v0] Create announcement response: $response');
+      Map<String, dynamic> response;
+      if (widget.announcementId != null) {
+        // Edit mode - update existing announcement
+        response = await _apiService.updateAnnouncement(widget.announcementId!, announcementData);
+        print('[v0] Update announcement response: $response');
+      } else {
+        // Create mode
+        response = await _apiService.createAnnouncement(announcementData);
+        print('[v0] Create announcement response: $response');
+      }
 
       // Hide loading indicator
       if (mounted) Navigator.of(context).pop();
@@ -364,12 +476,13 @@ void _handleLogout(BuildContext context) async {
                            response['announcement']?['formatted_id'] ??
                            response['id'] ??
                            response['announcement']?['id'] ??
+                           widget.announcementId ??
                            'Unknown';
 
-        print('[v0] Success! Announcement ID: $formattedId');
-
         _showSuccessSnackBar(
-          'Announcement created successfully! ID: $formattedId',
+          widget.announcementId != null
+              ? 'Announcement updated successfully! ID: $formattedId'
+              : 'Announcement created successfully! ID: $formattedId',
         );
 
         // Navigate back to announcement list after a short delay
@@ -385,7 +498,9 @@ void _handleLogout(BuildContext context) async {
 
       // Show error message
       if (mounted) {
-        _showErrorSnackBar('Failed to create announcement: $e');
+        _showErrorSnackBar(widget.announcementId != null
+            ? 'Failed to update announcement: $e'
+            : 'Failed to create announcement: $e');
       }
     }
   }
@@ -478,11 +593,16 @@ void _handleLogout(BuildContext context) async {
     return FacilityFixLayout(
       currentRoute: 'announcement',
       onNavigate: (routeKey) {
+        print('[DEBUG] onNavigate called with routeKey: $routeKey');
         final routePath = _getRoutePath(routeKey);
         if (routePath != null) {
+          print('[DEBUG] Navigating to route: $routePath');
           context.go(routePath);
         } else if (routeKey == 'logout') {
+          print('[DEBUG] Logout route detected, calling _handleLogout');
           _handleLogout(context);
+        } else {
+          print('[DEBUG] Unknown routeKey: $routeKey');
         }
       },
       // Important: let THIS be the only scroll view at this level.
