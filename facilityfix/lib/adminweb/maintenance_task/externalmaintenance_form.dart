@@ -371,7 +371,7 @@ class _ExternalMaintenanceFormPageState
     print('[DEBUG] _handleLogout called');
     // Ensure we're not already navigating
     if (!mounted) return;
-    
+
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false, // Prevent accidental dismissal
@@ -381,7 +381,7 @@ class _ExternalMaintenanceFormPageState
       },
     );
     print('[DEBUG] Dialog result: $result');
-    
+
     if (result == true && mounted) {
       // Perform logout
       print('[DEBUG] Logging out...');
@@ -416,7 +416,6 @@ class _ExternalMaintenanceFormPageState
     }
   }
 
-
   /// Returns the total reserved quantity for the given inventory id across reservations
   Future<int> _getReservedQty(String inventoryId) async {
     try {
@@ -426,8 +425,13 @@ class _ExternalMaintenanceFormPageState
         int reservedTotal = 0;
         for (var r in reservations) {
           if ((r['inventory_id']?.toString() ?? '') == inventoryId) {
-            final status = (r['status'] ?? r['request_status'] ?? 'reserved').toString().toLowerCase();
-            if (status == 'reserved' || status == 'approved' || status == 'pending') {
+            final status =
+                (r['status'] ?? r['request_status'] ?? 'reserved')
+                    .toString()
+                    .toLowerCase();
+            if (status == 'reserved' ||
+                status == 'approved' ||
+                status == 'pending') {
               reservedTotal += (r['quantity'] ?? 0) as int;
             }
           }
@@ -519,7 +523,7 @@ class _ExternalMaintenanceFormPageState
       // Task type
       // Task type ID for automatic inventory population
       _selectedTaskTypeId = data['task_type_id']?.toString();
-      
+
       // Find task type name from loaded options
       if (_selectedTaskTypeId != null) {
         final selectedTaskType = _taskTypeOptions.firstWhere(
@@ -675,22 +679,22 @@ class _ExternalMaintenanceFormPageState
       print('[DEBUG] _loadTaskTypes called');
       print('[DEBUG] API Service instance: $_apiService');
       print('[v0] Loading task types...');
-      
+
       // Check if token is set
       final token = await AuthStorage.getToken();
       print('[DEBUG] Auth token available: ${token != null}');
-      
+
       final taskTypes = await _apiService.getTaskTypesForDropdown();
       print('[v0] Loaded ${taskTypes.length} task types: $taskTypes');
       print('[DEBUG] Raw task types data: $taskTypes');
       print('[DEBUG] Task types type: ${taskTypes.runtimeType}');
-      
+
       // If we get empty data, try the fallback method
       if (taskTypes.isEmpty) {
         print('[DEBUG] Got empty task types, trying fallback method...');
         throw Exception('Empty task types returned, triggering fallback');
       }
-      
+
       setState(() {
         _taskTypeOptions =
             taskTypes
@@ -704,27 +708,36 @@ class _ExternalMaintenanceFormPageState
       });
       print('[v0] Task type options set: $_taskTypeOptions');
       print('[DEBUG] _taskTypeOptions.isEmpty: ${_taskTypeOptions.isEmpty}');
-      print('[DEBUG] Task types loaded successfully, dropdown should now be enabled');
+      print(
+        '[DEBUG] Task types loaded successfully, dropdown should now be enabled',
+      );
     } catch (e) {
       print('[v0] Error loading task types: $e');
       print('[DEBUG] Exception details: ${e.toString()}');
       print('[DEBUG] Exception type: ${e.runtimeType}');
-      
+
       // Try alternative API method as fallback
       try {
         print('[DEBUG] Attempting fallback API call...');
         // If getTaskTypesForDropdown fails, try a more basic approach
         final fallbackData = await _apiService.listTaskTypes();
         print('[DEBUG] Fallback data: $fallbackData');
-        
+
         if (fallbackData != null && fallbackData.isNotEmpty) {
           setState(() {
-            _taskTypeOptions = fallbackData
-                .map((item) => {
-                      'id': item['id']?.toString() ?? item['formatted_id']?.toString() ?? '',
-                      'name': '${item['category']?.toString() ?? 'Unknown'} - ${item['description']?.toString() ?? 'No Description'}',
-                    })
-                .toList();
+            _taskTypeOptions =
+                fallbackData
+                    .map(
+                      (item) => {
+                        'id':
+                            item['id']?.toString() ??
+                            item['formatted_id']?.toString() ??
+                            '',
+                        'name':
+                            '${item['category']?.toString() ?? 'Unknown'} - ${item['description']?.toString() ?? 'No Description'}',
+                      },
+                    )
+                    .toList();
           });
           print('[DEBUG] Fallback task types loaded: $_taskTypeOptions');
           return;
@@ -732,23 +745,26 @@ class _ExternalMaintenanceFormPageState
       } catch (fallbackError) {
         print('[DEBUG] Fallback also failed: $fallbackError');
       }
-      
+
       // Add a fallback with some test options if all loading fails
       setState(() {
         _taskTypeOptions = [
-          {'id': 'TT-2025-00015', 'name': 'Corrective - Fixing plumbing leaks (From DB)'},
+          {
+            'id': 'TT-2025-00015',
+            'name': 'Corrective - Fixing plumbing leaks (From DB)',
+          },
           {'id': 'temp_1', 'name': 'Corrective Maintenance (Temporary)'},
           {'id': 'temp_2', 'name': 'Preventive Maintenance (Temporary)'},
           {'id': 'temp_3', 'name': 'Emergency Repair (Temporary)'},
           {'id': '', 'name': 'API Error - Using fallback options'},
         ];
       });
-      
+
       print('[DEBUG] Using fallback task types, dropdown should now work!');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Using fallback task types due to API error')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Using fallback task types due to API error')),
+        );
       }
     }
   }
@@ -763,14 +779,18 @@ class _ExternalMaintenanceFormPageState
       try {
         print('[v0] Task type changed to: $taskTypeId');
         print('[v0] Fetching inventory items for task type: $taskTypeId');
-        
+
         // Check if this is a temporary/fallback task type ID
         if (taskTypeId.startsWith('temp_') || taskTypeId.isEmpty) {
-          print('[DEBUG] Skipping inventory fetch for temporary task type: $taskTypeId');
+          print(
+            '[DEBUG] Skipping inventory fetch for temporary task type: $taskTypeId',
+          );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('This is a temporary task type. No inventory items available.'),
+                content: Text(
+                  'This is a temporary task type. No inventory items available.',
+                ),
                 backgroundColor: Colors.orange,
                 duration: Duration(seconds: 2),
               ),
@@ -778,7 +798,7 @@ class _ExternalMaintenanceFormPageState
           }
           return;
         }
-        
+
         final taskTypeInventory = await _apiService.getTaskTypeInventoryItems(
           taskTypeId,
         );
@@ -845,12 +865,14 @@ class _ExternalMaintenanceFormPageState
       } catch (e) {
         print('[v0] Error loading task type inventory: $e');
         print('[DEBUG] Task type inventory error details: ${e.toString()}');
-        
+
         // Show user-friendly error message
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Could not load inventory for this task type. You can still add items manually.'),
+              content: Text(
+                'Could not load inventory for this task type. You can still add items manually.',
+              ),
               backgroundColor: Colors.orange,
               duration: const Duration(seconds: 3),
               action: SnackBarAction(
@@ -866,7 +888,9 @@ class _ExternalMaintenanceFormPageState
         // Don't fail if task type inventory loading fails
       }
     }
-  }  Future<void> _loadInventoryItems() async {
+  }
+
+  Future<void> _loadInventoryItems() async {
     try {
       print('[v0] Loading inventory items...');
       // Use admin API service to get inventory items
@@ -899,14 +923,63 @@ class _ExternalMaintenanceFormPageState
     final List<Map<String, String>> createdReservations = [];
 
     try {
+      // DUPLICATE PREVENTION: Fetch existing reservations for this task
+      print('[v0] Checking for existing reservations for task: $taskId');
+      Map<String, dynamic>? existingReservationsData;
+      Set<String> existingInventoryIds = {};
+
+      try {
+        existingReservationsData = await _apiService.getInventoryReservations(
+          maintenanceTaskId: taskId,
+        );
+
+        if (existingReservationsData != null &&
+            existingReservationsData['reservations'] is List) {
+          final reservations = existingReservationsData['reservations'] as List;
+          for (final reservation in reservations) {
+            if (reservation is Map<String, dynamic>) {
+              final invId = reservation['inventory_id']?.toString() ?? '';
+              if (invId.isNotEmpty) {
+                existingInventoryIds.add(invId);
+                print(
+                  '[v0] Found existing reservation for inventory_id: $invId',
+                );
+              }
+            }
+          }
+        }
+        print(
+          '[v0] Found ${existingInventoryIds.length} existing reservations to skip',
+        );
+      } catch (e) {
+        print('[v0] Error fetching existing reservations (will continue): $e');
+        // Continue with creation - if we can't check, better to try and let backend handle
+      }
+
       for (final item in _selectedInventoryItems) {
         final qty = item['quantity'];
         final fromTaskType = item['from_task_type'] == true;
         final itemName = item['item_name'] ?? 'Unknown Item';
+        final inventoryId = item['inventory_id']?.toString() ?? '';
 
         if (qty == null || qty <= 0) {
           print(
             '[v0] Skipping reservation for $itemName due to invalid quantity: $qty',
+          );
+          continue;
+        }
+
+        if (inventoryId.isEmpty) {
+          print(
+            '[v0] Skipping reservation for $itemName due to missing inventory ID',
+          );
+          continue;
+        }
+
+        // DUPLICATE PREVENTION: Skip if reservation already exists
+        if (existingInventoryIds.contains(inventoryId)) {
+          print(
+            '[v0] SKIPPING - Reservation already exists for $itemName (ID: $inventoryId)',
           );
           continue;
         }
@@ -933,7 +1006,7 @@ class _ExternalMaintenanceFormPageState
         }
       }
       print(
-        '[v0] Created ${createdReservations.length} inventory reservations linked to task $taskId',
+        '[v0] Processed ${_selectedInventoryItems.length} items, skipped ${existingInventoryIds.length} existing, created ${createdReservations.length} new reservations',
       );
       return createdReservations;
     } catch (e) {
@@ -1214,11 +1287,15 @@ class _ExternalMaintenanceFormPageState
                                         setState(() {
                                           _selectedTaskTypeId = value;
                                           // Find the selected task type name for display
-                                          final selectedTaskType = _taskTypeOptions.firstWhere(
-                                            (taskType) => taskType['id'] == value,
-                                            orElse: () => {'name': 'Unknown'},
-                                          );
-                                          _selectedTaskType = selectedTaskType['name'];
+                                          final selectedTaskType =
+                                              _taskTypeOptions.firstWhere(
+                                                (taskType) =>
+                                                    taskType['id'] == value,
+                                                orElse:
+                                                    () => {'name': 'Unknown'},
+                                              );
+                                          _selectedTaskType =
+                                              selectedTaskType['name'];
                                         });
                                         // Automatically populate inventory items for this task type
                                         _handleTaskTypeChange(value);
@@ -2618,20 +2695,23 @@ class _ExternalMaintenanceFormPageState
             ),
             dropdownColor: Colors.white,
             items:
-                options.map((opt) {
-                  if (opt is String) {
-                    return DropdownMenuItem<String>(
-                      value: opt,
-                      child: Text(opt),
-                    );
-                  } else if (opt is Map<String, String>) {
-                    return DropdownMenuItem<String>(
-                      value: opt['id'],
-                      child: Text(opt['name'] ?? ''),
-                    );
-                  }
-                  return null;
-                }).whereType<DropdownMenuItem<String>>().toList(),
+                options
+                    .map((opt) {
+                      if (opt is String) {
+                        return DropdownMenuItem<String>(
+                          value: opt,
+                          child: Text(opt),
+                        );
+                      } else if (opt is Map<String, String>) {
+                        return DropdownMenuItem<String>(
+                          value: opt['id'],
+                          child: Text(opt['name'] ?? ''),
+                        );
+                      }
+                      return null;
+                    })
+                    .whereType<DropdownMenuItem<String>>()
+                    .toList(),
             onChanged: enabled ? onChanged : null,
             icon: Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
           ),

@@ -1,6 +1,9 @@
 // // // The above Dart code initializes a Flutter application with Firebase, sets up routing for various
 // // // pages in an admin web interface, and includes theme management functionality.
 
+import 'package:facilityfix/adminweb/analytics&reports/adminwebanalytics_page.dart';
+import 'package:facilityfix/adminweb/analytics&reports/export_page.dart';
+import 'package:facilityfix/adminweb/inventory_management/admininventoryforecasting_page.dart';
 import 'package:facilityfix/adminweb/inventory_management/equipment_create_page.dart';
 import 'package:facilityfix/adminweb/maintenance_task/admintasktype_page.dart';
 import 'firebase_options.dart';
@@ -11,8 +14,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'adminweb/inventory_management/adminequipment_page.dart';
 import 'adminweb/inventory_management/admininventoryitems_page.dart';
 import 'adminweb/inventory_management/admininventoryrequest_page.dart';
-import 'adminweb/inventory_management/admininventoryforecasting_page.dart';
-import 'adminweb/pages/adminwebanalytics_page.dart';
 import 'adminweb/announcement/adminwebannouncement_page.dart';
 import 'adminweb/layout/facilityfix_layout.dart';
 import 'adminweb/pages/login_page.dart';
@@ -291,6 +292,11 @@ class _MyAppState extends State<MyApp> {
           name: 'analytics',
           builder: (context, state) => const AdminWebAnalyticsPage(),
         ),
+        GoRoute(
+          path: '/export',
+          name: 'export',
+          builder: (context, state) => const ExportPage(),
+        ),
 
         // Announcement Management route
         GoRoute(
@@ -412,6 +418,7 @@ class PlaceholderPage extends StatelessWidget {
       'inventory_items': 'inventory_items',
       'inventory_request': 'inventory_request',
       'analytics': 'analytics',
+      'export': 'export',
       'announcement': '/announcement',
       'settings': 'settings',
       'logout': 'logout',
@@ -433,6 +440,7 @@ class PlaceholderPage extends StatelessWidget {
       'inventory_items': '/inventory/items',
       'inventory_request': '/inventory/request',
       'analytics': '/analytics',
+      'export': '/export',
       'announcement': '/announcement',
       'settings': '/settings',
       'logout': '/logout',

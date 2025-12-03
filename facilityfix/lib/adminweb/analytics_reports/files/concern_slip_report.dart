@@ -1,0 +1,983 @@
+import 'dart:typed_data';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:intl/intl.dart';
+import 'package:universal_html/html.dart' as html;
+import 'package:flutter/services.dart' show rootBundle;
+
+class ConcernSlipReport {
+  /// Generate and download a PDF report for a single concern slip
+  static Future<void> generateAndDownloadSinglePDF({
+    required Map<String, dynamic> concernSlipData,
+    required String userName,
+    String? location,
+    String? contactNumber,
+    String? email,
+  }) async {
+    final pdf = pw.Document();
+
+    // Load logo image
+    final logoBytes = await rootBundle.load('assets/images/logo.png');
+    final logo = pw.Container(
+      width: 80,
+      height: 80,
+      child: pw.Image(pw.MemoryImage(logoBytes.buffer.asUint8List())),
+    );
+
+    final now = DateTime.now();
+    final formattedDate = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
+
+    // Extract concern slip details
+    final concernId =
+        concernSlipData['id'] ??
+        concernSlipData['formatted_id'] ??
+        concernSlipData['concernId'] ??
+        'N/A';
+    final title =
+        concernSlipData['title'] ??
+        concernSlipData['description'] ??
+        'Concern Slip Report';
+    final status = concernSlipData['status'] ?? 'Pending';
+    final priority = concernSlipData['priority'] ?? 'Medium';
+    final category =
+        concernSlipData['category'] ??
+        concernSlipData['department'] ??
+        'General';
+    final reportedBy =
+        concernSlipData['reported_by_name'] ??
+        concernSlipData['reported_by'] ??
+        'Unknown';
+    final assignedTo =
+        concernSlipData['assigned_to_name'] ??
+        concernSlipData['assigned_to'] ??
+        'Unassigned';
+    final resolutionType =
+        concernSlipData['resolution_type'] ?? 'Pending Resolution';
+
+    // Parse dates
+    final createdAt = _parseDate(concernSlipData['created_at']);
+    final completedAt = _parseDate(
+      concernSlipData['completed_at'] ??
+          concernSlipData['assessed_at'] ??
+          concernSlipData['updated_at'],
+    );
+
+    // Calculate time spent
+    String timeSpent = 'N/A';
+    if (createdAt != null && completedAt != null) {
+      final duration = completedAt.difference(createdAt);
+      timeSpent = _formatDuration(duration);
+    }
+
+    // Get schedule tracker info if available
+    final scheduleTracker = concernSlipData['schedule_tracker'] ?? {};
+    final startTime = _parseDate(scheduleTracker['start_time']);
+    final endTime = _parseDate(scheduleTracker['end_time']);
+
+    String scheduleTimeSpent = 'N/A';
+    if (startTime != null && endTime != null) {
+      final duration = endTime.difference(startTime);
+      scheduleTimeSpent = _formatDuration(duration);
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat(
+          8.5 * PdfPageFormat.inch,
+          11 * PdfPageFormat.inch,
+        ),
+        margin: pw.EdgeInsets.all(20),
+        build: (pw.Context context) {
+          return [
+            // ===== HEADER SECTION =====
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                logo,
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'Facility: Smart Maintenance and Repair Analytics Management System',
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    fontWeight: pw.FontWeight.bold,
+                    fontFallback: [pw.Font.helvetica()],
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
+                pw.SizedBox(height: 10),
+                pw.Text(
+                  location ?? 'Location: Not Specified',
+                  style: pw.TextStyle(fontSize: 10),
+                ),
+                pw.SizedBox(height: 5),
+                pw.Text(
+                  '${contactNumber ?? 'Contact: N/A'} | ${email ?? 'Email: N/A'}',
+                  style: pw.TextStyle(fontSize: 10),
+                ),
+                pw.SizedBox(height: 8),
+                pw.Text(
+                  'Concern Slip Report - Job Receipt',
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'Final Job Receipt - Print Ready',
+                  style: pw.TextStyle(
+                    fontSize: 11,
+                    fontStyle: pw.FontStyle.italic,
+                    color: PdfColors.grey700,
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
+                pw.SizedBox(height: 16),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      'Generated by: $userName',
+                      style: pw.TextStyle(fontSize: 9),
+                    ),
+                    pw.Text(
+                      'Generated at: $formattedDate',
+                      style: pw.TextStyle(fontSize: 9),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 20),
+
+            // ===== CONCERN SLIP DETAILS SECTION =====
+            pw.Container(
+              padding: pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.blue700, width: 2),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'CONCERN SLIP DETAILS',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 12),
+
+            // ===== BASIC INFO GRID =====
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  flex: 1,
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      _buildInfoField('Concern ID', concernId),
+                      pw.SizedBox(height: 8),
+                      _buildInfoField('Status', _colorizedStatus(status)),
+                      pw.SizedBox(height: 8),
+                      _buildInfoField('Priority', priority.toUpperCase()),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(width: 12),
+                pw.Expanded(
+                  flex: 1,
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      _buildInfoField('Category', category),
+                      pw.SizedBox(height: 8),
+                      _buildInfoField('Reported By', reportedBy),
+                      pw.SizedBox(height: 8),
+                      _buildInfoField('Assigned To', assignedTo),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 12),
+
+            // ===== ISSUE DESCRIPTION =====
+            pw.Container(
+              padding: pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                borderRadius: pw.BorderRadius.circular(4),
+                border: pw.Border.all(color: PdfColors.grey300),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Issue Description',
+                    style: pw.TextStyle(
+                      fontSize: 10,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 6),
+                  pw.Text(
+                    title,
+                    style: pw.TextStyle(fontSize: 10, color: PdfColors.grey800),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            // ===== TIMELINE SECTION =====
+            pw.Container(
+              padding: pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey400, width: 1),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'TIMELINE & RESOLUTION',
+                    style: pw.TextStyle(
+                      fontSize: 11,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 10),
+                  pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Expanded(
+                        flex: 1,
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            _buildTimelineField(
+                              'Submission Time',
+                              _formatDateTime(createdAt),
+                            ),
+                            pw.SizedBox(height: 10),
+                            _buildTimelineField(
+                              'Completion Time',
+                              _formatDateTime(completedAt),
+                            ),
+                            pw.SizedBox(height: 10),
+                            _buildTimelineField('Total Time Spent', timeSpent),
+                          ],
+                        ),
+                      ),
+                      pw.SizedBox(width: 12),
+                      pw.Expanded(
+                        flex: 1,
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            _buildTimelineField(
+                              'Resolution Type',
+                              _formatResolutionType(resolutionType),
+                            ),
+                            pw.SizedBox(height: 10),
+                            _buildTimelineField(
+                              'Schedule Start',
+                              _formatDateTime(startTime),
+                            ),
+                            pw.SizedBox(height: 10),
+                            _buildTimelineField(
+                              'Schedule Time Spent',
+                              scheduleTimeSpent,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            // ===== SUMMARY TABLE =====
+            pw.Container(
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey400, width: 1),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Table.fromTextArray(
+                headers: ['Field', 'Value'],
+                data: [
+                  ['Concern ID', concernId],
+                  [
+                    'Title',
+                    title.substring(0, (title.length > 50 ? 50 : title.length)),
+                  ],
+                  ['Status', status],
+                  ['Priority', priority],
+                  ['Category', category],
+                  ['Reported By', reportedBy],
+                  ['Assigned To', assignedTo],
+                  ['Resolution Type', resolutionType],
+                  ['Time Spent', timeSpent],
+                  ['Schedule Time Spent', scheduleTimeSpent],
+                ],
+                headerStyle: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 10,
+                  color: PdfColors.white,
+                ),
+                headerDecoration: pw.BoxDecoration(
+                  color: PdfColors.blue700,
+                  borderRadius: pw.BorderRadius.only(
+                    topLeft: pw.Radius.circular(4),
+                    topRight: pw.Radius.circular(4),
+                  ),
+                ),
+                cellStyle: pw.TextStyle(fontSize: 9, color: PdfColors.grey900),
+                cellAlignment: pw.Alignment.topLeft,
+                cellPadding: pw.EdgeInsets.all(8),
+                columnWidths: {
+                  0: pw.FlexColumnWidth(1.2),
+                  1: pw.FlexColumnWidth(2.0),
+                },
+                border: pw.TableBorder(
+                  bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  left: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  right: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                ),
+                tableWidth: pw.TableWidth.max,
+                oddRowDecoration: pw.BoxDecoration(color: PdfColors.grey50),
+              ),
+            ),
+            pw.SizedBox(height: 20),
+
+            // ===== FOOTER SECTION =====
+            pw.Divider(color: PdfColors.grey400),
+            pw.SizedBox(height: 10),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'This is a confidential job receipt. Print date: ${_formatDateTime(now)}',
+                  style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+                ),
+                pw.Text(
+                  'Page 1 of 1',
+                  style: pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+                ),
+              ],
+            ),
+          ];
+        },
+      ),
+    );
+
+    // Download the PDF for web
+    final bytes = await pdf.save();
+    final blob = html.Blob([bytes], 'application/pdf');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.AnchorElement(href: url)
+      ..setAttribute('download', 'concern_slip_${concernId}.pdf')
+      ..click();
+    html.Url.revokeObjectUrl(url);
+  }
+
+  /// Generate and download a PDF report for multiple concern slips
+  static Future<void> generateAndDownloadBulkPDF({
+    List<Map<String, dynamic>>? concernSlips,
+    required String userName,
+    String? location,
+    String? contactNumber,
+    String? email,
+  }) async {
+    final pdf = pw.Document();
+
+    // Use empty list if no slips provided
+    final slips = concernSlips ?? [];
+
+    // Load logo image
+    final logoBytes = await rootBundle.load('assets/images/logo.png');
+    final logo = pw.Container(
+      width: 80,
+      height: 80,
+      child: pw.Image(pw.MemoryImage(logoBytes.buffer.asUint8List())),
+    );
+
+    final now = DateTime.now();
+    final formattedDate = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
+    final summaryStats = _calculateSummaryStatistics(slips);
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat(
+          8.5 * PdfPageFormat.inch,
+          11 * PdfPageFormat.inch,
+        ),
+        margin: pw.EdgeInsets.all(20),
+        build: (pw.Context context) {
+          return [
+            // Header
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                logo,
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'Facility: Smart Maintenance and Repair Analytics Management System',
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    fontWeight: pw.FontWeight.bold,
+                    fontFallback: [pw.Font.helvetica()],
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
+                pw.SizedBox(height: 10),
+                pw.Text(
+                  location ?? 'Location: Not Specified',
+                  style: pw.TextStyle(fontSize: 10),
+                ),
+                pw.SizedBox(height: 5),
+                pw.Text(
+                  '${contactNumber ?? 'Contact: N/A'} | ${email ?? 'Email: N/A'}',
+                  style: pw.TextStyle(fontSize: 10),
+                ),
+                pw.SizedBox(height: 8),
+                pw.Text(
+                  'Concern Slip Summary Report',
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
+                pw.SizedBox(height: 16),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      'Generated by: $userName',
+                      style: pw.TextStyle(fontSize: 9),
+                    ),
+                    pw.Text(
+                      'Generated at: $formattedDate',
+                      style: pw.TextStyle(fontSize: 9),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 30),
+
+            pw.Container(
+              padding: pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.blue50,
+                border: pw.Border.all(color: PdfColors.blue300),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'SUMMARY SECTION',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.blue700,
+                    ),
+                  ),
+                  pw.SizedBox(height: 8),
+                  pw.Text(
+                    'Total Number of Concern Slips: ${slips.length}',
+                    style: pw.TextStyle(fontSize: 10),
+                  ),
+                  pw.SizedBox(height: 6),
+                  pw.Text(
+                    'Date Range: ${summaryStats['dateRange']}',
+                    style: pw.TextStyle(fontSize: 10),
+                  ),
+                  pw.SizedBox(height: 6),
+                  pw.Text(
+                    'Location Coverage: ${summaryStats['locationCoverage']} unique building(s)/unit(s)',
+                    style: pw.TextStyle(fontSize: 10),
+                  ),
+                  pw.SizedBox(height: 6),
+                  pw.Text(
+                    'Outstanding Actions: ${summaryStats['outstandingActions']} task(s) requiring follow-up',
+                    style: pw.TextStyle(fontSize: 10),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            pw.Text(
+              'Task Status Breakdown',
+              style: pw.TextStyle(
+                fontSize: 11,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.blue700,
+              ),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Container(
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey400, width: 1),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Table.fromTextArray(
+                headers: ['Status', 'Count', 'Percentage'],
+                data: (summaryStats['statusBreakdown'] as List<List<String>>),
+                headerStyle: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 9,
+                  color: PdfColors.white,
+                ),
+                headerDecoration: pw.BoxDecoration(
+                  color: PdfColors.blue700,
+                  borderRadius: pw.BorderRadius.only(
+                    topLeft: pw.Radius.circular(4),
+                    topRight: pw.Radius.circular(4),
+                  ),
+                ),
+                cellStyle: pw.TextStyle(fontSize: 9, color: PdfColors.grey900),
+                cellAlignment: pw.Alignment.topLeft,
+                cellPadding: pw.EdgeInsets.all(6),
+                columnWidths: {
+                  0: pw.FlexColumnWidth(1.5),
+                  1: pw.FlexColumnWidth(0.8),
+                  2: pw.FlexColumnWidth(1),
+                },
+                border: pw.TableBorder(
+                  bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  left: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  right: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                ),
+                oddRowDecoration: pw.BoxDecoration(color: PdfColors.grey50),
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            pw.Text(
+              'Priority Distribution',
+              style: pw.TextStyle(
+                fontSize: 11,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.blue700,
+              ),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Container(
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey400, width: 1),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Table.fromTextArray(
+                headers: ['Priority Level', 'Count', 'Percentage'],
+                data:
+                    (summaryStats['priorityDistribution']
+                        as List<List<String>>),
+                headerStyle: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 9,
+                  color: PdfColors.white,
+                ),
+                headerDecoration: pw.BoxDecoration(
+                  color: PdfColors.blue700,
+                  borderRadius: pw.BorderRadius.only(
+                    topLeft: pw.Radius.circular(4),
+                    topRight: pw.Radius.circular(4),
+                  ),
+                ),
+                cellStyle: pw.TextStyle(fontSize: 9, color: PdfColors.grey900),
+                cellAlignment: pw.Alignment.topLeft,
+                cellPadding: pw.EdgeInsets.all(6),
+                columnWidths: {
+                  0: pw.FlexColumnWidth(1.5),
+                  1: pw.FlexColumnWidth(0.8),
+                  2: pw.FlexColumnWidth(1),
+                },
+                border: pw.TableBorder(
+                  bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  left: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  right: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                ),
+                oddRowDecoration: pw.BoxDecoration(color: PdfColors.grey50),
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            pw.Text(
+              'Category Overview',
+              style: pw.TextStyle(
+                fontSize: 11,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.blue700,
+              ),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Container(
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey400, width: 1),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Table.fromTextArray(
+                headers: ['Category', 'Count', 'Percentage'],
+                data: (summaryStats['categoryOverview'] as List<List<String>>),
+                headerStyle: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 9,
+                  color: PdfColors.white,
+                ),
+                headerDecoration: pw.BoxDecoration(
+                  color: PdfColors.blue700,
+                  borderRadius: pw.BorderRadius.only(
+                    topLeft: pw.Radius.circular(4),
+                    topRight: pw.Radius.circular(4),
+                  ),
+                ),
+                cellStyle: pw.TextStyle(fontSize: 9, color: PdfColors.grey900),
+                cellAlignment: pw.Alignment.topLeft,
+                cellPadding: pw.EdgeInsets.all(6),
+                columnWidths: {
+                  0: pw.FlexColumnWidth(1.5),
+                  1: pw.FlexColumnWidth(0.8),
+                  2: pw.FlexColumnWidth(1),
+                },
+                border: pw.TableBorder(
+                  bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  left: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  right: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                ),
+                oddRowDecoration: pw.BoxDecoration(color: PdfColors.grey50),
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            pw.Text(
+              'CONCERN SLIP DETAILS',
+              style: pw.TextStyle(
+                fontSize: 12,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.blue700,
+              ),
+            ),
+            pw.SizedBox(height: 12),
+            pw.Container(
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey400, width: 1),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Table.fromTextArray(
+                headers: [
+                  'ID',
+                  'Title',
+                  'Date Requested',
+                  'Building & Unit',
+                  'Priority',
+                  'Category',
+                  'Status',
+                ],
+                data:
+                    slips
+                        .map(
+                          (slip) => [
+                            slip['id'] ??
+                                slip['formatted_id'] ??
+                                slip['concernId'] ??
+                                '',
+                            (slip['title'] ?? slip['description'] ?? '')
+                                        .length >
+                                    25
+                                ? '${(slip['title'] ?? slip['description'] ?? '').substring(0, 25)}...'
+                                : slip['title'] ?? slip['description'] ?? '',
+                            _formatDateTime(
+                              _parseDate(
+                                slip['created_at'] ?? slip['date_requested'],
+                              ),
+                            ),
+                            slip['building'] ??
+                                slip['unit'] ??
+                                slip['location'] ??
+                                'N/A',
+                            slip['priority'] ?? 'Medium',
+                            slip['category'] ?? slip['department'] ?? '',
+                            slip['status'] ?? 'Pending',
+                          ],
+                        )
+                        .toList(),
+                headerStyle: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 8,
+                  color: PdfColors.white,
+                ),
+                headerDecoration: pw.BoxDecoration(
+                  color: PdfColors.blue700,
+                  borderRadius: pw.BorderRadius.only(
+                    topLeft: pw.Radius.circular(4),
+                    topRight: pw.Radius.circular(4),
+                  ),
+                ),
+                cellStyle: pw.TextStyle(fontSize: 7, color: PdfColors.grey900),
+                cellAlignment: pw.Alignment.topLeft,
+                cellPadding: pw.EdgeInsets.all(5),
+                columnWidths: {
+                  0: pw.FlexColumnWidth(0.9),
+                  1: pw.FlexColumnWidth(1.1),
+                  2: pw.FlexColumnWidth(1),
+                  3: pw.FlexColumnWidth(0.9),
+                  4: pw.FlexColumnWidth(0.8),
+                  5: pw.FlexColumnWidth(0.9),
+                  6: pw.FlexColumnWidth(0.9),
+                },
+                border: pw.TableBorder(
+                  bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  left: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                  right: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                ),
+                tableWidth: pw.TableWidth.max,
+                oddRowDecoration: pw.BoxDecoration(color: PdfColors.grey50),
+              ),
+            ),
+          ];
+        },
+      ),
+    );
+
+    // Download the PDF for web
+    final bytes = await pdf.save();
+    final blob = html.Blob([bytes], 'application/pdf');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.AnchorElement(href: url)
+      ..setAttribute(
+        'download',
+        'concern_slip_summary_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      )
+      ..click();
+    html.Url.revokeObjectUrl(url);
+  }
+
+  // ===== HELPER METHODS =====
+
+  static Map<String, dynamic> _calculateSummaryStatistics(
+    List<Map<String, dynamic>> slips,
+  ) {
+    if (slips.isEmpty) {
+      return {
+        'dateRange': 'N/A',
+        'locationCoverage': 0,
+        'outstandingActions': 0,
+        'statusBreakdown': [
+          ['No Data', '0', '0%'],
+        ],
+        'priorityDistribution': [
+          ['No Data', '0', '0%'],
+        ],
+        'categoryOverview': [
+          ['No Data', '0', '0%'],
+        ],
+      };
+    }
+
+    // Calculate date range
+    final dates =
+        slips
+            .map(
+              (slip) =>
+                  _parseDate(slip['created_at'] ?? slip['date_requested']),
+            )
+            .whereType<DateTime>()
+            .toList();
+    String dateRange = 'N/A';
+    if (dates.isNotEmpty) {
+      dates.sort();
+      final earliest = DateFormat('MMM dd, yyyy').format(dates.first);
+      final latest = DateFormat('MMM dd, yyyy').format(dates.last);
+      dateRange = '$earliest - $latest';
+    }
+
+    // Calculate location coverage
+    final locations =
+        slips
+            .map((slip) => slip['building'] ?? slip['unit'] ?? slip['location'])
+            .toSet()
+            .length;
+
+    // Calculate outstanding actions (non-completed tasks)
+    final outstanding =
+        slips.where((slip) {
+          final status = (slip['status'] ?? '').toString().toLowerCase();
+          return !status.contains('completed') &&
+              !status.contains('done') &&
+              !status.contains('resolved');
+        }).length;
+
+    // Status breakdown
+    final statusMap = <String, int>{};
+    for (final slip in slips) {
+      final status = slip['status'] ?? 'Unknown';
+      statusMap[status] = (statusMap[status] ?? 0) + 1;
+    }
+    final statusBreakdown =
+        statusMap.entries
+            .map(
+              (e) => [
+                e.key,
+                e.value.toString(),
+                '${((e.value / slips.length) * 100).toStringAsFixed(1)}%',
+              ],
+            )
+            .toList();
+
+    // Priority distribution
+    final priorityMap = <String, int>{};
+    for (final slip in slips) {
+      final priority = slip['priority'] ?? 'Medium';
+      priorityMap[priority] = (priorityMap[priority] ?? 0) + 1;
+    }
+    final priorityDistribution =
+        priorityMap.entries
+            .map(
+              (e) => [
+                e.key,
+                e.value.toString(),
+                '${((e.value / slips.length) * 100).toStringAsFixed(1)}%',
+              ],
+            )
+            .toList();
+
+    // Category overview
+    final categoryMap = <String, int>{};
+    for (final slip in slips) {
+      final category =
+          slip['category'] ?? slip['department'] ?? 'Uncategorized';
+      categoryMap[category] = (categoryMap[category] ?? 0) + 1;
+    }
+    final categoryOverview =
+        categoryMap.entries
+            .map(
+              (e) => [
+                e.key,
+                e.value.toString(),
+                '${((e.value / slips.length) * 100).toStringAsFixed(1)}%',
+              ],
+            )
+            .toList();
+
+    return {
+      'dateRange': dateRange,
+      'locationCoverage': locations,
+      'outstandingActions': outstanding,
+      'statusBreakdown': statusBreakdown,
+      'priorityDistribution': priorityDistribution,
+      'categoryOverview': categoryOverview,
+    };
+  }
+
+  static pw.Widget _buildInfoField(String label, String value) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          label,
+          style: pw.TextStyle(
+            fontSize: 9,
+            fontWeight: pw.FontWeight.bold,
+            color: PdfColors.grey700,
+          ),
+        ),
+        pw.SizedBox(height: 2),
+        pw.Text(
+          value,
+          style: pw.TextStyle(fontSize: 10, color: PdfColors.black),
+        ),
+      ],
+    );
+  }
+
+  static pw.Widget _buildTimelineField(String label, String value) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          label,
+          style: pw.TextStyle(
+            fontSize: 9,
+            fontWeight: pw.FontWeight.bold,
+            color: PdfColors.blue700,
+          ),
+        ),
+        pw.SizedBox(height: 2),
+        pw.Text(
+          value,
+          style: pw.TextStyle(fontSize: 10, color: PdfColors.black),
+        ),
+      ],
+    );
+  }
+
+  static String _colorizedStatus(String status) {
+    final normalized = status.toLowerCase();
+    if (normalized.contains('pending')) return '🔵 Pending';
+    if (normalized.contains('assigned') || normalized.contains('to inspect'))
+      return '🟡 To Inspect';
+    if (normalized.contains('in progress')) return '🟠 In Progress';
+    if (normalized.contains('completed') || normalized.contains('done'))
+      return '🟢 Completed';
+    return status;
+  }
+
+  static String _formatResolutionType(String? resolutionType) {
+    if (resolutionType == null) return 'Pending Resolution';
+    final normalized = resolutionType.toLowerCase();
+    if (normalized.contains('job_service') ||
+        normalized.contains('job service'))
+      return 'Job Service';
+    if (normalized.contains('work_permit') ||
+        normalized.contains('work permit'))
+      return 'Work Permit';
+    if (normalized.contains('reject')) return 'Rejected';
+    return resolutionType;
+  }
+
+  static DateTime? _parseDate(dynamic dateValue) {
+    if (dateValue == null) return null;
+    try {
+      if (dateValue is DateTime) return dateValue;
+      if (dateValue is String && dateValue.isNotEmpty) {
+        return DateTime.parse(dateValue);
+      }
+    } catch (e) {
+      print('Error parsing date: $e');
+    }
+    return null;
+  }
+
+  static String _formatDateTime(DateTime? dateTime) {
+    if (dateTime == null) return 'N/A';
+    return DateFormat('MMM dd, yyyy h:mm a').format(dateTime);
+  }
+
+  static String _formatDuration(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final days = duration.inDays;
+
+    if (days > 0) {
+      return '$days day${days > 1 ? 's' : ''}, $hours hour${hours != 1 ? 's' : ''}';
+    } else if (hours > 0) {
+      return '$hours hour${hours != 1 ? 's' : ''} $minutes minute${minutes != 1 ? 's' : ''}';
+    } else {
+      return '$minutes minute${minutes != 1 ? 's' : ''}';
+    }
+  }
+}

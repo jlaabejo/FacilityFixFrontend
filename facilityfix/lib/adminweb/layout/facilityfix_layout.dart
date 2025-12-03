@@ -316,6 +316,14 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         'Analytics',
                         'analytics',),
                       const SizedBox(height: 4),
+                      // Export navigation item
+                      _navItem(
+                        Icons.file_download_outlined,
+                        'Export',
+                        'export',
+                      ),
+                      const SizedBox(height: 4),
+                      const SizedBox(height: 4),
 
                       // Announcement navigation item - Fixed: changed from 'announcement' to 'announcements'
                       _navItem(
@@ -454,12 +462,6 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         opacity: 1, 
                       ),
                     ),
-<<<<<<< HEAD
-                    // Use a LayoutBuilder + ConstrainedBox inside the SingleChildScrollView so
-                    // the child layout receives bounded height constraints. Without this,
-                    // any Expanded/Flexible children inside pages (e.g. DataTables with
-                    // Expanded rows) will cause: "RenderFlex children have non-zero flex but
-                    // incoming height constraints are unbounded" errors.
                     child: LayoutBuilder(
                       builder: (context, constraints) {
                         final viewportHeight = constraints.maxHeight;
@@ -471,11 +473,6 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                           ),
                         );
                       },
-=======
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(24),
-                      child: widget.body,
->>>>>>> dd66fea750bab4395a5b0f42ada85c2b70d2066c
                     ),
                   ),
                 ),

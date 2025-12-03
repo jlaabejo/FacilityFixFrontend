@@ -1,3 +1,4 @@
+import 'package:facilityfix/adminweb/analytics&reports/files/inventory_report.dart';
 import 'package:facilityfix/adminweb/inventory_management/inventory_item_create_page.dart';
 import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:flutter/material.dart';
@@ -8,7 +9,6 @@ import '../services/api_service_web.dart';
 import 'pop_up/inventoryitem_details_popup.dart';
 import '../popupwidgets/stock_management_popup.dart';
 import '../widgets/tags.dart';
-import '../report_files/inventory_report.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:intl/intl.dart';

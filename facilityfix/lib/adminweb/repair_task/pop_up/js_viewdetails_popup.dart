@@ -4,7 +4,6 @@ import '../../widgets/tags.dart';
 import '../../../services/api_services_mobile.dart';
 import '../../../utils/ui_format.dart';
 import '../../services/round_robin_assignment_service.dart';
-import '../../services/api_service.dart' as admin_api;
 import 'package:intl/intl.dart';
 
 class JobServiceConcernSlipDialog extends StatefulWidget {
@@ -43,7 +42,6 @@ class _JobServiceConcernSlipDialogState
     extends State<JobServiceConcernSlipDialog> {
   final _formKey = GlobalKey<FormState>();
   final APIService _apiService = APIService();
-  final admin_api.ApiService _adminApiService = admin_api.ApiService();
   final RoundRobinAssignmentService _roundRobinService =
       RoundRobinAssignmentService();
 

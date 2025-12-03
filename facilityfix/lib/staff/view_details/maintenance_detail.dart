@@ -54,9 +54,16 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
     super.initState();
     print('DEBUG: MaintenanceDetailScreen initState called');
     print('DEBUG: Task data keys: ${widget.task.keys.toList()}');
-    print('DEBUG: Raw checklist_completed value: ${widget.task['checklist_completed']}');
-    print('DEBUG: Raw checklist_completed type: ${widget.task['checklist_completed'].runtimeType}');
-    _checklistItems = _convertChecklistToMap(widget.task['checklist_completed'], widget.task['category'] ?? 'general');
+    print(
+      'DEBUG: Raw checklist_completed value: ${widget.task['checklist_completed']}',
+    );
+    print(
+      'DEBUG: Raw checklist_completed type: ${widget.task['checklist_completed'].runtimeType}',
+    );
+    _checklistItems = _convertChecklistToMap(
+      widget.task['checklist_completed'],
+      widget.task['category'] ?? 'general',
+    );
     print('DEBUG: Converted checklist items: $_checklistItems');
     print('DEBUG: Checklist items count: ${_checklistItems.length}');
 
@@ -78,62 +85,115 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
       print('DEBUG: Loading staff inventory reservations for task $taskId');
       final response = await apiService.getMyInventoryReservations();
       if (response['success'] == true && response['data'] != null) {
-        final allReservations = List<Map<String, dynamic>>.from(response['data']);
-        
+        final allReservations = List<Map<String, dynamic>>.from(
+          response['data'],
+        );
+
         // Filter reservations for this specific maintenance task
-        final taskReservations = allReservations.where((r) {
-          final maintenanceTaskId = r['maintenance_task_id'] ?? r['reference_id'];
-          return maintenanceTaskId?.toString() == taskId.toString();
-        }).toList();
-        
-        print('DEBUG: Found ${taskReservations.length} reservations for task $taskId');
-        
-        // Enrich with item details
+        final taskReservations =
+            allReservations.where((r) {
+              final maintenanceTaskId =
+                  r['maintenance_task_id'] ?? r['reference_id'];
+              return maintenanceTaskId?.toString() == taskId.toString();
+            }).toList();
+
+        print(
+          'DEBUG: Found ${taskReservations.length} reservations for task $taskId',
+        );
+        print(
+          'DEBUG: Raw reservation inventory IDs: ${taskReservations.map((r) => r['inventory_id']).toList()}',
+        );
+
+        // Enrich with item details and deduplicate by inventory_id
+        final Map<String, Map<String, dynamic>> uniqueReservations = {};
+
         for (var r in taskReservations) {
+          final inventoryId = r['inventory_id']?.toString() ?? '';
+
+          // Skip if we already have this inventory item (prevents duplicates)
+          if (inventoryId.isNotEmpty &&
+              uniqueReservations.containsKey(inventoryId)) {
+            print(
+              'DEBUG: Skipping duplicate reservation for inventory $inventoryId',
+            );
+            print('DEBUG: Duplicate reservation data: ${r.toString()}');
+            continue;
+          }
+
           if (r['inventory_id'] != null) {
             try {
-              final itemData = await apiService.getInventoryItemById(r['inventory_id']);
+              final itemData = await apiService.getInventoryItemById(
+                r['inventory_id'],
+              );
               if (itemData != null) {
-                r['item_name'] = itemData['item_name'] ?? itemData['name'] ?? '';
-                r['item_code'] = itemData['item_code'] ?? itemData['code'] ?? '';
-                r['stock_quantity'] = itemData['available_stock'] ?? itemData['stock'] ?? itemData['current_stock'] ?? itemData['stock_quantity'] ?? 'N/A';
-                r['stock_status'] = itemData['status'] ?? itemData['stock_status'] ?? 'Unknown';
+                r['item_name'] =
+                    itemData['item_name'] ?? itemData['name'] ?? '';
+                r['item_code'] =
+                    itemData['item_code'] ?? itemData['code'] ?? '';
+                r['stock_quantity'] =
+                    itemData['available_stock'] ??
+                    itemData['stock'] ??
+                    itemData['current_stock'] ??
+                    itemData['stock_quantity'] ??
+                    'N/A';
+                r['stock_status'] =
+                    itemData['status'] ?? itemData['stock_status'] ?? 'Unknown';
               }
             } catch (e) {
               print('DEBUG: Error loading item details for reservation: $e');
             }
           }
-          
+
           // Normalize reservation id for downstream usage
-          // Try multiple possible ID field names from the API response
-          String? reservationId;
-          for (final idField in ['id', '_id', 'reservation_id', 'reservationId', '_doc_id']) {
-            if ((r[idField] ?? '').toString().isNotEmpty) {
-              reservationId = r[idField].toString();
-              break;
-            }
-          }
-          
-          if (reservationId != null) {
+          // Backend now includes 'id' and '_doc_id' fields
+          String? reservationId =
+              r['id'] ?? r['_doc_id'] ?? r['reservation_id'];
+
+          if (reservationId != null && reservationId.isNotEmpty) {
+            // Ensure all ID fields are consistent
             r['reservation_id'] = reservationId;
-            r['_doc_id'] = reservationId;  // Also set _doc_id for consistency
+            r['_doc_id'] = reservationId;
+            r['id'] = reservationId;
+            print(
+              'DEBUG: Reservation ID for ${r['inventory_id']}: $reservationId',
+            );
           } else {
-            print('[v0] Warning: reservation for inventory ${r['inventory_id']} missing explicit id fields');
-            print('[v0] Available fields: ${r.keys.toList()}');
-            // Use inventory_id + task_id as a composite identifier as fallback
-            r['reservation_id'] = 'composite_${r['inventory_id']}_${r['maintenance_task_id']}';
-            r['_doc_id'] = r['reservation_id'];
+            // This shouldn't happen with the updated backend, but handle gracefully
+            print(
+              '⚠️ WARNING: Reservation for inventory ${r['inventory_id']} missing ID - backend update may not be deployed',
+            );
+            r['_missing_id'] = true; // Flag for UI to show as read-only
           }
-          
+
           // Mark as reservation type
           r['type'] = 'reservation';
+
+          // Store unique reservation by inventory_id
+          if (inventoryId.isNotEmpty) {
+            uniqueReservations[inventoryId] = r;
+          }
         }
-        
-        if (taskReservations.isNotEmpty) {
+
+        // Convert map values back to list
+        final deduplicatedReservations = uniqueReservations.values.toList();
+
+        if (deduplicatedReservations.isNotEmpty) {
+          print(
+            'DEBUG: After deduplication: ${deduplicatedReservations.length} unique items',
+          );
+          print(
+            'DEBUG: Unique inventory IDs: ${deduplicatedReservations.map((r) => r['inventory_id']).toList()}',
+          );
+          print(
+            'DEBUG: Item names: ${deduplicatedReservations.map((r) => r['item_name']).toList()}',
+          );
+
           setState(() {
-            _inventoryRequests = taskReservations;
+            _inventoryRequests = deduplicatedReservations;
           });
-          print('DEBUG: Loaded ${taskReservations.length} inventory reservations for maintenance task');
+          print(
+            'DEBUG: ✅ Loaded ${deduplicatedReservations.length} unique inventory reservations for maintenance task',
+          );
           return; // Data found, exit early
         }
       }
@@ -146,7 +206,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
     // reservations should be visible in MaintenanceDetails. Requests are listed
     // under the Inventory page and can still be created via the Request button.
   }
-  
+
   void _onTabTapped(int index) {
     if (index == _selectedIndex) return;
 
@@ -193,19 +253,22 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
 
     setState(() => _selectedIndex = index);
   }
-  
+
   // Computed properties for checklist progress
   // Only count items visible to current user
-  int get completedCount => _checklistItems.where((item) {
-    final assignedTo = item['assigned_to']?.toString() ?? '';
-    final isVisibleToMe = assignedTo.isEmpty || assignedTo == widget.currentStaffId;
-    return isVisibleToMe && item['completed'] == true;
-  }).length;
+  int get completedCount =>
+      _checklistItems.where((item) {
+        final assignedTo = item['assigned_to']?.toString() ?? '';
+        final isVisibleToMe =
+            assignedTo.isEmpty || assignedTo == widget.currentStaffId;
+        return isVisibleToMe && item['completed'] == true;
+      }).length;
 
-  int get totalCount => _checklistItems.where((item) {
-    final assignedTo = item['assigned_to']?.toString() ?? '';
-    return assignedTo.isEmpty || assignedTo == widget.currentStaffId;
-  }).length;
+  int get totalCount =>
+      _checklistItems.where((item) {
+        final assignedTo = item['assigned_to']?.toString() ?? '';
+        return assignedTo.isEmpty || assignedTo == widget.currentStaffId;
+      }).length;
 
   DateTime? _parseDate(dynamic value) {
     if (value == null) return null;
@@ -216,7 +279,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
 
   String _formatTimestamp(dynamic timestamp) {
     if (timestamp == null) return '';
-    
+
     DateTime? date;
     if (timestamp is DateTime) {
       date = timestamp;
@@ -230,54 +293,66 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
         print('Error converting Timestamp: $e');
       }
     }
-    
+
     return date?.toIso8601String() ?? '';
   }
 
-  List<Map<String, dynamic>> _convertChecklistToMap(dynamic checklist, String category) {
+  List<Map<String, dynamic>> _convertChecklistToMap(
+    dynamic checklist,
+    String category,
+  ) {
     print('DEBUG _convertChecklistToMap: Input checklist: $checklist');
     print('DEBUG _convertChecklistToMap: Input type: ${checklist.runtimeType}');
-    
+
     if (checklist == null) {
-      print('DEBUG _convertChecklistToMap: checklist is null, returning empty list');
+      print(
+        'DEBUG _convertChecklistToMap: checklist is null, returning empty list',
+      );
       return [];
     }
-    
+
     if (checklist is! List) {
-      print('DEBUG _convertChecklistToMap: checklist is not a List (is ${checklist.runtimeType}), returning empty list');
+      print(
+        'DEBUG _convertChecklistToMap: checklist is not a List (is ${checklist.runtimeType}), returning empty list',
+      );
       return [];
     }
-    
-    print('DEBUG _convertChecklistToMap: checklist is a List with ${checklist.length} items');
-    
-    final result = checklist
-        .where((item) {
-          final isMap = item is Map;
-          print('DEBUG _convertChecklistToMap: Item is Map? $isMap, item: $item');
-          return isMap;
-        })
 
+    print(
+      'DEBUG _convertChecklistToMap: checklist is a List with ${checklist.length} items',
+    );
 
-        .map<Map<String, dynamic>>((item) {
-          final converted = <String, dynamic>{
-            'id': item['id']?.toString() ?? '',
-            'task': item['task']?.toString() ?? '',
-            'completed': item['completed'] == true,
-          };
-          final assigned = item['assigned_to'];
+    final result =
+        checklist
+            .where((item) {
+              final isMap = item is Map;
+              print(
+                'DEBUG _convertChecklistToMap: Item is Map? $isMap, item: $item',
+              );
+              return isMap;
+            })
+            .map<Map<String, dynamic>>((item) {
+              final converted = <String, dynamic>{
+                'id': item['id']?.toString() ?? '',
+                'task': item['task']?.toString() ?? '',
+                'completed': item['completed'] == true,
+              };
+              final assigned = item['assigned_to'];
 
-          if (assigned != null && assigned.toString().trim().isNotEmpty && category == 'safety') {
-            converted['assigned_to'] = assigned.toString();
-          }
-          return converted;
-        })
-        .where((item) {
-          final hasId = item['id'].toString().isNotEmpty;
-          print('DEBUG _convertChecklistToMap: Item has ID? $hasId');
-          return hasId;
-        })
-        .toList();
-    
+              if (assigned != null &&
+                  assigned.toString().trim().isNotEmpty &&
+                  category == 'safety') {
+                converted['assigned_to'] = assigned.toString();
+              }
+              return converted;
+            })
+            .where((item) {
+              final hasId = item['id'].toString().isNotEmpty;
+              print('DEBUG _convertChecklistToMap: Item has ID? $hasId');
+              return hasId;
+            })
+            .toList();
+
     print('DEBUG _convertChecklistToMap: Final result count: ${result.length}');
     return result;
   }
@@ -309,8 +384,8 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
           SnackBar(
             content: Text(
               newCompletedStatus
-                ? 'Task marked as completed'
-                : 'Task marked as incomplete'
+                  ? 'Task marked as completed'
+                  : 'Task marked as incomplete',
             ),
             duration: const Duration(seconds: 1),
             behavior: SnackBarBehavior.floating,
@@ -322,7 +397,8 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
 
       // Revert optimistic update on error
       setState(() {
-        _checklistItems[index]['completed'] = !_checklistItems[index]['completed'];
+        _checklistItems[index]['completed'] =
+            !_checklistItems[index]['completed'];
       });
 
       if (mounted) {
@@ -355,7 +431,9 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
         }
 
         final response = await http.patch(
-          Uri.parse('${apiService.baseUrl}/maintenance-tasks/${widget.task['id']}'),
+          Uri.parse(
+            '${apiService.baseUrl}/maintenance-tasks/${widget.task['id']}',
+          ),
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $token',
@@ -366,12 +444,12 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
         if (response.statusCode < 200 || response.statusCode >= 300) {
           throw Exception('Failed to resume task: ${response.body}');
         }
-        
+
         setState(() {
           widget.task['status'] = 'assigned';
           holdMeta = {};
         });
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -394,9 +472,9 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
     } else {
       // Put on hold - show bottom sheet
       final result = await showHoldSheet(context);
-      
+
       if (result == null) return; // User cancelled
-      
+
       try {
         final apiService = APIService(roleOverride: AppRole.staff);
         final token = await AuthStorage.getToken();
@@ -408,17 +486,19 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
           'status': 'on_hold',
           'hold_reason': result.reason,
         };
-        
+
         if (result.note != null && result.note!.isNotEmpty) {
           body['hold_notes'] = result.note;
         }
-        
+
         if (result.resumeAt != null) {
           body['resume_at'] = result.resumeAt!.toIso8601String();
         }
 
         final response = await http.patch(
-          Uri.parse('${apiService.baseUrl}/maintenance-tasks/${widget.task['id']}'),
+          Uri.parse(
+            '${apiService.baseUrl}/maintenance-tasks/${widget.task['id']}',
+          ),
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $token',
@@ -429,7 +509,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
         if (response.statusCode < 200 || response.statusCode >= 300) {
           throw Exception('Failed to put task on hold: ${response.body}');
         }
-        
+
         setState(() {
           widget.task['status'] = 'on_hold';
           holdMeta = {
@@ -439,7 +519,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
             'timestamp': DateTime.now().toIso8601String(),
           };
         });
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -467,12 +547,13 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AssessmentForm(
-          concernSlipId: widget.task['id'] ?? '',
-          concernSlipData: widget.task,
-          requestType: 'Maintenance Task',
-          showResolutionType: false,
-        ),
+        builder:
+            (context) => AssessmentForm(
+              concernSlipId: widget.task['id'] ?? '',
+              concernSlipData: widget.task,
+              requestType: 'Maintenance Task',
+              showResolutionType: false,
+            ),
       ),
     );
 
@@ -484,9 +565,11 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
       final apiService = APIService(roleOverride: AppRole.staff);
       final taskId = widget.task['id'];
       if (taskId != null && taskId.toString().isNotEmpty) {
-        final fresh = await apiService.getMaintenanceTaskById(taskId.toString());
+        final fresh = await apiService.getMaintenanceTaskById(
+          taskId.toString(),
+        );
 
-  if (fresh.isNotEmpty) {
+        if (fresh.isNotEmpty) {
           // Merge fresh values into the existing task map so callers using
           // the same Map reference (this.widget.task) observe changes.
           fresh.forEach((k, v) {
@@ -495,7 +578,10 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
 
           // Recompute derived state
           setState(() {
-            _checklistItems = _convertChecklistToMap(widget.task['checklist_completed'], widget.task['category'] ?? 'general');
+            _checklistItems = _convertChecklistToMap(
+              widget.task['checklist_completed'],
+              widget.task['category'] ?? 'general',
+            );
           });
 
           // Reload inventory requests as these may have changed too
@@ -513,9 +599,11 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
 
   Future<void> _markInventoryItemsAsUsed() async {
     // Check if task now has an assessment (completion notes or photos)
-    final hasAssessment = (widget.task['completion_notes'] != null &&
-                          widget.task['completion_notes'].toString().trim().isNotEmpty) ||
-                         (widget.task['photos'] is List && (widget.task['photos'] as List).isNotEmpty);
+    final hasAssessment =
+        (widget.task['completion_notes'] != null &&
+            widget.task['completion_notes'].toString().trim().isNotEmpty) ||
+        (widget.task['photos'] is List &&
+            (widget.task['photos'] as List).isNotEmpty);
 
     if (!hasAssessment) return; // Only mark as used if assessment was created
 
@@ -525,11 +613,18 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
     for (final request in _inventoryRequests) {
       final status = (request['status'] ?? '').toString().toLowerCase();
       final isReceived = status == 'received' || request['received'] == true;
-      final requestId = request['_doc_id'] ?? request['id'] ?? request['_id'] ?? request['request_id'] ?? request['reservation_id'];
+      final requestId =
+          request['_doc_id'] ??
+          request['id'] ??
+          request['_id'] ??
+          request['request_id'] ??
+          request['reservation_id'];
 
       if (isReceived && requestId != null) {
         try {
-          print('DEBUG: Marking inventory reservation $requestId as consumed after assessment');
+          print(
+            'DEBUG: Marking inventory reservation $requestId as consumed after assessment',
+          );
           await apiService.markReservationConsumed(requestId);
         } catch (e) {
           print('DEBUG: Failed to mark reservation $requestId as consumed: $e');
@@ -547,260 +642,312 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: DraggableScrollableSheet(
-          initialChildSize: 0.7,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          expand: false,
-          builder: (context, scrollController) {
-            final itemName = request['item_name'] ?? 'Unknown Item';
-            final itemCode = request['item_code'] ?? 'N/A';
-            final quantityRequested = request['quantity_requested'] ?? 0;
-            final status = request['status'] ?? 'pending';
-            final notes = request['notes'] ?? '';
-            
-            // Stock information (if available)
-            final stockQuantity = request['stock_quantity'] ?? 'N/A';
-            final stockStatus = request['stock_status'] ?? 'Unknown';
+      builder:
+          (context) => Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: DraggableScrollableSheet(
+              initialChildSize: 0.7,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (context, scrollController) {
+                final itemName = request['item_name'] ?? 'Unknown Item';
+                final itemCode = request['item_code'] ?? 'N/A';
+                final quantityRequested = request['quantity_requested'] ?? 0;
+                final status = request['status'] ?? 'pending';
+                final notes = request['notes'] ?? '';
 
-            return SingleChildScrollView(
-              controller: scrollController,
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Drag handle
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 20),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE5E7EB),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  
-                  // Header
-                  Row(
+                // Stock information (if available)
+                final stockQuantity = request['stock_quantity'] ?? 'N/A';
+                final stockStatus = request['stock_status'] ?? 'Unknown';
+
+                return SingleChildScrollView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              itemName,
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1F2937),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Item Code: $itemCode',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Color(0xFF6B7280),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // Request Information
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF9FAFB),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Request Details',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1F2937),
+                      // Drag handle
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 20),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE5E7EB),
+                            borderRadius: BorderRadius.circular(2),
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        _buildInfoRow('Quantity Requested', '$quantityRequested'),
-                        const SizedBox(height: 8),
-                        _buildInfoRow('Status', status.toUpperCase()),
-                      ],
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // Stock Information
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF9FAFB),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Stock Information',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1F2937),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildInfoRow('Available Stock', stockQuantity.toString()),
-                        const SizedBox(height: 8),
-                        _buildInfoRow('Stock Status', stockStatus),
-                      ],
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // Additional Notes
-                  if (notes.isNotEmpty) ...[
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF9FAFB),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+
+                      // Header
+                      Row(
                         children: [
-                          const Text(
-                            'Additional Notes',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1F2937),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  itemName,
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1F2937),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Item Code: $itemCode',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Color(0xFF6B7280),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          Text(
-                            notes,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Color(0xFF374151),
-                              height: 1.5,
-                            ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                ],
-              ),
-            );
-          },
-        ),
-      ),
-      
+
+                      const SizedBox(height: 24),
+
+                      // Request Information
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF9FAFB),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE5E7EB)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Request Details',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1F2937),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            _buildInfoRow(
+                              'Quantity Requested',
+                              '$quantityRequested',
+                            ),
+                            const SizedBox(height: 8),
+                            _buildInfoRow('Status', status.toUpperCase()),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Stock Information
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF9FAFB),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE5E7EB)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Stock Information',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1F2937),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            _buildInfoRow(
+                              'Available Stock',
+                              stockQuantity.toString(),
+                            ),
+                            const SizedBox(height: 8),
+                            _buildInfoRow('Stock Status', stockStatus),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Additional Notes
+                      if (notes.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF9FAFB),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Additional Notes',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1F2937),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                notes,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Color(0xFF374151),
+                                  height: 1.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
     );
   }
 
-  Future<void> _handleInventoryAction(Map<String, dynamic> request, String action) async {
+  Future<void> _handleInventoryAction(
+    Map<String, dynamic> request,
+    String action,
+  ) async {
     // Try multiple possible ID field names for existing request/reservation IDs
     String? requestId;
-    for (final idField in ['_doc_id', 'id', '_id', 'request_id', 'reservation_id']) {
+    for (final idField in [
+      '_doc_id',
+      'id',
+      '_id',
+      'request_id',
+      'reservation_id',
+    ]) {
       if ((request[idField] ?? '').toString().isNotEmpty) {
         requestId = request[idField].toString();
         break;
       }
     }
-    
+
     final itemType = request['type'] ?? 'unknown';
-    final referenceId = request['reference_id'] ?? request['maintenance_task_id'];
+    final referenceId =
+        request['reference_id'] ?? request['maintenance_task_id'];
     final isMaintenanceItem = referenceId == widget.task['id'];
     final inventoryId = request['inventory_id'];
-    
-    print('DEBUG: _handleInventoryAction called with action: $action, type: $itemType, requestId: $requestId');
-    
+
+    print(
+      'DEBUG: _handleInventoryAction called with action: $action, type: $itemType, requestId: $requestId',
+    );
+
+    // Check if this reservation is missing ID (backend issue)
+    if (request['_missing_id'] == true) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Cannot $action: Backend needs to be updated to include reservation IDs. '
+              'Contact admin to fix the backend /inventory/reservations endpoint.',
+            ),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
+      return;
+    }
+
     // For some actions like 'request' and 'return', we don't need an existing ID
     // since we'll be creating new requests or using the flexible action endpoint
     if (requestId == null && !['request', 'return'].contains(action)) {
       print('DEBUG: Request keys: ${request.keys.toList()}');
       print('DEBUG: Request map: $request');
-      
-      // For reservations without explicit ID, try to use inventory_id + maintenance_task_id as identifier
-      if (itemType == 'reservation' && inventoryId != null && isMaintenanceItem) {
-        print('DEBUG: Using composite identifier for reservation');
-        requestId = 'composite_${inventoryId}_${widget.task['id']}';
-      } else {
-        final snackMsg = (itemType == 'reservation') ? 'Reservation ID not found' : 'Request ID not found';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(snackMsg)),
-        );
-        return;
-      }
+
+      final snackMsg =
+          (itemType == 'reservation')
+              ? 'Reservation ID not found. Backend must include document IDs in /inventory/reservations response.'
+              : 'Request ID not found';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(snackMsg)));
+      return;
     }
 
     try {
       final apiService = APIService();
 
       if (action == 'receive') {
-        final requestStatus = (request['status'] ?? '').toString().toLowerCase();
-        final hasReservationId = (request['reservation_id'] ?? '').toString().isNotEmpty;
+        final requestStatus =
+            (request['status'] ?? '').toString().toLowerCase();
+        final hasReservationId =
+            (request['reservation_id'] ?? '').toString().isNotEmpty;
 
         // Treat maintenance items as reservations too, or if reserve-like markers exist
-        if (itemType == 'reservation' || isMaintenanceItem || hasReservationId || requestStatus == 'reserved') {
+        if (itemType == 'reservation' ||
+            isMaintenanceItem ||
+            hasReservationId ||
+            requestStatus == 'reserved') {
           if (_isUpdating) return;
           setState(() => _isUpdating = true);
           try {
             // Use the extracted requestId, but if it's a composite ID, we need to handle it differently
             String reservationId = request['reservation_id'] ?? requestId;
-            
-            print('DEBUG: Calling receiveInventoryReservation for reservation $reservationId');
-            
+
+            print(
+              'DEBUG: Calling receiveInventoryReservation for reservation $reservationId',
+            );
+
             // If it's a composite ID, we need to reload reservations and find the actual ID
             Map<String, dynamic> response;
             if (reservationId.startsWith('composite_')) {
-              print('DEBUG: Composite ID detected, trying to find actual reservation ID');
+              print(
+                'DEBUG: Composite ID detected, trying to find actual reservation ID',
+              );
               // Try to get the actual reservation ID from fresh API data
               try {
-                final reservationsResponse = await apiService.getMyInventoryReservations();
-                if (reservationsResponse['success'] == true && reservationsResponse['data'] != null) {
-                  final reservations = List<Map<String, dynamic>>.from(reservationsResponse['data']);
+                final reservationsResponse =
+                    await apiService.getMyInventoryReservations();
+                if (reservationsResponse['success'] == true &&
+                    reservationsResponse['data'] != null) {
+                  final reservations = List<Map<String, dynamic>>.from(
+                    reservationsResponse['data'],
+                  );
                   final matchingReservation = reservations.firstWhere(
-                    (r) => r['inventory_id'] == inventoryId && 
-                           (r['maintenance_task_id'] ?? r['reference_id']) == widget.task['id'],
+                    (r) =>
+                        r['inventory_id'] == inventoryId &&
+                        (r['maintenance_task_id'] ?? r['reference_id']) ==
+                            widget.task['id'],
                     orElse: () => <String, dynamic>{},
                   );
-                  
+
                   if (matchingReservation.isNotEmpty) {
-                    final actualId = matchingReservation['id'] ?? matchingReservation['_id'] ?? matchingReservation['reservation_id'];
+                    final actualId =
+                        matchingReservation['id'] ??
+                        matchingReservation['_id'] ??
+                        matchingReservation['reservation_id'];
                     if (actualId != null) {
                       reservationId = actualId.toString();
-                      print('DEBUG: Found actual reservation ID: $reservationId');
+                      print(
+                        'DEBUG: Found actual reservation ID: $reservationId',
+                      );
                     }
                   }
                 }
@@ -808,17 +955,27 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
                 print('DEBUG: Failed to get actual reservation ID: $e');
               }
             }
-            
-            response = await apiService.receiveInventoryReservation(reservationId);
+
+            response = await apiService.receiveInventoryReservation(
+              reservationId,
+            );
 
             if (response['success'] == true) {
               print('DEBUG: Reservation marked as received successfully');
 
               // Update local UI state for the request
               setState(() {
-                final newList = List<Map<String, dynamic>>.from(_inventoryRequests);
-                final index = newList.indexWhere((r) =>
-                    (r['_doc_id'] ?? r['id'] ?? r['request_id'] ?? r['reservation_id']) == requestId);
+                final newList = List<Map<String, dynamic>>.from(
+                  _inventoryRequests,
+                );
+                final index = newList.indexWhere(
+                  (r) =>
+                      (r['_doc_id'] ??
+                          r['id'] ??
+                          r['request_id'] ??
+                          r['reservation_id']) ==
+                      requestId,
+                );
                 if (index != -1) {
                   newList[index]['status'] = 'received';
                   newList[index]['received'] = true;
@@ -832,35 +989,62 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
               final inventoryId = request['inventory_id'];
               if (inventoryId != null) {
                 try {
-                  final itemResp = await apiService.getInventoryItemById(inventoryId);
+                  final itemResp = await apiService.getInventoryItemById(
+                    inventoryId,
+                  );
                   if (itemResp != null) {
-                    final newStock = itemResp['current_stock'] ?? itemResp['quantity_in_stock'] ?? itemResp['stock'] ?? null;
+                    final newStock =
+                        itemResp['current_stock'] ??
+                        itemResp['quantity_in_stock'] ??
+                        itemResp['stock'] ??
+                        null;
                     if (newStock != null) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Reservation received — current stock: $newStock')),
+                        SnackBar(
+                          content: Text(
+                            'Reservation received — current stock: $newStock',
+                          ),
+                        ),
                       );
                     }
                   }
                 } catch (e) {
-                  print('DEBUG: Failed to refresh inventory item after receive: $e');
+                  print(
+                    'DEBUG: Failed to refresh inventory item after receive: $e',
+                  );
                 }
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Reservation received successfully')),
+                  const SnackBar(
+                    content: Text('Reservation received successfully'),
+                  ),
                 );
               }
             } else {
               final errorMessage = (response['message'] ?? '');
-              if (errorMessage.toString().toLowerCase().contains('already received') || errorMessage.toString().toLowerCase().contains('already marked')) {
+              if (errorMessage.toString().toLowerCase().contains(
+                    'already received',
+                  ) ||
+                  errorMessage.toString().toLowerCase().contains(
+                    'already marked',
+                  )) {
                 print('DEBUG: Reservation was already received, updating UI');
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Item was already received')),
                 );
 
                 setState(() {
-                  final newList = List<Map<String, dynamic>>.from(_inventoryRequests);
-                  final index = newList.indexWhere((r) =>
-                      (r['_doc_id'] ?? r['id'] ?? r['request_id'] ?? r['reservation_id']) == requestId);
+                  final newList = List<Map<String, dynamic>>.from(
+                    _inventoryRequests,
+                  );
+                  final index = newList.indexWhere(
+                    (r) =>
+                        (r['_doc_id'] ??
+                            r['id'] ??
+                            r['request_id'] ??
+                            r['reservation_id']) ==
+                        requestId,
+                  );
                   if (index != -1) {
                     newList[index]['status'] = 'received';
                     newList[index]['received'] = true;
@@ -870,7 +1054,9 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
 
                 // Show message without reloading
               } else {
-                throw Exception((response['message'] ?? 'Failed to receive reservation'));
+                throw Exception(
+                  (response['message'] ?? 'Failed to receive reservation'),
+                );
               }
             }
           } finally {
@@ -878,9 +1064,13 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
           }
         } else {
           // For requests, show message that receive is only for reservations
-          print('DEBUG: Receive action called on non-reservation item (type: $itemType)');
+          print(
+            'DEBUG: Receive action called on non-reservation item (type: $itemType)',
+          );
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Receive is only available for reserved items')),
+            const SnackBar(
+              content: Text('Receive is only available for reserved items'),
+            ),
           );
           return; // Don't proceed
         }
@@ -889,14 +1079,18 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
         final result = await showModalBottomSheet<RequestResult>(
           context: context,
           isScrollControlled: true,
-          builder: (ctx) => RequestItem(
-            itemName: request['item_name'] ?? 'Unknown Item',
-            itemId: request['inventory_id'] ?? '',
-            unit: request['unit'] ?? 'pcs',
-            stock: request['stock_quantity']?.toString() ?? '0',
-            maintenanceId: widget.task['id'],
-            staffName: widget.task['assigned_staff_name'] ?? widget.task['assigned_to'] ?? 'Unknown Staff',
-          ),
+          builder:
+              (ctx) => RequestItem(
+                itemName: request['item_name'] ?? 'Unknown Item',
+                itemId: request['inventory_id'] ?? '',
+                unit: request['unit'] ?? 'pcs',
+                stock: request['stock_quantity']?.toString() ?? '0',
+                maintenanceId: widget.task['id'],
+                staffName:
+                    widget.task['assigned_staff_name'] ??
+                    widget.task['assigned_to'] ??
+                    'Unknown Staff',
+              ),
         );
 
         if (result != null) {
@@ -908,7 +1102,9 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
             inventoryId: itemId,
             buildingId: 'default_building',
             quantityRequested: quantity,
-            purpose: result.notes ?? 'Additional request for maintenance task ${widget.task['id']}',
+            purpose:
+                result.notes ??
+                'Additional request for maintenance task ${widget.task['id']}',
             requestedBy: widget.currentStaffId,
             maintenanceTaskId: widget.task['id'],
             status: 'pending',
@@ -932,44 +1128,66 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
           }
         }
       } else if (action == 'return') {
-        // Handle return action using the new API method
-        final itemId = request['inventory_id'];
-        final quantity = request['quantity'] ?? 1;
-
-        final response = await apiService.handleReservationAction(
-          inventoryId: itemId,
-          quantity: quantity,
-          maintenanceTaskId: widget.task['id'],
-          action: 'return',
-          itemName: request['item_name'],
-          itemCode: request['item_code'],
-          currentStock: request['current_stock'],
-          stockQuantity: request['stock_quantity'],
-          stockStatus: request['stock_status'],
+        // Show return sheet to get details
+        final result = await showModalBottomSheet<ReturnResult>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder:
+              (ctx) => ReturnItem(
+                itemName: request['item_name'] ?? 'Unknown Item',
+                itemId: request['inventory_id'] ?? '',
+                unit: request['unit'] ?? 'pcs',
+                stock: request['stock_quantity']?.toString() ?? '0',
+                maintenanceId: widget.task['id'],
+                staffName:
+                    widget.task['assigned_staff_name'] ??
+                    widget.task['assigned_to'] ??
+                    'Unknown Staff',
+              ),
         );
 
-        if (response['success'] == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Item returned successfully')),
+        if (result != null) {
+          // Handle return action using the new API method
+          final itemId = request['inventory_id'];
+          final quantity =
+              int.tryParse(result.quantity) ?? request['quantity'] ?? 1;
+
+          final response = await apiService.handleReservationAction(
+            inventoryId: itemId,
+            quantity: quantity,
+            maintenanceTaskId: widget.task['id'],
+            action: 'return',
+            itemName: request['item_name'],
+            itemCode: request['item_code'],
+            currentStock: request['current_stock'],
+            stockQuantity: request['stock_quantity'],
+            stockStatus: request['stock_status'],
           );
-          // Reload inventory requests to reflect changes
-          await _loadInventoryRequests();
-          // Notify inventory update
-          try {
-            final notifier = InventoryUpdateNotifier();
-            notifier.notifyItemUpdated(itemId?.toString() ?? '');
-          } catch (e) {
-            print('DEBUG: Failed to notify inventory update: $e');
+
+          if (response['success'] == true) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Item returned successfully')),
+            );
+            // Reload inventory requests to reflect changes
+            await _loadInventoryRequests();
+            // Notify inventory update
+            try {
+              final notifier = InventoryUpdateNotifier();
+              notifier.notifyItemUpdated(itemId?.toString() ?? '');
+            } catch (e) {
+              print('DEBUG: Failed to notify inventory update: $e');
+            }
+          } else {
+            throw Exception(response['message'] ?? 'Failed to return item');
           }
-        } else {
-          throw Exception(response['message'] ?? 'Failed to return item');
         }
       }
     } catch (e) {
       print('Error handling inventory action: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -979,10 +1197,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 14,
-            color: Color(0xFF6B7280),
-          ),
+          style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
         ),
         Text(
           value,
@@ -998,15 +1213,17 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-  // Determine whether an assessment exists (completion notes or staff photos)
-  // and only expose an assessedAt timestamp to the details widget when
-  // there's actually an assessment recorded.
-  final bool _hasAssessment =
-    (widget.task['completion_notes'] != null &&
-      widget.task['completion_notes'].toString().trim().isNotEmpty) ||
-    (widget.task['photos'] is List && (widget.task['photos'] as List).isNotEmpty);
+    // Determine whether an assessment exists (completion notes or staff photos)
+    // and only expose an assessedAt timestamp to the details widget when
+    // there's actually an assessment recorded.
+    final bool _hasAssessment =
+        (widget.task['completion_notes'] != null &&
+            widget.task['completion_notes'].toString().trim().isNotEmpty) ||
+        (widget.task['photos'] is List &&
+            (widget.task['photos'] as List).isNotEmpty);
 
-  final DateTime? _assessedAtForDetails = _hasAssessment ? _parseDate(widget.task['updated_at']) : null;
+    final DateTime? _assessedAtForDetails =
+        _hasAssessment ? _parseDate(widget.task['updated_at']) : null;
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
@@ -1023,16 +1240,21 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
               // Checklist Progress Banner
               if (_checklistItems.isNotEmpty) ...[
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
-                    color: completedCount == totalCount 
-                        ? const Color(0xFFECFDF5)
-                        : const Color(0xFFF3F4F6),
+                    color:
+                        completedCount == totalCount
+                            ? const Color(0xFFECFDF5)
+                            : const Color(0xFFF3F4F6),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: completedCount == totalCount
-                          ? const Color(0xFF10B981)
-                          : const Color(0xFFE5E7EB),
+                      color:
+                          completedCount == totalCount
+                              ? const Color(0xFF10B981)
+                              : const Color(0xFFE5E7EB),
                     ),
                   ),
                   child: Row(
@@ -1042,9 +1264,10 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
                             ? Icons.check_circle
                             : Icons.pending_actions,
                         size: 20,
-                        color: completedCount == totalCount
-                            ? const Color(0xFF10B981)
-                            : const Color(0xFF6B7280),
+                        color:
+                            completedCount == totalCount
+                                ? const Color(0xFF10B981)
+                                : const Color(0xFF6B7280),
                       ),
                       const SizedBox(width: 8),
                       Text(
@@ -1054,9 +1277,10 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: completedCount == totalCount
-                              ? const Color(0xFF047857)
-                              : const Color(0xFF374151),
+                          color:
+                              completedCount == totalCount
+                                  ? const Color(0xFF047857)
+                                  : const Color(0xFF374151),
                         ),
                       ),
                     ],
@@ -1065,48 +1289,72 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
 
                 const SizedBox(height: 16),
               ],
-              
-  // Use MaintenanceDetails widget - it has its own SingleChildScrollView
-  MaintenanceDetails(
+
+              // Use MaintenanceDetails widget - it has its own SingleChildScrollView
+              MaintenanceDetails(
                 // Basic Information
                 id: widget.task['id'] ?? '',
-                createdAt: _parseDate(widget.task['created_at']) ?? DateTime.now(),
+                createdAt:
+                    _parseDate(widget.task['created_at']) ?? DateTime.now(),
                 updatedAt: _parseDate(widget.task['updated_at']),
-                departmentTag: widget.task['category'] ?? widget.task['department'],
-                requestTypeTag: widget.task['maintenance_type'] ?? widget.task['maintenanceType'] ?? 'internal',
+                departmentTag:
+                    widget.task['category'] ?? widget.task['department'],
+                requestTypeTag:
+                    widget.task['maintenance_type'] ??
+                    widget.task['maintenanceType'] ??
+                    'internal',
                 priority: widget.task['priority'],
                 statusTag: widget.task['status'] ?? 'scheduled',
-                
+
                 // Tenant / Requester
-                requestedBy: widget.task['created_by'] ?? widget.task['assigned_to'] ?? '',
+                requestedBy:
+                    widget.task['created_by'] ??
+                    widget.task['assigned_to'] ??
+                    '',
                 scheduleDate: _formatTimestamp(widget.task['scheduled_date']),
-                
+
                 // Request Details
-                title: widget.task['task_title'] ?? widget.task['title'] ?? 'Maintenance Task',
+                title:
+                    widget.task['task_title'] ??
+                    widget.task['title'] ??
+                    'Maintenance Task',
                 startedAt: _parseDate(widget.task['started_at']),
                 completedAt: _parseDate(widget.task['completed_at']),
                 location: widget.task['location'],
-                description: widget.task['task_description'] ?? widget.task['description'],
-                attachments: widget.task['photos'] is List 
-                    ? (widget.task['photos'] as List).map((e) => e.toString()).toList()
-                    : null,
+                description:
+                    widget.task['task_description'] ??
+                    widget.task['description'],
+                attachments:
+                    widget.task['photos'] is List
+                        ? (widget.task['photos'] as List)
+                            .map((e) => e.toString())
+                            .toList()
+                        : null,
                 adminNote: widget.task['completion_notes'],
-                
+
                 // Staff
-                assignedStaff: widget.task['assigned_staff_name'] ?? widget.task['assigned_to'],
+                assignedStaff:
+                    widget.task['assigned_staff_name'] ??
+                    widget.task['assigned_to'],
                 staffDepartment: widget.task['department'],
                 staffPhotoUrl: null,
                 assessedAt: _assessedAtForDetails,
                 assessment: widget.task['completion_notes'],
-                staffAttachments: widget.task['photos'] is List 
-                    ? (widget.task['photos'] as List).map((e) => e.toString()).toList()
-                    : null,
-                
+                staffAttachments:
+                    widget.task['photos'] is List
+                        ? (widget.task['photos'] as List)
+                            .map((e) => e.toString())
+                            .toList()
+                        : null,
+
                 // Tracking
-                materialsUsed: widget.task['parts_used'] is List 
-                    ? (widget.task['parts_used'] as List).map((e) => e.toString()).toList()
-                    : null,
-                
+                materialsUsed:
+                    widget.task['parts_used'] is List
+                        ? (widget.task['parts_used'] as List)
+                            .map((e) => e.toString())
+                            .toList()
+                        : null,
+
                 // Interactive checklist and inventory
                 checklistItems: _checklistItems,
                 inventoryRequests: _inventoryRequests,
@@ -1118,26 +1366,27 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
                 onInventoryAction: _handleInventoryAction,
                 currentStaffId: widget.currentStaffId,
                 taskCategory: widget.task['category'],
-                
+
                 // Action callbacks
-                onHold: (widget.task['status'] == 'pending' ||
-                        widget.task['status'] == 'scheduled' || 
-                        widget.task['status'] == 'assigned' ||
-                        widget.task['status'] == 'new' ||
-                        widget.task['status'] == 'in_progress' || 
-                        widget.task['status'] == 'on_hold')
-                    ? _onHoldPressed
-                    : null,
-                onCreateAssessment: (widget.task['status'] == 'pending' ||
-                                    widget.task['status'] == 'scheduled' || 
-                                    widget.task['status'] == 'assigned' ||
-                                    widget.task['status'] == 'new' ||
-                                    widget.task['status'] == 'in_progress' || 
-                                    widget.task['status'] == 'on_hold')
-                    ? _createAssessment
-                    : null,
+                onHold:
+                    (widget.task['status'] == 'pending' ||
+                            widget.task['status'] == 'scheduled' ||
+                            widget.task['status'] == 'assigned' ||
+                            widget.task['status'] == 'new' ||
+                            widget.task['status'] == 'in_progress' ||
+                            widget.task['status'] == 'on_hold')
+                        ? _onHoldPressed
+                        : null,
+                onCreateAssessment:
+                    (widget.task['status'] == 'pending' ||
+                            widget.task['status'] == 'scheduled' ||
+                            widget.task['status'] == 'assigned' ||
+                            widget.task['status'] == 'new' ||
+                            widget.task['status'] == 'in_progress' ||
+                            widget.task['status'] == 'on_hold')
+                        ? _createAssessment
+                        : null,
               ),
-            
             ],
           ),
         ),
@@ -1166,19 +1415,27 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
                 child: SizedBox(
                   width: double.infinity,
                   child: Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 48,
-                        child: fx.OutlinedPillButton(
-                          label: holdMeta.isNotEmpty && widget.task['status'] == 'on_hold' ? 'Resume Task' : 'On Hold',
-                          icon: holdMeta.isNotEmpty && widget.task['status'] == 'on_hold' ? Icons.play_arrow : Icons.pause,
-                          borderColor: const Color(0xFF005CE7),
-                          foregroundColor: const Color(0xFF005CE7),
-                          onPressed: _onHoldPressed,
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 48,
+                          child: fx.OutlinedPillButton(
+                            label:
+                                holdMeta.isNotEmpty &&
+                                        widget.task['status'] == 'on_hold'
+                                    ? 'Resume Task'
+                                    : 'On Hold',
+                            icon:
+                                holdMeta.isNotEmpty &&
+                                        widget.task['status'] == 'on_hold'
+                                    ? Icons.play_arrow
+                                    : Icons.pause,
+                            borderColor: const Color(0xFF005CE7),
+                            foregroundColor: const Color(0xFF005CE7),
+                            onPressed: _onHoldPressed,
+                          ),
                         ),
                       ),
-                    ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: SizedBox(

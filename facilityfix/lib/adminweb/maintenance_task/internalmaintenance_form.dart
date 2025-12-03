@@ -739,37 +739,43 @@ class _InternalMaintenanceFormPageState
               );
               setState(() {
                 // Get stock value using multiple field names
-                  final stockValue = item['current_stock'] ?? 
-                                    item['available_stock'] ?? 
-                                    item['stock'] ?? 
-                                    item['quantity_on_hand'] ?? 0;
-                  
-                  final newItem = {
-                    'inventory_id':
-                        item['inventory_id'] ??
-                        item['id'] ??
-                        item['item_code'] ??
-                        item['itemCode'] ??
-                        item['_doc_id'],
-                    'formatted_id': item['formatted_id'] ?? item['inventory_id'] ?? item['id'] ?? '',
-                    'item_name': item['item_name'],
-                    'item_code':
-                        item['formatted_id'] ?? 
-                        item['item_code'] ??
-                        item['inventory_id'] ??
-                        item['id'] ??
-                        '',
-                    'quantity': quantity,
-                    'available_stock': stockValue,
-                    'current_stock': stockValue,
-                    'unit':
-                        item['unit'] ??
-                        item['uom'] ??
-                        item['unit_of_measure'] ??
-                        '',
-                  };
-                  _selectedInventoryItems.add(newItem);
-                  print('[DEBUG] Added inventory item: $newItem');
+                final stockValue =
+                    item['current_stock'] ??
+                    item['available_stock'] ??
+                    item['stock'] ??
+                    item['quantity_on_hand'] ??
+                    0;
+
+                final newItem = {
+                  'inventory_id':
+                      item['inventory_id'] ??
+                      item['id'] ??
+                      item['item_code'] ??
+                      item['itemCode'] ??
+                      item['_doc_id'],
+                  'formatted_id':
+                      item['formatted_id'] ??
+                      item['inventory_id'] ??
+                      item['id'] ??
+                      '',
+                  'item_name': item['item_name'],
+                  'item_code':
+                      item['formatted_id'] ??
+                      item['item_code'] ??
+                      item['inventory_id'] ??
+                      item['id'] ??
+                      '',
+                  'quantity': quantity,
+                  'available_stock': stockValue,
+                  'current_stock': stockValue,
+                  'unit':
+                      item['unit'] ??
+                      item['uom'] ??
+                      item['unit_of_measure'] ??
+                      '',
+                };
+                _selectedInventoryItems.add(newItem);
+                print('[DEBUG] Added inventory item: $newItem');
                 print(
                   '[DEBUG] Total selected items now: ${_selectedInventoryItems.length}',
                 );
@@ -966,6 +972,39 @@ class _InternalMaintenanceFormPageState
     final List<Map<String, String>> createdReservations = [];
 
     try {
+      // DUPLICATE PREVENTION: Fetch existing reservations for this task
+      print('[v0] Checking for existing reservations for task: $taskId');
+      Map<String, dynamic>? existingReservationsData;
+      Set<String> existingInventoryIds = {};
+
+      try {
+        existingReservationsData = await _apiService.getInventoryReservations(
+          maintenanceTaskId: taskId,
+        );
+
+        if (existingReservationsData != null &&
+            existingReservationsData['reservations'] is List) {
+          final reservations = existingReservationsData['reservations'] as List;
+          for (final reservation in reservations) {
+            if (reservation is Map<String, dynamic>) {
+              final invId = reservation['inventory_id']?.toString() ?? '';
+              if (invId.isNotEmpty) {
+                existingInventoryIds.add(invId);
+                print(
+                  '[v0] Found existing reservation for inventory_id: $invId',
+                );
+              }
+            }
+          }
+        }
+        print(
+          '[v0] Found ${existingInventoryIds.length} existing reservations to skip',
+        );
+      } catch (e) {
+        print('[v0] Error fetching existing reservations (will continue): $e');
+        // Continue with creation - if we can't check, better to try and let backend handle
+      }
+
       for (final item in _selectedInventoryItems) {
         final qty = item['quantity'];
         final fromTaskType = item['from_task_type'] == true;
@@ -989,6 +1028,14 @@ class _InternalMaintenanceFormPageState
         if (inventoryId.isEmpty) {
           print(
             '[v0] Skipping reservation for $itemName due to missing inventory ID',
+          );
+          continue;
+        }
+
+        // DUPLICATE PREVENTION: Skip if reservation already exists
+        if (existingInventoryIds.contains(inventoryId)) {
+          print(
+            '[v0] SKIPPING - Reservation already exists for $itemName (ID: $inventoryId)',
           );
           continue;
         }
@@ -1047,7 +1094,7 @@ class _InternalMaintenanceFormPageState
       }
 
       print(
-        '[v0] Processed ${_selectedInventoryItems.length} items, created ${createdReservations.length} confirmed reservations',
+        '[v0] Processed ${_selectedInventoryItems.length} items, skipped ${existingInventoryIds.length} existing, created ${createdReservations.length} new reservations',
       );
       return createdReservations;
     } catch (e) {
