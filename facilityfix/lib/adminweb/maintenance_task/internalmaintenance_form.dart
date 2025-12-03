@@ -7,6 +7,7 @@ import '../layout/facilityfix_layout.dart';
 import '../services/api_service_web.dart';
 import '../services/round_robin_assignment_service.dart';
 import '../../services/auth_storage.dart';
+import '../../utils/inventory_notifier.dart';
 import '../../services/api_services_mobile.dart' as main_api;
 import 'package:file_picker/file_picker.dart';
 import 'package:facilityfix/services/api_services_mobile.dart' as SecondaryAPI;
@@ -1764,6 +1765,9 @@ class _InternalMaintenanceFormPageState
         }
         print('[v0] Using task ID for inventory requests: $actualTaskId');
         print('[DEBUG] Task data structure: ${result['task']?.keys?.toList()}');
+
+        // NOTE: Staff assignment is already included in the maintenance object sent to createAdminMaintenanceTask()
+        // No need to call assignStaffToMaintenanceTask() again as it would send a duplicate notification
 
         // Create inventory reservations for selected items with the correct task ID
         List<Map<String, String>> createdPairs = [];

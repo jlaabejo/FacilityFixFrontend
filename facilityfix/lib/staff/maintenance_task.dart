@@ -238,79 +238,6 @@ class _MaintenanceTaskPageState extends State<MaintenanceTaskPage> {
     _loadUnreadNotifCount();
   }
 
-  Future<void> _receiveMaintenanceTask(Map<String, dynamic> task) async {
-    final taskId = task['id'] ?? '';
-    if (taskId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Error: Invalid maintenance task ID'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-
-    // Show loading indicator
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    try {
-      final apiService = APIService(roleOverride: AppRole.staff);
-      
-      // Update task status to indicate it's been received/accepted
-      final updateData = {
-        'status': 'received', // Update status to received
-        'received_at': DateTime.now().toIso8601String(), // Optional: track when it was received
-      };
-
-      final result = await apiService.updateMaintenanceTask(taskId, updateData);
-
-      // Hide loading indicator
-      if (mounted) Navigator.of(context).pop();
-
-      if (result != null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Maintenance task received successfully'),
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-        // Refresh the task list
-        _loadAllMaintenanceTasks();
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to receive maintenance task. Please try again.'),
-              backgroundColor: Colors.red,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      // Hide loading indicator
-      if (mounted) Navigator.of(context).pop();
-
-      print('Error receiving maintenance task: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error receiving task: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
-
   // ===== Bottom nav ==========================================================
   final List<NavItem> _navItems = const [
     NavItem(icon: Icons.home),
@@ -443,9 +370,6 @@ class _MaintenanceTaskPageState extends State<MaintenanceTaskPage> {
     final priority = task['priority'] ?? 'medium';
     final maintenanceType = task['maintenanceType'] ?? task['maintenance_type'] ?? 'internal';
 
-    // Show receive button for tasks that can be received (e.g., Sent or Assigned status)
-    final canReceive = status.toLowerCase() == 'sent' || status.toLowerCase() == 'assigned';
-
     return MaintenanceCard(
       id: taskId,
       createdAt: scheduledDate,
@@ -483,7 +407,7 @@ class _MaintenanceTaskPageState extends State<MaintenanceTaskPage> {
           _loadAllMaintenanceTasks();
         });
       },
-      onReceiveTap: canReceive ? () => _receiveMaintenanceTask(task) : null,
+      onReceiveTap: null,
       // Chat removed as requested
       onChatTap: null,
     );

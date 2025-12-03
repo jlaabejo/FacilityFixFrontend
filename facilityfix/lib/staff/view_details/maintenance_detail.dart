@@ -769,7 +769,6 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
 
       if (action == 'receive') {
         final requestStatus = (request['status'] ?? '').toString().toLowerCase();
-        final requestTypeStr = (request['type'] ?? '').toString().toLowerCase();
         final hasReservationId = (request['reservation_id'] ?? '').toString().isNotEmpty;
 
         // Treat maintenance items as reservations too, or if reserve-like markers exist

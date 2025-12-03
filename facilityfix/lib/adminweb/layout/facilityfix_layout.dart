@@ -454,9 +454,28 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         opacity: 1, 
                       ),
                     ),
+<<<<<<< HEAD
+                    // Use a LayoutBuilder + ConstrainedBox inside the SingleChildScrollView so
+                    // the child layout receives bounded height constraints. Without this,
+                    // any Expanded/Flexible children inside pages (e.g. DataTables with
+                    // Expanded rows) will cause: "RenderFlex children have non-zero flex but
+                    // incoming height constraints are unbounded" errors.
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final viewportHeight = constraints.maxHeight;
+                        return SingleChildScrollView(
+                          padding: const EdgeInsets.all(24),
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(minHeight: viewportHeight),
+                            child: widget.body,
+                          ),
+                        );
+                      },
+=======
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(24),
                       child: widget.body,
+>>>>>>> dd66fea750bab4395a5b0f42ada85c2b70d2066c
                     ),
                   ),
                 ),
