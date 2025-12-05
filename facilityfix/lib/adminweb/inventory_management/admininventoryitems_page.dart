@@ -1,4 +1,4 @@
-import 'package:facilityfix/adminweb/analytics&reports/files/inventory_report.dart';
+import 'package:facilityfix/adminweb/analytics_reports/files/inventory_report.dart';
 import 'package:facilityfix/adminweb/inventory_management/inventory_item_create_page.dart';
 import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:flutter/material.dart';

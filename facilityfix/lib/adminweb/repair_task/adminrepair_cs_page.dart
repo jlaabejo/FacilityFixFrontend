@@ -1,4 +1,4 @@
-import 'package:facilityfix/adminweb/analytics&reports/files/concern_slip_report.dart';
+import 'package:facilityfix/adminweb/analytics_reports/files/concern_slip_report.dart';
 import 'package:facilityfix/adminweb/repair_task/pop_up/cs_viewdetails_popup.dart';
 import 'package:facilityfix/adminweb/widgets/logout_popup.dart';
 import 'package:facilityfix/adminweb/widgets/tags.dart';

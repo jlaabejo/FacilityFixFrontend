@@ -1,8 +1,8 @@
 // // // The above Dart code initializes a Flutter application with Firebase, sets up routing for various
 // // // pages in an admin web interface, and includes theme management functionality.
 
-import 'package:facilityfix/adminweb/analytics&reports/adminwebanalytics_page.dart';
-import 'package:facilityfix/adminweb/analytics&reports/export_page.dart';
+import 'package:facilityfix/adminweb/analytics_reports/adminwebanalytics_page.dart';
+import 'package:facilityfix/adminweb/analytics_reports/export_page.dart';
 import 'package:facilityfix/adminweb/inventory_management/admininventoryforecasting_page.dart';
 import 'package:facilityfix/adminweb/inventory_management/equipment_create_page.dart';
 import 'package:facilityfix/adminweb/maintenance_task/admintasktype_page.dart';
