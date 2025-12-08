@@ -1,4 +1,3 @@
-
 import 'package:facilityfix/adminweb/analytics_reports/files/job_service_report.dart';
 import 'package:facilityfix/adminweb/services/round_robin_assignment_service.dart';
 import 'package:facilityfix/adminweb/widgets/bulk_action_buttons.dart';
@@ -145,7 +144,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
     print('[DEBUG] _handleLogout called');
     // Ensure we're not already navigating
     if (!mounted) return;
-    
+
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false, // Prevent accidental dismissal
@@ -155,7 +154,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       },
     );
     print('[DEBUG] Dialog result: $result');
-    
+
     if (result == true && mounted) {
       // Perform logout
       print('[DEBUG] Logging out...');
@@ -164,7 +163,6 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
       print('[DEBUG] Logout cancelled or dialog dismissed');
     }
   }
-
 
   @override
   void initState() {
@@ -721,6 +719,35 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
             continue;
           }
 
+          String? scheduleDate;
+          final scheduleData =
+              task['schedule_availability'] ??
+              task['dateRequested'] ??
+              task['rawData']?['schedule_availability'];
+          if (scheduleData != null) {
+            try {
+              DateTime? parsed;
+              final scheduleStr = scheduleData.toString();
+
+              if (scheduleStr.contains(' - ')) {
+                final parts = scheduleStr.split(' - ');
+                parsed = DateTime.tryParse(parts[0].trim());
+              } else {
+                parsed = DateTime.tryParse(scheduleStr);
+              }
+
+              if (parsed != null) {
+                scheduleDate =
+                    "${parsed.year}-${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')}";
+                print(
+                  '[BulkAssign] Task ${task['id']} scheduled for: $scheduleDate',
+                );
+              }
+            } catch (e) {
+              print('[BulkAssign] Error parsing schedule date: $e');
+            }
+          }
+
           print(
             '[BulkAssign] Assigning job service ${task['id']} to department: $department',
           );
@@ -730,6 +757,7 @@ class _RepairJobServicePageState extends State<RepairJobServicePage> {
             taskId: task['id'].toString(),
             taskType: 'job_service',
             department: department,
+            schedule: scheduleDate,
             notes: 'Auto-assigned from bulk assignment',
           );
 

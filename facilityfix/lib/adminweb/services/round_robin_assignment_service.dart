@@ -23,11 +23,32 @@ class RoundRobinAssignmentService {
       final staffList = await _apiService.getStaffMembers(
         department: department,
         availableOnly: true,
+        schedule:
+            schedule, // Pass schedule (date) parameter to exclude unavailable staff o that date
       );
 
-      if (staffList.isEmpty) {
+      // Additional filtering: exclude staff marked as unavailable
+      List<dynamic> filteredStaffList = [];
+      for (var staff in staffList) {
+        final status = staff['status']?.toString().toLowerCase() ?? '';
+        final availability =
+            staff['availability']?.toString().toLowerCase() ?? '';
+
+        // Exclude if overall status is "unavailable"
+        if (status.contains('unavailable') ||
+            availability.contains('unavailable')) {
+          print(
+            '[RoundRobin] Filtering out unavailable staff: ${staff['first_name']} ${staff['last_name']}',
+          );
+          continue;
+        }
+
+        filteredStaffList.add(staff);
+      }
+
+      if (filteredStaffList.isEmpty) {
         print(
-          '[RoundRobin] No available staff found for department: $department',
+          '[RoundRobin] No available staff found for department: $department${schedule != null ? ' on $schedule' : ''}',
         );
         return null;
       }
@@ -36,13 +57,14 @@ class RoundRobinAssignmentService {
       final currentPointer = await _getDepartmentPointer(department);
 
       // Calculate next index (wrap around if needed)
-      final nextIndex = currentPointer % staffList.length;
+      final nextIndex = currentPointer % filteredStaffList.length;
 
       // Get the staff member at this index
-      final selectedStaff = staffList[nextIndex] as Map<String, dynamic>;
+      final selectedStaff =
+          filteredStaffList[nextIndex] as Map<String, dynamic>;
 
       // Increment and save the pointer for next assignment
-      await _incrementDepartmentPointer(department, staffList.length);
+      await _incrementDepartmentPointer(department, filteredStaffList.length);
 
       print(
         '[RoundRobin] Assigned staff at index $nextIndex for department: $department',
@@ -258,21 +280,42 @@ class RoundRobinAssignmentService {
   }
 
   /// Preview who would be assigned next for a department (without actually assigning)
-  Future<Map<String, dynamic>?> previewNextAssignment(String department) async {
+  Future<Map<String, dynamic>?> previewNextAssignment(
+    String department, {
+    String? schedule, // Added schedule parameter
+  }) async {
     try {
       final staffList = await _apiService.getStaffMembers(
         department: department,
         availableOnly: true,
+        schedule:
+            schedule, // Include schedule when previewing to show accurate next assignment
       );
 
-      if (staffList.isEmpty) {
+      // Additional filtering: exclude staff marked as unavailable
+      List<dynamic> filteredStaffList = [];
+      for (var staff in staffList) {
+        final status = staff['status']?.toString().toLowerCase() ?? '';
+        final availability =
+            staff['availability']?.toString().toLowerCase() ?? '';
+
+        // Exclude if overall status is "unavailable"
+        if (status.contains('unavailable') ||
+            availability.contains('unavailable')) {
+          continue;
+        }
+
+        filteredStaffList.add(staff);
+      }
+
+      if (filteredStaffList.isEmpty) {
         return null;
       }
 
       final currentPointer = await _getDepartmentPointer(department);
-      final nextIndex = currentPointer % staffList.length;
+      final nextIndex = currentPointer % filteredStaffList.length;
 
-      return staffList[nextIndex] as Map<String, dynamic>;
+      return filteredStaffList[nextIndex] as Map<String, dynamic>;
     } catch (e) {
       print('[RoundRobin] Error previewing next assignment: $e');
       return null;

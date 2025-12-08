@@ -29,8 +29,8 @@ class ConcernSlipReport {
 
     // Extract concern slip details
     final concernId =
-        concernSlipData['id'] ??
         concernSlipData['formatted_id'] ??
+        concernSlipData['id'] ??
         concernSlipData['concernId'] ??
         'N/A';
     final title =
@@ -691,8 +691,8 @@ class ConcernSlipReport {
                     slips
                         .map(
                           (slip) => [
-                            slip['id'] ??
-                                slip['formatted_id'] ??
+                            slip['formatted_id'] ??
+                                slip['id'] ??
                                 slip['concernId'] ??
                                 '',
                             (slip['title'] ?? slip['description'] ?? '')

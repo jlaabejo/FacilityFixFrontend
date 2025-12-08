@@ -53,7 +53,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
       'initState -> currentRoute=${widget.currentRoute}, expanded=$_expanded',
     );
     _initializeAuth();
-    
+
     // Set up periodic notification refresh (every 30 seconds)
     _startNotificationRefreshTimer();
   }
@@ -67,14 +67,13 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
   Timer? _notificationRefreshTimer;
 
   void _startNotificationRefreshTimer() {
-    _notificationRefreshTimer = Timer.periodic(
-      const Duration(seconds: 30),
-      (timer) {
-        if (mounted && !_isLoadingNotifications) {
-          _fetchNotifications();
-        }
-      },
-    );
+    _notificationRefreshTimer = Timer.periodic(const Duration(seconds: 30), (
+      timer,
+    ) {
+      if (mounted && !_isLoadingNotifications) {
+        _fetchNotifications();
+      }
+    });
   }
 
   // Automatically expand parent dropdown if child route is active
@@ -91,11 +90,55 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
   // Handle navigation when item is clicked
   void _handleNavigation(String routeKey) {
     _logHighlight('Navigate -> $routeKey');
-    if (widget.onNavigate != null) {
-      widget.onNavigate!(routeKey);
-    } else {
-      print('Navigate to $routeKey');
+    // Special-case logout: prefer the page-level handler if provided
+    if (routeKey == 'logout') {
+      if (widget.onNavigate != null) {
+        widget.onNavigate!(routeKey);
+      } else {
+        // default logout route
+        GoRouter.of(context).go('/logout');
+      }
+      return;
     }
+
+    // Try to resolve a default path for common admin routes so navigation
+    // works even when individual pages provide their own `onNavigate` that
+    // doesn't include all possible route keys (e.g. 'export').
+    final path = _getRoutePath(routeKey);
+    if (path != null) {
+      GoRouter.of(context).go(path);
+    } else {
+      // If no mapping available, fall back to page-provided handler if present
+      if (widget.onNavigate != null) {
+        widget.onNavigate!(routeKey);
+      } else {
+        print('Navigate to $routeKey (no mapping found)');
+      }
+    }
+  }
+
+  // Default mapping from route keys used by the layout to actual paths.
+  // This allows the sidebar to navigate to common pages (including Export)
+  // even when the current page's onNavigate handler doesn't include them.
+  String? _getRoutePath(String routeKey) {
+    final Map<String, String> pathMap = {
+      'dashboard': '/dashboard',
+      'user_users': '/user/users',
+      'user_scheduling': '/user/scheduling',
+      'work_maintenance': '/work/maintenance',
+      'work_task_type': '/work/task_type',
+      'work_repair': '/work/repair',
+      'calendar': '/calendar',
+      'inventory_equipment': '/inventory/equipment',
+      'inventory_items': '/inventory/items',
+      'inventory_request': '/inventory/request',
+      'analytics': '/analytics',
+      'export': '/export',
+      'announcement': '/announcement',
+      'settings': '/settings',
+      'profile': '/profile',
+    };
+    return pathMap[routeKey];
   }
 
   Future<void> _initializeAuth() async {
@@ -130,24 +173,28 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
       } else {
         // Fallback for unexpected response format
         notificationsList = [];
-        print('[AdminLayout] Unexpected response format: ${response.runtimeType}');
+        print(
+          '[AdminLayout] Unexpected response format: ${response.runtimeType}',
+        );
       }
 
       // Transform backend data to match popup format with enhanced fields
-      final transformedNotifications = notificationsList.map((notif) {
-        return {
-          'id': notif['id'],
-          'type': notif['notification_type'] ?? 'system',
-          'title': notif['title'] ?? 'Notification',
-          'message': notif['message'] ?? '',
-          'timestamp': notif['created_at'] ?? DateTime.now().toIso8601String(),
-          'isRead': notif['is_read'] ?? false,
-          'relatedId': notif['related_entity_id'],
-          'priority': notif['priority'] ?? 'normal',
-          'isUrgent': notif['is_urgent'] ?? false,
-          'notificationType': notif['notification_type'] ?? 'system',
-        };
-      }).toList();
+      final transformedNotifications =
+          notificationsList.map((notif) {
+            return {
+              'id': notif['id'],
+              'type': notif['notification_type'] ?? 'system',
+              'title': notif['title'] ?? 'Notification',
+              'message': notif['message'] ?? '',
+              'timestamp':
+                  notif['created_at'] ?? DateTime.now().toIso8601String(),
+              'isRead': notif['is_read'] ?? false,
+              'relatedId': notif['related_entity_id'],
+              'priority': notif['priority'] ?? 'normal',
+              'isUrgent': notif['is_urgent'] ?? false,
+              'notificationType': notif['notification_type'] ?? 'system',
+            };
+          }).toList();
 
       // Get accurate unread count from the enhanced notifications
       final unreadCount = await ApiService().getUnreadNotificationCount();
@@ -166,7 +213,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
       setState(() {
         _isLoadingNotifications = false;
       });
-      
+
       // Show error to user only if this is not a background refresh
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -227,10 +274,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
-                      Image.asset(
-                        'images/leftgraphicsP2.png',
-                        height: 40,
-                      ),
+                      Image.asset('images/leftgraphicsP2.png', height: 40),
                       const SizedBox(width: 8),
                       const Text(
                         'FacilityFix',
@@ -274,7 +318,10 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         title: 'User Management',
                         sectionKey: 'user',
                         children: [
-                          _subNavItem('Availability & Scheduling', 'user_scheduling'),
+                          _subNavItem(
+                            'Availability & Scheduling',
+                            'user_scheduling',
+                          ),
                           _subNavItem('Users', 'user_users'),
                         ],
                       ),
@@ -303,7 +350,10 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         title: 'Inventory Management',
                         sectionKey: 'inventory',
                         children: [
-                          _subNavItem('Equipment Registry', 'inventory_equipment'),
+                          _subNavItem(
+                            'Equipment Registry',
+                            'inventory_equipment',
+                          ),
                           _subNavItem('Inventory Items', 'inventory_items'),
                           _subNavItem('Inventory Request', 'inventory_request'),
                         ],
@@ -314,7 +364,8 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       _navItem(
                         Icons.analytics_outlined,
                         'Analytics',
-                        'analytics',),
+                        'analytics',
+                      ),
                       const SizedBox(height: 4),
                       // Export navigation item
                       _navItem(
@@ -368,75 +419,85 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                   color: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,  // Changed to end alignment
+                    mainAxisAlignment:
+                        MainAxisAlignment.end, // Changed to end alignment
                     children: [
                       // Header action buttons
                       Row(
                         children: [
-                            SizedBox(
+                          SizedBox(
                             width: 48,
                             height: 48,
                             child: Stack(
                               alignment: Alignment.center,
                               children: [
-                              IconButton(
-                                icon: Icon(
-                                Icons.notifications_outlined,
-                                color: _isLoadingNotifications ? Colors.grey : null,
-                                ),
-                                tooltip: _isLoadingNotifications
-                                  ? 'Loading notifications...'
-                                  : 'View notifications',
-                                onPressed: _isLoadingNotifications
-                                  ? null
-                                  : () {
-                                    NotificationDialog.show(
-                                    context,
-                                    _notifications,
-                                    onRefresh: _fetchNotifications,
-                                    );
-                                  },
-                              ),
-
-                              // Constrain the loading indicator to the icon area so it stays centered
-                              if (_isLoadingNotifications)
-                                Center(
-                                child: SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.blue),
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.notifications_outlined,
+                                    color:
+                                        _isLoadingNotifications
+                                            ? Colors.grey
+                                            : null,
                                   ),
-                                ),
+                                  tooltip:
+                                      _isLoadingNotifications
+                                          ? 'Loading notifications...'
+                                          : 'View notifications',
+                                  onPressed:
+                                      _isLoadingNotifications
+                                          ? null
+                                          : () {
+                                            NotificationDialog.show(
+                                              context,
+                                              _notifications,
+                                              onRefresh: _fetchNotifications,
+                                            );
+                                          },
                                 ),
 
-                              if (_unreadCount > 0)
-                                Positioned(
-                                right: 6,
-                                top: 6,
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                  color: Colors.red,
-                                  shape: BoxShape.circle,
+                                // Constrain the loading indicator to the icon area so it stays centered
+                                if (_isLoadingNotifications)
+                                  Center(
+                                    child: SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.blue,
+                                            ),
+                                      ),
+                                    ),
                                   ),
-                                  constraints: const BoxConstraints(
-                                  minWidth: 16,
-                                  minHeight: 16,
+
+                                if (_unreadCount > 0)
+                                  Positioned(
+                                    right: 6,
+                                    top: 6,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      constraints: const BoxConstraints(
+                                        minWidth: 16,
+                                        minHeight: 16,
+                                      ),
+                                      child: Text(
+                                        _unreadCount > 99
+                                            ? '99+'
+                                            : '$_unreadCount',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
                                   ),
-                                  child: Text(
-                                  _unreadCount > 99 ? '99+' : '$_unreadCount',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                  ),
-                                ),
-                                ),
                               ],
                             ),
                           ),
@@ -457,9 +518,11 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                   child: Container(
                     decoration: const BoxDecoration(
                       image: DecorationImage(
-                        image: AssetImage('images/bglayout.png'), // Make sure this image exists in your assets
+                        image: AssetImage(
+                          'images/bglayout.png',
+                        ), // Make sure this image exists in your assets
                         fit: BoxFit.cover,
-                        opacity: 1, 
+                        opacity: 1,
                       ),
                     ),
                     child: LayoutBuilder(
@@ -468,7 +531,9 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         return SingleChildScrollView(
                           padding: const EdgeInsets.all(24),
                           child: ConstrainedBox(
-                            constraints: BoxConstraints(minHeight: viewportHeight),
+                            constraints: BoxConstraints(
+                              minHeight: viewportHeight,
+                            ),
                             child: widget.body,
                           ),
                         );

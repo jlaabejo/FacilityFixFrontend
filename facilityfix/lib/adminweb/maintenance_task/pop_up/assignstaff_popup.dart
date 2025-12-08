@@ -18,7 +18,8 @@ class AssignScheduleWorkDialog extends StatefulWidget {
   });
 
   @override
-  State<AssignScheduleWorkDialog> createState() => _AssignScheduleWorkDialogState();
+  State<AssignScheduleWorkDialog> createState() =>
+      _AssignScheduleWorkDialogState();
 
   static void show(
     BuildContext context,
@@ -44,7 +45,8 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
   final _formKey = GlobalKey<FormState>();
   final APIService _apiService = APIService();
   final admin_api.ApiService _adminApiService = admin_api.ApiService();
-  final RoundRobinAssignmentService _roundRobinService = RoundRobinAssignmentService();
+  final RoundRobinAssignmentService _roundRobinService =
+      RoundRobinAssignmentService();
 
   bool _formValid = false;
   bool _isLoading = false;
@@ -70,7 +72,11 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
 
   void _initializeScheduleDate() {
     try {
-      final raw = widget.task['rawData']?['schedule_availability'] ?? widget.task['schedule'] ?? widget.task['dateRequested'] ?? widget.task['rawData']?['scheduled_date'];
+      final raw =
+          widget.task['rawData']?['schedule_availability'] ??
+          widget.task['schedule'] ??
+          widget.task['dateRequested'] ??
+          widget.task['rawData']?['scheduled_date'];
       final sa = raw?.toString() ?? '';
       if (sa.isEmpty) return;
 
@@ -99,7 +105,10 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
         }
       }
 
-      if (parsed != null) setState(() => selectedDate = parsed);
+      if (parsed != null) {
+        setState(() => selectedDate = parsed);
+        Future.delayed(const Duration(milliseconds: 200), _loadStaffMembers);
+      }
     } catch (e) {
       print('[AssignScheduleWorkDialog] Error parsing schedule date: $e');
     }
@@ -141,13 +150,45 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
           department = null;
       }
 
-      final staffData = await _apiService.getStaffMembers(
+      String? scheduleDate;
+      if (selectedDate != null) {
+        // Format date as YYYY-MM-DD for API filtering
+        scheduleDate =
+            "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}";
+        print('[AssignStaff] Filtering staff unavailable on: $scheduleDate');
+      }
+
+      var staffData = await _adminApiService.getStaffMembers(
         department: department,
         availableOnly: true,
+        schedule: scheduleDate,
       );
 
+      // Fallback: if none found in requested department, expand to all depts
+      if (staffData.isEmpty) {
+        staffData = await _adminApiService.getStaffMembers(
+          availableOnly: true,
+          schedule: scheduleDate,
+        );
+      }
+
+      // Additional frontend filtering: exclude staff marked as unavailable
+      List<Map<String, dynamic>> filtered = [];
+      for (var s in staffData) {
+        final status = s['status']?.toString().toLowerCase() ?? '';
+        final availability = s['availability']?.toString().toLowerCase() ?? '';
+        if (status.contains('unavailable') ||
+            availability.contains('unavailable')) {
+          print(
+            '[AssignStaff] Skipping unavailable staff: ${s['first_name']} ${s['last_name']} - status: $status availability: $availability',
+          );
+          continue;
+        }
+        filtered.add(Map<String, dynamic>.from(s));
+      }
+
       setState(() {
-        _staffList = staffData;
+        _staffList = filtered;
         _filteredStaffList = List.from(_staffList);
         _isLoading = false;
       });
@@ -176,7 +217,8 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
   String _getStaffDisplayName(Map<String, dynamic> staff) {
     final firstName = staff['first_name'] ?? '';
     final lastName = staff['last_name'] ?? '';
-    final department = staff['staff_department'] ?? staff['department'] ?? 'General';
+    final department =
+        staff['staff_department'] ?? staff['department'] ?? 'General';
     final userId = staff['user_id'] ?? staff['id'] ?? '';
 
     String name = '$firstName $lastName'.trim();
@@ -214,7 +256,8 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
       const Color(0xFFA855F7), // Purple
     ];
 
-    final name = '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'.trim();
+    final name =
+        '${staff['first_name'] ?? ''} ${staff['last_name'] ?? ''}'.trim();
     final hash = name.hashCode.abs();
     return colors[hash % colors.length];
   }
@@ -251,7 +294,13 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 8))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -281,9 +330,21 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.error_outline, color: Colors.red[600], size: 20),
+                              Icon(
+                                Icons.error_outline,
+                                color: Colors.red[600],
+                                size: 20,
+                              ),
                               const SizedBox(width: 8),
-                              Expanded(child: Text(_errorMessage!, style: TextStyle(color: Colors.red[600], fontSize: 14))),
+                              Expanded(
+                                child: Text(
+                                  _errorMessage!,
+                                  style: TextStyle(
+                                    color: Colors.red[600],
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -316,9 +377,21 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
       padding: const EdgeInsets.only(left: 32, right: 24, top: 24, bottom: 16),
       child: Row(
         children: [
-          const Text('Assign & Schedule Work', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.black87)),
+          const Text(
+            'Assign & Schedule Work',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
           const Spacer(),
-          IconButton(onPressed: _isAssigning ? null : () => Navigator.of(context).pop(), icon: const Icon(Icons.close, color: Colors.grey, size: 24), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
+          IconButton(
+            onPressed: _isAssigning ? null : () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.close, color: Colors.grey, size: 24),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
         ],
       ),
     );
@@ -327,15 +400,36 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
   Widget _buildTaskInfo() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey[200]!)),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Task: ${widget.task['id'] ?? 'N/A'}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
+          Text(
+            'Task: ${widget.task['id'] ?? 'N/A'}',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(widget.task['title'] ?? 'No Title', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black87)),
+          Text(
+            widget.task['title'] ?? 'No Title',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Colors.black87,
+            ),
+          ),
           const SizedBox(height: 8),
-          Text('Category: ${widget.task['department'] ?? 'General'}', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+          Text(
+            'Category: ${widget.task['department'] ?? 'General'}',
+            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+          ),
         ],
       ),
     );
@@ -364,17 +458,35 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(16)),
-      child: Text('$priority Priority', style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w500)),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        '$priority Priority',
+        style: TextStyle(
+          color: textColor,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     );
   }
 
   Widget _buildStaffDropdown() {
-    final hasSelected = selectedStaffName != null && selectedStaffName!.isNotEmpty;
+    final hasSelected =
+        selectedStaffName != null && selectedStaffName!.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Assign Staff', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black87)),
+        const Text(
+          'Assign Staff',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: Colors.black87,
+          ),
+        ),
         const SizedBox(height: 12),
 
         // ConcernSlip-style compact display when a staff is selected
@@ -398,8 +510,15 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
                   ),
                   child: Center(
                     child: Text(
-                      (selectedStaffName ?? 'SM').split(' ').map((p) => p.isNotEmpty ? p[0].toUpperCase() : '').take(2).join(),
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                      (selectedStaffName ?? 'SM')
+                          .split(' ')
+                          .map((p) => p.isNotEmpty ? p[0].toUpperCase() : '')
+                          .take(2)
+                          .join(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
@@ -408,13 +527,27 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(selectedStaffName ?? 'Staff Member', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
+                      Text(
+                        selectedStaffName ?? 'Staff Member',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Text(
                         () {
                           try {
-                            final found = _staffList.firstWhere((s) => _getStaffId(s) == selectedStaffId, orElse: () => {});
-                            if (found.isNotEmpty) return (found['staff_department'] ?? found['department'] ?? '').toString();
+                            final found = _staffList.firstWhere(
+                              (s) => _getStaffId(s) == selectedStaffId,
+                              orElse: () => {},
+                            );
+                            if (found.isNotEmpty)
+                              return (found['staff_department'] ??
+                                      found['department'] ??
+                                      '')
+                                  .toString();
                           } catch (_) {}
                           return '';
                         }(),
@@ -430,8 +563,17 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
         if (_isLoading)
           Container(
             height: 50,
-            decoration: BoxDecoration(border: Border.all(color: Colors.grey[300]!), borderRadius: BorderRadius.circular(8)),
-            child: const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
           )
         else
           DropdownButtonFormField<String>(
@@ -439,8 +581,13 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
             isExpanded: true,
             decoration: InputDecoration(
               isDense: true,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              hintText: _filteredStaffList.isEmpty ? 'No staff available' : 'Select Staff...',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              hintText:
+                  _filteredStaffList.isEmpty
+                      ? 'No staff available'
+                      : 'Select Staff...',
             ),
             selectedItemBuilder: (BuildContext context) {
               return _filteredStaffList.map((staff) {
@@ -472,59 +619,72 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
                 return const SizedBox.shrink();
               }).toList();
             },
-            items: _filteredStaffList.map((staff) {
-              final staffId = _getStaffId(staff);
-              final firstName = staff['first_name'] ?? '';
-              final lastName = staff['last_name'] ?? '';
-              final department = staff['staff_department'] ?? staff['department'] ?? 'General';
+            items:
+                _filteredStaffList.map((staff) {
+                  final staffId = _getStaffId(staff);
+                  final firstName = staff['first_name'] ?? '';
+                  final lastName = staff['last_name'] ?? '';
+                  final department =
+                      staff['staff_department'] ??
+                      staff['department'] ??
+                      'General';
 
-              String name = '$firstName $lastName'.trim();
-              if (name.isEmpty) name = 'Staff Member';
+                  String name = '$firstName $lastName'.trim();
+                  if (name.isEmpty) name = 'Staff Member';
 
-              return DropdownMenuItem(
-                value: staffId,
-                child: Row(
-                  children: [
-                    _buildStaffAvatar(staff, size: 32),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            name,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.black87,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+                  return DropdownMenuItem(
+                    value: staffId,
+                    child: Row(
+                      children: [
+                        _buildStaffAvatar(staff, size: 32),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                name,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.black87,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                department,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
-                          Text(
-                            department,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              );
-            }).toList(),
-            onChanged: _filteredStaffList.isEmpty ? null : (value) {
-              setState(() {
-                selectedStaffId = value;
-                final staff = _filteredStaffList.firstWhere((s) => _getStaffId(s) == value);
-                selectedStaffName = _getStaffDisplayName(staff);
-              });
-              _revalidate();
-            },
-            validator: (value) => value == null || value.isEmpty ? 'Please select a staff member' : null,
+                  );
+                }).toList(),
+            onChanged:
+                _filteredStaffList.isEmpty
+                    ? null
+                    : (value) {
+                      setState(() {
+                        selectedStaffId = value;
+                        final staff = _filteredStaffList.firstWhere(
+                          (s) => _getStaffId(s) == value,
+                        );
+                        selectedStaffName = _getStaffDisplayName(staff);
+                      });
+                      _revalidate();
+                    },
+            validator:
+                (value) =>
+                    value == null || value.isEmpty
+                        ? 'Please select a staff member'
+                        : null,
           ),
       ],
     );
@@ -534,37 +694,80 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Job Service Schedule', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black87)),
+        const Text(
+          'Job Service Schedule',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: Colors.black87,
+          ),
+        ),
         const SizedBox(height: 12),
         FormField<DateTime>(
           validator: (_) {
             if (selectedDate == null) return 'Please pick a date';
             final today = DateTime.now();
             final floor = DateTime(today.year, today.month, today.day);
-            if (selectedDate!.isBefore(floor)) return 'Date can\'t be in the past';
+            if (selectedDate!.isBefore(floor))
+              return 'Date can\'t be in the past';
             return null;
           },
-          builder: (state) => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              InkWell(
-                onTap: () => _selectDate(context).then((_) => _revalidate()),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(border: Border.all(color: state.hasError ? Colors.red : Colors.grey[300]!), borderRadius: BorderRadius.circular(8)),
-                  child: Row(
-                    children: [
-                      Icon(Icons.calendar_today, color: state.hasError ? Colors.red : Colors.blue[600], size: 20),
-                      const SizedBox(width: 12),
-                      Text(selectedDate != null ? _fmtDate(selectedDate!) : 'DD / MM / YY', style: TextStyle(color: selectedDate != null ? Colors.black87 : (state.hasError ? Colors.red : Colors.grey[500]), fontSize: 14)),
-                    ],
+          builder:
+              (state) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  InkWell(
+                    onTap:
+                        () => _selectDate(context).then((_) => _revalidate()),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color:
+                              state.hasError ? Colors.red : Colors.grey[300]!,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today,
+                            color:
+                                state.hasError ? Colors.red : Colors.blue[600],
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            selectedDate != null
+                                ? _fmtDate(selectedDate!)
+                                : 'DD / MM / YY',
+                            style: TextStyle(
+                              color:
+                                  selectedDate != null
+                                      ? Colors.black87
+                                      : (state.hasError
+                                          ? Colors.red
+                                          : Colors.grey[500]),
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                  if (state.hasError) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      state.errorText!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ],
+                ],
               ),
-              if (state.hasError) ...[const SizedBox(height: 6), Text(state.errorText!, style: const TextStyle(color: Colors.red, fontSize: 12))],
-            ],
-          ),
         ),
       ],
     );
@@ -581,16 +784,27 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Internal Notes (Optional)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black87)),
+        const Text(
+          'Internal Notes (Optional)',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: Colors.black87,
+          ),
+        ),
         const SizedBox(height: 12),
         TextFormField(
           controller: notesController,
           maxLines: 6,
-          decoration: InputDecoration(hintText: 'Enter Notes....', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+          decoration: InputDecoration(
+            hintText: 'Enter Notes....',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          ),
           inputFormatters: [LengthLimitingTextInputFormatter(500)],
           validator: (v) {
             if (v == null || v.trim().isEmpty) return null;
-            if (v.trim().length < 5) return 'Add a bit more detail or leave blank';
+            if (v.trim().length < 5)
+              return 'Add a bit more detail or leave blank';
             return null;
           },
         ),
@@ -610,9 +824,14 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
               foregroundColor: Colors.blue[600],
               side: BorderSide(color: Colors.blue[600]!),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
-            child: const Text('Back', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+            child: const Text(
+              'Back',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            ),
           ),
           Row(
             children: [
@@ -622,40 +841,63 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.orange[600],
                   side: BorderSide(color: Colors.orange[600]!),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 16,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 icon: const Icon(Icons.autorenew, size: 18),
-                label: const Text('Auto-Assign', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                label: const Text(
+                  'Auto-Assign',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                ),
               ),
               const SizedBox(width: 12),
               // Manual Assign Button
               ElevatedButton(
-                onPressed: (_formValid && !_isAssigning) ? _handleSaveAndAssign : null,
+                onPressed:
+                    (_formValid && !_isAssigning) ? _handleSaveAndAssign : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green[600],
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 16,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   elevation: 0,
                 ),
-                child: _isAssigning
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                child:
+                    _isAssigning
+                        ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                        : const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.save, size: 18),
+                            SizedBox(width: 8),
+                            Text(
+                              'Save & Assign Staff',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
-                      )
-                    : const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.save, size: 18),
-                          SizedBox(width: 8),
-                          Text('Save & Assign Staff', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                        ],
-                      ),
               ),
             ],
           ),
@@ -665,8 +907,14 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
   }
 
   Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(context: context, initialDate: selectedDate ?? DateTime.now(), firstDate: DateTime.now(), lastDate: DateTime(2030, 12));
-    if (picked != null && picked != selectedDate) setState(() => selectedDate = picked);
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2030, 12),
+    );
+    if (picked != null && picked != selectedDate)
+      setState(() => selectedDate = picked);
   }
 
   /// Handle auto-assignment using round-robin algorithm
@@ -707,15 +955,16 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
       // Determine task type
       String taskType;
       String? taskId;
-      
+
       if (widget.isMaintenanceTask) {
         taskType = 'maintenance';
         taskId = widget.task['id'] ?? widget.task['task_id'];
       } else {
         taskType = 'concern_slip';
-        taskId = widget.task['rawData']?['id'] ?? 
-                 widget.task['rawData']?['_doc_id'] ?? 
-                 widget.task['id'];
+        taskId =
+            widget.task['rawData']?['id'] ??
+            widget.task['rawData']?['_doc_id'] ??
+            widget.task['id'];
       }
 
       if (taskId == null || taskId.isEmpty) {
@@ -730,12 +979,17 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
         taskId: taskId,
         taskType: taskType,
         department: department,
-        notes: notesController.text.trim().isNotEmpty ? notesController.text.trim() : null,
+        notes:
+            notesController.text.trim().isNotEmpty
+                ? notesController.text.trim()
+                : null,
       );
 
       if (assignedStaff != null) {
-        final staffName = '${assignedStaff['first_name'] ?? ''} ${assignedStaff['last_name'] ?? ''}'.trim();
-        
+        final staffName =
+            '${assignedStaff['first_name'] ?? ''} ${assignedStaff['last_name'] ?? ''}'
+                .trim();
+
         if (mounted) {
           Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
@@ -779,7 +1033,9 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
           final taskId = widget.task['task_id'];
           if (taskId == null) throw Exception('Task ID not found');
 
-          print('[AssignStaff] Assigning staff $selectedStaffId to checklist item $checklistItemId');
+          print(
+            '[AssignStaff] Assigning staff $selectedStaffId to checklist item $checklistItemId',
+          );
 
           final result = await _adminApiService.assignStaffToChecklistItem(
             taskId,
@@ -805,22 +1061,31 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
           final taskId = widget.task['id'] ?? widget.task['task_id'];
           if (taskId == null) throw Exception('Maintenance task ID not found');
 
-          print('[AssignStaff] Assigning staff $selectedStaffId to maintenance task $taskId');
+          print(
+            '[AssignStaff] Assigning staff $selectedStaffId to maintenance task $taskId',
+          );
 
           final result = await _adminApiService.assignStaffToMaintenanceTask(
             taskId,
             selectedStaffId!,
             scheduledDate: selectedDate,
-            notes: notesController.text.trim().isNotEmpty ? notesController.text.trim() : null,
+            notes:
+                notesController.text.trim().isNotEmpty
+                    ? notesController.text.trim()
+                    : null,
           );
 
-          print('[AssignStaff] Maintenance task assignment successful: $result');
+          print(
+            '[AssignStaff] Maintenance task assignment successful: $result',
+          );
 
           if (mounted) {
             Navigator.of(context).pop();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Staff assigned successfully to maintenance task'),
+                content: Text(
+                  'Staff assigned successfully to maintenance task',
+                ),
                 backgroundColor: Colors.green,
                 duration: const Duration(seconds: 3),
               ),
@@ -830,12 +1095,20 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
         }
       } else {
         // Handle concern slip assignment (original logic)
-        final concernSlipId = widget.task['rawData']?['id'] ?? widget.task['rawData']?['_doc_id'] ?? widget.task['id'];
+        final concernSlipId =
+            widget.task['rawData']?['id'] ??
+            widget.task['rawData']?['_doc_id'] ??
+            widget.task['id'];
         if (concernSlipId == null) throw Exception('Concern slip ID not found');
 
-        print('[AssignStaff] Assigning staff $selectedStaffId to concern slip $concernSlipId');
+        print(
+          '[AssignStaff] Assigning staff $selectedStaffId to concern slip $concernSlipId',
+        );
 
-        final result = await _apiService.assignStaffToConcernSlip(concernSlipId, selectedStaffId!);
+        final result = await _apiService.assignStaffToConcernSlip(
+          concernSlipId,
+          selectedStaffId!,
+        );
 
         print('[AssignStaff] Assignment successful: $result');
 
@@ -843,7 +1116,9 @@ class _AssignScheduleWorkDialogState extends State<AssignScheduleWorkDialog> {
           Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Staff assigned successfully to ${widget.task['id']}'),
+              content: Text(
+                'Staff assigned successfully to ${widget.task['id']}',
+              ),
               backgroundColor: Colors.green,
               duration: const Duration(seconds: 3),
             ),

@@ -26,21 +26,25 @@ class ExportCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: width,
-      height: height,
+      // allow flexible height (height may be null)
+      constraints: height != null ? BoxConstraints(minHeight: height!) : null,
       padding: const EdgeInsets.only(
-        top: 25.22,
-        left: 25.22,
-        right: 25.22,
-        bottom: 1.23,
+        top: 28.0,
+        left: 24.0,
+        right: 24.0,
+        bottom: 20.0,
       ),
-      decoration: ShapeDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
-        shape: RoundedRectangleBorder(
-          side: const BorderSide(
-            width: 1.23,
-            color: Color(0xFFE5E6E8),
+        border: Border.all(width: 1.0, color: const Color(0xFFE5E6E8)),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-        ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -86,11 +90,7 @@ class ExportCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       // Badges
                       if (badges.isNotEmpty)
-                        Wrap(
-                          spacing: 15.99,
-                          runSpacing: 8,
-                          children: badges,
-                        ),
+                        Wrap(spacing: 15.99, runSpacing: 8, children: badges),
                     ],
                   ),
                 ),
@@ -99,21 +99,18 @@ class ExportCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 15.99),
+          const SizedBox(height: 16),
           // Bottom Container (optional)
           if (bottomContent != null)
             bottomContent!
           else
             Container(
               width: double.infinity,
-              height: 55.17,
-              decoration: const ShapeDecoration(
-                shape: RoundedRectangleBorder(
-                  side: BorderSide(
-                    width: 1.23,
-                    color: Color(0xFFE5E6E8),
-                  ),
-                ),
+              height: 70,
+              decoration: BoxDecoration(
+                border: Border.all(width: 1.0, color: const Color(0xFFE5E6E8)),
+                borderRadius: BorderRadius.circular(8),
+                color: Colors.white,
               ),
             ),
         ],
@@ -126,11 +123,8 @@ class StatusBadge extends StatelessWidget {
   final String text;
   final Color dotColor;
 
-  const StatusBadge({
-    Key? key,
-    required this.text,
-    required this.dotColor,
-  }) : super(key: key);
+  const StatusBadge({Key? key, required this.text, required this.dotColor})
+    : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -164,7 +158,7 @@ class StatusBadge extends StatelessWidget {
   }
 }
 
-// Buttons 
+// Buttons
 
 class ExportButton extends StatelessWidget {
   final VoidCallback? onPressed;
@@ -180,43 +174,44 @@ class ExportButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDisabled = onPressed == null;
     return GestureDetector(
-      onTap: onPressed,
-      child: Container(
-        width: 140.67,
-        height: 40.99,
-        decoration: ShapeDecoration(
-          color: const Color(0xFF005CE7),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+      onTap: isDisabled ? null : onPressed,
+      behavior: HitTestBehavior.opaque,
+      child: Opacity(
+        opacity: isDisabled ? 0.55 : 1.0,
+        child: Container(
+          width: 140.67,
+          height: 40.99,
+          decoration: ShapeDecoration(
+            color: const Color(0xFF005CE7),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (icon != null)
+                icon!
+              else
+                const Icon(Icons.download, color: Colors.white, size: 16),
+              const SizedBox(width: 8),
+              Text(
+                text,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.w500,
+                  height: 1.50,
+                ),
+              ),
+            ],
           ),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (icon != null) 
-              icon!
-            else
-              const Icon(
-                Icons.download,
-                color: Colors.white,
-                size: 16,
-              ),
-            const SizedBox(width: 8),
-            Text(
-              text,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w500,
-                height: 1.50,
-              ),
-            ),
-          ],
-         ),
-       )
+      ),
     );
   }
 }
@@ -245,51 +240,43 @@ class OutlinedButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDisabled = onPressed == null;
     return GestureDetector(
-      onTap: onPressed,
-      child: Container(
-        width: width,
-        height: height,
-        decoration: ShapeDecoration(
-          color: backgroundColor,
-          shape: RoundedRectangleBorder(
-            side: BorderSide(
-              width: 1.23,
-              color: borderColor,
+      onTap: isDisabled ? null : onPressed,
+      behavior: HitTestBehavior.opaque,
+      child: Opacity(
+        opacity: isDisabled ? 0.55 : 1.0,
+        child: Container(
+          width: width,
+          height: height,
+          decoration: ShapeDecoration(
+            color: backgroundColor,
+            shape: RoundedRectangleBorder(
+              side: BorderSide(width: 1.23, color: borderColor),
+              borderRadius: BorderRadius.circular(6),
             ),
-            borderRadius: BorderRadius.circular(6),
           ),
-        ),
-        child: Stack(
-          children: [
-            if (icon != null)
-              Positioned(
-                left: 17.23,
-                top: 10.98,
-                child: Container(
-                  width: 15.99,
-                  height: 15.99,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: const BoxDecoration(),
-                  child: icon,
-                ),
-              ),
-            Positioned(
-              left: 39.22,
-              top: 9.46,
-              child: Text(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (icon != null) ...[
+                SizedBox(width: 20, height: 20, child: Center(child: icon)),
+                const SizedBox(width: 8),
+              ],
+              Text(
                 text,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: textColor,
-                  fontSize: 13,
+                  fontSize: 14,
                   fontFamily: 'Inter',
                   fontWeight: FontWeight.w500,
                   height: 1.50,
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -365,14 +352,13 @@ class LabeledDateContainer extends StatelessWidget {
             decoration: ShapeDecoration(
               color: backgroundColor,
               shape: RoundedRectangleBorder(
-                side: BorderSide(
-                  width: 1.23,
-                  color: borderColor,
-                ),
+                side: BorderSide(width: 1.23, color: borderColor),
                 borderRadius: BorderRadius.circular(borderRadius),
               ),
             ),
-            padding: padding ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding:
+                padding ??
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -388,7 +374,8 @@ class LabeledDateContainer extends StatelessWidget {
                         child: Text(
                           dateText ?? placeholder ?? '',
                           style: TextStyle(
-                            color: dateText != null ? textColor : placeholderColor,
+                            color:
+                                dateText != null ? textColor : placeholderColor,
                             fontSize: 14,
                             fontFamily: 'Inter',
                             fontWeight: FontWeight.w400,
@@ -447,10 +434,7 @@ class ClearButton extends StatelessWidget {
         decoration: ShapeDecoration(
           color: backgroundColor,
           shape: RoundedRectangleBorder(
-            side: BorderSide(
-              width: 1.23,
-              color: borderColor,
-            ),
+            side: BorderSide(width: 1.23, color: borderColor),
             borderRadius: BorderRadius.circular(borderRadius),
           ),
         ),

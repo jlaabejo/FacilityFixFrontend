@@ -4,6 +4,7 @@ import '../../widgets/tags.dart';
 import '../../../services/api_services_mobile.dart';
 import '../../../utils/ui_format.dart';
 import '../../services/round_robin_assignment_service.dart';
+import '../../services/api_service_web.dart' as admin_api;
 import 'package:intl/intl.dart';
 
 class JobServiceConcernSlipDialog extends StatefulWidget {
@@ -42,6 +43,7 @@ class _JobServiceConcernSlipDialogState
     extends State<JobServiceConcernSlipDialog> {
   final _formKey = GlobalKey<FormState>();
   final APIService _apiService = APIService();
+  final admin_api.ApiService _adminApiService = admin_api.ApiService();
   final RoundRobinAssignmentService _roundRobinService =
       RoundRobinAssignmentService();
 
@@ -337,18 +339,60 @@ class _JobServiceConcernSlipDialogState
           department = null;
       }
 
-      final staffData = await _apiService.getStaffMembers(
+      // Format schedule date if available for availability filtering
+      String? scheduleDate;
+      if (selectedDate != null) {
+        scheduleDate =
+            "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}";
+        print(
+          '[JobServiceDialog] Loading staff for date: $scheduleDate, department: $department',
+        );
+      } else {
+        print('[JobServiceDialog] No schedule date set, selectedDate is null');
+      }
+
+      var staffData = await _adminApiService.getStaffMembers(
         department: department,
         availableOnly: true,
+        schedule: scheduleDate,
       );
 
+      // Fallback to any department if none found in matching department
+      if (staffData.isEmpty) {
+        staffData = await _adminApiService.getStaffMembers(
+          availableOnly: true,
+          schedule: scheduleDate,
+        );
+      }
+
+      // Additional frontend filtering: exclude staff marked as unavailable
+      List<dynamic> filteredStaffData = [];
+      for (var staff in staffData) {
+        final status = staff['status']?.toString().toLowerCase() ?? '';
+        final availability =
+            staff['availability']?.toString().toLowerCase() ?? '';
+
+        // Exclude if overall status is "unavailable"
+        if (status.contains('unavailable') ||
+            availability.contains('unavailable')) {
+          print(
+            '[JobServiceDialog] Filtering out unavailable staff: ${staff['first_name']} ${staff['last_name']} (status: $status, availability: $availability)',
+          );
+          continue;
+        }
+
+        filteredStaffData.add(staff);
+      }
+
       setState(() {
-        _staffList = staffData;
+        _staffList = filteredStaffData.cast<Map<String, dynamic>>();
         _isLoading = false;
       });
 
       _autoAssignStaff();
-      print('[JobServiceDialog] Loaded ${_staffList.length} staff members for department: $department');
+      print(
+        '[JobServiceDialog] Loaded ${filteredStaffData.length} available staff members (filtered from ${staffData.length} total)',
+      );
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -419,8 +463,16 @@ class _JobServiceConcernSlipDialogState
         return;
       }
 
+      // Format schedule date if available for availability filtering
+      String? scheduleDate;
+      if (selectedDate != null) {
+        scheduleDate =
+            "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}";
+      }
+
       final nextStaff = await _roundRobinService.getNextStaffForDepartment(
         department,
+        schedule: scheduleDate,
       );
 
       if (nextStaff != null) {
@@ -433,7 +485,7 @@ class _JobServiceConcernSlipDialogState
         print(
           '[JobServiceDialog] Round-robin assigned staff: $selectedStaffName (ID: $selectedStaffId) for department: $department',
         );
-        
+
         // Trigger validation after state update
         WidgetsBinding.instance.addPostFrameCallback((_) => _revalidate());
       } else {
@@ -460,7 +512,7 @@ class _JobServiceConcernSlipDialogState
           selectedStaffName = _getStaffDisplayName(firstStaff);
           roundRobinAssignedStaffId = selectedStaffId;
         });
-        
+
         // Trigger validation after state update
         WidgetsBinding.instance.addPostFrameCallback((_) => _revalidate());
       }
@@ -1216,7 +1268,8 @@ class _JobServiceConcernSlipDialogState
                       // Must return one widget per item in the dropdown list
                       return _staffList.map<Widget>((m) {
                         // Show the selected staff with avatar and name
-                        if (selectedStaffId != null && selectedStaffId!.isNotEmpty) {
+                        if (selectedStaffId != null &&
+                            selectedStaffId!.isNotEmpty) {
                           if (_getStaffId(m) == selectedStaffId) {
                             return Padding(
                               padding: const EdgeInsets.only(left: 4),

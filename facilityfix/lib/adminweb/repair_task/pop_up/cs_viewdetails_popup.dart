@@ -322,16 +322,58 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
           department = null;
       }
 
-      final staffData = await _apiService.getStaffMembers(
+      // Format schedule date if available for availability filtering
+      String? scheduleDate;
+      if (selectedDate != null) {
+        scheduleDate =
+            "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}";
+        print(
+          '[ConcernSlipDetail] Loading staff for date: $scheduleDate, department: $department',
+        );
+      } else {
+        print('[ConcernSlipDetail] No schedule date set, selectedDate is null');
+      }
+
+      var staffData = await _adminApiService.getStaffMembers(
         department: department,
         availableOnly: true,
+        schedule: scheduleDate,
       );
 
+      // If no staff were found for the matching department, expand search to all departments
+      if (staffData.isEmpty) {
+        staffData = await _adminApiService.getStaffMembers(
+          availableOnly: true,
+          schedule: scheduleDate,
+        );
+      }
+
+      // Additional frontend filtering: exclude staff marked as unavailable
+      List<Map<String, dynamic>> filteredStaffData = [];
+      for (var staff in staffData) {
+        final status = staff['status']?.toString().toLowerCase() ?? '';
+        final availability =
+            staff['availability']?.toString().toLowerCase() ?? '';
+
+        // Exclude if overall status is "unavailable"
+        if (status.contains('unavailable') ||
+            availability.contains('unavailable')) {
+          print(
+            '[ConcernSlipDetail] Filtering out unavailable staff: ${staff['first_name']} ${staff['last_name']} (status: $status, availability: $availability)',
+          );
+          continue;
+        }
+
+        filteredStaffData.add(staff);
+      }
+
       setState(() {
-        _staffList = staffData;
+        _staffList = filteredStaffData.cast<Map<String, dynamic>>();
       });
 
-      print('[ConcernSlipDetail] Loaded ${_staffList.length} staff members');
+      print(
+        '[ConcernSlipDetail] Loaded ${filteredStaffData.length} available staff members (filtered from ${staffData.length} total)',
+      );
     } catch (e) {
       print('[ConcernSlipDetail] Error loading staff: $e');
     }
@@ -408,7 +450,7 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
         print(
           '[ConcernSlipDetail] Round-robin assigned staff: $selectedStaffName (ID: $selectedStaffId)',
         );
-        
+
         // Trigger validation after state update
         WidgetsBinding.instance.addPostFrameCallback((_) => _revalidate());
       } else {
@@ -422,7 +464,7 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
             selectedStaffId = _getStaffId(firstStaff);
             selectedStaffName = _getStaffDisplayName(firstStaff);
           });
-          
+
           // Trigger validation after state update
           WidgetsBinding.instance.addPostFrameCallback((_) => _revalidate());
         }
@@ -437,7 +479,7 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
           selectedStaffId = _getStaffId(firstStaff);
           selectedStaffName = _getStaffDisplayName(firstStaff);
         });
-        
+
         // Trigger validation after state update
         WidgetsBinding.instance.addPostFrameCallback((_) => _revalidate());
       }
@@ -1510,7 +1552,8 @@ class _ConcernSlipDetailDialogState extends State<ConcernSlipDetailDialog> {
                       // Must return one widget per item in the dropdown list
                       return _staffList.map<Widget>((m) {
                         // Show the selected staff with avatar and name
-                        if (selectedStaffId != null && selectedStaffId!.isNotEmpty) {
+                        if (selectedStaffId != null &&
+                            selectedStaffId!.isNotEmpty) {
                           if (_getStaffId(m) == selectedStaffId) {
                             return Padding(
                               padding: const EdgeInsets.only(left: 4),

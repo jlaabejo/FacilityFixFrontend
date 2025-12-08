@@ -757,12 +757,15 @@ class APIService {
       final profile = await getUserProfile();
       final userId = profile?['id'] ?? profile?['user_id'];
 
+      final categoryNorm = category.trim().toLowerCase();
+      final priorityNorm = (priority ?? '').trim().toLowerCase();
+
       final body = {
         'title': title,
         'description': description,
         'location': location,
-        'category': category,
-        'priority': _mapPriorityToBackend(priority),
+        'category': mapCategoryToBackend(categoryNorm),
+        'priority': _mapPriorityToBackend(priorityNorm),
         'schedule_availability': scheduleAvailability,
         if (unitId != null) 'unit_id': unitId,
         if (userId != null) 'user_id': userId,
@@ -772,6 +775,9 @@ class APIService {
       };
 
       print('[API] Submitting concern slip directly to Firebase...');
+      try {
+        print('[API] Concern slip request body: ${jsonEncode(body)}');
+      } catch (_) {}
 
       final response = await post(
         '/concern-slips/',
@@ -1146,15 +1152,19 @@ class APIService {
   /// Get staff scheduling overview for admin dashboard
   Future<Map<String, dynamic>> getStaffScheduleOverview({
     String? buildingId,
+    String? weekStart,
   }) async {
     try {
       await _refreshRoleLabelFromToken();
       final token = await _requireToken();
 
+      final params = <String, String>{};
+      if (buildingId != null) params['building_id'] = buildingId;
+      if (weekStart != null) params['week_start'] = weekStart;
       final query =
-          buildingId != null
-              ? '?building_id=${Uri.encodeComponent(buildingId)}'
-              : '';
+          params.isEmpty
+              ? ''
+              : '?${params.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}';
       final response = await get(
         '/staff-scheduling/overview$query',
         headers: _authHeaders(token),
@@ -1178,6 +1188,7 @@ class APIService {
   Future<List<Map<String, dynamic>>> getStaffListWithStatus({
     String? department,
     String? statusFilter,
+    String? weekStart,
   }) async {
     try {
       await _refreshRoleLabelFromToken();
@@ -1186,6 +1197,7 @@ class APIService {
       final params = <String, String>{};
       if (department != null) params['department'] = department;
       if (statusFilter != null) params['status_filter'] = statusFilter;
+      if (weekStart != null) params['week_start'] = weekStart;
 
       final queryString =
           params.isEmpty
@@ -1333,7 +1345,7 @@ class APIService {
       final response = await patch(
         '/staff-scheduling/day-off/bulk/approve',
         headers: _authHeaders(token),
-        body: jsonEncode(body), 
+        body: jsonEncode(body),
       );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -2803,7 +2815,7 @@ class APIService {
         'action': action,
         'type': type,
       };
-      
+
       if (currentStock != null) body['current_stock'] = currentStock;
       if (itemName != null) body['item_name'] = itemName;
       if (itemCode != null) body['item_code'] = itemCode;
@@ -4108,8 +4120,14 @@ class APIService {
   // ===== misc =====
 
   String _mapPriorityToBackend(String? uiPriority) {
-    if (uiPriority == null) return 'medium';
-    switch (uiPriority.toLowerCase().trim()) {
+    if (uiPriority == null) {
+      print(
+        '[API] _mapPriorityToBackend: uiPriority is null, defaulting to "medium"',
+      );
+      return 'medium';
+    }
+    final s = uiPriority.toLowerCase().trim();
+    switch (s) {
       case 'high':
         return 'high';
       case 'medium':
@@ -4119,6 +4137,9 @@ class APIService {
       case 'critical':
         return 'critical';
       default:
+        print(
+          '[API] _mapPriorityToBackend: unrecognized priority "$uiPriority", defaulting to "medium"',
+        );
         return 'medium';
     }
   }
@@ -4892,7 +4913,9 @@ class APIService {
   // ============================================
 
   /// Receive reserved inventory items (staff confirms receipt)
-  Future<Map<String, dynamic>> receiveInventoryReservation(String reservationId) async {
+  Future<Map<String, dynamic>> receiveInventoryReservation(
+    String reservationId,
+  ) async {
     // Use the new standardized method
     return await markReservationReceived(reservationId);
   }
@@ -4917,7 +4940,10 @@ class APIService {
     String notes,
   ) async {
     await _refreshRoleLabelFromToken();
-    _logReq('POST', '/inventory/reservations/$reservationId/request-replacement');
+    _logReq(
+      'POST',
+      '/inventory/reservations/$reservationId/request-replacement',
+    );
 
     try {
       final token = await _requireToken();
@@ -4946,7 +4972,10 @@ class APIService {
 
     try {
       final token = await _requireToken();
-      final resp = await get('/inventory/reservations', headers: _authHeaders(token));
+      final resp = await get(
+        '/inventory/reservations',
+        headers: _authHeaders(token),
+      );
       return json.decode(resp.body);
     } catch (e) {
       print('[API] Error fetching my inventory reservations: $e');
