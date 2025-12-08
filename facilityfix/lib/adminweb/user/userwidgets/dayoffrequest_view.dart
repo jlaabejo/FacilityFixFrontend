@@ -3,7 +3,8 @@ import 'package:facilityfix/services/api_services_mobile.dart';
 import 'package:flutter/material.dart';
 
 class DayOffRequestView extends StatefulWidget {
-  const DayOffRequestView({super.key});
+  final VoidCallback? onChange;
+  const DayOffRequestView({super.key, this.onChange});
 
   @override
   State<DayOffRequestView> createState() => _DayOffRequestViewState();
@@ -515,17 +516,7 @@ class _DayOffRequestViewState extends State<DayOffRequestView> {
         _handleRequestClick(request);
         break;
       case 'approve':
-        setState(() {
-          request['status'] = 'Approved';
-          request['adminNote'] =
-              null; // clear any prior admin note when approved
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Approved request ${request['id']}'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        _confirmApprove(request);
         break;
       case 'reject':
         _promptForAdminNote(context, request).then((note) {
@@ -559,6 +550,69 @@ class _DayOffRequestViewState extends State<DayOffRequestView> {
           ),
         );
         break;
+    }
+  }
+
+  Future<void> _confirmApprove(Map<String, dynamic> request) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: Text('Approve Request ${request['id']}'),
+            content: Text('Approve day-off request for ${request['name']}?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Approve'),
+              ),
+            ],
+          ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final apiService = APIService();
+      final response = await apiService.approveDayOffRequest(
+        request['requestId'].toString(),
+      );
+      // Update UI only when the backend call succeeds
+      if (response['request_id'] != null) {
+        setState(() {
+          request['status'] = 'Approved';
+          request['adminNote'] = null;
+        });
+        // Notify parent to refresh overview / staff availability on admin page
+        widget.onChange?.call();
+        // Attempt to reload list to reflect any schedule availability changes
+        await _loadDayOffRequests();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Approved request ${request['id']}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to approve request'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Approve failed: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

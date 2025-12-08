@@ -97,7 +97,8 @@ class _AvailabilityTabWidgetState extends State<AvailabilityTabWidget> {
 
 // Schedule Availability Card
 class ScheduleAvailabilityWidget extends StatefulWidget {
-  const ScheduleAvailabilityWidget({super.key});
+  final ValueNotifier<int>? reloadNotifier;
+  const ScheduleAvailabilityWidget({super.key, this.reloadNotifier});
 
   @override
   State<ScheduleAvailabilityWidget> createState() =>
@@ -118,6 +119,8 @@ class _ScheduleAvailabilityWidgetState
 
   bool _isLoading = false;
   final APIService _api = APIService(roleOverride: AppRole.staff);
+  Set<String> _pendingDays =
+      {}; // Set of day abbreviations with pending day offs
   String _weekStartDate = '';
   String _weekEndDate = '';
 
@@ -126,6 +129,14 @@ class _ScheduleAvailabilityWidgetState
     super.initState();
     _calculateWeekDates();
     _loadCurrentAvailability();
+    _loadPendingDayOffs();
+    widget.reloadNotifier?.addListener(_onReloadNotifier);
+  }
+
+  @override
+  void dispose() {
+    widget.reloadNotifier?.removeListener(_onReloadNotifier);
+    super.dispose();
   }
 
   void _calculateWeekDates() {
@@ -160,6 +171,39 @@ class _ScheduleAvailabilityWidgetState
     } catch (e) {
       print('[ScheduleAvailability] Error loading availability: $e');
     }
+  }
+
+  Future<void> _loadPendingDayOffs() async {
+    try {
+      final requests = await _api.getMyDayOffRequests(statusFilter: 'pending');
+      final pending = <String>{};
+      if (requests.isNotEmpty) {
+        for (final r in requests) {
+          final rd = r['request_date']?.toString();
+          if (rd == null || rd.isEmpty) continue;
+          try {
+            final d = DateTime.parse(rd);
+            final weekStart = DateTime.parse(_weekStartDate);
+            final weekEnd = DateTime.parse(_weekEndDate);
+            if (!(d.isBefore(weekStart) || d.isAfter(weekEnd))) {
+              // Map to Mon/Tue/Wed... abbreviations
+              final abbr = DateFormat('E').format(d).substring(0, 3);
+              pending.add(abbr);
+            }
+          } catch (e) {
+            // ignore parse errors
+          }
+        }
+      }
+      if (mounted) setState(() => _pendingDays = pending);
+    } catch (e) {
+      print('[ScheduleAvailability] Error loading pending day offs: $e');
+    }
+  }
+
+  void _onReloadNotifier() {
+    _loadCurrentAvailability();
+    _loadPendingDayOffs();
   }
 
   void _toggleDay(String day) {
@@ -448,11 +492,12 @@ class _ScheduleAvailabilityWidgetState
       final day = days[index];
       final fullDay = fullDays[index];
       final isAvailable = _dayAvailability[day]!;
+      final isPending = _pendingDays.contains(day);
 
       return Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: GestureDetector(
-          onTap: () => _toggleDay(day),
+          onTap: isPending ? null : () => _toggleDay(day),
           child: Container(
             width: cardWidth,
             height: 66.52,
@@ -526,6 +571,27 @@ class _ScheduleAvailabilityWidgetState
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
+                            if (isPending)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange[50],
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Colors.orange[300]!,
+                                  ),
+                                ),
+                                child: Text(
+                                  'Pending',
+                                  style: TextStyle(
+                                    color: Colors.orange[700],
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ),
                             Text(
                               isAvailable ? 'Available' : 'Unavailable',
                               style: const TextStyle(
@@ -582,7 +648,8 @@ class _ScheduleAvailabilityWidgetState
 
 // Day Off Requests Card
 class DayOffRequestsWidget extends StatefulWidget {
-  const DayOffRequestsWidget({Key? key}) : super(key: key);
+  final ValueNotifier<int>? reloadNotifier;
+  const DayOffRequestsWidget({Key? key, this.reloadNotifier}) : super(key: key);
 
   @override
   State<DayOffRequestsWidget> createState() => _DayOffRequestsWidgetState();
@@ -616,6 +683,7 @@ class _DayOffRequestsWidgetState extends State<DayOffRequestsWidget> {
 
   void _refreshRequests() {
     _loadDayOffRequests();
+    widget.reloadNotifier?.value++;
   }
 
   @override

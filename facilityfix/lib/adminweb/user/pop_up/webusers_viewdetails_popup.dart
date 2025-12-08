@@ -32,10 +32,10 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
   late TextEditingController emailController;
   late TextEditingController phoneController;
   late TextEditingController departmentController; // Single department only
-  
+
   // Selected department (single selection)
   String selectedDepartment = '';
-  
+
   // Available department options
   final List<String> availableDepartments = [
     'Carpentry',
@@ -68,7 +68,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
   void initState() {
     super.initState();
     final rawUser = widget.user['_raw'] ?? widget.user;
-    
+
     // Initialize controllers with proper fallback handling
     firstNameController = TextEditingController(
       text: rawUser['first_name'] ?? _extractFirstName(),
@@ -85,7 +85,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     departmentController = TextEditingController(
       text: rawUser['department'] ?? widget.user['department'] ?? '',
     );
-    
+
     // Initialize selected departments from user data with better fallback
     _initializeDepartments();
   }
@@ -110,34 +110,39 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
 
   void _initializeDepartments() {
     final rawUser = widget.user['_raw'] ?? widget.user;
-    
+
     // Get single department from various sources
-    String department = rawUser['department'] ?? 
-                       rawUser['staff_department'] ?? 
-                       widget.user['department'] ?? 
-                       widget.user['staff_department'] ?? '';
-    
+    String department =
+        rawUser['department'] ??
+        rawUser['staff_department'] ??
+        widget.user['department'] ??
+        widget.user['staff_department'] ??
+        '';
+
     // If no single department, try to get first from departments list
     if (department.isEmpty) {
-      final departments = rawUser['departments'] ?? 
-                         rawUser['staff_departments'] ?? 
-                         widget.user['departments'] ?? 
-                         widget.user['staff_departments'];
-      
+      final departments =
+          rawUser['departments'] ??
+          rawUser['staff_departments'] ??
+          widget.user['departments'] ??
+          widget.user['staff_departments'];
+
       if (departments is List && departments.isNotEmpty) {
         department = departments[0].toString();
       } else if (departments is String && departments.isNotEmpty) {
         department = departments;
       }
     }
-    
+
     // Validate that the department exists in our available options
     // If not, reset to empty string
     if (department.isNotEmpty && !availableDepartments.contains(department)) {
-      print('[UserProfileDialog] Department "$department" not found in available options, resetting to empty');
+      print(
+        '[UserProfileDialog] Department "$department" not found in available options, resetting to empty',
+      );
       department = '';
     }
-    
+
     selectedDepartment = department;
     departmentController.text = department;
   }
@@ -244,8 +249,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
             ),
           ),
           const Spacer(),
-          if (!isEditMode)
-          const SizedBox(width: 8),
+          if (!isEditMode) const SizedBox(width: 8),
           // Edit toggle button
           IconButton(
             onPressed: () => _toggleEditMode(),
@@ -403,7 +407,10 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
   Widget _buildPersonalDetailsSection() {
     final rawUser = widget.user['_raw'] ?? widget.user;
     // Determine role for this user so we can hide department for tenants
-    final String role = (rawUser['role'] ?? widget.user['role'] ?? 'tenant').toString().toLowerCase();
+    final String role =
+        (rawUser['role'] ?? widget.user['role'] ?? 'tenant')
+            .toString()
+            .toLowerCase();
 
     return Container(
       width: double.infinity,
@@ -483,12 +490,15 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
           const SizedBox(height: 20),
 
           // Building ID (if available)
-          if (rawUser['building_id'] != null || rawUser['building_unit'] != null)
+          if (rawUser['building_id'] != null ||
+              rawUser['building_unit'] != null)
             Column(
               children: [
                 _buildReadOnlyField(
-                  'Building/Unit', 
-                  rawUser['building_id'] ?? rawUser['building_unit'] ?? 'Not specified'
+                  'Building/Unit',
+                  rawUser['building_id'] ??
+                      rawUser['building_unit'] ??
+                      'Not specified',
                 ),
                 const SizedBox(height: 20),
               ],
@@ -499,8 +509,8 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
             Column(
               children: [
                 _buildReadOnlyField(
-                  'Created', 
-                  _formatDate(rawUser['created_at'])
+                  'Created',
+                  _formatDate(rawUser['created_at']),
                 ),
                 const SizedBox(height: 20),
               ],
@@ -511,8 +521,8 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
             Column(
               children: [
                 _buildReadOnlyField(
-                  'Last Updated', 
-                  _formatDate(rawUser['updated_at'])
+                  'Last Updated',
+                  _formatDate(rawUser['updated_at']),
                 ),
                 const SizedBox(height: 24),
               ],
@@ -527,7 +537,6 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
 
   String _formatDate(dynamic dateValue) {
     if (dateValue == null) return 'Unknown';
-    
     try {
       DateTime date;
       if (dateValue is String) {
@@ -537,8 +546,14 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
       } else {
         return 'Invalid date';
       }
-      
-      return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} at ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+
+      final local = date.toLocal();
+      final datePart =
+          '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
+      final hour12 = local.hour % 12 == 0 ? 12 : local.hour % 12;
+      final minute = local.minute.toString().padLeft(2, '0');
+      final ampm = local.hour >= 12 ? 'PM' : 'AM';
+      return '$datePart | ${hour12.toString().padLeft(2, '0')}:$minute $ampm';
     } catch (e) {
       return 'Invalid date';
     }
@@ -655,10 +670,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
                 borderSide: BorderSide(color: Colors.grey[300]!),
               ),
               focusedBorder: const OutlineInputBorder(
-                borderSide: BorderSide(
-                  color: Color(0xFF1976D2),
-                  width: 2,
-                ),
+                borderSide: BorderSide(color: Color(0xFF1976D2), width: 2),
               ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 12,
@@ -671,10 +683,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
                 child: Text('No department'),
               ),
               ...availableDepartments.map((dept) {
-                return DropdownMenuItem<String>(
-                  value: dept,
-                  child: Text(dept),
-                );
+                return DropdownMenuItem<String>(value: dept, child: Text(dept));
               }).toList(),
             ],
             onChanged: (value) {
@@ -690,7 +699,9 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Text(
-              selectedDepartment.isEmpty ? 'No department assigned' : selectedDepartment,
+              selectedDepartment.isEmpty
+                  ? 'No department assigned'
+                  : selectedDepartment,
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
@@ -862,33 +873,39 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
       lastNameController.text = rawUser['last_name'] ?? '';
       emailController.text = rawUser['email'] ?? widget.user['email'] ?? '';
       phoneController.text = rawUser['phone_number'] ?? '';
-      
+
       // Reset department to original value
-      String originalDepartment = rawUser['department'] ?? 
-                                 rawUser['staff_department'] ?? 
-                                 widget.user['department'] ?? 
-                                 widget.user['staff_department'] ?? '';
-      
+      String originalDepartment =
+          rawUser['department'] ??
+          rawUser['staff_department'] ??
+          widget.user['department'] ??
+          widget.user['staff_department'] ??
+          '';
+
       // If no single department, try to get first from departments list
       if (originalDepartment.isEmpty) {
-        final departments = rawUser['departments'] ?? 
-                           rawUser['staff_departments'] ?? 
-                           widget.user['departments'] ?? 
-                           widget.user['staff_departments'];
-        
+        final departments =
+            rawUser['departments'] ??
+            rawUser['staff_departments'] ??
+            widget.user['departments'] ??
+            widget.user['staff_departments'];
+
         if (departments is List && departments.isNotEmpty) {
           originalDepartment = departments[0].toString();
         } else if (departments is String && departments.isNotEmpty) {
           originalDepartment = departments;
         }
       }
-      
+
       // Validate that the department exists in our available options
-      if (originalDepartment.isNotEmpty && !availableDepartments.contains(originalDepartment)) {
-        print('[UserProfileDialog] Original department "$originalDepartment" not found in available options, resetting to empty');
+      if (originalDepartment.isNotEmpty &&
+          !availableDepartments.contains(originalDepartment)) {
+        print(
+          '[UserProfileDialog] Original department "$originalDepartment" not found in available options, resetting to empty',
+        );
         originalDepartment = '';
       }
-      
+
       selectedDepartment = originalDepartment;
       departmentController.text = originalDepartment;
 
@@ -923,7 +940,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
         'phone_number': phoneController.text.trim(),
         // Note: department is added below only for non-tenant roles
       };
-      
+
       // Add role-specific department fields for backward compatibility
       final role = widget.user['role']?.toString().toLowerCase() ?? 'tenant';
       // Only include department-related fields for non-tenant roles
@@ -934,11 +951,14 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
         if (role == 'staff') {
           updateData['staff_department'] = selectedDepartment;
           // Also set departments array for backward compatibility
-          updateData['staff_departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
-          updateData['departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
+          updateData['staff_departments'] =
+              selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
+          updateData['departments'] =
+              selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
         } else {
           // For other non-tenant roles (e.g., admin), set departments array
-          updateData['departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
+          updateData['departments'] =
+              selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
         }
       }
 
@@ -950,12 +970,14 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
       print('[UserProfileDialog] Update response: $response');
 
       // Update local user data to reflect changes immediately
-      final newName = '${firstNameController.text.trim()} ${lastNameController.text.trim()}';
-      
+      final newName =
+          '${firstNameController.text.trim()} ${lastNameController.text.trim()}';
+
       widget.user['name'] = newName;
       widget.user['email'] = emailController.text.trim();
       widget.user['department'] = selectedDepartment;
-      widget.user['departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
+      widget.user['departments'] =
+          selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
 
       if (widget.user['_raw'] != null) {
         widget.user['_raw']['first_name'] = firstNameController.text.trim();
@@ -963,11 +985,13 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
         widget.user['_raw']['email'] = emailController.text.trim();
         widget.user['_raw']['phone_number'] = phoneController.text.trim();
         widget.user['_raw']['department'] = selectedDepartment;
-        widget.user['_raw']['departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
-        
+        widget.user['_raw']['departments'] =
+            selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
+
         if (role == 'staff') {
           widget.user['_raw']['staff_department'] = selectedDepartment;
-          widget.user['_raw']['staff_departments'] = selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
+          widget.user['_raw']['staff_departments'] =
+              selectedDepartment.isNotEmpty ? [selectedDepartment] : [];
         }
       }
 

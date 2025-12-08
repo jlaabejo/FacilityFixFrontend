@@ -665,7 +665,13 @@ class _WebSchedulingViewDetailsContentState
         return date.toString();
       }
 
-      return '${dateTime.year}-${_twoDigits(dateTime.month)}-${_twoDigits(dateTime.day)} ${_twoDigits(dateTime.hour)}:${_twoDigits(dateTime.minute)}';
+      final local = dateTime.toLocal();
+      final datePart =
+          '${local.year}-${_twoDigits(local.month)}-${_twoDigits(local.day)}';
+      final hour12 = local.hour % 12 == 0 ? 12 : local.hour % 12;
+      final minute = _twoDigits(local.minute);
+      final ampm = local.hour >= 12 ? 'PM' : 'AM';
+      return '$datePart | ${hour12.toString().padLeft(2, '0')}:$minute $ampm';
     } catch (e) {
       return date.toString();
     }

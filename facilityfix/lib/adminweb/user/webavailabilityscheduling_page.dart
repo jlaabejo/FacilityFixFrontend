@@ -100,8 +100,16 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
   Future<void> _fetchOverviewAndStaff() async {
     setState(() => _isLoading = true);
     try {
-      final overview = await _api.getStaffScheduleOverview();
-      final staff = await _api.getStaffListWithStatus();
+      final weekStart = _computeWeekStartForSelectedWeek();
+      final overview = await _api.getStaffScheduleOverview(
+        weekStart: weekStart,
+      );
+      final String? department =
+          _selectedDepartment != 'All Departments' ? _selectedDepartment : null;
+      final staff = await _api.getStaffListWithStatus(
+        department: department,
+        weekStart: weekStart,
+      );
 
       setState(() {
         _statsData = {
@@ -183,7 +191,7 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
     print('[DEBUG] _handleLogout called');
     // Ensure we're not already navigating
     if (!mounted) return;
-    
+
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false, // Prevent accidental dismissal
@@ -193,7 +201,7 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
       },
     );
     print('[DEBUG] Dialog result: $result');
-    
+
     if (result == true && mounted) {
       // Perform logout
       print('[DEBUG] Logging out...');
@@ -202,7 +210,6 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
       print('[DEBUG] Logout cancelled or dialog dismissed');
     }
   }
-
 
   // ---- Handle Staff Row Click ----
   void _handleStaffClick(Map<String, dynamic> staff) async {
@@ -504,7 +511,7 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
 
   // ---- Build Status Badge ----
   Widget _buildStatusBadge(String status) {
-    final isAvailable = status == 'Available';
+    final isAvailable = status.toString().toLowerCase() == 'available';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -915,6 +922,8 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
                                         _selectedDepartment = newValue;
                                         _currentPage = 1; // Reset to first page
                                       });
+                                      // Refresh staff and overview for the selected department
+                                      _fetchOverviewAndStaff();
                                     }
                                   },
                                 ),
@@ -955,6 +964,8 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
                                       setState(() {
                                         _selectedWeek = newValue;
                                       });
+                                      // Update the view to reflect chosen week
+                                      _fetchOverviewAndStaff();
                                     }
                                   },
                                 ),
@@ -1168,7 +1179,9 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
                                       Expanded(
                                         flex: 2,
                                         child: Text(
-                                          staff['lastUpdated'],
+                                          _formatLastUpdated(
+                                            staff['lastUpdated'],
+                                          ),
                                           style: TextStyle(
                                             fontSize: 14,
                                             color: Colors.grey[600],
@@ -1259,12 +1272,40 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
               ],
 
               // ---- Day Off Request View (Placeholder) ----
-              if (_selectedView == 'Day Off Request') const DayOffRequestView(),
+              if (_selectedView == 'Day Off Request')
+                DayOffRequestView(onChange: _fetchOverviewAndStaff),
             ],
           ),
         ),
       ),
     );
+  }
+
+  String _formatLastUpdated(dynamic value) {
+    if (value == null) return '-';
+    try {
+      // If already a DateTime, use it; otherwise parse string.
+      DateTime dt;
+      if (value is DateTime) {
+        dt = value;
+      } else {
+        dt = DateTime.parse(value.toString());
+      }
+      final local = dt.toLocal();
+      final datePart =
+          '${local.year.toString().padLeft(4, '0')}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
+      final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+      final minute = local.minute.toString().padLeft(2, '0');
+      final ampm = local.hour >= 12 ? 'PM' : 'AM';
+      return '$datePart | ${hour.toString().padLeft(2, '0')}:$minute $ampm';
+    } catch (e) {
+      try {
+        // Fallback: show the original value as string
+        return value.toString();
+      } catch (e) {
+        return '-';
+      }
+    }
   }
 
   // ---- Build View Toggle Button ----
@@ -1291,5 +1332,35 @@ class _StaffSchedulingPageState extends State<StaffSchedulingPage> {
         ),
       ),
     );
+  }
+
+  String? _computeWeekStartForSelectedWeek() {
+    try {
+      DateTime today = DateTime.now();
+      // Get the Monday for the current week
+      final currentWeekStart = today.subtract(
+        Duration(days: today.weekday - 1),
+      );
+      DateTime weekStartDate = currentWeekStart;
+      switch (_selectedWeek) {
+        case 'Current Week':
+          weekStartDate = currentWeekStart;
+          break;
+        case 'Next Week':
+          weekStartDate = currentWeekStart.add(Duration(days: 7));
+          break;
+        case 'Last Week':
+          weekStartDate = currentWeekStart.subtract(Duration(days: 7));
+          break;
+        default:
+          weekStartDate = currentWeekStart;
+      }
+      final s =
+          '${weekStartDate.year.toString().padLeft(4, '0')}-${weekStartDate.month.toString().padLeft(2, '0')}-${weekStartDate.day.toString().padLeft(2, '0')}';
+      return s;
+    } catch (e) {
+      print('[ComputeWeekStart] Error: $e');
+      return null;
+    }
   }
 }

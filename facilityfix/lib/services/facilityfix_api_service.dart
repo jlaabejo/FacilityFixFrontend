@@ -58,7 +58,9 @@ class FacilityFixAPIService {
       }
       return map;
     }
-    throw FormatException('Expected JSON object but got ${decoded.runtimeType}');
+    throw FormatException(
+      'Expected JSON object but got ${decoded.runtimeType}',
+    );
   }
 
   void clearAuthToken() {

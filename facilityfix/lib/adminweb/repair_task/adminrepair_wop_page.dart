@@ -8,6 +8,8 @@ import '../widgets/pop_up_dialog.dart';
 import 'pop_up/wo_viewdetails_popup.dart';
 import 'pop_up/edit_popup.dart';
 import '../services/api_service_web.dart';
+import '../report_files/work_order_report.dart';
+import 'package:printing/printing.dart';
 
 class RepairWorkOrderPermitPage extends StatefulWidget {
   const RepairWorkOrderPermitPage({super.key});
@@ -47,6 +49,50 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     }
 
     return _filteredTasks.sublist(startIndex, endIndex);
+  }
+
+  Future<void> _exportToPdf() async {
+    if (_filteredTasks.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No work orders to export')));
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      // Prepare a simplified list expected by the report generator
+      final items =
+          _filteredTasks.map((t) {
+            return <String, dynamic>{
+              'id': t['serviceId'] ?? t['id'] ?? t['service_id'] ?? '',
+              'title': t['title'] ?? t['description'] ?? '',
+              'dateRequested': t['dateRequested'],
+              'buildingUnit':
+                  t['buildingUnit'] ?? t['building'] ?? t['unit'] ?? '',
+              'priority': t['priority'] ?? '',
+              'category': t['department'] ?? t['category'] ?? '',
+              'status': t['status'] ?? '',
+            };
+          }).toList();
+
+      final bytes = await WorkOrderReport.generate(
+        items,
+        generatedBy: 'Admin User',
+        generatedAt: DateTime.now(),
+      );
+
+      // Use printing package to share or print the PDF
+      await Printing.sharePdf(bytes: bytes, filename: 'work_order_summary.pdf');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error generating PDF: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   // Get total pages
@@ -190,7 +236,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     print('[DEBUG] _handleLogout called');
     // Ensure we're not already navigating
     if (!mounted) return;
-    
+
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false, // Prevent accidental dismissal
@@ -200,7 +246,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       },
     );
     print('[DEBUG] Dialog result: $result');
-    
+
     if (result == true && mounted) {
       // Perform logout
       print('[DEBUG] Logging out...');
@@ -209,7 +255,6 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       print('[DEBUG] Logout cancelled or dialog dismissed');
     }
   }
-
 
   @override
   void initState() {
@@ -470,8 +515,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     if (s == 'sent') return 'Sent to Client';
     if (s == 'sent to client') return 'Sent to Client';
     if (s == 'approved') return 'Approved';
-    if (s == 'inspected')
-      return 'Completed'; // Map "inspected" to "Completed" for consistency
+    if (s == 'inspected') return 'Completed';
     if (s == 'done') return 'Completed';
     // fallback
     return s.isNotEmpty ? '${s[0].toUpperCase()}${s.substring(1)}' : 'Pending';
@@ -1434,11 +1478,14 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
             ),
             child: PopupMenuButton<String>(
               onSelected: (value) {
-                // TODO: Implement export functionality
                 if (value == 'pdf') {
-                  // Export to PDF
+                  _exportToPdf();
                 } else if (value == 'word') {
-                  // Export to Word
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Word export not implemented'),
+                    ),
+                  );
                 }
               },
               itemBuilder:

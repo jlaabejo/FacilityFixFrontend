@@ -446,7 +446,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     print('[DEBUG] _handleLogout called');
     // Ensure we're not already navigating
     if (!mounted) return;
-    
+
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false, // Prevent accidental dismissal
@@ -456,7 +456,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       },
     );
     print('[DEBUG] Dialog result: $result');
-    
+
     if (result == true && mounted) {
       // Perform logout
       print('[DEBUG] Logging out...');
@@ -465,7 +465,6 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       print('[DEBUG] Logout cancelled or dialog dismissed');
     }
   }
-
 
   // Check if task can be assigned to staff
   bool _canAssignStaff(Map<String, dynamic> task) {
@@ -856,6 +855,35 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
             continue;
           }
 
+          String? scheduleDate;
+          final scheduleData =
+              task['schedule_availability'] ??
+              task['dateRequested'] ??
+              task['rawData']?['schedule_availability'];
+          if (scheduleData != null) {
+            try {
+              DateTime? parsed;
+              final scheduleStr = scheduleData.toString();
+
+              if (scheduleStr.contains(' - ')) {
+                final parts = scheduleStr.split(' - ');
+                parsed = DateTime.tryParse(parts[0].trim());
+              } else {
+                parsed = DateTime.tryParse(scheduleStr);
+              }
+
+              if (parsed != null) {
+                scheduleDate =
+                    "${parsed.year}-${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')}";
+                print(
+                  '[BulkAssign] Task ${task['id']} scheduled for: $scheduleDate',
+                );
+              }
+            } catch (e) {
+              print('[BulkAssign] Error parsing schedule date: $e');
+            }
+          }
+
           print(
             '[BulkAssign] Assigning task ${task['id']} to department: $department',
           );
@@ -865,6 +893,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
             taskId: task['id'].toString(),
             taskType: 'concern_slip',
             department: department,
+            schedule: scheduleDate,
             notes: 'Auto-assigned from bulk assignment',
           );
 

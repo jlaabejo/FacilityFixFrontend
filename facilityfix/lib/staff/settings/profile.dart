@@ -87,7 +87,10 @@ class _ProfilePageState extends State<ProfilePage> {
     super.initState();
     _loadSavedProfile();
     _loadUnreadNotifCount();
+    _scheduleReloadNotifier = ValueNotifier<int>(0);
   }
+
+  late final ValueNotifier<int> _scheduleReloadNotifier;
 
   Future<void> _loadUnreadNotifCount() async {
     try {
@@ -176,6 +179,7 @@ class _ProfilePageState extends State<ProfilePage> {
     birthDateController.dispose();
     staffDepartmentController.dispose();
     super.dispose();
+    _scheduleReloadNotifier.dispose();
   }
 
   void _onTabTapped(int index) {
@@ -447,7 +451,9 @@ class _ProfilePageState extends State<ProfilePage> {
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Column(
               children: [
-                const ScheduleAvailabilityWidget(),
+                ScheduleAvailabilityWidget(
+                  reloadNotifier: _scheduleReloadNotifier,
+                ),
                 const SizedBox(height: 16),
                 RealTimeStatusWidget(
                   onStatusChanged: () {
@@ -464,7 +470,7 @@ class _ProfilePageState extends State<ProfilePage> {
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Column(
               children: [
-                const DayOffRequestsWidget(),
+                DayOffRequestsWidget(reloadNotifier: _scheduleReloadNotifier),
                 const SizedBox(height: 16),
                 _buildDayOffRequestsList(),
               ],
