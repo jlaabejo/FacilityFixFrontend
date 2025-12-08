@@ -1,7 +1,6 @@
 import 'package:facilityfix/widgets/buttons.dart' as custom_buttons;
 import 'package:flutter/material.dart';
 
-
 class CustomPopup extends StatelessWidget {
   final String title;
   final String message;
@@ -83,42 +82,42 @@ class CustomPopup extends StatelessWidget {
                 // Primary button
                 primaryIcon != null
                     ? ElevatedButton.icon(
-                        icon: Icon(primaryIcon, color: Colors.white),
-                        label: Text(
-                          primaryText,
-                          style: const TextStyle(
-                            color: Color(0xFFFFFFFF),
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.1,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48),
-                          backgroundColor: const Color(0xFF005CE7),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(100),
-                          ),
-                        ),
-                        onPressed: onPrimaryPressed,
-                      )
-                    : ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48),
-                          backgroundColor: const Color(0xFF005CE7),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(100),
-                          ),
-                        ),
-                        onPressed: onPrimaryPressed,
-                        child: Text(
-                          primaryText,
-                          style: const TextStyle(
-                            color: Color(0xFFFFFFFF),
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.1,
-                          ),
+                      icon: Icon(primaryIcon, color: Colors.white),
+                      label: Text(
+                        primaryText,
+                        style: const TextStyle(
+                          color: Color(0xFFFFFFFF),
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.1,
                         ),
                       ),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        backgroundColor: const Color(0xFF005CE7),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                      ),
+                      onPressed: onPrimaryPressed,
+                    )
+                    : ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        backgroundColor: const Color(0xFF005CE7),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                      ),
+                      onPressed: onPrimaryPressed,
+                      child: Text(
+                        primaryText,
+                        style: const TextStyle(
+                          color: Color(0xFFFFFFFF),
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.1,
+                        ),
+                      ),
+                    ),
 
                 const SizedBox(height: 12),
 
@@ -126,52 +125,53 @@ class CustomPopup extends StatelessWidget {
                 if (secondaryText != null)
                   secondaryIcon != null
                       ? OutlinedButton.icon(
-                          icon: Icon(secondaryIcon, color: const Color(0xFF005CE7)),
-                          label: Text(
-                            secondaryText!,
-                            style: const TextStyle(
-                              color: Color(0xFF005CE7),
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.1,
-                            ),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                            side: const BorderSide(color: Color(0xFF005CE7)),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(100),
-                            ),
-                          ),
-                          onPressed: onSecondaryPressed,
-                        )
-                      : OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                            side: const BorderSide(color: Color(0xFF005CE7)),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(100),
-                            ),
-                          ),
-                          onPressed: onSecondaryPressed,
-                          child: Text(
-                            secondaryText!,
-                            style: const TextStyle(
-                              color: Color(0xFF005CE7),
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.1,
-                            ),
+                        icon: Icon(
+                          secondaryIcon,
+                          color: const Color(0xFF005CE7),
+                        ),
+                        label: Text(
+                          secondaryText!,
+                          style: const TextStyle(
+                            color: Color(0xFF005CE7),
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.1,
                           ),
                         ),
-
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          side: const BorderSide(color: Color(0xFF005CE7)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                        ),
+                        onPressed: onSecondaryPressed,
+                      )
+                      : OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          side: const BorderSide(color: Color(0xFF005CE7)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                        ),
+                        onPressed: onSecondaryPressed,
+                        child: Text(
+                          secondaryText!,
+                          style: const TextStyle(
+                            color: Color(0xFF005CE7),
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.1,
+                          ),
+                        ),
+                      ),
               ],
-            )
+            ),
           ],
         ),
       ),
     );
   }
 }
-
 
 /// ============================ Restock Bottom Sheet ============================
 
@@ -181,13 +181,17 @@ class RequestResult {
   final DateTime? dateNeeded;
   final String? notes;
   final String stock; // automated stock snapshot
+  final String inventoryId; // the inventory/requested item id
+  final DateTime requestedAt; // timestamp when the request was made
 
-  const RequestResult({
+  RequestResult({
     required this.quantity,
     required this.unit,
     this.dateNeeded,
     this.notes,
     required this.stock,
+    required this.inventoryId,
+    required this.requestedAt,
   });
 }
 
@@ -198,6 +202,7 @@ class RequestItem extends StatefulWidget {
   final String stock; // ⬅️ automated stock value (e.g. "24 pcs" or "24")
   final String maintenanceId;
   final String staffName;
+  final String? notes;
 
   const RequestItem({
     super.key,
@@ -207,6 +212,7 @@ class RequestItem extends StatefulWidget {
     required this.stock,
     required this.maintenanceId,
     required this.staffName,
+    this.notes,
   });
 
   @override
@@ -223,29 +229,32 @@ class _RequestItemState extends State<RequestItem> {
     final q = _qtyCtrl.text.trim();
     final asNum = double.tryParse(q);
     if (!q.isNotEmpty || asNum == null || asNum <= 0) return false;
-    
+
     // Parse available stock from the stock string
     final stockParts = widget.stock.split(' ');
     final availableStock = double.tryParse(stockParts.first) ?? 0.0;
-    
+
     // Ensure requested quantity doesn't exceed available stock
-    return asNum <= availableStock;
+    if (asNum > availableStock) return false;
+
+    return true;
   }
 
   String? get _quantityError {
     final q = _qtyCtrl.text.trim();
     if (q.isEmpty) return null;
-    
+
     final asNum = double.tryParse(q);
     if (asNum == null) return 'Please enter a valid number';
     if (asNum <= 0) return 'Quantity must be greater than 0';
-    
+
     // Parse available stock from the stock string
     final stockParts = widget.stock.split(' ');
     final availableStock = double.tryParse(stockParts.first) ?? 0.0;
-    
-    if (asNum > availableStock) return 'Cannot request more than available stock (${availableStock.toInt()} ${widget.unit})';
-    
+
+    if (asNum > availableStock)
+      return 'Cannot request more than available stock (${availableStock.toInt()} ${widget.unit})';
+
     return null;
   }
 
@@ -266,6 +275,7 @@ class _RequestItemState extends State<RequestItem> {
   void _refresh() => setState(() {});
 
   Future<void> _pickDateTime() async {
+    // Only pick a DATE (no time). This sets the dateNeeded as a DateTime with time 00:00.
     final now = DateTime.now();
     final base = _dateNeeded ?? now;
 
@@ -278,26 +288,16 @@ class _RequestItemState extends State<RequestItem> {
     );
     if (pickedDate == null) return;
 
-    final pickedTime = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(base),
-      builder: (ctx, child) => _ThemedPicker(child: child),
-    );
-
     setState(() {
-      _dateNeeded = DateTime(
-        pickedDate.year,
-        pickedDate.month,
-        pickedDate.day,
-        pickedTime?.hour ?? base.hour,
-        pickedTime?.minute ?? base.minute,
-      );
+      _dateNeeded = DateTime(pickedDate.year, pickedDate.month, pickedDate.day);
     });
   }
 
   void _clearDateTime() {
     setState(() => _dateNeeded = null);
   }
+
+  String _formatDateOnly(DateTime d) => formatDateTime(d).split(' ').first;
 
   @override
   Widget build(BuildContext context) {
@@ -354,26 +354,6 @@ class _RequestItemState extends State<RequestItem> {
                     ],
                   ),
                 ),
-
-                // // Display maintenance and staff info
-                // Padding(
-                //   padding: const EdgeInsets.symmetric(horizontal: 16),
-                //   child: Column(
-                //     children: [
-                //       Row(
-                //         children: [
-                //           Expanded(
-                //             child: _buildInfoTile("Maintenance ID", widget.maintenanceId),
-                //           ),
-                //           const SizedBox(width: 16),
-                //           Expanded(
-                //             child: _buildInfoTile("Requested By", widget.staffName),
-                //           ),
-                //         ],
-                //       ),
-                //     ],
-                //   ),
-                // ),
                 const SizedBox(height: 8),
 
                 // Scrollable content
@@ -383,7 +363,7 @@ class _RequestItemState extends State<RequestItem> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Date Needed (moved to top)
+                        // Date Needed (moved to top) — only a date picker
                         const Text(
                           'Date needed',
                           style: TextStyle(
@@ -395,16 +375,17 @@ class _RequestItemState extends State<RequestItem> {
                         ),
                         const SizedBox(height: 8),
                         _ResumePickerRow(
-                          valueText: _dateNeeded == null ? 'Not set' : formatDateTime(_dateNeeded!),
+                          valueText: _dateNeeded == null
+                              ? 'Not set'
+                              : _formatDateOnly(_dateNeeded!),
                           onPick: _pickDateTime,
                           onClear: _dateNeeded == null ? null : _clearDateTime,
                         ),
-
                         const SizedBox(height: 16),
 
-                        // Quantity + Unit pill
+                        // Quantity needed + Unit pill
                         const Text(
-                          'Quantity',
+                          'Quantity needed',
                           style: TextStyle(
                             fontSize: 12.5,
                             color: Color(0xFF6B7280),
@@ -419,19 +400,28 @@ class _RequestItemState extends State<RequestItem> {
                               child: TextField(
                                 controller: _qtyCtrl,
                                 keyboardType:
-                                    const TextInputType.numberWithOptions(decimal: true),
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
                                 decoration: InputDecoration(
                                   hintText: 'e.g., 50',
                                   errorText: _quantityError,
                                   isDense: true,
                                   filled: true,
                                   fillColor: const Color(0xFFF9FAFB),
-                                  contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                                  contentPadding: const EdgeInsets.fromLTRB(
+                                    12,
+                                    12,
+                                    12,
+                                    12,
+                                  ),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   enabledBorder: const OutlineInputBorder(
-                                    borderSide: BorderSide(color: Color(0xFFD1D5DB)), // default gray
+                                    borderSide: BorderSide(
+                                      color: Color(0xFFD1D5DB),
+                                    ), // default gray
                                   ),
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
@@ -445,11 +435,16 @@ class _RequestItemState extends State<RequestItem> {
                             ),
                             const SizedBox(width: 8),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFEEF4FF),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFD1D5DB)),
+                                border: Border.all(
+                                  color: const Color(0xFFD1D5DB),
+                                ),
                               ),
                               child: Text(
                                 widget.unit, // auto unit from details
@@ -477,7 +472,10 @@ class _RequestItemState extends State<RequestItem> {
                         ),
                         const SizedBox(height: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFCFCFD),
                             borderRadius: BorderRadius.circular(12),
@@ -485,7 +483,11 @@ class _RequestItemState extends State<RequestItem> {
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.inventory_2_outlined, size: 18, color: Color(0xFF475467)),
+                              const Icon(
+                                Icons.inventory_2_outlined,
+                                size: 18,
+                                color: Color(0xFF475467),
+                              ),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
@@ -503,9 +505,9 @@ class _RequestItemState extends State<RequestItem> {
 
                         const SizedBox(height: 16),
 
-                        // Additional notes
+                        // Notes (optional)
                         const Text(
-                          'Additional notes (optional)',
+                          'Notes (optional)',
                           style: TextStyle(
                             fontSize: 12.5,
                             color: Color(0xFF6B7280),
@@ -515,6 +517,7 @@ class _RequestItemState extends State<RequestItem> {
                         ),
                         const SizedBox(height: 8),
                         _NoteField(controller: _notesCtrl),
+                        const SizedBox(height: 8),
                       ],
                     ),
                   ),
@@ -572,8 +575,13 @@ class _RequestItemState extends State<RequestItem> {
                                       quantity: _qtyCtrl.text.trim(),
                                       unit: widget.unit, // auto unit
                                       dateNeeded: _dateNeeded,
-                                      notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+                                      notes:
+                                          _notesCtrl.text.trim().isEmpty
+                                              ? null
+                                              : _notesCtrl.text.trim(),
                                       stock: widget.stock,
+                                      inventoryId: widget.itemId,
+                                      requestedAt: DateTime.now(),
                                     ),
                                   );
                                 },
@@ -626,6 +634,8 @@ class ReturnResult {
   final DateTime? dateReturned;
   final String? notes;
   final String stock; // automated stock snapshot
+  final String reason; // return reason (Good/Working or Defective/Broken)
+  final bool needsReplacement; // does user want a replacement?
 
   const ReturnResult({
     required this.quantity,
@@ -633,6 +643,8 @@ class ReturnResult {
     this.dateReturned,
     this.notes,
     required this.stock,
+    required this.reason,
+    this.needsReplacement = false,
   });
 }
 
@@ -643,6 +655,7 @@ class ReturnItem extends StatefulWidget {
   final String stock; // ⬅️ automated stock value (e.g. "24 pcs" or "24")
   final String maintenanceId;
   final String staffName;
+  final String? requestedQuantity; // optional field (prefill / display)
 
   const ReturnItem({
     super.key,
@@ -652,6 +665,7 @@ class ReturnItem extends StatefulWidget {
     required this.stock,
     required this.maintenanceId,
     required this.staffName,
+    this.requestedQuantity, // optional
   });
 
   @override
@@ -663,6 +677,8 @@ class _ReturnItemState extends State<ReturnItem> {
   final TextEditingController _notesCtrl = TextEditingController();
 
   DateTime? _dateReturned;
+  String _selectedReason = 'Good / Working';
+  bool _needsReplacement = false;
 
   bool get _isValid {
     final q = _qtyCtrl.text.trim();
@@ -673,17 +689,27 @@ class _ReturnItemState extends State<ReturnItem> {
   String? get _quantityError {
     final q = _qtyCtrl.text.trim();
     if (q.isEmpty) return null;
-    
+
     final asNum = double.tryParse(q);
     if (asNum == null) return 'Please enter a valid number';
     if (asNum <= 0) return 'Quantity must be greater than 0';
-    
+
     return null;
+  }
+
+  int get _availableStock {
+    final stockParts = widget.stock.split(' ');
+    return int.tryParse(stockParts.first) ?? 0;
   }
 
   @override
   void initState() {
     super.initState();
+    // Prefill the quantity if requestedQuantity is provided
+    if (widget.requestedQuantity != null &&
+        widget.requestedQuantity!.isNotEmpty) {
+      _qtyCtrl.text = widget.requestedQuantity!;
+    }
     _qtyCtrl.addListener(_refresh);
   }
 
@@ -787,6 +813,49 @@ class _ReturnItemState extends State<ReturnItem> {
                   ),
                 ),
 
+                // Add a compact info row: maintenance id, requested quantity (if available), and staff name
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildInfoTile(
+                              "Maintenance ID",
+                              widget.maintenanceId,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildInfoTile(
+                              "Requested",
+                              widget.requestedQuantity != null &&
+                                      widget.requestedQuantity!.isNotEmpty
+                                  ? '${widget.requestedQuantity} ${widget.unit}'
+                                  : '—',
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildInfoTile(
+                              "Returned By",
+                              widget.staffName,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
                 // Scrollable content
                 Flexible(
                   child: SingleChildScrollView(
@@ -806,10 +875,158 @@ class _ReturnItemState extends State<ReturnItem> {
                         ),
                         const SizedBox(height: 8),
                         _ResumePickerRow(
-                          valueText: _dateReturned == null ? 'Not set' : formatDateTime(_dateReturned!),
+                          valueText:
+                              _dateReturned == null
+                                  ? 'Not set'
+                                  : formatDateTime(_dateReturned!),
                           onPick: _pickDateTime,
-                          onClear: _dateReturned == null ? null : _clearDateTime,
+                          onClear:
+                              _dateReturned == null ? null : _clearDateTime,
                         ),
+
+                        const SizedBox(height: 16),
+
+                        // Reason dropdown (Good / Working or Defective / Broken)
+                        const Text(
+                          'Reason',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFF6B7280),
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<String>(
+                          value: _selectedReason,
+                          items:
+                              ['Good / Working', 'Defective / Broken'].map((r) {
+                                return DropdownMenuItem<String>(
+                                  value: r,
+                                  child: Text(r),
+                                );
+                              }).toList(),
+                          onChanged: (value) {
+                            if (value != null)
+                              setState(() => _selectedReason = value);
+                          },
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: const Color(0xFFF9FAFB),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            enabledBorder: const OutlineInputBorder(
+                              borderSide: BorderSide(color: Color(0xFFD1D5DB)),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF005CE7),
+                                width: 1.6,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        // ===== Conditional replacement section for damaged items =====
+                        if (_selectedReason.contains('Defective') ||
+                            _selectedReason.contains('Broken')) ...[
+                          const SizedBox(height: 16),
+
+                          // Warning message
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFFF59E0B),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.warning_rounded,
+                                  color: Color(0xFFD97706),
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'This item will be marked as damaged/needs repair',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF92400E),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          // Replacement checkbox
+                          CheckboxListTile(
+                            value: _needsReplacement,
+                            onChanged: (bool? value) {
+                              setState(
+                                () => _needsReplacement = value ?? false,
+                              );
+                            },
+                            title: const Text(
+                              'I need a replacement unit to continue my work',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF111827),
+                              ),
+                            ),
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            activeColor: const Color(0xFF005CE7),
+                          ),
+
+                          // Available stock indicator
+                          if (_needsReplacement) ...[
+                            const SizedBox(height: 4),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _availableStock > 0
+                                        ? Icons.check_circle_outline
+                                        : Icons.error_outline,
+                                    size: 16,
+                                    color:
+                                        _availableStock > 0
+                                            ? const Color(0xFF10B981)
+                                            : const Color(0xFFEF4444),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      _availableStock > 0
+                                          ? 'Available replacements: $_availableStock units'
+                                          : '⚠️ No replacements in stock - request will be pending',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color:
+                                            _availableStock > 0
+                                                ? const Color(0xFF10B981)
+                                                : const Color(0xFFDC2626),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
 
                         const SizedBox(height: 16),
 
@@ -830,19 +1047,28 @@ class _ReturnItemState extends State<ReturnItem> {
                               child: TextField(
                                 controller: _qtyCtrl,
                                 keyboardType:
-                                    const TextInputType.numberWithOptions(decimal: true),
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
                                 decoration: InputDecoration(
                                   hintText: 'e.g., 50',
                                   errorText: _quantityError,
                                   isDense: true,
                                   filled: true,
                                   fillColor: const Color(0xFFF9FAFB),
-                                  contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                                  contentPadding: const EdgeInsets.fromLTRB(
+                                    12,
+                                    12,
+                                    12,
+                                    12,
+                                  ),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   enabledBorder: const OutlineInputBorder(
-                                    borderSide: BorderSide(color: Color(0xFFD1D5DB)), // default gray
+                                    borderSide: BorderSide(
+                                      color: Color(0xFFD1D5DB),
+                                    ), // default gray
                                   ),
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
@@ -856,11 +1082,16 @@ class _ReturnItemState extends State<ReturnItem> {
                             ),
                             const SizedBox(width: 8),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFEEF4FF),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFD1D5DB)),
+                                border: Border.all(
+                                  color: const Color(0xFFD1D5DB),
+                                ),
                               ),
                               child: Text(
                                 widget.unit, // auto unit from details
@@ -888,7 +1119,10 @@ class _ReturnItemState extends State<ReturnItem> {
                         ),
                         const SizedBox(height: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFCFCFD),
                             borderRadius: BorderRadius.circular(12),
@@ -896,7 +1130,11 @@ class _ReturnItemState extends State<ReturnItem> {
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.inventory_2_outlined, size: 18, color: Color(0xFF475467)),
+                              const Icon(
+                                Icons.inventory_2_outlined,
+                                size: 18,
+                                color: Color(0xFF475467),
+                              ),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
@@ -911,21 +1149,6 @@ class _ReturnItemState extends State<ReturnItem> {
                             ],
                           ),
                         ),
-
-                        const SizedBox(height: 16),
-
-                        // Additional notes
-                        const Text(
-                          'Additional notes (optional)',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            color: Color(0xFF6B7280),
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: .2,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        _NoteField(controller: _notesCtrl),
                       ],
                     ),
                   ),
@@ -983,8 +1206,14 @@ class _ReturnItemState extends State<ReturnItem> {
                                       quantity: _qtyCtrl.text.trim(),
                                       unit: widget.unit, // auto unit
                                       dateReturned: _dateReturned,
-                                      notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+                                      notes:
+                                          _notesCtrl.text.trim().isEmpty
+                                              ? null
+                                              : _notesCtrl.text.trim(),
                                       stock: widget.stock,
+                                      reason: _selectedReason, // include reason
+                                      needsReplacement:
+                                          _needsReplacement, // include replacement flag
                                     ),
                                   );
                                 },
@@ -1077,40 +1306,64 @@ class _DayOffRequestState extends State<DayOffRequest> {
     final now = DateTime.now();
     // Use a centered dialog-based picker (popup) instead of the platform full-screen picker.
     // Restrict the size so it behaves like a monthly popup (shows one month) while still letting the user select a range.
-    final DateTimeRange? initialRange = _selectedDates.isEmpty
-      ? null
-      : DateTimeRange(start: _selectedDates.first, end: _selectedDates.last);
+    final DateTimeRange? initialRange =
+        _selectedDates.isEmpty
+            ? null
+            : DateTimeRange(
+              start: _selectedDates.first,
+              end: _selectedDates.last,
+            );
 
     final pickedRange = await showDialog<DateTimeRange?>(
       context: context,
-      builder: (ctx) => Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420, maxHeight: 480, minWidth: 300, minHeight: 320),
-          child: _ThemedPicker(
-            child: DateRangePickerDialog(
-              initialDateRange: initialRange,
-              firstDate: now,
-              lastDate: DateTime(now.year + 1),
+      builder:
+          (ctx) => Dialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 24.0,
+              vertical: 24.0,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: 420,
+                maxHeight: 480,
+                minWidth: 300,
+                minHeight: 320,
+              ),
+              child: _ThemedPicker(
+                child: DateRangePickerDialog(
+                  initialDateRange: initialRange,
+                  firstDate: now,
+                  lastDate: DateTime(now.year + 1),
+                ),
+              ),
             ),
           ),
-        ),
-      ),
     );
     if (pickedRange != null) {
       // Enforce monthly range: start and end must be in the same month and year
-      if (pickedRange.start.month == pickedRange.end.month && pickedRange.start.year == pickedRange.end.year) {
+      if (pickedRange.start.month == pickedRange.end.month &&
+          pickedRange.start.year == pickedRange.end.year) {
         final start = pickedRange.start;
         final end = pickedRange.end;
         final dates = <DateTime>[];
-        for (var d = start; d.isBefore(end.add(const Duration(days: 1))); d = d.add(const Duration(days: 1))) {
+        for (
+          var d = start;
+          d.isBefore(end.add(const Duration(days: 1)));
+          d = d.add(const Duration(days: 1))
+        ) {
           dates.add(d);
         }
-        setState(() => _selectedDates.addAll(dates.where((d) => !_selectedDates.contains(d))));
+        setState(
+          () => _selectedDates.addAll(
+            dates.where((d) => !_selectedDates.contains(d)),
+          ),
+        );
       } else {
         // Show a brief message if range spans more than one month
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please select a date range within the same month.')),
+          const SnackBar(
+            content: Text('Please select a date range within the same month.'),
+          ),
         );
       }
     }
@@ -1133,7 +1386,20 @@ class _DayOffRequestState extends State<DayOffRequest> {
   }
 
   String _getMonthAbbrev(int month) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return months[month - 1];
   }
 
@@ -1181,30 +1447,34 @@ class _DayOffRequestState extends State<DayOffRequest> {
 
                 // Scrollable content
                 Flexible(
-                    child: SingleChildScrollView(
+                  child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                      // Select dates
-                      const Text(
-                        'Select dates',
-                        style: TextStyle(
-                        fontSize: 12.5,
-                        color: Color(0xFF6B7280),
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: .2,
+                        // Select dates
+                        const Text(
+                          'Select dates',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFF6B7280),
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .2,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      _ResumePickerRow(
-                        valueText: _formatSelectedDates(),
-                        onPick: _pickDateRange,
-                        onClear: _selectedDates.isEmpty ? null : () => setState(() => _selectedDates.clear()),
-                      ),
-                      // Previously we displayed a chip per selected date.
-                      // We prefer a compact date range display, so we no longer show individual date chips.
+                        const SizedBox(height: 8),
+                        _ResumePickerRow(
+                          valueText: _formatSelectedDates(),
+                          onPick: _pickDateRange,
+                          onClear:
+                              _selectedDates.isEmpty
+                                  ? null
+                                  : () =>
+                                      setState(() => _selectedDates.clear()),
+                        ),
 
+                        // Previously we displayed a chip per selected date.
+                        // We prefer a compact date range display, so we no longer show individual date chips.
                         const SizedBox(height: 16),
 
                         // Reason
@@ -1220,12 +1490,13 @@ class _DayOffRequestState extends State<DayOffRequest> {
                         const SizedBox(height: 8),
                         DropdownButtonFormField<String>(
                           value: _selectedReason,
-                          items: _reasons.map((reason) {
-                            return DropdownMenuItem<String>(
-                              value: reason,
-                              child: Text(reason),
-                            );
-                          }).toList(),
+                          items:
+                              _reasons.map((reason) {
+                                return DropdownMenuItem<String>(
+                                  value: reason,
+                                  child: Text(reason),
+                                );
+                              }).toList(),
                           onChanged: (value) {
                             if (value != null) {
                               setState(() => _selectedReason = value);
@@ -1264,9 +1535,14 @@ class _DayOffRequestState extends State<DayOffRequest> {
                               fillColor: const Color(0xFFF9FAFB),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFE5E7EB),
+                                ),
                               ),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 12,
+                              ),
                             ),
                           ),
                         ],
@@ -1337,13 +1613,20 @@ class _DayOffRequestState extends State<DayOffRequest> {
                                 onPressed: () {
                                   Navigator.pop(
                                     context,
-                                        DayOffResult(
-                                          selectedDates: _selectedDates,
-                                          reason: _selectedReason == 'Other' && _otherReasonCtrl.text.trim().isNotEmpty
+                                    DayOffResult(
+                                      selectedDates: _selectedDates,
+                                      reason:
+                                          _selectedReason == 'Other' &&
+                                                  _otherReasonCtrl.text
+                                                      .trim()
+                                                      .isNotEmpty
                                               ? _otherReasonCtrl.text.trim()
                                               : _selectedReason,
-                                          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-                                        ),
+                                      notes:
+                                          _notesCtrl.text.trim().isEmpty
+                                              ? null
+                                              : _notesCtrl.text.trim(),
+                                    ),
                                   );
                                 },
                               ),
@@ -1362,7 +1645,6 @@ class _DayOffRequestState extends State<DayOffRequest> {
     );
   }
 }
-
 
 // BOTTOM SHEET: PUT REQUEST ON HOLD (refined UI)
 class HoldBottomSheet extends StatefulWidget {
@@ -1441,10 +1723,12 @@ class _HoldBottomSheetState extends State<HoldBottomSheet> {
 
   void _confirm() {
     // Use custom reason if "Other" is selected and field is not empty
-    final finalReason = _selectedReason == 'Other' && _otherReasonController.text.trim().isNotEmpty
-        ? _otherReasonController.text.trim()
-        : _selectedReason;
-    
+    final finalReason =
+        _selectedReason == 'Other' &&
+                _otherReasonController.text.trim().isNotEmpty
+            ? _otherReasonController.text.trim()
+            : _selectedReason;
+
     Navigator.pop(
       context,
       HoldResult(
@@ -1497,7 +1781,7 @@ class _HoldBottomSheetState extends State<HoldBottomSheet> {
                         selected: _selectedReason,
                         onChanged: (r) => setState(() => _selectedReason = r),
                       ),
-                      
+
                       // Show input field when "Other" is selected
                       if (_selectedReason == 'Other') ...[
                         const SizedBox(height: 12),
@@ -1517,15 +1801,22 @@ class _HoldBottomSheetState extends State<HoldBottomSheet> {
                               vertical: 12,
                             ),
                             border: OutlineInputBorder(
-                              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFE5E7EB),
+                              ),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFE5E7EB),
+                              ),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderSide: const BorderSide(color: Color(0xFF005CE7), width: 1.4),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF005CE7),
+                                width: 1.4,
+                              ),
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
@@ -1537,9 +1828,10 @@ class _HoldBottomSheetState extends State<HoldBottomSheet> {
                       const _SectionLabel('Resume date & time'),
                       const SizedBox(height: 8),
                       _ResumePickerRow(
-                        valueText: _resumeAt == null
-                            ? 'Set date & time'
-                            : formatDateTime(_resumeAt!),
+                        valueText:
+                            _resumeAt == null
+                                ? 'Set date & time'
+                                : formatDateTime(_resumeAt!),
                         onPick: _pickDateTime,
                         onClear: _resumeAt == null ? null : _clearDateTime,
                       ),
@@ -1617,7 +1909,7 @@ class _ThemedPicker extends StatelessWidget {
     // Custom colors - NOT using default colors
     const kPrimary = Color(0xFF3B82F6); // Blue
     const kSurface = Color(0xFFF3F4F6); // Light gray
-    const kText    = Color(0xFF1F2937); // Dark gray
+    const kText = Color(0xFF1F2937); // Dark gray
 
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -1707,31 +1999,35 @@ class _ReasonChips extends StatelessWidget {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: reasons.map((r) {
-        final isSelected = r == selected;
-        return ChoiceChip(
-          label: Text(r),
-          selected: isSelected,
-          onSelected: (_) => onChanged(r),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: BorderSide(
-              color: isSelected ? const Color(0xFF3B82F6) : const Color(0xFFD1D5DB),
-              width: isSelected ? 1.5 : 1,
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          showCheckmark: false,
-          selectedColor: const Color(0xFF3B82F6),
-          backgroundColor: Colors.white,
-          labelStyle: TextStyle(
-            color: isSelected ? Colors.white : const Color(0xFF374151),
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        );
-      }).toList(),
+      children:
+          reasons.map((r) {
+            final isSelected = r == selected;
+            return ChoiceChip(
+              label: Text(r),
+              selected: isSelected,
+              onSelected: (_) => onChanged(r),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(
+                  color:
+                      isSelected
+                          ? const Color(0xFF3B82F6)
+                          : const Color(0xFFD1D5DB),
+                  width: isSelected ? 1.5 : 1,
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              showCheckmark: false,
+              selectedColor: const Color(0xFF3B82F6),
+              backgroundColor: Colors.white,
+              labelStyle: TextStyle(
+                color: isSelected ? Colors.white : const Color(0xFF374151),
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            );
+          }).toList(),
     );
   }
 }
@@ -1792,7 +2088,10 @@ class _ResumePickerRow extends StatelessWidget {
               onPressed: onClear,
               style: TextButton.styleFrom(
                 foregroundColor: const Color(0xFF9CA3AF),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 minimumSize: const Size(0, 0),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
@@ -1822,7 +2121,10 @@ class _NoteField extends StatelessWidget {
         counterText: '',
         filled: true,
         fillColor: const Color(0xFFF9FAFB),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
           borderRadius: BorderRadius.circular(12),
@@ -1832,7 +2134,10 @@ class _NoteField extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
         focusedBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.4),
+          borderSide: BorderSide(
+            color: Theme.of(context).colorScheme.primary,
+            width: 1.4,
+          ),
           borderRadius: BorderRadius.circular(12),
         ),
       ),
@@ -1851,7 +2156,6 @@ Future<HoldResult?> showHoldSheet(BuildContext context, {HoldResult? initial}) {
     builder: (ctx) => HoldBottomSheet(initial: initial),
   );
 }
-
 
 /// ====================== MODELS / HELPERS ON HOLD ======================= ///
 
@@ -1899,7 +2203,6 @@ class OnHoldBanner extends StatelessWidget {
 
 /// BOTTOM SHEET: PUT REQUEST ON HOLD (refined UI)
 
-
 /// ================== YOUR EXISTING TYPES ==================
 /// Keep using your own HoldResult & formatDateTime implementations.
 class HoldResult {
@@ -1917,7 +2220,6 @@ String formatDateTime(DateTime dt) {
   return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 }
-
 
 // =========================== Assign Staff Bottom Sheet =======================
 
@@ -2032,382 +2334,389 @@ class _AssignStaffBottomSheetState extends State<AssignStaffBottomSheet> {
       _selectedStaff = list.isNotEmpty ? list.first : null;
     }
 
-  return Container(
-    decoration: const BoxDecoration(
-      color: Colors.white, 
-      borderRadius: BorderRadius.vertical(
-        top: Radius.circular(20), 
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-    ),
-    child: SafeArea(
-      top: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 8),
-          // Grabber
-          Container(
-            width: 44,
-            height: 5,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE5E7EB),
-              borderRadius: BorderRadius.circular(999),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            // Grabber
+            Container(
+              width: 44,
+              height: 5,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE5E7EB),
+                borderRadius: BorderRadius.circular(999),
+              ),
             ),
-          ),
-          const SizedBox(height: 14),
+            const SizedBox(height: 14),
 
-          // Title
-          Text(
-            'Assign to Staff',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.1,
+            // Title
+            Text(
+              'Assign to Staff',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.1,
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
+            const SizedBox(height: 10),
 
-          // Content
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              children: [
-                // Search + filter row
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchCtrl,
-                        decoration: InputDecoration(
-                          hintText: 'Search staff by name or role…',
-                          prefixIcon: const Icon(Icons.search),
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 12,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+            // Content
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  // Search + filter row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchCtrl,
+                          decoration: InputDecoration(
+                            hintText: 'Search staff by name or role…',
+                            prefixIcon: const Icon(Icons.search),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Switch(
-                            value: _onlyAvailable,
-                            onChanged:
-                                (v) => setState(() => _onlyAvailable = v),
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          const SizedBox(width: 6),
-                          const Text(
-                            'Only available',
-                            style: TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-
-                // Staff card list
-                if (list.isEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                      color: const Color(0xFFFCFCFD),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      'No staff match your filters.\nTry a different search',
-                      style: TextStyle(color: Color(0xFF6B7280)),
-                    ),
-                  )
-                else
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 360),
-                    child: ListView.separated(
-                      physics: const BouncingScrollPhysics(),
-                      shrinkWrap: true,
-                      itemCount: list.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemBuilder: (_, i) {
-                        final name = list[i];
-                        final busy = _busyByStaff[name];
-                        final available = busy == null;
-                        final selected = _selectedStaff == name;
-
-                        return AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          curve: Curves.easeOut,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color:
-                                  selected
-                                      ? const Color(0xFF2563EB)
-                                      : const Color(0xFFE5E7EB),
-                              width: selected ? 2 : 1,
+                      const SizedBox(width: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Switch(
+                              value: _onlyAvailable,
+                              onChanged:
+                                  (v) => setState(() => _onlyAvailable = v),
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
                             ),
-                            boxShadow: [
-                              if (selected)
-                                BoxShadow(
-                                  color: const Color(
-                                    0xFF2563EB,
-                                  ).withOpacity(0.08),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 6),
-                                ),
-                              if (!selected)
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.04),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 4),
-                                ),
-                            ],
-                          ),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap:
-                                available
-                                    ? () =>
-                                        setState(() => _selectedStaff = name)
-                                    : null,
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Row(
-                                children: [
-                                  // Avatar with initials
-                                  CircleAvatar(
-                                    radius: 18,
-                                    backgroundColor:
-                                        available
-                                            ? const Color(0xFFEFF6FF)
-                                            : const Color(0xFFFFF7ED),
-                                    child: Text(
-                                      _initialsOf(name),
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        color:
-                                            available
-                                                ? const Color(0xFF1D4ED8)
-                                                : const Color(0xFF9A3412),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Only available',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Staff card list
+                  if (list.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                        color: const Color(0xFFFCFCFD),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        'No staff match your filters.\nTry a different search',
+                        style: TextStyle(color: Color(0xFF6B7280)),
+                      ),
+                    )
+                  else
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 360),
+                      child: ListView.separated(
+                        physics: const BouncingScrollPhysics(),
+                        shrinkWrap: true,
+                        itemCount: list.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (_, i) {
+                          final name = list[i];
+                          final busy = _busyByStaff[name];
+                          final available = busy == null;
+                          final selected = _selectedStaff == name;
+
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            curve: Curves.easeOut,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color:
+                                    selected
+                                        ? const Color(0xFF2563EB)
+                                        : const Color(0xFFE5E7EB),
+                                width: selected ? 2 : 1,
+                              ),
+                              boxShadow: [
+                                if (selected)
+                                  BoxShadow(
+                                    color: const Color(
+                                      0xFF2563EB,
+                                    ).withOpacity(0.08),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                if (!selected)
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.04),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                              ],
+                            ),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(16),
+                              onTap:
+                                  available
+                                      ? () =>
+                                          setState(() => _selectedStaff = name)
+                                      : null,
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Row(
+                                  children: [
+                                    // Avatar with initials
+                                    CircleAvatar(
+                                      radius: 18,
+                                      backgroundColor:
+                                          available
+                                              ? const Color(0xFFEFF6FF)
+                                              : const Color(0xFFFFF7ED),
+                                      child: Text(
+                                        _initialsOf(name),
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          color:
+                                              available
+                                                  ? const Color(0xFF1D4ED8)
+                                                  : const Color(0xFF9A3412),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
+                                    const SizedBox(width: 12),
 
-                                  // Name + badge
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          name,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 14.5,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: _availabilityBg(available),
-                                            borderRadius: BorderRadius.circular(
-                                              999,
-                                            ),
-                                            border: Border.all(
-                                              color: _availabilityColor(
-                                                available,
-                                              ).withOpacity(0.28),
+                                    // Name + badge
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 14.5,
                                             ),
                                           ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                _availabilityIcon(available),
-                                                size: 16,
+                                          const SizedBox(height: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: _availabilityBg(available),
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                              border: Border.all(
                                                 color: _availabilityColor(
                                                   available,
-                                                ),
+                                                ).withOpacity(0.28),
                                               ),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                available
-                                                    ? 'Available'
-                                                    : 'Busy — ${busy.reason}',
-                                                style: TextStyle(
-                                                  fontSize: 12.5,
-                                                  fontWeight: FontWeight.w700,
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  _availabilityIcon(available),
+                                                  size: 16,
                                                   color: _availabilityColor(
                                                     available,
                                                   ),
                                                 ),
-                                              ),
-                                            ],
+                                                const SizedBox(width: 6),
+                                                Text(
+                                                  available
+                                                      ? 'Available'
+                                                      : 'Busy — ${busy.reason}',
+                                                  style: TextStyle(
+                                                    fontSize: 12.5,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: _availabilityColor(
+                                                      available,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
-                                  ),
 
-                                  // Select radio
-                                  const SizedBox(width: 10),
-                                  Radio<String>(
-                                    value: name,
-                                    groupValue: _selectedStaff,
-                                    onChanged:
-                                        available
-                                            ? (v) => setState(
-                                              () => _selectedStaff = v,
-                                            )
-                                            : null,
-                                    activeColor: const Color(0xFF005CE7),
-                                  ),
-                                ],
+                                    // Select radio
+                                    const SizedBox(width: 10),
+                                    Radio<String>(
+                                      value: name,
+                                      groupValue: _selectedStaff,
+                                      onChanged:
+                                          available
+                                              ? (v) => setState(
+                                                () => _selectedStaff = v,
+                                              )
+                                              : null,
+                                      activeColor: const Color(0xFF005CE7),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
+                          );
+                        },
+                      ),
+                    ),
+                  const SizedBox(height: 14),
+
+                  // Optional note
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Note (optional)',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.2,
+                          color: Color(0xFF374151), // subtle gray tone
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _noteCtrl,
+                        maxLines: 3,
+                        textInputAction: TextInputAction.done,
+                        decoration: InputDecoration(
+                          hintText: 'Add any instructions or reminders…',
+                          filled: true,
+                          fillColor: const Color(0xFFF9FAFB),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.fromLTRB(
+                            12,
+                            12,
+                            12,
+                            12,
                           ),
-                        );
-                      },
-                    ),
-                  ),
-                const SizedBox(height: 14),
-
-                // Optional note
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Note (optional)',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.2,
-                        color: Color(0xFF374151), // subtle gray tone
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _noteCtrl,
-                      maxLines: 3,
-                      textInputAction: TextInputAction.done,
-                      decoration: InputDecoration(
-                        hintText: 'Add any instructions or reminders…',
-                        filled: true,
-                        fillColor: const Color(0xFFF9FAFB),
-                        isDense: true,
-                        contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.4),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFD1D5DB),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF2563EB),
+                              width: 1.4,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
 
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
 
-          // Sticky Actions
-          Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
-            ),
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      fixedSize: const Size.fromHeight(48),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+            // Sticky Actions
+            Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+              ),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        fixedSize: const Size.fromHeight(48),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        side: const BorderSide(color: Color(0xFFD0D5DD)),
                       ),
-                      side: const BorderSide(color: Color(0xFFD0D5DD)),
-                    ),
-                    child: const Text(
-                      'Cancel',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed:
-                        _selectedStaff == null
-                            ? null
-                            : () {
-                              Navigator.pop(
-                                context,
-                                AssignResult(
-                                  staffName: _selectedStaff!,
-                                  note:
-                                      _noteCtrl.text.trim().isEmpty
-                                          ? null
-                                          : _noteCtrl.text.trim(),
-                                ),
-                              );
-                            },
-                    icon: const Icon(Icons.person_add_alt),
-                    label: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 14),
-                      child: Text(
-                        'Assign',
-                        style: TextStyle(fontWeight: FontWeight.w800),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed:
+                          _selectedStaff == null
+                              ? null
+                              : () {
+                                Navigator.pop(
+                                  context,
+                                  AssignResult(
+                                    staffName: _selectedStaff!,
+                                    note:
+                                        _noteCtrl.text.trim().isEmpty
+                                            ? null
+                                            : _noteCtrl.text.trim(),
+                                  ),
+                                );
+                              },
+                      icon: const Icon(Icons.person_add_alt),
+                      label: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 14),
+                        child: Text(
+                          'Assign',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
                       ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      fixedSize: const Size.fromHeight(48),
-                      backgroundColor: const Color(0xFF16A34A),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                      style: ElevatedButton.styleFrom(
+                        fixedSize: const Size.fromHeight(48),
+                        backgroundColor: const Color(0xFF16A34A),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 2,
+                        shadowColor: const Color(0xFF16A34A).withOpacity(0.28),
+                        disabledBackgroundColor: const Color(0xFF86EFAC),
+                        disabledForegroundColor: Colors.white,
                       ),
-                      elevation: 2,
-                      shadowColor: const Color(0xFF16A34A).withOpacity(0.28),
-                      disabledBackgroundColor: const Color(0xFF86EFAC),
-                      disabledForegroundColor: Colors.white,
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-      )
     );
   }
 }
@@ -2611,17 +2920,27 @@ class _RejectBottomSheetState extends State<RejectBottomSheet> {
                                 filled: true,
                                 fillColor: const Color(0xFFF9FAFB),
                                 isDense: true,
-                                contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                                contentPadding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  12,
+                                  12,
+                                  12,
+                                ),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFFD1D5DB),
+                                  ),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.4),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFF2563EB),
+                                    width: 1.4,
+                                  ),
                                 ),
                               ),
                             ),
@@ -2656,7 +2975,7 @@ class _RejectBottomSheetState extends State<RejectBottomSheet> {
                             'Cancel',
                             style: TextStyle(
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFF005CE7), 
+                              color: Color(0xFF005CE7),
                             ),
                           ),
                         ),
@@ -2712,12 +3031,11 @@ class _RejectBottomSheetState extends State<RejectBottomSheet> {
   }
 }
 
-
 /// ===== Home Helpers  ====================================
 class SectionHeader extends StatelessWidget {
   final String title;
   final String? actionLabel;
-  final VoidCallback? onActionTap; 
+  final VoidCallback? onActionTap;
 
   const SectionHeader({
     super.key,

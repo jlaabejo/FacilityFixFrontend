@@ -588,7 +588,20 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
           await _loadInventoryRequests();
 
           // After assessment creation, mark received inventory items as used/consumed
-          await _markInventoryItemsAsUsed();
+          final consumedCount = await _markInventoryItemsAsUsed();
+          // Show a confirmation banner if any reserved items were consumed
+          if (mounted && consumedCount > 0) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  consumedCount == 1
+                      ? '1 reserved inventory item was automatically consumed.'
+                      : '$consumedCount reserved inventory items were automatically consumed.',
+                ),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
         }
       }
     } catch (e) {
@@ -597,7 +610,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
     }
   }
 
-  Future<void> _markInventoryItemsAsUsed() async {
+  Future<int> _markInventoryItemsAsUsed() async {
     // Check if task now has an assessment (completion notes or photos)
     final hasAssessment =
         (widget.task['completion_notes'] != null &&
@@ -605,27 +618,34 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
         (widget.task['photos'] is List &&
             (widget.task['photos'] as List).isNotEmpty);
 
-    if (!hasAssessment) return; // Only mark as used if assessment was created
+    if (!hasAssessment) return 0; // Only mark as used if assessment was created
 
     final apiService = APIService(roleOverride: AppRole.staff);
+    int consumedCount = 0;
 
-    // Mark all received reservations as consumed
+    // Mark all reservations (reserved or received) as consumed automatically
+    // when the assessment form is created (as the items were used during task).
     for (final request in _inventoryRequests) {
       final status = (request['status'] ?? '').toString().toLowerCase();
       final isReceived = status == 'received' || request['received'] == true;
+      final isReserved = status == 'reserved' || status == 'approved';
+      // Treat reservation that are reserved or already received as consumable
+      final shouldConsume =
+          (request['type']?.toString().toLowerCase() == 'reservation') &&
+          (isReceived || isReserved);
       final requestId =
           request['_doc_id'] ??
           request['id'] ??
           request['_id'] ??
           request['request_id'] ??
           request['reservation_id'];
-
-      if (isReceived && requestId != null) {
+      if (shouldConsume && requestId != null) {
         try {
           print(
             'DEBUG: Marking inventory reservation $requestId as consumed after assessment',
           );
           await apiService.markReservationConsumed(requestId);
+          consumedCount++;
         } catch (e) {
           print('DEBUG: Failed to mark reservation $requestId as consumed: $e');
           // Continue with other items even if one fails
@@ -635,6 +655,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
 
     // Reload inventory requests again to reflect the consumed status
     await _loadInventoryRequests();
+    return consumedCount;
   }
 
   void _showInventoryItemModal(Map<String, dynamic> request) {
@@ -1108,6 +1129,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
             requestedBy: widget.currentStaffId,
             maintenanceTaskId: widget.task['id'],
             status: 'pending',
+            staffNotes: result.notes, // Add staff notes
           );
 
           if (response['success'] == true) {
@@ -1128,23 +1150,53 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
           }
         }
       } else if (action == 'return') {
+        print('\n========== RETURN BUTTON CLICKED ==========');
+        print('Item Name: ${request['item_name']}');
+        print('Inventory ID: ${request['inventory_id']}');
+        print('Request Type: ${request['type']}');
+        print('Status: ${request['status']}');
+        print('Quantity: ${request['quantity']}');
+        print('Unit: ${request['unit']}');
+        print('Stock Quantity: ${request['stock_quantity']}');
+        print('Maintenance Task ID: ${widget.task['id']}');
+        print('Widget Mounted: $mounted');
+        print('Context Valid: ${context.mounted}');
+        print('===========================================\n');
+
+        // Ensure we're mounted before showing modal
+        if (!mounted) {
+          print('DEBUG: Widget not mounted, cannot show return modal');
+          return;
+        }
+
+        print('DEBUG: About to show ReturnItem bottom sheet...');
+        
         // Show return sheet to get details
         final result = await showModalBottomSheet<ReturnResult>(
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
           builder:
-              (ctx) => ReturnItem(
-                itemName: request['item_name'] ?? 'Unknown Item',
-                itemId: request['inventory_id'] ?? '',
-                unit: request['unit'] ?? 'pcs',
-                stock: request['stock_quantity']?.toString() ?? '0',
-                maintenanceId: widget.task['id'],
-                staffName:
-                    widget.task['assigned_staff_name'] ??
-                    widget.task['assigned_to'] ??
-                    'Unknown Staff',
-              ),
+              (ctx) {
+                print('DEBUG: ReturnItem builder called - constructing widget');
+                return ReturnItem(
+                  itemName: request['item_name'] ?? 'Unknown Item',
+                  itemId: request['inventory_id'] ?? '',
+                  unit: request['unit'] ?? 'pcs',
+                  stock: request['stock_quantity']?.toString() ?? '0',
+                  maintenanceId: widget.task['id'],
+                  staffName:
+                      widget.task['assigned_staff_name'] ??
+                      widget.task['assigned_to'] ??
+                      'Unknown Staff',
+                  requestedQuantity: request['quantity']?.toString(),
+                );
+              },
+        );
+
+        print('DEBUG: showModalBottomSheet completed');
+        print(
+          'DEBUG: Return modal result: ${result != null ? "Got result" : "Cancelled"}',
         );
 
         if (result != null) {
@@ -1153,6 +1205,12 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
           final quantity =
               int.tryParse(result.quantity) ?? request['quantity'] ?? 1;
 
+          // Check if item is damaged (Defective/Broken)
+          final isDamaged =
+              result.reason.contains('Defective') ||
+              result.reason.contains('Broken');
+
+          // Use the unified reservations/action endpoint with item_condition
           final response = await apiService.handleReservationAction(
             inventoryId: itemId,
             quantity: quantity,
@@ -1163,23 +1221,40 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
             currentStock: request['current_stock'],
             stockQuantity: request['stock_quantity'],
             stockStatus: request['stock_status'],
+            itemCondition: isDamaged ? 'defective' : 'good',
+            needsReplacement: result.needsReplacement,
+            notes: result.notes,
+            dateReturned: result.dateReturned,
+            reservationId: request['id'],
           );
 
           if (response['success'] == true) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Item returned successfully')),
-            );
-            // Reload inventory requests to reflect changes
-            await _loadInventoryRequests();
-            // Notify inventory update
-            try {
-              final notifier = InventoryUpdateNotifier();
-              notifier.notifyItemUpdated(itemId?.toString() ?? '');
-            } catch (e) {
-              print('DEBUG: Failed to notify inventory update: $e');
+            String message;
+            if (isDamaged) {
+              if (result.needsReplacement) {
+                message = 'Item quarantined and replacement request created';
+              } else {
+                message = 'Item marked as damaged/needs repair';
+              }
+            } else {
+              message = 'Item returned successfully';
             }
+
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(message)));
           } else {
             throw Exception(response['message'] ?? 'Failed to return item');
+          }
+
+          // Reload inventory requests to reflect changes
+          await _loadInventoryRequests();
+          // Notify inventory update
+          try {
+            final notifier = InventoryUpdateNotifier();
+            notifier.notifyItemUpdated(itemId?.toString() ?? '');
+          } catch (e) {
+            print('DEBUG: Failed to notify inventory update: $e');
           }
         }
       }

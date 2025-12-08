@@ -2352,6 +2352,7 @@ class APIService {
     required String requestedBy,
     String? maintenanceTaskId,
     String? status, // Allow overriding status
+    String? staffNotes, // Staff notes
   }) async {
     try {
       await _refreshRoleLabelFromToken();
@@ -2372,6 +2373,7 @@ class APIService {
         if (maintenanceTaskId != null) 'maintenance_task_id': maintenanceTaskId,
         if (maintenanceTaskId != null) 'reference_type': 'maintenance_task',
         if (maintenanceTaskId != null) 'reference_id': maintenanceTaskId,
+        if (staffNotes != null && staffNotes.isNotEmpty) 'staff_notes': staffNotes,
       });
 
       final response = await post(
@@ -2803,6 +2805,12 @@ class APIService {
     int? stockQuantity,
     String? stockStatus,
     String type = "reservation",
+    // Return-specific fields
+    String? itemCondition, // "good" or "defective"
+    bool needsReplacement = false,
+    String? notes,
+    DateTime? dateReturned,
+    String? reservationId,
   }) async {
     try {
       await _refreshRoleLabelFromToken();
@@ -2821,6 +2829,14 @@ class APIService {
       if (itemCode != null) body['item_code'] = itemCode;
       if (stockQuantity != null) body['stock_quantity'] = stockQuantity;
       if (stockStatus != null) body['stock_status'] = stockStatus;
+
+      // Return-specific fields
+      if (itemCondition != null) body['item_condition'] = itemCondition;
+      if (needsReplacement) body['needs_replacement'] = needsReplacement;
+      if (notes != null) body['notes'] = notes;
+      if (dateReturned != null)
+        body['date_returned'] = dateReturned.toIso8601String();
+      if (reservationId != null) body['reservation_id'] = reservationId;
 
       final response = await post(
         '/inventory/reservations/action',

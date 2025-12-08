@@ -167,21 +167,11 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
           print('[v0] First item keys: ${(rawData[0] as Map).keys.toList()}');
         }
 
-        // Filter out reservations (items linked to maintenance tasks) - only show standalone requests
-        final filteredData =
-            rawData.where((item) {
-              final maintenanceTaskId =
-                  item['maintenance_task_id'] ?? item['reference_id'];
-              return maintenanceTaskId == null ||
-                  maintenanceTaskId.toString().isEmpty;
-            }).toList();
-
-        print(
-          '[v0] Filtered to ${filteredData.length} standalone requests (excluded ${rawData.length - filteredData.length} reservations)',
-        );
+        // Show ALL inventory requests (no filtering)
+        print('[v0] Loaded ${rawData.length} inventory requests');
 
         setState(() {
-          _requestItems = List<Map<String, dynamic>>.from(filteredData);
+          _requestItems = List<Map<String, dynamic>>.from(rawData);
           _isLoading = false;
         });
 
@@ -391,7 +381,14 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
 
   // View request method
   Future<void> _viewRequest(Map<String, dynamic> item) async {
-    final requestId = item['_doc_id'] ?? item['id'] ?? 'N/A';
+    print('[DEBUG] _viewRequest - Full item data: $item');
+    
+    // Use formatted_id from backend (INVREQ-YYYY-XXXXX format)
+    final requestId = item['formatted_id'] ?? item['_doc_id'] ?? item['id'] ?? 'N/A';
+    print('[DEBUG] Request ID: $requestId');
+    print('[DEBUG] formatted_id: ${item['formatted_id']}');
+    print('[DEBUG] _doc_id: ${item['_doc_id']}');
+    print('[DEBUG] id: ${item['id']}');
 
     // Get item name from cached inventory items
     String itemName = 'Unknown Item';
@@ -409,23 +406,44 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
       itemName = 'Item $inventoryId';
     }
 
+    // Debug staff department fields
+    print('[DEBUG] Staff Department Fields:');
+    print('[DEBUG] - staff_department: ${item['staff_department']}');
+    print('[DEBUG] - department: ${item['department']}');
+    print('[DEBUG] - requester_department: ${item['requester_department']}');
+    
+    // Debug staff name fields
+    print('[DEBUG] Staff Name Fields:');
+    print('[DEBUG] - requested_by_name: ${item['requested_by_name']}');
+    print('[DEBUG] - requested_by: ${item['requested_by']}');
+    print('[DEBUG] - requester_name: ${item['requester_name']}');
+    print('[DEBUG] - staff_name: ${item['staff_name']}');
+
     // Prepare request data for the popup
     final requestData = {
       'requestId': requestId,
+      'formatted_id': item['formatted_id'],
       'itemName': itemName,
       'purpose': item['purpose'] ?? 'General',
       'quantityRequested': item['quantity_requested'] ?? 0,
       'quantityApproved': item['quantity_approved'] ?? 0,
       'status': _normalizeStatus(item['status']),
-      'requestedBy': item['requested_by'] ?? 'Unknown',
-      'staffDepartment': item['staff_department'] ?? 'N/A',
+      'requestedBy': item['requested_by_name'] ?? item['requested_by'] ?? item['requester_name'] ?? item['staff_name'] ?? 'Unknown',
+      'staffDepartment': item['staff_department'] ?? item['department'] ?? item['requester_department'] ?? 'N/A',
       'requestedDate': _formatDate(item['requested_date']),
       'approvedDate': _formatDate(item['approved_date']),
       'adminNotes': item['admin_notes'] ?? 'No notes',
+      'staff_notes': item['staff_notes'] ?? item['purpose'] ?? 'No notes provided',
       'maintenanceTaskId': item['maintenance_task_id'] ?? item['reference_id'],
       // Keep the original item for actions
       '_originalItem': item,
     };
+    
+    print('[DEBUG] Popup requestData prepared:');
+    print('[DEBUG] - requestId: ${requestData['requestId']}');
+    print('[DEBUG] - formatted_id: ${requestData['formatted_id']}');
+    print('[DEBUG] - staffDepartment: ${requestData['staffDepartment']}');
+    print('[DEBUG] - requestedBy: ${requestData['requestedBy']}');
 
     // Show the details popup and get result
     final result = await InventoryRequestDetailsDialog.show(
@@ -454,7 +472,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
         throw Exception('Request ID not found');
       }
 
-      // Get inventory item ID and requested quantity
+      // Get inventory item ID and requested quantity for stock validation
       final inventoryId = item['inventory_id']?.toString();
       final quantityRequested =
           (item['quantity_requested'] ?? item['quantity'] ?? 0) as num;
@@ -551,43 +569,13 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
         }
       }
 
-      // Step 2: Approve the request in the backend
+      // Step 2: Approve the request in the backend (NO stock deduction)
+      // Stock will be deducted when staff marks the request as "received"
       await _apiService.approveInventoryRequest(requestId);
-
-      // Step 3: Deduct stock from the inventory item
-      if (inventoryId != null && quantityRequested > 0) {
-        try {
-          // Get current inventory item data again (in case it changed)
-          final itemResp = await _apiService.getInventoryItem(inventoryId);
-          if (itemResp['success'] == true && itemResp['data'] is Map) {
-            final inventoryData = Map<String, dynamic>.from(itemResp['data']);
-            final currentStock =
-                (inventoryData['current_stock'] ??
-                        inventoryData['quantity_in_stock'] ??
-                        0)
-                    as num;
-
-            // Calculate new stock (deduct the approved quantity)
-            final newStock = (currentStock - quantityRequested).toInt();
-
-            // Update the inventory item with new stock
-            await _apiService.updateInventoryItem(inventoryId, {
-              'current_stock': newStock,
-              'quantity_in_stock': newStock,
-            });
-
-            print(
-              '[v0] Stock deducted: $inventoryId, Old: $currentStock, New: $newStock',
-            );
-          }
-        } catch (stockError) {
-          print('[v0] Error deducting stock: $stockError');
-          // Request was approved, but stock deduction failed - log but don't fail the whole operation
-        }
-      }
 
       // Reload the list
       _loadInventoryRequests();
+      
       // Notify staff views that this request was approved so they can refresh
       try {
         final notifier = InventoryUpdateNotifier();
@@ -596,10 +584,11 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
       } catch (e) {
         print('[v0] Failed to notify inventory update after approve: $e');
       }
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Request $requestId approved and stock deducted'),
+            content: Text('Request approved. Staff can now mark as received.'),
             backgroundColor: Colors.green,
           ),
         );
@@ -1467,11 +1456,8 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                         ],
                         rows:
                             _getPaginatedRequests().map((item) {
-                              // Use _doc_id as the primary ID from Firestore
-                              final requestId = _formatId(
-                                item['_doc_id'] ?? item['id'],
-                                'REQ',
-                              );
+                              // Use formatted_id from backend (INVREQ-YYYY-XXXXX format)
+                              final requestId = item['formatted_id'] ?? item['_doc_id'] ?? item['id'] ?? 'N/A';
                               final maintenanceId = _formatId(
                                 item['maintenance_task_id'] ??
                                     item['reference_id'],

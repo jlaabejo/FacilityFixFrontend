@@ -1593,8 +1593,7 @@ class _MaintenanceState extends State<MaintenanceDetails> {
   List<Map<String, dynamic>> _inventoryRequests = [];
   final Set<String> _loadingItems = {}; // Track which items are being processed
   late final InventoryUpdateNotifier _notifier;
-  final Set<String> _suppressReturnIds =
-      {}; // Hide return button immediately after receive
+  // Removed _suppressReturnIds - Return button now always visible (disabled when not received)
 
   @override
   void initState() {
@@ -1915,12 +1914,7 @@ class _MaintenanceState extends State<MaintenanceDetails> {
               }
             }
 
-            // Hide the return button briefly while reloading to avoid flicker
-            setState(() => _suppressReturnIds.add(reservationId));
-            Timer(const Duration(seconds: 3), () {
-              if (mounted)
-                setState(() => _suppressReturnIds.remove(reservationId));
-            });
+            // Removed suppression logic - Return button now always visible
             // Notify listeners that inventory was updated (use the actual reservationId)
             _notifier.notifyReservationReceived(
               reservationId,
@@ -1998,14 +1992,7 @@ class _MaintenanceState extends State<MaintenanceDetails> {
               }
             }
 
-            // Hide the return button briefly while reloading to avoid flicker
-            if (requestId != null) {
-              setState(() => _suppressReturnIds.add(requestId!));
-              Timer(const Duration(seconds: 3), () {
-                if (mounted)
-                  setState(() => _suppressReturnIds.remove(requestId));
-              });
-            }
+            // Removed suppression logic - Return button now always visible
             // Notify listeners that inventory was updated
             _notifier.notifyItemUpdated(inventoryId ?? '');
           } else {
@@ -2445,108 +2432,215 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                   ),
 
                   // Inventory Items
-                  ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _inventoryRequests.length,
-                    separatorBuilder:
-                        (_, __) => const Divider(
-                          height: 1,
-                          thickness: 1,
-                          color: Color(0xFFE5E7EB),
-                        ),
-                    itemBuilder: (context, index) {
-                      final request = _inventoryRequests[index];
-                      final itemName =
-                          request['item_name'] ??
-                          request['name'] ??
-                          'Unknown Item';
-                      final quantity =
-                          request['quantity_requested'] ??
-                          request['quantity'] ??
-                          0;
-                      final stockQuantity =
-                          request['stock_quantity'] ??
-                          request['available_stock'] ??
-                          0;
-                      final status =
-                          (request['status'] ?? 'pending').toString();
-                      final itemType =
-                          (request['type'] ?? 'request')
-                              .toString()
-                              .toLowerCase();
-                      // Only allow receiving when admin has approved the request, or when it's a reservation
-                      final isApproved =
-                          status.toLowerCase() == 'approved' ||
-                          status.toLowerCase() == 'reserved';
-                      final hasReservationId =
-                          (request['reservation_id'] ?? '')
-                              .toString()
-                              .isNotEmpty;
+                  if (widget.statusTag.toLowerCase() == 'completed' ||
+                      widget.statusTag.toLowerCase() == 'done' ||
+                      widget.statusTag.toLowerCase() == 'complete') ...[
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _inventoryRequests.length,
+                      separatorBuilder:
+                          (_, __) => const Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: Color(0xFFE5E7EB),
+                          ),
+                      itemBuilder: (context, index) {
+                        final request = _inventoryRequests[index];
+                        final itemName =
+                            request['item_name'] ??
+                            request['name'] ??
+                            'Unknown Item';
+                        final quantity =
+                            request['quantity_requested'] ??
+                            request['quantity'] ??
+                            0;
+                        final unit = request['unit'] ?? '';
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          title: Text(
+                            itemName,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF1F2937),
+                            ),
+                          ),
+                          trailing: Text(
+                            unit.toString().trim().isEmpty
+                                ? quantity.toString()
+                                : '${quantity.toString()} ${unit.toString()}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1F2937),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ] else ...[
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _inventoryRequests.length,
+                      separatorBuilder:
+                          (_, __) => const Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: Color(0xFFE5E7EB),
+                          ),
+                      itemBuilder: (context, index) {
+                        final request = _inventoryRequests[index];
+                        final itemName =
+                            request['item_name'] ??
+                            request['name'] ??
+                            'Unknown Item';
+                        final quantity =
+                            request['quantity_requested'] ??
+                            request['quantity'] ??
+                            0;
+                        final stockQuantity =
+                            request['stock_quantity'] ??
+                            request['available_stock'] ??
+                            0;
+                        final status =
+                            (request['status'] ?? 'pending').toString();
+                        final itemType =
+                            (request['type'] ?? 'request')
+                                .toString()
+                                .toLowerCase();
+                        // Only allow receiving when admin has approved the request, or when it's a reservation
+                        final isApproved =
+                            status.toLowerCase() == 'approved' ||
+                            status.toLowerCase() == 'reserved';
+                        final hasReservationId =
+                            (request['reservation_id'] ?? '')
+                                .toString()
+                                .isNotEmpty;
 
-                      final category = request['category'] ?? '';
-                      final requestId =
-                          request['_doc_id'] ??
-                          request['id'] ??
-                          request['_id'] ??
-                          request['request_id'] ??
-                          request['reservation_id'];
+                        final category = request['category'] ?? '';
+                        final requestId =
+                            request['_doc_id'] ??
+                            request['id'] ??
+                            request['_id'] ??
+                            request['request_id'] ??
+                            request['reservation_id'];
 
-                      // Determine if item is received
-                      bool isReceived =
-                          status.toLowerCase() == 'fulfilled' ||
-                          status.toLowerCase() == 'received' ||
-                          request['received'] == true;
+                        // Determine if item is received
+                        bool isReceived =
+                            status.toLowerCase() == 'fulfilled' ||
+                            status.toLowerCase() == 'received' ||
+                            request['received'] == true;
 
-                      return Container(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    itemName,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: Color(0xFF1F2937),
+                        return Container(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      itemName,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        color: Color(0xFF1F2937),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Row(
-                                    children: [
-                                      Text(
-                                        'Reserve: $quantity',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF1F2937),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Text(
-                                        'Stock: $stockQuantity',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Color(0xFF6B7280),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: Row(
+                                    const SizedBox(height: 4),
+                                    Row(
                                       children: [
-                                        // Receive button
-                                        if (isReceived) ...[
+                                        Text(
+                                          'Reserve: $quantity',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF1F2937),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          'Stock: $stockQuantity',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF6B7280),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: Row(
+                                        children: [
+                                          // Return button - always visible, disabled when not received
+                                          OutlinedButton(
+                                            onPressed:
+                                                (_loadingItems.contains(
+                                                          requestId,
+                                                        ) ||
+                                                        !isReceived)
+                                                    ? null
+                                                    : () => widget
+                                                        .onInventoryAction
+                                                        ?.call(
+                                                          request,
+                                                          'return',
+                                                        ),
+                                            style: OutlinedButton.styleFrom(
+                                              side: const BorderSide(
+                                                color: Color(0xFFDC2626),
+                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 6,
+                                                  ),
+                                            ),
+                                            child:
+                                                _loadingItems.contains(
+                                                      requestId,
+                                                    )
+                                                    ? const SizedBox(
+                                                      width: 16,
+                                                      height: 16,
+                                                      child: CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        valueColor:
+                                                            AlwaysStoppedAnimation<
+                                                              Color
+                                                            >(
+                                                              Color(0xFFDC2626),
+                                                            ),
+                                                      ),
+                                                    )
+                                                    : const Text(
+                                                      'Return',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: Color(
+                                                          0xFFDC2626,
+                                                        ),
+                                                      ),
+                                                    ),
+                                          ),
+                                          const SizedBox(width: 8),
+
+                                          // Request button
                                           ElevatedButton(
-                                            onPressed: null, // Already received
+                                            onPressed:
+                                                () => widget.onInventoryAction
+                                                    ?.call(request, 'request'),
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor: const Color(
-                                                0xFF059669,
+                                                0xFF005CE7,
                                               ),
                                               padding:
                                                   const EdgeInsets.symmetric(
@@ -2555,7 +2649,7 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                                                   ),
                                             ),
                                             child: const Text(
-                                              'Received',
+                                              'Request',
                                               style: TextStyle(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w600,
@@ -2563,192 +2657,41 @@ class _MaintenanceState extends State<MaintenanceDetails> {
                                               ),
                                             ),
                                           ),
-                                        ] else ...[
-                                          Tooltip(
-                                            message:
-                                                (itemType == 'reservation' ||
-                                                        isApproved)
-                                                    ? 'Receive'
-                                                    : 'Waiting for admin approval',
-                                            child: OutlinedButton(
-                                              onPressed:
-                                                  (_loadingItems.contains(
-                                                            requestId,
-                                                          ) ||
-                                                          !((itemType ==
-                                                                      'reservation' &&
-                                                                  hasReservationId) ||
-                                                              isApproved))
-                                                      ? null
-                                                      : () =>
-                                                          _handleInventoryAction(
-                                                            request,
-                                                            'receive',
-                                                          ),
-                                              style: OutlinedButton.styleFrom(
-                                                side: const BorderSide(
-                                                  color: Color(0xFF059669),
-                                                ),
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 6,
-                                                    ),
-                                              ),
-                                              child:
-                                                  _loadingItems.contains(
-                                                        requestId,
-                                                      )
-                                                      ? const SizedBox(
-                                                        width: 16,
-                                                        height: 16,
-                                                        child: CircularProgressIndicator(
-                                                          strokeWidth: 2,
-                                                          valueColor:
-                                                              AlwaysStoppedAnimation<
-                                                                Color
-                                                              >(
-                                                                Color(
-                                                                  0xFF059669,
-                                                                ),
-                                                              ),
-                                                        ),
-                                                      )
-                                                      : const Text(
-                                                        'Receive',
-                                                        style: TextStyle(
-                                                          fontSize: 12,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          color: Color(
-                                                            0xFF059669,
-                                                          ),
-                                                        ),
-                                                      ),
-                                            ),
-                                          ),
                                         ],
-                                        const SizedBox(width: 8),
-                                        // Return button (for received items)
-                                        if (isReceived &&
-                                            !_suppressReturnIds.contains(
-                                              requestId,
-                                            )) ...[
-                                          Tooltip(
-                                            message:
-                                                isReceived
-                                                    ? 'Return this item'
-                                                    : 'You can only return after receiving',
-                                            child: OutlinedButton(
-                                              onPressed:
-                                                  (_loadingItems.contains(
-                                                            requestId,
-                                                          ) ||
-                                                          !isReceived)
-                                                      ? null
-                                                      : () =>
-                                                          _handleReturnInventory(
-                                                            request,
-                                                          ),
-                                              style: OutlinedButton.styleFrom(
-                                                side: const BorderSide(
-                                                  color: Color(0xFFDC2626),
-                                                ),
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 6,
-                                                    ),
-                                              ),
-                                              child:
-                                                  _loadingItems.contains(
-                                                        requestId,
-                                                      )
-                                                      ? const SizedBox(
-                                                        width: 16,
-                                                        height: 16,
-                                                        child: CircularProgressIndicator(
-                                                          strokeWidth: 2,
-                                                          valueColor:
-                                                              AlwaysStoppedAnimation<
-                                                                Color
-                                                              >(
-                                                                Color(
-                                                                  0xFFDC2626,
-                                                                ),
-                                                              ),
-                                                        ),
-                                                      )
-                                                      : const Text(
-                                                        'Return',
-                                                        style: TextStyle(
-                                                          fontSize: 12,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          color: Color(
-                                                            0xFFDC2626,
-                                                          ),
-                                                        ),
-                                                      ),
-                                            ),
-                                          ),
-                                        ],
-                                        const SizedBox(width: 8),
-                                        // Request button
-                                        ElevatedButton(
-                                          onPressed:
-                                              () => widget.onInventoryAction
-                                                  ?.call(request, 'request'),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: const Color(
-                                              0xFF005CE7,
-                                            ),
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 12,
-                                              vertical: 6,
-                                            ),
-                                          ),
-                                          child: const Text(
-                                            'Request',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (category.isNotEmpty) ...[
-                                    const SizedBox(height: 4),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF3F4F6),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        category.toUpperCase(),
-                                        style: const TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF6B7280),
-                                        ),
                                       ),
                                     ),
+                                    if (category.isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF3F4F6),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          category.toString().toUpperCase(),
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF6B7280),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ],
-                                ],
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -3457,10 +3400,10 @@ class InventoryDetailsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           if (_isNotEmpty(requestId))
-            Text('Req ID: $requestId', style: idStyle),
+            Text('$requestId', style: idStyle),
           if (_isNotEmpty(maintenanceId)) ...[
             const SizedBox(height: 4),
-            Text('Maintenance ID: $maintenanceId', style: idStyle),
+            Text('$maintenanceId', style: idStyle),
           ],
           _divider(),
           // Body

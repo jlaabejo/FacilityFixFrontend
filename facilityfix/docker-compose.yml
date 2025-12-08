@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  facilityfixfrontend:
+    image: <your-dockerhub-username>/facilityfixfrontendweb:latest
+    ports:
+      - "80:80"
+    restart: unless-stopped
+version: '3.8'
+
+services:
+  facilityfix-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    environment:
+      - FLUTTER_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: for development with hot reload
+  facilityfix-web-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./facilityfix:/app
+      - /app/build
+    environment:
+      - FLUTTER_ENV=development
+    restart: unless-stopped

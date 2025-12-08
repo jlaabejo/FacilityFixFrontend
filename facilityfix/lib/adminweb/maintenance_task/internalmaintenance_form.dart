@@ -412,6 +412,10 @@ class _InternalMaintenanceFormPageState
 
     setState(() {
       _selectedTaskTypeId = taskTypeId;
+      // Clear previous inventory items from task type when switching to a new task type
+      _selectedInventoryItems.removeWhere(
+        (item) => item['from_task_type'] == true,
+      );
     });
 
     // Automatically populate inventory items associated with this task type
@@ -537,7 +541,7 @@ class _InternalMaintenanceFormPageState
               item['item_code'] ??
               item['code'] ??
               item['itemCode'] ??
-              inventoryId;
+              'UNKNOWN'; // Never use inventoryId as fallback
           final unit =
               item['unit'] ?? item['uom'] ?? item['unit_of_measure'] ?? 'pcs';
 
@@ -546,17 +550,33 @@ class _InternalMaintenanceFormPageState
           );
 
           // Try to find the full inventory item details from available items
+          // Match by inventory_id to get the proper item_code
           Map<String, dynamic>? fullItemDetails;
           for (final availableItem in _availableInventoryItems) {
+            final availableItemCode =
+                availableItem['item_code']?.toString() ?? '';
             final availableId =
-                availableItem['inventory_id'] ??
-                availableItem['formatted_id'] ??
-                availableItem['id'] ??
+                availableItem['inventory_id']?.toString() ??
+                availableItem['id']?.toString() ??
                 '';
-            if (availableId == inventoryId) {
+
+            // Try to match by inventory_id (document ID) to get the full item details with item_code
+            if (availableId == inventoryId ||
+                (availableItemCode.isNotEmpty &&
+                    availableItemCode == itemCode &&
+                    itemCode != 'UNKNOWN')) {
               fullItemDetails = availableItem;
+              print(
+                '[DEBUG] ✓ Matched inventory item: $itemName -> item_code: ${availableItem['item_code']}',
+              );
               break;
             }
+          }
+
+          if (fullItemDetails == null) {
+            print(
+              '[DEBUG] ✗ WARNING: No match found for inventory_id: $inventoryId, item will show as UNKNOWN',
+            );
           }
 
           // Use full details if found, otherwise use basic task type data
@@ -565,18 +585,24 @@ class _InternalMaintenanceFormPageState
               fullItemDetails?['available_stock'] ??
               fullItemDetails?['stock'] ??
               currentStock;
-          final formattedId = fullItemDetails?['formatted_id'] ?? inventoryId;
-          final actualItemCode = fullItemDetails?['item_code'] ?? itemCode;
+          final actualItemCode =
+              fullItemDetails?['item_code'] ??
+              itemCode; // Will be UNKNOWN if not found
+          final actualInventoryId =
+              fullItemDetails?['inventory_id'] ??
+              fullItemDetails?['id'] ??
+              inventoryId;
 
           print(
-            '[DEBUG] Enhanced inventory details: formatted_id=$formattedId, actual_stock=$actualStock',
+            '[DEBUG] Enhanced inventory details: item_code=$actualItemCode, inventory_id=$actualInventoryId, actual_stock=$actualStock',
           );
 
           newItems.add({
-            'inventory_id': inventoryId,
-            'formatted_id': formattedId,
+            'inventory_id':
+                actualInventoryId, // Use the actual inventory_id from full details
             'item_name': itemName,
-            'item_code': actualItemCode,
+            'item_code':
+                actualItemCode, // Use the properly formatted item_code (never UID)
             'quantity': defaultQuantity, // Use default quantity from task type
             'available_stock': actualStock,
             'current_stock': actualStock,
@@ -585,7 +611,7 @@ class _InternalMaintenanceFormPageState
           });
 
           print(
-            '[v0] Added task type inventory item: $itemName (ID: $inventoryId, Qty: $defaultQuantity)',
+            '[v0] ✓ Added inventory item: $itemName | Code: $actualItemCode | Qty: $defaultQuantity',
           );
         }
       }
@@ -2032,6 +2058,52 @@ class _InternalMaintenanceFormPageState
 
                       Row(
                         children: [
+                          // Task Title
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _fieldLabel('Task Title (optional)'),
+                                _fieldBox(
+                                  child: TextFormField(
+                                    controller: _taskTitleController,
+                                    // No validator = optional field
+                                    validator: (_) => null,
+                                    decoration: _decoration(
+                                      'Enter Task Title...',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          // // Equipment
+                          // Expanded(
+                          //   child: Column(
+                          //     crossAxisAlignment: CrossAxisAlignment.start,
+                          //     children: [
+                          //       _fieldLabel('Equipment'),
+                          //       _fieldBox(
+                          //         child: TextFormField(
+                          //           controller: _equipmentController,
+                          //           validator: _req,
+                          //           decoration: _decoration(
+                          //             'Enter Equipment...',
+                          //           ),
+                          //         ),
+                          //       ),
+                          //     ],
+                          //   ),
+                          // ),
+                          Expanded(child: Container()), // Spacer
+                          const SizedBox(width: 24),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      Row(
+                        children: [
                           // Task Type
                           Expanded(
                             child: Column(
@@ -2167,7 +2239,6 @@ class _InternalMaintenanceFormPageState
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
 
                       Row(
                         children: [
@@ -2356,10 +2427,10 @@ class _InternalMaintenanceFormPageState
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
 
                       Row(
                         children: [
+                          const SizedBox(width: 24),
                           const Expanded(child: SizedBox()), // Left spacer
                           const SizedBox(height: 24),
                           if (_selectedLocation == 'Other')
@@ -2383,7 +2454,6 @@ class _InternalMaintenanceFormPageState
                             ),
                         ],
                       ),
-                      const SizedBox(height: 24),
 
                       // Description
                       _fieldLabel('Description'),
