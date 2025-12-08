@@ -43,8 +43,8 @@ class InventoryItem {
     String displayStatus = 'Stock';
     if (json['current_stock'] == 0) {
       displayStatus = 'Out of Stock';
-    } else if (json['minimum_stock'] != null && 
-               json['current_stock'] <= json['minimum_stock']) {
+    } else if (json['minimum_stock'] != null &&
+        json['current_stock'] <= json['minimum_stock']) {
       displayStatus = 'Critical';
     }
 
@@ -65,7 +65,8 @@ class InventoryItem {
 
 class InventoryRequest {
   final String itemName;
-  final String requestId;
+  final String requestId; // Formatted ID for display (INVREQ-2025-00001)
+  final String internalId; // Internal ID for API calls (_doc_id)
   final String department;
   final String status;
   final int? quantityRequested;
@@ -77,6 +78,7 @@ class InventoryRequest {
   const InventoryRequest({
     required this.itemName,
     required this.requestId,
+    required this.internalId,
     required this.department,
     required this.status,
     this.quantityRequested,
@@ -87,16 +89,35 @@ class InventoryRequest {
   });
 
   factory InventoryRequest.fromJson(Map<String, dynamic> json) {
+    // Debug: Print all available fields
+    print(
+      'DEBUG InventoryRequest.fromJson - All fields: ${json.keys.toList()}',
+    );
+    print('DEBUG formatted_id: ${json['formatted_id']}');
+    print('DEBUG _doc_id: ${json['_doc_id']}');
+    print('DEBUG id: ${json['id']}');
+    print('DEBUG requested_by_name: ${json['requested_by_name']}');
+    print('DEBUG requested_by: ${json['requested_by']}');
+
     return InventoryRequest(
       itemName: json['item_name'] ?? 'Unknown Item',
-      requestId: json['_doc_id'] ?? json['id'] ?? json['inventory_id'] ?? '',
+      requestId: json['formatted_id'] ?? json['id'] ?? 'Unknown ID',
+      internalId: json['_doc_id'] ?? json['id'] ?? '',
       department: json['department'] ?? 'Unknown',
       status: json['status'] ?? 'pending',
       quantityRequested: json['quantity_requested'],
       purpose: json['purpose'],
-      requestedBy: json['assigned_staff_name'] ?? json['staff_name'] ?? 'Unknown',
-      requestDate: json['created_at'] != null ? DateTime.tryParse(json['created_at']) : null,
-      maintenanceId: json['id'] ?? null,
+      requestedBy:
+          json['requested_by_name'] ??
+          json['requested_by_name'] ??
+          json['assigned_staff_name'] ??
+          json['staff_name'] ??
+          'Unknown',
+      requestDate:
+          json['created_at'] != null
+              ? DateTime.tryParse(json['created_at'])
+              : null,
+      maintenanceId: json['reference_id'],
     );
   }
 }
@@ -120,12 +141,6 @@ class _InventoryPageState extends State<InventoryPage> {
 
   // ----- API Data -----
   List<InventoryRequest> _requests = [];
-
-  // ----- Tabs -----
-  String selectedTabLabel = "Requests";
-  final tabs = [
-    TabItem(label: 'Requests', count: 1),
-  ];
 
   // ----- Bottom nav -----
   final List<NavItem> _navItems = const [
@@ -287,11 +302,15 @@ class _InventoryPageState extends State<InventoryPage> {
       for (var request in allRequestsMap.values) {
         if (request['inventory_id'] != null) {
           try {
-            final itemData = await _apiService.getInventoryItemById(request['inventory_id']);
+            final itemData = await _apiService.getInventoryItemById(
+              request['inventory_id'],
+            );
             if (itemData != null) {
               request['item_name'] = itemData['item_name'];
               request['department'] = itemData['department'];
-              request['inventory_id'] = itemData['inventory_id'];
+              request['item_code'] =
+                  itemData['item_code'] ?? itemData['inventory_id'];
+              request['unit_of_measure'] = itemData['unit_of_measure'];
             }
           } catch (e) {
             print('Error loading item details: $e');
@@ -299,30 +318,21 @@ class _InventoryPageState extends State<InventoryPage> {
         }
       }
 
-      // Enrich with staff names for requested_by UIDs
-      for (var request in allRequestsMap.values) {
-        if (request['requested_by'] != null && request['requested_by'].toString().isNotEmpty) {
-          try {
-            final staffData = await _apiService.getStaffById(request['requested_by']);
-            if (staffData != null && staffData['name'] != null) {
-              request['requested_by_name'] = staffData['name'];
-            }
-          } catch (e) {
-            print('Error loading staff details for ${request['requested_by']}: $e');
-          }
-        }
-      }
+      // Staff names now provided by backend via requested_by_name field
+      print(
+        'DEBUG: Backend provides requested_by_name, skipping staff enrichment',
+      );
 
       setState(() {
-        _requests = allRequestsMap.values
-            .map((request) => InventoryRequest.fromJson(request))
-            .toList();
-
-        // Update tabs count
-        tabs[0] = TabItem(label: 'Requests', count: _requests.length);
+        _requests =
+            allRequestsMap.values
+                .map((request) => InventoryRequest.fromJson(request))
+                .toList();
       });
 
-      print('DEBUG: Loaded ${_requests.length} total inventory requests (general + maintenance)');
+      print(
+        'DEBUG: Loaded ${_requests.length} total inventory requests (general + maintenance)',
+      );
     } catch (e) {
       print('Error loading inventory requests: $e');
       setState(() {
@@ -340,7 +350,8 @@ class _InventoryPageState extends State<InventoryPage> {
     final q = _searchController.text.trim().toLowerCase();
     return _requests.where((r) {
       // Exclude received requests by default unless specifically filtering for them
-      if (_selectedStatus == 'All' && r.status.toLowerCase() == 'received') return false;
+      if (_selectedStatus == 'All' && r.status.toLowerCase() == 'received')
+        return false;
       if (_selectedStatus != 'All' && r.status != _selectedStatus) return false;
       if (q.isEmpty) return true;
       return [
@@ -353,39 +364,33 @@ class _InventoryPageState extends State<InventoryPage> {
   }
 
   Widget _buildTabContent() {
-    switch (selectedTabLabel.toLowerCase()) {
-      case 'requests':
-        final reqs = _filteredRequests;
-        if (reqs.isEmpty) return const Center(child: Text('No requests found.'));
-        return ListView.separated(
-          itemCount: reqs.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (_, i) {
-            final r = reqs[i];
-            return InventoryRequestCard(
-              itemName: r.itemName,
-              requestId: r.requestId,
-              department: r.department,
-              status: r.status,
-              maintenanceId: r.maintenanceId,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => InventoryDetails(
+    final reqs = _filteredRequests;
+    if (reqs.isEmpty) return const Center(child: Text('No requests found.'));
+    return ListView.separated(
+      itemCount: reqs.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (_, i) {
+        final r = reqs[i];
+        return InventoryRequestCard(
+          itemName: r.itemName,
+          requestId: r.requestId,
+          department: r.department,
+          status: r.status,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder:
+                    (_) => InventoryDetails(
                       selectedTabLabel: 'inventory request',
-                      requestId: r.requestId,
+                      requestId: r.internalId, // Use internal ID for API
                     ),
-                  ),
-                );
-              },
+              ),
             );
           },
         );
-
-      default:
-        return const Center(child: Text('No data.'));
-    }
+      },
+    );
   }
 
   @override
@@ -450,22 +455,22 @@ class _InventoryPageState extends State<InventoryPage> {
                       statuses: _statusOptions,
                       selectedClassification: _selectedDepartment,
                       onStatusChanged: (status) {
-                        setState(() => _selectedStatus = status.trim().isEmpty ? 'All' : status);
+                        setState(
+                          () =>
+                              _selectedStatus =
+                                  status.trim().isEmpty ? 'All' : status,
+                        );
                       },
                       onSearchChanged: (_) => setState(() {}),
-                    ),
-                    const SizedBox(height: 16),
-
-                    StatusTabSelector(
-                      tabs: tabs,
-                      selectedLabel: selectedTabLabel,
-                      onTabSelected: (label) => setState(() => selectedTabLabel = label),
                     ),
                     const SizedBox(height: 24),
 
                     Text(
                       'Recent Requests',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 16),
 

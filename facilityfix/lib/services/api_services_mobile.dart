@@ -1333,7 +1333,7 @@ class APIService {
       final response = await patch(
         '/staff-scheduling/day-off/bulk/approve',
         headers: _authHeaders(token),
-        body: jsonEncode(body), 
+        body: jsonEncode(body),
       );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -2340,6 +2340,7 @@ class APIService {
     required String requestedBy,
     String? maintenanceTaskId,
     String? status, // Allow overriding status
+    String? staffNotes, // Staff notes
   }) async {
     try {
       await _refreshRoleLabelFromToken();
@@ -2360,6 +2361,7 @@ class APIService {
         if (maintenanceTaskId != null) 'maintenance_task_id': maintenanceTaskId,
         if (maintenanceTaskId != null) 'reference_type': 'maintenance_task',
         if (maintenanceTaskId != null) 'reference_id': maintenanceTaskId,
+        if (staffNotes != null && staffNotes.isNotEmpty) 'staff_notes': staffNotes,
       });
 
       final response = await post(
@@ -2791,6 +2793,12 @@ class APIService {
     int? stockQuantity,
     String? stockStatus,
     String type = "reservation",
+    // Return-specific fields
+    String? itemCondition, // "good" or "defective"
+    bool needsReplacement = false,
+    String? notes,
+    DateTime? dateReturned,
+    String? reservationId,
   }) async {
     try {
       await _refreshRoleLabelFromToken();
@@ -2803,12 +2811,20 @@ class APIService {
         'action': action,
         'type': type,
       };
-      
+
       if (currentStock != null) body['current_stock'] = currentStock;
       if (itemName != null) body['item_name'] = itemName;
       if (itemCode != null) body['item_code'] = itemCode;
       if (stockQuantity != null) body['stock_quantity'] = stockQuantity;
       if (stockStatus != null) body['stock_status'] = stockStatus;
+
+      // Return-specific fields
+      if (itemCondition != null) body['item_condition'] = itemCondition;
+      if (needsReplacement) body['needs_replacement'] = needsReplacement;
+      if (notes != null) body['notes'] = notes;
+      if (dateReturned != null)
+        body['date_returned'] = dateReturned.toIso8601String();
+      if (reservationId != null) body['reservation_id'] = reservationId;
 
       final response = await post(
         '/inventory/reservations/action',
@@ -4892,7 +4908,9 @@ class APIService {
   // ============================================
 
   /// Receive reserved inventory items (staff confirms receipt)
-  Future<Map<String, dynamic>> receiveInventoryReservation(String reservationId) async {
+  Future<Map<String, dynamic>> receiveInventoryReservation(
+    String reservationId,
+  ) async {
     // Use the new standardized method
     return await markReservationReceived(reservationId);
   }
@@ -4917,7 +4935,10 @@ class APIService {
     String notes,
   ) async {
     await _refreshRoleLabelFromToken();
-    _logReq('POST', '/inventory/reservations/$reservationId/request-replacement');
+    _logReq(
+      'POST',
+      '/inventory/reservations/$reservationId/request-replacement',
+    );
 
     try {
       final token = await _requireToken();
@@ -4946,7 +4967,10 @@ class APIService {
 
     try {
       final token = await _requireToken();
-      final resp = await get('/inventory/reservations', headers: _authHeaders(token));
+      final resp = await get(
+        '/inventory/reservations',
+        headers: _authHeaders(token),
+      );
       return json.decode(resp.body);
     } catch (e) {
       print('[API] Error fetching my inventory reservations: $e');

@@ -15,9 +15,10 @@ class InventoryRequestDetailsDialog {
           insetPadding: const EdgeInsets.all(20),
           child: Container(
             width: MediaQuery.of(context).size.width * 0.5,
-            constraints: const BoxConstraints(
+            constraints: BoxConstraints(
               maxWidth: 700,
-              maxHeight: 700,
+              minHeight: 400,
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
             ),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -56,31 +57,35 @@ class _InventoryRequestDetailsContentState
   void initState() {
     super.initState();
     _requestData = Map<String, dynamic>.from(widget.requestData);
+    
+    // Debug print all request data
+    print('\n========== INVENTORY REQUEST POPUP DEBUG ==========');
+    print('Request ID: ${_requestData['formatted_id'] ?? _requestData['requestId'] ?? _requestData['id']}');
+    print('Item Name: ${_requestData['itemName']}');
+    print('Requested Date: ${_requestData['requestedDate']}');
+    print('Status: ${_requestData['status']}');
+    print('Quantity Requested: ${_requestData['quantityRequested']}');
+    print('Quantity Approved: ${_requestData['quantityApproved']}');
+    print('Staff Name: ${_requestData['requestedBy'] ?? _requestData['requested_by'] ?? _requestData['requested_by_name']}');
+    print('Staff Department: ${_requestData['staffDepartment'] ?? _requestData['staff_department'] ?? _requestData['department']}');
+    print('Staff Notes: ${_requestData['staff_notes'] ?? _requestData['staffNotes'] ?? _requestData['purpose']}');
+    print('Admin Notes: ${_requestData['adminNotes']}');
+    print('Approved Date: ${_requestData['approvedDate']}');
+    print('Maintenance Task ID: ${_requestData['maintenanceTaskId']}');
+    print('===================================================\n');
   }
 
-  /// Format request ID to show as REQ-XXXXX
-  String _formatRequestId(dynamic id) {
-    if (id == null || id.toString() == 'N/A') return 'N/A';
+  /// Get request ID directly from backend's formatted_id field
+  String _getRequestId(dynamic data) {
+    if (data == null) return 'N/A';
     
-    final idStr = id.toString();
-    
-    // If already formatted (starts with REQ-), return as is
-    if (idStr.toUpperCase().startsWith('REQ-')) {
-      return idStr.toUpperCase();
+    // Backend provides formatted_id in INVREQ-YYYY-XXXXX format
+    if (data is Map<String, dynamic>) {
+      return data['formatted_id'] ?? data['requestId'] ?? data['_doc_id'] ?? data['id'] ?? 'N/A';
     }
     
-    // If it's a Firebase document ID (long alphanumeric), take last 8 chars
-    if (idStr.length > 15) {
-      return 'REQ-${idStr.substring(idStr.length - 8).toUpperCase()}';
-    }
-    
-    // If it's a short ID, format with padding
-    if (idStr.length <= 5) {
-      return 'REQ-${idStr.padLeft(5, '0')}';
-    }
-    
-    // Otherwise, use as is with REQ- prefix
-    return 'REQ-$idStr';
+    // If passed as string directly
+    return data.toString();
   }
 
   @override
@@ -108,119 +113,99 @@ class _InventoryRequestDetailsContentState
                 // Request Information Section
                 _buildSectionTitle("Request Information"),
                 const SizedBox(height: 12),
-                Column(
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _buildInfoTile(
-                            "Item Name", _requestData['itemName'] ?? 'N/A'),
-                        ),
-                        const SizedBox(width: 48),
-                        Expanded(
-                          child: _buildInfoTile(
-                            "Maintenance Task ID",
-                            _requestData['maintenanceTaskId']?.toString() ?? 'No Maintenance Task',
-                          ),
-                        ),
-                      ],
+                    Expanded(
+                      child: _buildInfoTile(
+                          "Item Name", _requestData['itemName'] ?? 'N/A'),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(width: 48),
+                    Expanded(
+                      child: _buildInfoTile(
+                        "Maintenance Task ID",
+                        _requestData['maintenanceTaskId']?.toString() ??
+                            'No Maintenance Task',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: _buildInfoTile("Quantity Requested",
-                          _requestData['quantityRequested']?.toString() ?? '0'),
+                          _requestData['quantityRequested']?.toString() ??
+                              '0'),
                     ),
                     const SizedBox(width: 48),
                     Expanded(
                       child: _buildInfoTile("Quantity Approved",
-                          _requestData['quantityApproved']?.toString() ?? '0'),
+                          _requestData['quantityApproved']?.toString() ??
+                              '0'),
                     ),
                   ],
                 ),
-                  ],
-                ),
+                const SizedBox(height: 24),
+                _buildInfoTile(
+                    "Staff Notes",
+                    _requestData['staff_notes'] ??
+                        _requestData['staffNotes'] ??
+                        _requestData['purpose'] ??
+                        'No notes provided'),
 
                 const SizedBox(height: 24),
                 Divider(color: Colors.grey[200], thickness: 1, height: 1),
                 const SizedBox(height: 24),
 
-                // Requester Details
+                // Requester Details - Always show
                 _buildSectionTitle("Requester Details"),
                 const SizedBox(height: 12),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _buildInfoTile("Staff Name",
-                          _requestData['requestedBy'] ?? 
-                          _requestData['requested_by'] ?? 
-                          _requestData['requester_name'] ?? 
-                          _requestData['staff_name'] ?? 
-                          'Unknown'),
-                    ),
-                    const SizedBox(width: 48),
-                    Expanded(
-                      child: _buildInfoTile("Staff Department",
-                          _requestData['staffDepartment'] ?? 
-                          _requestData['staff_department'] ?? 
-                          _requestData['department'] ?? 
-                          _requestData['requester_department'] ?? 
-                          'N/A'),
-                    ),
-                  ],
+                Builder(
+                  builder: (context) {
+                    final staffName = _requestData['requestedBy'] ??
+                        _requestData['requested_by'] ??
+                        _requestData['requested_by_name'] ??
+                        _requestData['requester_name'] ??
+                        _requestData['staff_name'] ??
+                        'Unknown';
+                    
+                    final staffDept = _requestData['staffDepartment'] ??
+                        _requestData['staff_department'] ??
+                        _requestData['department'] ??
+                        _requestData['requester_department'] ??
+                        'N/A';
+                    
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _buildInfoTile("Staff Name", staffName),
+                        ),
+                        const SizedBox(width: 48),
+                        Expanded(
+                          child: _buildInfoTile("Staff Department", staffDept),
+                        ),
+                      ],
+                    );
+                  },
                 ),
 
-                const SizedBox(height: 24),
-                Divider(color: Colors.grey[200], thickness: 1, height: 1),
-                const SizedBox(height: 24),
+                // Only show Admin Response if the request has been approved/rejected
+                if ((_requestData['status'] ?? 'pending').toString().toLowerCase() !=
+                    'pending') ...[
+                  const SizedBox(height: 24),
+                  Divider(color: Colors.grey[200], thickness: 1, height: 1),
+                  const SizedBox(height: 24),
 
-                // Admin Response
-                _buildSectionTitle("Admin Response"),
-                const SizedBox(height: 12),
-                _buildInfoTile("Response Date",
-                    _requestData['approvedDate'] ?? 'N/A'),
-
-                const SizedBox(height: 24),
-                Divider(color: Colors.grey[200], thickness: 1, height: 1),
-                const SizedBox(height: 24),
-
-                // Additional Notes
-                _buildSectionTitle("Additional Notes"),
-                const SizedBox(height: 12),
-                if (_requestData['adminNotes'] != null &&
-                    _requestData['adminNotes'].toString().isNotEmpty &&
-                    _requestData['adminNotes'] != 'No notes')
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey[200]!),
-                    ),
-                    child: Text(
-                      _requestData['adminNotes'].toString(),
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[800],
-                        height: 1.5,
-                      ),
-                    ),
-                  )
-                else
-                  Text(
-                    'No additional notes',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[500],
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                const SizedBox(height: 24),
+                  // Admin Response
+                  _buildSectionTitle("Admin Response"),
+                  const SizedBox(height: 12),
+                  _buildInfoTile("Response Date",
+                      _requestData['approvedDate'] ?? 'N/A'),
+                  const SizedBox(height: 24),
+                ], // End conditional block for Admin Response
               ],
             ),
           ),
@@ -277,8 +262,8 @@ class _InventoryRequestDetailsContentState
 
   // Request header with ID and status
   Widget _buildRequestHeader() {
-    final rawRequestId = _requestData['requestId'] ?? _requestData['_doc_id'] ?? _requestData['id'] ?? 'N/A';
-    final requestId = _formatRequestId(rawRequestId);
+    // Get formatted_id from backend (INVREQ-YYYY-XXXXX format)
+    final requestId = _getRequestId(_requestData);
     final itemName = _requestData['itemName'] ?? 'Unknown Item';
     final status = (_requestData['status'] ?? 'pending').toString();
     final requestedDate = _requestData['requestedDate'] ?? 'N/A';
