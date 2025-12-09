@@ -326,7 +326,6 @@ class _NotificationPageState extends State<NotificationPage> {
             icon: const Icon(Icons.done_all, size: 18),
             label: const Text('Mark all read'),
           ),
-          const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(

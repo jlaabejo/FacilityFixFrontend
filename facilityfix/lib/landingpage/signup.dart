@@ -169,7 +169,7 @@ class _SignUpState extends State<SignUp> {
       }
     }
 
-    final emailRe = RegExp(r'^[\w\.-]+@([\w-]+\.)+[\w-]{2,}$');
+    final emailRe = RegExp(r'^[\w.-]+@([\w-]+\.)+[\w-]{2,}$');
     if (email.isEmpty) {
       _emailErr = 'Email is required.';
     } else if (!emailRe.hasMatch(email)) {
@@ -204,7 +204,7 @@ class _SignUpState extends State<SignUp> {
     if (email == null || email.isEmpty) return 'User';
     final at = email.indexOf('@');
     if (at > 0) {
-      final part = email.substring(0, at).replaceAll(RegExp(r'[\.\_\-]'), ' ').trim();
+      final part = email.substring(0, at).replaceAll(RegExp(r'[._-]'), ' ').trim();
       if (part.isNotEmpty) return part;
     }
     return email;
@@ -374,7 +374,7 @@ class _SignUpState extends State<SignUp> {
     return GestureDetector(
       onTap: () => Navigator.of(context).pop(),
       child: Scaffold(
-        backgroundColor: Colors.black.withOpacity(0.5),
+        backgroundColor: const Color.fromRGBO(0, 0, 0, 0.5),
         body: GestureDetector(
           onTap: () {},
           child: Align(

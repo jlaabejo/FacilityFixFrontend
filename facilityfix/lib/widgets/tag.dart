@@ -187,6 +187,7 @@ class StatusTag extends StatelessWidget {
   // Maintenance
   'Scheduled':    _StatusStyle(fg: Color(0xFF4F46E5), bg: Color(0xFFEEF2FF)),
   'Completed':    _StatusStyle(fg: Color(0xFF15803D), bg: Color(0xFFEFFCF6)),
+  'Ready for Next Cycle': _StatusStyle(fg: Color(0xFF0B5FFF), bg: Color(0xFFEFF6FF)),
 
   // Inventory / Approval
   'Approved':     _StatusStyle(fg: Color(0xFF065F46), bg: Color(0xFFF1FBF5)),

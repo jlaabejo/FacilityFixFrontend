@@ -569,6 +569,12 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
         'assignee_department': _assigneeDeptCtrl.text.trim(),
       };
 
+      // If staff assessment exists (indicating staff has completed assessment), set status to Ready for Next Cycle
+      if ((_staffAssessmentCtrl.text.trim()).isNotEmpty) {
+        apiUpdateData['status'] = 'ready_for_next_cycle';
+        print('[InternalTaskView] Staff assessment present; setting status to ready_for_next_cycle for task ${widget.taskId}');
+      }
+
       // Add assigned_to if a staff member is selected (override empty above)
       if (_selectedStaffId != null && _selectedStaffId!.isNotEmpty) {
         apiUpdateData['assigned_to'] = _selectedStaffId;

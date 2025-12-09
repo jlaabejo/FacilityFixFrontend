@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:flutter/services.dart' show rootBundle;
 
-class AnalyticsReport {
+class AnalyticsReport {  
   static Future<void> generateAndDownloadPDF({
     required Map<String, dynamic> analyticsData,
     required String userName,

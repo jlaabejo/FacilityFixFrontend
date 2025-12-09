@@ -569,7 +569,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
           taskId.toString(),
         );
 
-        if (fresh.isNotEmpty) {
+          if (fresh.isNotEmpty) {
           // Merge fresh values into the existing task map so callers using
           // the same Map reference (this.widget.task) observe changes.
           fresh.forEach((k, v) {
@@ -587,6 +587,7 @@ class _MaintenanceDetailPageState extends State<MaintenanceDetailPage> {
           // Reload inventory requests as these may have changed too
           await _loadInventoryRequests();
 
+          print('DEBUG: After assessment, task ${widget.task['id']} status: ${widget.task['status']}');
           // After assessment creation, mark received inventory items as used/consumed
           final consumedCount = await _markInventoryItemsAsUsed();
           // Show a confirmation banner if any reserved items were consumed

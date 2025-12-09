@@ -242,11 +242,13 @@ class _AssessmentFormState extends State<AssessmentForm> {
       }
 
       // Submit assessment to backend
-      await apiService.patch(
+      final patchResp = await apiService.patch(
         endpoint,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(requestBody),
       );
+
+      print('[AssessmentForm] Submitted assessment for ${widget.concernSlipId}. Response: $patchResp');
 
       final APIService api = APIService(roleOverride: AppRole.staff);
 
@@ -271,6 +273,20 @@ class _AssessmentFormState extends State<AssessmentForm> {
             'description': 'Assessment Attachment',
           },
         );
+      }
+
+      // If this assessment was for a maintenance task, mark status as Ready for Next Cycle
+      if (widget.requestType?.contains('Maintenance') ?? false) {
+        try {
+          final statusPatchResp = await api.patch(
+            '/maintenance-tasks/${widget.concernSlipId}',
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'status': 'ready_for_next_cycle'}),
+          );
+          print('[AssessmentForm] Marked maintenance ${widget.concernSlipId} as ready_for_next_cycle: $statusPatchResp');
+        } catch (e) {
+          print('[AssessmentForm] Failed to set status to ready_for_next_cycle for ${widget.concernSlipId}: $e');
+        }
       }
 
       if (mounted) {

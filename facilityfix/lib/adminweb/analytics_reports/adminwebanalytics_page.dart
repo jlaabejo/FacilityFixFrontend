@@ -377,7 +377,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
       'announcement': '/announcement',
       'settings': '/settings',
       //'logout': '/logout',
-    };
+    };  
     return pathMap[routeKey];
   }
 

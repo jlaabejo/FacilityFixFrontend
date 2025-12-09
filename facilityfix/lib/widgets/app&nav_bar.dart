@@ -114,18 +114,24 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       centerTitle: false, 
       titleSpacing: 0,   
       title: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24), // ⬅️ 24px both sides
+        padding: const EdgeInsets.symmetric(horizontal: 16), // ⬅️ 16 px both sides
         child: Row(
           children: [
             if (leading != null) leading! else const SizedBox(width: 8),
             if (title != null)
-              Text(
-                title!,
-                style: const TextStyle(
-                  color: Color(0xFF101828),
-                  fontWeight: FontWeight.w600,
-                  fontSize: 18,
-                  letterSpacing: -0.2,
+              // Use Expanded + ellipsis to avoid RenderFlex overflow when title is long
+              Expanded(
+                child: Text(
+                  title!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: false,
+                  style: const TextStyle(
+                    color: Color(0xFF101828),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    letterSpacing: -0.2,
+                  ),
                 ),
               ),
           ],
@@ -135,7 +141,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       // Actions 
       actions: [
         Padding(
-          padding: const EdgeInsets.only(right: 24),
+          padding: const EdgeInsets.only(right: 16),
           child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -221,7 +227,7 @@ class NavBar extends StatefulWidget {
 
     @override
     State<NavBar> createState() => _NavBarState();
-    Size get preferredSize => const Size.fromHeight(70);
+    Size get preferredSize => const Size.fromHeight(60);
   }
 
   // Navigation Bar Widget
@@ -243,6 +249,7 @@ class NavBar extends StatefulWidget {
                 child: Icon(
                   item.icon,
                   color: isSelected ? const Color(0xFF005CE8) : const Color(0xFF494949),
+                  size: 24,
                 ),
               ),
               label: '',

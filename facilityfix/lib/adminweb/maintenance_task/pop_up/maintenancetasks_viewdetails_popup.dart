@@ -70,7 +70,7 @@ class _MaintenanceTaskDetailDialogState extends State<MaintenanceTaskDetailDialo
 
   // --- Allowed values
   static const _priorities = ['High', 'Medium', 'Low'];
-  static const _statuses = ['New', 'In Progress', 'Pending', 'Completed', 'Cancelled'];
+  static const _statuses = ['New', 'In Progress', 'Pending', 'Completed', 'Cancelled', 'Ready for Next Cycle'];
   static const _types = ['Internal', 'External'];
 
   @override
@@ -168,16 +168,20 @@ class _MaintenanceTaskDetailDialogState extends State<MaintenanceTaskDetailDialo
     if (ok != _formValid) setState(() => _formValid = ok);
   }
 
+  // Normalize incoming statuses and map to allowed display labels
+  // Handles values like 'ready_for_next_cycle' or 'READY_FOR_NEXT_CYCLE' by matching
   String _coerceToAllowed(dynamic value, List<String> allowed, String fallback) {
-    final v = (value ?? '').toString().trim();
+    final v = (value ?? '').toString().replaceAll('_', ' ').trim().toLowerCase();
     final hit = allowed.firstWhere(
-      (o) => o.toLowerCase() == v.toLowerCase(),
+      (o) => o.toLowerCase().replaceAll('_', ' ') == v,
       orElse: () => '',
     );
     return hit.isEmpty ? fallback : hit;
   }
 
   Map<String, dynamic> _buildUpdatedTask() {
+    String status = _statusCtrl.text.trim();
+    if (status.toLowerCase() == 'ready for next cycle') status = 'ready_for_next_cycle';
     return {
       ...widget.task,
       'task': _titleCtrl.text.trim(),
@@ -185,7 +189,7 @@ class _MaintenanceTaskDetailDialogState extends State<MaintenanceTaskDetailDialo
       'id': _idCtrl.text.trim(),
       'dateRequested': _dateRequestedCtrl.text.trim(),
       'priority': _priorityCtrl.text.trim(),
-      'status': _statusCtrl.text.trim(),
+      'status': status,
       'requestedBy': _requestedByCtrl.text.trim(),
       'department': _departmentCtrl.text.trim(),
       'buildingUnit': _buildingUnitCtrl.text.trim(),

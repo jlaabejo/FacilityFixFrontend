@@ -11,7 +11,6 @@ import 'package:facilityfix/staff/repair_task.dart';
 import 'package:facilityfix/staff/settings/notification_settings.dart';
 import 'package:facilityfix/staff/settings/settings.dart';
 import 'package:facilityfix/staff/settings/privacy.dart';
-import 'package:facilityfix/widgets/buttons.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -19,7 +18,6 @@ import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/modals.dart';
 import 'package:facilityfix/widgets/profile.dart';
 import 'package:facilityfix/widgets/forgotPassword.dart';
-import 'package:facilityfix/widgets/buttons.dart' as custom_buttons;
 import 'package:facilityfix/services/auth_storage.dart';
 import 'package:facilityfix/services/profile_service.dart';
 import 'package:intl/intl.dart';
@@ -87,10 +85,7 @@ class _ProfilePageState extends State<ProfilePage> {
     super.initState();
     _loadSavedProfile();
     _loadUnreadNotifCount();
-    _scheduleReloadNotifier = ValueNotifier<int>(0);
   }
-
-  late final ValueNotifier<int> _scheduleReloadNotifier;
 
   Future<void> _loadUnreadNotifCount() async {
     try {
@@ -100,6 +95,11 @@ class _ProfilePageState extends State<ProfilePage> {
     } catch (e) {
       print('[Staff Profile] Failed to load unread notification count: $e');
     }
+  }
+
+  Future<void> _refresh() async {
+    await _loadSavedProfile();
+    await _loadUnreadNotifCount();
   }
 
   Future<void> _loadSavedProfile() async {
@@ -179,7 +179,6 @@ class _ProfilePageState extends State<ProfilePage> {
     birthDateController.dispose();
     staffDepartmentController.dispose();
     super.dispose();
-    _scheduleReloadNotifier.dispose();
   }
 
   void _onTabTapped(int index) {
@@ -451,9 +450,7 @@ class _ProfilePageState extends State<ProfilePage> {
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Column(
               children: [
-                ScheduleAvailabilityWidget(
-                  reloadNotifier: _scheduleReloadNotifier,
-                ),
+                const ScheduleAvailabilityWidget(),
                 const SizedBox(height: 16),
                 RealTimeStatusWidget(
                   onStatusChanged: () {
@@ -470,7 +467,7 @@ class _ProfilePageState extends State<ProfilePage> {
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Column(
               children: [
-                DayOffRequestsWidget(reloadNotifier: _scheduleReloadNotifier),
+                const DayOffRequestsWidget(),
                 const SizedBox(height: 16),
                 _buildDayOffRequestsList(),
               ],
@@ -591,169 +588,173 @@ class _ProfilePageState extends State<ProfilePage> {
         },
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ProfileInfoWidget(
-                profileImage: _profileImageProvider,
-                fullName: _fullName,
-                staffId:
-                    _staffId.isNotEmpty
-                        ? 'Staff ID: #$_staffId'
-                        : 'Staff ID: —',
-                onTap: () => _openPhotoPickerSheet(context),
-              ),
-              const SizedBox(height: 24),
-              SectionCard(
-                title: 'Personal Details',
-                trailing: IconButton(
-                  icon: const Icon(
-                    Icons.edit,
-                    size: 20,
-                    color: Colors.blueGrey,
-                  ),
-                  tooltip: 'Edit personal details',
-                  onPressed: _openEditAllDetailsSheet,
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ProfileInfoWidget(
+                  profileImage: _profileImageProvider,
+                  fullName: _fullName,
+                  staffId:
+                      _staffId.isNotEmpty
+                          ? 'Staff ID: #$_staffId'
+                          : 'Staff ID: —',
+                  onTap: () => _openPhotoPickerSheet(context),
                 ),
-                child: Column(
-                  children: [
-                    DetailRow(
-                      label: 'Birth Date',
-                      value:
-                          birthDateController.text.isNotEmpty
-                              ? birthDateController.text
-                              : '—',
+                const SizedBox(height: 24),
+                SectionCard(
+                  title: 'Personal Details',
+                  trailing: IconButton(
+                    icon: const Icon(
+                      Icons.edit,
+                      size: 20,
+                      color: Colors.blueGrey,
                     ),
-                    const SizedBox(height: 10),
-                    DetailRow(
-                      label: 'Staff Department',
-                      value:
-                          staffDepartmentController.text.isNotEmpty
-                              ? staffDepartmentController.text
-                              : '—',
-                    ),
-                    const SizedBox(height: 10),
-                    DetailRow(
-                      label: 'Email',
-                      value:
-                          emailController.text.isNotEmpty
-                              ? emailController.text
-                              : '—',
-                    ),
-                    const SizedBox(height: 10),
-                    DetailRow(
-                      label: 'Contact Number',
-                      value:
-                          phoneNumberController.text.isNotEmpty
-                              ? phoneNumberController.text
-                              : '—',
-                    ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton(
-                        onPressed: _openForgotPasswordEmail,
-                        child: const Text(
-                          'Forgot password?',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF005CE7),
+                    tooltip: 'Edit personal details',
+                    onPressed: _openEditAllDetailsSheet,
+                  ),
+                  child: Column(
+                    children: [
+                      DetailRow(
+                        label: 'Birth Date',
+                        value:
+                            birthDateController.text.isNotEmpty
+                                ? birthDateController.text
+                                : '—',
+                      ),
+                      const SizedBox(height: 10),
+                      DetailRow(
+                        label: 'Staff Department',
+                        value:
+                            staffDepartmentController.text.isNotEmpty
+                                ? staffDepartmentController.text
+                                : '—',
+                      ),
+                      const SizedBox(height: 10),
+                      DetailRow(
+                        label: 'Email',
+                        value:
+                            emailController.text.isNotEmpty
+                                ? emailController.text
+                                : '—',
+                      ),
+                      const SizedBox(height: 10),
+                      DetailRow(
+                        label: 'Contact Number',
+                        value:
+                            phoneNumberController.text.isNotEmpty
+                                ? phoneNumberController.text
+                                : '—',
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          onPressed: _openForgotPasswordEmail,
+                          child: const Text(
+                            'Forgot password?',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF005CE7),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 18),
+                const SizedBox(height: 18),
 
-              // Availability Tabs
-              AvailabilityTabWidget(
-                tabs: _availabilityTabs,
-                selectedLabel: _selectedTab,
-                onTabSelected: (label) {
-                  setState(() {
-                    _selectedTab = label;
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // Tab Content
-              _buildTabContent(),
-              const SizedBox(height: 18),
-
-              SectionCard(
-                title: 'Settings',
-                child: Column(
-                  children: [
-                    SettingsOption(
-                      text: 'Notifications',
-                      icon: Icons.notifications,
-                      onTap:
-                          () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => NotificationSettingsPage(),
-                            ),
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    SettingsOption(
-                      text: 'Settings',
-                      icon: Icons.settings,
-                      onTap:
-                          () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => SettingsPage()),
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    SettingsOption(
-                      text: 'Privacy & Security',
-                      icon: Icons.lock,
-                      onTap:
-                          () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const PrivacyPolicyPage(),
-                            ),
-                          ),
-                    ),
-                  ],
+                // Availability Tabs
+                AvailabilityTabWidget(
+                  tabs: _availabilityTabs,
+                  selectedLabel: _selectedTab,
+                  onTabSelected: (label) {
+                    setState(() {
+                      _selectedTab = label;
+                    });
+                  },
                 ),
-              ),
-              const SizedBox(height: 24),
-              LogoutButton(
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder:
-                        (_) => CustomPopup(
-                          title: 'Confirm Logout',
-                          message: 'Are you sure you want to logout?',
-                          primaryText: 'Yes',
-                          onPrimaryPressed: () async {
-                            Navigator.of(context).pop();
-                            await AuthStorage.clear();
-                            Navigator.pushAndRemoveUntil(
+                const SizedBox(height: 16),
+
+                // Tab Content
+                _buildTabContent(),
+                const SizedBox(height: 18),
+
+                SectionCard(
+                  title: 'Settings',
+                  child: Column(
+                    children: [
+                      SettingsOption(
+                        text: 'Notifications',
+                        icon: Icons.notifications,
+                        onTap:
+                            () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const SplashScreen(),
+                                builder: (_) => NotificationSettingsPage(),
                               ),
-                              (route) => false,
-                            );
-                          },
-                          secondaryText: 'No',
-                          onSecondaryPressed: () => Navigator.of(context).pop(),
-                        ),
-                  );
-                },
-              ),
-            ],
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      SettingsOption(
+                        text: 'Settings',
+                        icon: Icons.settings,
+                        onTap:
+                            () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => SettingsPage()),
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      SettingsOption(
+                        text: 'Privacy & Security',
+                        icon: Icons.lock,
+                        onTap:
+                            () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const PrivacyPolicyPage(),
+                              ),
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                LogoutButton(
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder:
+                          (_) => CustomPopup(
+                            title: 'Confirm Logout',
+                            message: 'Are you sure you want to logout?',
+                            primaryText: 'Yes',
+                            onPrimaryPressed: () async {
+                              Navigator.of(context).pop();
+                              await AuthStorage.clear();
+                              Navigator.pushAndRemoveUntil(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const SplashScreen(),
+                                ),
+                                (route) => false,
+                              );
+                            },
+                            secondaryText: 'No',
+                            onSecondaryPressed: () => Navigator.of(context).pop(),
+                          ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
